@@ -6,6 +6,7 @@ import { AlertTriangle, ArrowDown, Check, Info, Maximize2, Minimize2, Users, X }
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 
 import { EpicPlanBarIcon } from "@/components/timeline/epic-plan-bar";
+import { TeamAvatar } from "@/components/ui/team-avatar";
 import { epicTimelineDraggableId } from "@/lib/epic-dnd-ids";
 import { type CapacityLoadBasis } from "@/lib/capacity-load-basis";
 import { capacityGaugeFluidStops } from "@/lib/capacity-thermometer";
@@ -403,9 +404,16 @@ export function TeamCapacityBucket({
         <div className="relative grid min-h-8 w-full min-w-0 grid-cols-[1fr_auto_1fr] items-center gap-x-1">
           <div className="min-w-0 justify-self-start" aria-hidden />
           <p className="col-start-2 inline-flex min-w-0 max-w-[min(16rem,85vw)] items-center gap-2 rounded-lg border border-slate-200/80 bg-white px-2.5 py-1 text-[15px] font-bold text-slate-800">
-            <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-600">
-              <Users className="size-3.5" aria-hidden />
-            </span>
+            <TeamAvatar
+              slug={team.id}
+              sizePx={24}
+              rounded="rounded-full"
+              fallback={
+                <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-600">
+                  <Users className="size-3.5" aria-hidden />
+                </span>
+              }
+            />
             <span className="min-w-0 truncate">
               {teamLabelPrefix ? (
                 <>

@@ -7,6 +7,7 @@ import { Flag, GripVertical, SquarePen, StickyNote, Users, X } from "lucide-reac
 
 import { cn } from "@/lib/utils";
 import { InitiativeItem } from "@/lib/types";
+import { TeamAvatar } from "@/components/ui/team-avatar";
 import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { monthTeamLabelForId } from "@/lib/month-team-board";
 import { currentCalendarYearSprint } from "@/lib/year-sprint";
@@ -120,9 +121,11 @@ export function resolveDisplayTitle(chart: DashboardChartItem): string {
 
 function renderTitleNodes(chart: DashboardChartItem, displayTitle: string) {
   let teamLabel: string | null = null;
+  let teamSlug: string | null = null;
   try {
     const parsed = JSON.parse(chart.config) as Record<string, unknown>;
     if (typeof parsed.team === "string" && parsed.team.length > 0) {
+      teamSlug = parsed.team;
       teamLabel = monthTeamLabelForId(parsed.team) ?? parsed.team;
     }
   } catch { /* ignore */ }
@@ -136,7 +139,13 @@ function renderTitleNodes(chart: DashboardChartItem, displayTitle: string) {
         {idx > 0 && <span className="mx-1 shrink-0 text-slate-300">·</span>}
         <span className="inline-flex shrink-0 items-center gap-1">
           {isSprint && <Flag className="size-3 text-rose-500" aria-hidden />}
-          {isTeam && <Users className="size-3 text-indigo-500" aria-hidden />}
+          {isTeam && (
+            <TeamAvatar
+              slug={teamSlug}
+              sizePx={12}
+              fallback={<Users className="size-3 text-indigo-500" aria-hidden />}
+            />
+          )}
           <span className={cn(idx === 0 ? "text-slate-800" : "text-slate-600")}>{segment}</span>
         </span>
       </Fragment>

@@ -44,6 +44,7 @@ import {
 import { createPortal } from "react-dom";
 
 import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
+import { TeamAvatar } from "@/components/ui/team-avatar";
 import { HealthBadge, formatHealthTooltip } from "@/components/timeline/health-badge";
 import { RoadmapHealthPopover, type ProgressBasis } from "@/components/timeline/roadmap-health-popover";
 import { computeInitiativeProgress, computeProgress, type HealthStatus } from "@/lib/progress";
@@ -631,7 +632,7 @@ type EpicGanttLaneRowProps = {
   emphasize?: boolean;
   emphasizeTick?: number;
   showProgress?: boolean;
-  teamAssignmentChip?: { label: string; className: string } | null;
+  teamAssignmentChip?: { label: string; className: string; slug: string | null } | null;
   /** Work-based health verdict for the epic — feeds the health badge below
    *  the bar. Passed in pre-computed so all views share one progress lib. */
   healthStatus?: HealthStatus | null;
@@ -1438,7 +1439,7 @@ function MonthInitiativeGanttLaneRow({
   healthStatus?: HealthStatus | null;
   healthTooltip?: string;
   effortProgressPercent?: number | null;
-  teamAssignmentChip?: { label: string; className: string } | null;
+  teamAssignmentChip?: { label: string; className: string; slug: string | null } | null;
   /** When set, the row's backdrop also renders day-level vertical
    *  guides matching the active month's sprint-1 / sprint-2 splits. */
   planYear?: number;
@@ -5759,7 +5760,7 @@ export function TimelineGrid({
                       ) : null}
                       {teamLabel && teamLabel !== "—" ? (
                         <span className="inline-flex items-center gap-1 rounded bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">
-                          <Users className="size-2.5 shrink-0 opacity-70" aria-hidden />
+                          <TeamAvatar slug={epic.team} sizePx={10} fallback={<Users className="size-2.5 shrink-0 opacity-70" aria-hidden />} />
                           {teamLabel}
                         </span>
                       ) : null}

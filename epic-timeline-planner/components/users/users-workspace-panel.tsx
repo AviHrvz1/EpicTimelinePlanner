@@ -38,6 +38,7 @@ import {
   readImageFileAsDataUrl,
   useImageFilePicker,
 } from "@/components/users/edit-image-dialog";
+import { refreshTeamImages } from "@/lib/use-team-images";
 import { MONTH_TEAM_COLUMNS, MONTH_TEAM_IDS } from "@/lib/month-team-board";
 import { TABLE_ZEBRA_BASE_BG, TABLE_ZEBRA_STRIPE_BG } from "@/lib/table-zebra";
 import {
@@ -1817,6 +1818,16 @@ export function UsersWorkspacePanel() {
     return [...s];
   }, [rows, teams, registeredTeamSlugs]);
 
+  /** Team slug → logo URL, for showing a team's image (instead of the generic
+   *  group icon) on the grouped-by-team header rows. */
+  const teamImageBySlug = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const t of teams) {
+      if (t.slug && t.image) m.set(t.slug, t.image);
+    }
+    return m;
+  }, [teams]);
+
   const userDirectoryTableRows = useMemo(() => {
     const renderLeaf = (list: WorkspaceUserRow[], nameTreeDepth: number) =>
       list.map((row) => (
@@ -1892,9 +1903,18 @@ export function UsersWorkspacePanel() {
                         ) : (
                           <ChevronRight className="size-4 shrink-0 self-center text-slate-600" aria-hidden />
                         )}
-                        <span className="flex size-4 shrink-0 items-center justify-center text-slate-500 [&_svg]:size-4">
-                          {userDirectoryGroupLevelIcon(level)}
-                        </span>
+                        {level === "team" && teamImageBySlug.has(key) ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src={teamImageBySlug.get(key)!}
+                            alt=""
+                            className="size-4 shrink-0 self-center rounded-[5px] object-cover ring-1 ring-slate-200"
+                          />
+                        ) : (
+                          <span className="flex size-4 shrink-0 items-center justify-center text-slate-500 [&_svg]:size-4">
+                            {userDirectoryGroupLevelIcon(level)}
+                          </span>
+                        )}
                         <span className="flex shrink-0 items-center leading-none text-slate-600">
                           {USER_DIRECTORY_GROUP_LEVEL_LABELS[level]}:
                         </span>
@@ -1929,6 +1949,7 @@ export function UsersWorkspacePanel() {
     directoryTeamIds,
     cancelDrawerClose,
     openTeamEditorBySlug,
+    teamImageBySlug,
   ]);
 
   useLayoutEffect(() => {
@@ -2235,6 +2256,7 @@ export function UsersWorkspacePanel() {
       toast.success(teamForm.id ? `Team “${displayName}” updated.` : `Team “${displayName}” created.`);
       closeTeamPanel();
       await Promise.all([load(), loadTeams()]);
+      refreshTeamImages();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -2264,6 +2286,7 @@ export function UsersWorkspacePanel() {
       toast.success(`Team “${teamForm.displayName}” deleted.`);
       closeTeamPanel();
       await Promise.all([load(), loadTeams()]);
+      refreshTeamImages();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Delete failed");
     } finally {

@@ -68,6 +68,7 @@ import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
 import { TableColumnDragGrip } from "@/components/ui/table-column-drag-grip";
 import { resolveAssigneeAvatar } from "@/components/ui/user-avatar";
+import { TeamAvatar } from "@/components/ui/team-avatar";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import {
   formatBacklogPlanDate,
@@ -4953,7 +4954,11 @@ export function BacklogPlanningPanel({
     const label = monthTeamLabelForId(teamId) ?? teamLabelForWorkspaceUser(teamId) ?? teamId;
     return (
       <span className="inline-flex items-center gap-1.5 text-[15px] text-slate-800">
-        <span className={cn("inline-block size-2 rounded-full", color)} aria-hidden />
+        <TeamAvatar
+          slug={teamId}
+          sizePx={14}
+          fallback={<span className={cn("inline-block size-2 rounded-full", color)} aria-hidden />}
+        />
         <span className="truncate">{label}</span>
       </span>
     );

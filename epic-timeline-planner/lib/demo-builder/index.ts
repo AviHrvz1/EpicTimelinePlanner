@@ -28,6 +28,7 @@ import {
   DEMO_NAME_POOL,
   DEMO_STORY_DESCRIPTIONS,
   DEMO_STORY_TEMPLATES_BY_TEAM,
+  DEMO_TEAM_LABELS,
   DEMO_TEAM_SLUGS,
   DEMO_USER_NAMES_BY_TEAM,
   type DemoTeamSlug,
@@ -36,6 +37,7 @@ import {
   buildDemoSnapshotSeries,
   pickDemoStoryCurve,
 } from "@/lib/demo-builder/snapshots";
+import { buildTeamLogoDataUrl } from "@/lib/demo-builder/team-logos";
 import {
   currentCalendarYearSprint,
   globalSprintFromMonthLane,
@@ -90,6 +92,10 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
   // Roadmap may not be present in all installs — guard with try/catch in case
   // the table doesn't exist yet for an older DB snapshot.
   try { await db.roadmap.deleteMany({}); } catch { /* ignore */ }
+  // Teams reference WorkspaceUser via leadId (onDelete: SetNull). Delete the
+  // Team rows first so we don't leave dangling references, then the users.
+  // Guarded in case an older DB snapshot predates the Team table.
+  try { await db.team.deleteMany({}); } catch { /* ignore */ }
   await db.workspaceUser.deleteMany({});
 
   // 2. Wipe previously-uploaded avatar files so disk doesn't accumulate
@@ -143,6 +149,31 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
   for (const slug of DEMO_TEAM_SLUGS) membersByTeam.set(slug, []);
   for (const u of createdUsers) membersByTeam.get(u.team)!.push(u.name);
 
+  // 3b. Create first-class Team rows — one per demo team — with a generated
+  //     monogram logo and the first member of each team as its lead.
+  //     Membership stays implicit via WorkspaceUser.team === Team.slug, so we
+  //     don't write a members table; we only need the lead's id, which we
+  //     look up from the freshly-inserted users by name + team.
+  const insertedUsers = await db.workspaceUser.findMany({
+    select: { id: true, name: true, team: true },
+  });
+  const userIdByTeamAndName = new Map<string, string>();
+  for (const u of insertedUsers) userIdByTeamAndName.set(`${u.team}::${u.name}`, u.id);
+  for (let teamIdx = 0; teamIdx < DEMO_TEAM_SLUGS.length; teamIdx++) {
+    const slug = DEMO_TEAM_SLUGS[teamIdx]!;
+    const leadName = membersByTeam.get(slug)?.[0] ?? null;
+    const leadId = leadName ? userIdByTeamAndName.get(`${slug}::${leadName}`) ?? null : null;
+    await db.team.create({
+      data: {
+        slug,
+        displayName: DEMO_TEAM_LABELS[slug],
+        image: buildTeamLogoDataUrl(slug),
+        leadId,
+        displayOrder: teamIdx,
+      },
+    });
+  }
+
   // 4. Ensure the default roadmap exists and includes the seeded year.
   //    The initiatives GET route filters by `roadmapId` (defaulting to
   //    `DEFAULT_ROADMAP_ID`) so initiatives without that link don't render
@@ -163,7 +194,22 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
   for (let initIdx = 0; initIdx < DEMO_INITIATIVES.length; initIdx++) {
     const seed = DEMO_INITIATIVES[initIdx]!;
     const startMonth = seed.startMonth;
-    const endMonth = Math.min(12, startMonth + seed.monthSpan - 1);
+    // Lay out the 5 epics sequentially per the seed's `epicLayout`: walk a
+    // month cursor, inserting each slot's `gap` before its `span`. Windows
+    // are clamped to December so a long span near year-end can't overflow.
+    // The initiative's own end is the last epic's end.
+    const epicWindows: { start: number; end: number }[] = [];
+    {
+      let cursor = startMonth;
+      for (const slot of seed.epicLayout) {
+        cursor = Math.min(12, cursor + slot.gap);
+        const eStart = Math.min(12, cursor);
+        const eEnd = Math.min(12, eStart + slot.span - 1);
+        epicWindows.push({ start: eStart, end: eEnd });
+        cursor = eEnd + 1;
+      }
+    }
+    const endMonth = epicWindows.reduce((mx, w) => Math.max(mx, w.end), startMonth);
     // Initiative assignee: pick a member of the first team for visual
     // variety — different team per initiative via round-robin.
     const initTeam = DEMO_TEAM_SLUGS[initIdx % DEMO_TEAM_SLUGS.length]!;
@@ -186,30 +232,29 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
         endMonth,
         year: planYear,
         team: initTeam,
-        timelineRow: initIdx,
+        // Reserve 4 Gantt rows per initiative: the initiative bar at the top
+        // and up to 3 sub-rows below for its epics. Spreading the 5 epics
+        // across sub-rows (see the team loop) keeps no more than 2 bars on
+        // any single row and produces a cascading top-left → bottom-right
+        // "stairs" silhouette as time progresses.
+        timelineRow: initIdx * 4,
         roadmapId: DEMO_DEFAULT_ROADMAP_ID,
         labels: pickDemoLabels(initIdx, 2) ?? null,
       },
     });
 
-    // 5. Create 5 epics under this initiative — one per team. Each epic
-    //    claims a UNIQUE multi-month slot within the initiative's window
-    //    so they don't pile up on the same row of the Gantt, AND every
-    //    epic always covers both sprints of its month range (planSprint=1,
-    //    planEndSprint=2) — narrower than that and the epic title gets
-    //    truncated by the bar on the all-quarters view. The floor/ceil
-    //    math ensures epic[i+1].start > epic[i].end for any span ≥ 5;
-    //    with seeded spans ≥ 10 each epic gets ~2 months of width.
+    // 5. Create 5 epics under this initiative — one per team. Each epic's
+    //    month window comes from the precomputed `epicWindows` (sequential,
+    //    non-overlapping, varied lengths). Every epic still covers sprint-1 →
+    //    sprint-2 of its range so the bar is wide enough for its label even
+    //    when the span is a single month.
     const TEAMS_PER_INITIATIVE = DEMO_TEAM_SLUGS.length;
     for (let teamIdx = 0; teamIdx < TEAMS_PER_INITIATIVE; teamIdx++) {
       const teamSlug = DEMO_TEAM_SLUGS[teamIdx]!;
-      const startOffset = Math.floor((teamIdx * seed.monthSpan) / TEAMS_PER_INITIATIVE);
-      const nextStartOffset = Math.floor(((teamIdx + 1) * seed.monthSpan) / TEAMS_PER_INITIATIVE);
-      const endOffset = Math.max(startOffset, nextStartOffset - 1);
-      const epicStartMonth = Math.min(endMonth, startMonth + startOffset);
-      const epicEndMonth = Math.min(endMonth, startMonth + endOffset);
+      const epicStartMonth = epicWindows[teamIdx]!.start;
+      const epicEndMonth = epicWindows[teamIdx]!.end;
       // Always sprint-1 → sprint-2 so every epic spans at least 2 sprints.
-      // For 2-month epics that's 4 sprints, plenty of width for the label.
+      // For multi-month epics that's 4+ sprints, plenty of width for the label.
       const planSprint: 1 | 2 = 1;
       const planEndSprint: 1 | 2 = 2;
 
@@ -236,7 +281,13 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
           planStartMonth: epicStartMonth,
           planEndMonth: epicEndMonth,
           planEndSprint,
-          timelineRow: initIdx,
+          // Stair pattern: spread 5 epics across 3 sub-rows below the
+          // initiative bar (initiative is at initIdx*4; epics live at +1,
+          // +2, +3). Pairing teamIdx 0+1 on the first sub-row, 2+3 on the
+          // second, and 4 alone on the third keeps each Gantt row to at
+          // most 2 bars and produces a visible staircase as later epics
+          // start further right AND one row lower.
+          timelineRow: initIdx * 4 + 1 + Math.floor(teamIdx / 2),
           team: teamSlug,
           originalEstimateDays: null,
           labels: pickDemoLabels(initIdx * 5 + teamIdx, 2) ?? null,

@@ -8,6 +8,7 @@ import {
   teamLabelForWorkspaceUser,
   type WorkspaceDirectoryTeamSource,
 } from "@/lib/workspace-users";
+import { TeamAvatar } from "@/components/ui/team-avatar";
 
 type CapacityPlanTeamComboboxProps = {
   directoryUsers: readonly WorkspaceDirectoryTeamSource[];
@@ -71,7 +72,7 @@ export function CapacityPlanTeamCombobox({
               onSelectedIdsChange((prev) => prev.filter((teamId) => teamId !== id));
             }}
           >
-            <Users className="size-3 shrink-0 opacity-70" aria-hidden />
+            <TeamAvatar slug={id} sizePx={12} fallback={<Users className="size-3 shrink-0 opacity-70" aria-hidden />} />
             {labelForId(id)}
             <X className="size-3" aria-hidden />
           </button>
@@ -133,7 +134,7 @@ export function CapacityPlanTeamCombobox({
                 }}
               >
                 <span className="inline-flex items-center gap-1.5">
-                  <Users className="size-3.5 shrink-0 opacity-70" aria-hidden />
+                  <TeamAvatar slug={team.id} sizePx={14} fallback={<Users className="size-3.5 shrink-0 opacity-70" aria-hidden />} />
                   {team.label}
                 </span>
                 {selected ? <Check className="size-3.5 text-sky-700" aria-hidden /> : null}

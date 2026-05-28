@@ -4,6 +4,7 @@ import { Folder, Users } from "lucide-react";
 
 import { monthTeamLabelForId } from "@/lib/month-team-board";
 import type { EpicItem, InitiativeItem } from "@/lib/types";
+import { TeamAvatar } from "@/components/ui/team-avatar";
 import { cn } from "@/lib/utils";
 
 /** Tailwind classes that color a small team badge. Falls back to slate for unknown teams. */
@@ -166,13 +167,20 @@ export function MiniGanttCard({ initiatives, year, quarter, team, teams }: Props
               <div className="flex min-w-0 flex-col pr-2">
                 <p className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-slate-800">
                   {showTeamBadges && (
-                    <span
-                      className={cn("inline-flex size-4 shrink-0 items-center justify-center rounded-md ring-1", teamBadgeClass(row.team))}
+                    <TeamAvatar
+                      slug={row.team}
+                      sizePx={16}
                       title={row.team ? (monthTeamLabelForId(row.team) ?? row.team) : "No team"}
-                      aria-label={row.team ? (monthTeamLabelForId(row.team) ?? row.team) : "No team"}
-                    >
-                      <Users className="size-2.5" />
-                    </span>
+                      fallback={
+                        <span
+                          className={cn("inline-flex size-4 shrink-0 items-center justify-center rounded-md ring-1", teamBadgeClass(row.team))}
+                          title={row.team ? (monthTeamLabelForId(row.team) ?? row.team) : "No team"}
+                          aria-label={row.team ? (monthTeamLabelForId(row.team) ?? row.team) : "No team"}
+                        >
+                          <Users className="size-2.5" />
+                        </span>
+                      }
+                    />
                   )}
                   <span className="inline-block size-1.5 shrink-0 rounded-full" style={{ backgroundColor: row.color }} aria-hidden />
                   <span className="truncate">{row.title}</span>

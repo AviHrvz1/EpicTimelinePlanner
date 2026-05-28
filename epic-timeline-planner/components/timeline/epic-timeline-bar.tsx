@@ -13,6 +13,7 @@ import type { HealthStatus } from "@/lib/progress";
 import { cn } from "@/lib/utils";
 import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
 import { HealthBadge } from "@/components/timeline/health-badge";
+import { TeamAvatar } from "@/components/ui/team-avatar";
 
 function isLightColor(hex: string): boolean {
   const h = hex.replace("#", "");
@@ -132,7 +133,7 @@ type InitiativeTimelineBarProps = {
   healthTooltip?: string;
   /** Optional team-assignment pill rendered below the bar (same pattern as
    *  the epic bar) when the toolbar's Teams toggle is on. */
-  teamAssignmentChip?: { label: string; className: string } | null;
+  teamAssignmentChip?: { label: string; className: string; slug: string | null } | null;
 };
 
 export function InitiativeTimelineBar({
@@ -249,8 +250,8 @@ export function InitiativeTimelineBar({
               className={cn("inline-flex items-center gap-1", teamAssignmentChip.className)}
               title={teamAssignmentChip.label}
             >
-              <Users className="size-2.5 shrink-0 opacity-70" aria-hidden />
-              {teamAssignmentChip.label}
+              <TeamAvatar slug={teamAssignmentChip.slug} sizePx={10} className="opacity-90" fallback={<Users className="size-2.5 shrink-0 opacity-70" aria-hidden />} />
+
             </span>
           ) : null}
         </div>
@@ -277,7 +278,7 @@ type EpicPlanTimelineBarProps = {
   /** Renders at the start of the progress row (below the epic title strip), not on the colored title row. */
   progressRowPrefix?: ReactNode;
   /** Small pill after the title: delivery team assignment (Gantt middle panel). */
-  teamAssignmentChip?: { label: string; className: string } | null;
+  teamAssignmentChip?: { label: string; className: string; slug: string | null } | null;
   /** When set, a chart icon appears at the start of the progress row;
    * clicking it opens the insights view in a new tab (epic scope). */
   onInsightsClick?: () => void;
@@ -427,8 +428,8 @@ export function EpicPlanTimelineBar({
               className={cn("inline-flex items-center gap-1", teamAssignmentChip.className)}
               title={teamAssignmentChip.label}
             >
-              <Users className="size-2.5 shrink-0 opacity-70" aria-hidden />
-              {teamAssignmentChip.label}
+              <TeamAvatar slug={teamAssignmentChip.slug} sizePx={10} className="opacity-90" fallback={<Users className="size-2.5 shrink-0 opacity-70" aria-hidden />} />
+
             </span>
           ) : null}
         </div>

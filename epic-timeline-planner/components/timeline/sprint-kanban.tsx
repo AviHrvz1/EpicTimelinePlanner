@@ -22,6 +22,7 @@ import {
 import { StoryStatus } from "@/lib/generated/prisma";
 import { storyBoardDraggableId, sprintKanbanDropId } from "@/lib/epic-dnd-ids";
 import { epicDeliveryTeamAssignmentChip, monthTeamLabelForId } from "@/lib/month-team-board";
+import { TeamAvatar } from "@/components/ui/team-avatar";
 import { assigneeMatchRosterForSprintTeam, type SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { collectStoriesForSprintBoard, collectEpicsForSprintKanban, type BoardStoryRow, type BoardEpicRow } from "@/lib/sprint-plan";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
@@ -576,7 +577,7 @@ function SprintEpicCard({
           })() : null}
           {teamChip ? (
             <span className={cn("inline-flex items-center gap-1", chipBase, teamChip.className)}>
-              <Users className="size-2.5 shrink-0" aria-hidden />
+              <TeamAvatar slug={epic.team} sizePx={10} fallback={<Users className="size-2.5 shrink-0" aria-hidden />} />
               {teamChip.label}
             </span>
           ) : null}

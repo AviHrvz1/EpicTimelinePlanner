@@ -4,6 +4,7 @@ import { AlertTriangle, User, Users } from "lucide-react";
 
 import { buildSprintAnalytics } from "@/lib/sprint-analytics";
 import { InitiativeItem } from "@/lib/types";
+import { TeamAvatar } from "@/components/ui/team-avatar";
 import { cn } from "@/lib/utils";
 
 /** Per-team color classes for the avatar swatch — falls back to violet for unknown teams / assignee rows. */
@@ -125,7 +126,9 @@ export function WorkloadChart({ initiatives, year, quarter, sprint, team, teams,
                           : "bg-violet-100 text-violet-700 ring-violet-200/80",
                   )}
                 >
-                  {teamMode ? <Users className="size-3" /> : (row.initials || <User className="size-3" />)}
+                  {teamMode
+                    ? <TeamAvatar slug={row.teamId} sizePx={20} rounded="rounded-full" fallback={<Users className="size-3" />} />
+                    : (row.initials || <User className="size-3" />)}
                 </span>
 
                 <div className="min-w-0 flex-1">

@@ -13,6 +13,7 @@ import {
 
 import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
 import { normalizeWorkspaceUserTeam, teamLabelForWorkspaceUser } from "@/lib/workspace-users";
+import { TeamAvatar } from "@/components/ui/team-avatar";
 import { cn } from "@/lib/utils";
 
 type TeamRow = { id: string; label: string };
@@ -244,7 +245,7 @@ export function TeamIdCombobox({
                   <button
                     type="button"
                     className={cn(
-                      "w-full px-2.5 py-1.5 text-left text-[13px] font-semibold hover:bg-slate-100",
+                      "flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-[13px] font-semibold hover:bg-slate-100",
                       r.id ? "text-slate-800" : "text-slate-500",
                     )}
                     onMouseDown={(ev) => {
@@ -252,6 +253,7 @@ export function TeamIdCombobox({
                       commitPick(r.id);
                     }}
                   >
+                    {r.id ? <TeamAvatar slug={r.id} sizePx={16} /> : null}
                     {r.label}
                   </button>
                 </li>
@@ -262,8 +264,20 @@ export function TeamIdCombobox({
         )
       : null;
 
+  // Show the selected team's logo (or default team icon) inside the input
+  // so the picker reads like a chip even when collapsed. Mirrors what
+  // `AssigneeFieldDecoration` does for user avatars. Hidden while focused so
+  // it doesn't cover the user's typing.
+  const showSelectedDecoration = Boolean(teamId) && !focused;
   return (
     <div ref={wrapRef} className="relative min-w-0 w-full">
+      {showSelectedDecoration ? (
+        <TeamAvatar
+          slug={teamId}
+          sizePx={16}
+          className="pointer-events-none absolute left-2 top-1/2 z-10 -translate-y-1/2"
+        />
+      ) : null}
       <input
         ref={inputRef}
         id={inputIdProp}
@@ -301,7 +315,7 @@ export function TeamIdCombobox({
         onKeyDown={(e) => {
           if (e.key === "Escape") setOpen(false);
         }}
-        className={cn(className)}
+        className={cn(className, showSelectedDecoration && "pl-8")}
       />
       {dropdown}
     </div>

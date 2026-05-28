@@ -73,10 +73,13 @@ export function monthTeamLabelForId(teamId: string | null | undefined): string |
   return MONTH_TEAM_COLUMNS.find((t) => t.id === teamId)?.label ?? null;
 }
 
-/** Pill for Gantt epic bars: delivery team assignment (or unassigned / custom slug). */
+/** Pill for Gantt epic bars: delivery team assignment (or unassigned / custom
+ *  slug). `slug` is the team identifier (or null when unassigned) so callers
+ *  can resolve the team's logo image alongside the label. */
 export function epicDeliveryTeamAssignmentChip(teamId: string | null | undefined): {
   label: string;
   className: string;
+  slug: string | null;
 } {
   const known = monthTeamLabelForId(teamId);
   if (known) {
@@ -86,6 +89,7 @@ export function epicDeliveryTeamAssignmentChip(teamId: string | null | undefined
     return {
       label: known,
       className: `inline-flex max-w-[7rem] shrink-0 truncate rounded px-2 py-0.5 text-[12px] font-normal leading-none ring-1 ${pill}`,
+      slug: teamId ?? null,
     };
   }
   const raw = teamId?.trim();
@@ -99,12 +103,14 @@ export function epicDeliveryTeamAssignmentChip(teamId: string | null | undefined
       label,
       className:
         "inline-flex max-w-[7rem] shrink-0 truncate rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-[12px] font-normal leading-none text-slate-700 ring-1 ring-slate-200/80",
+      slug: raw,
     };
   }
   return {
     label: "Unassigned",
     className:
       "inline-flex max-w-[6rem] shrink-0 truncate rounded border border-slate-200 bg-slate-100 px-2 py-0.5 text-[12px] font-normal leading-none text-slate-500 ring-1 ring-slate-200/80",
+    slug: null,
   };
 }
 

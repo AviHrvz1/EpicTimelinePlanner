@@ -31,22 +31,31 @@ export const DEMO_TEAM_LABELS: Record<DemoTeamSlug, string> = {
  * `startMonth` the first month — chosen so the 10 initiatives are spread
  * across Q1-Q4 without piling up.
  */
+/** One epic's placement within its initiative window: `span` = length in
+ *  months (1 = a month, 2 = two months, 3 = a quarter, 4 = quarter + a month);
+ *  `gap` = empty months left BEFORE this epic (0 = back-to-back with the
+ *  previous one). The 5 epics of an initiative are laid out sequentially, so
+ *  they never overlap on the shared timeline row. */
+export interface DemoEpicSlot {
+  span: number;
+  gap: number;
+}
+
 export interface DemoInitiativeSeed {
   title: string;
   icon: string;
   /** 1-12, calendar-month start within the plan year. */
   startMonth: number;
-  /** Number of months the initiative spans (inclusive). */
-  monthSpan: number;
+  /** Placement of this initiative's 5 epics (one per team). Durations are
+   *  deliberately varied — a mix of 1-month, 2-month, quarter (3), and
+   *  quarter-plus-a-month (4) epics, with occasional gaps between them — so
+   *  the Gantt shows realistic spread instead of uniform one-month blocks.
+   *  The initiative's own end month is derived from the last epic's end. */
+  epicLayout: DemoEpicSlot[];
 }
 
-// Staircase layout: start months cascade Jan → Aug so the 10 initiative rows
-// form a top-left → bottom-right diagonal on the all-quarters Gantt.
-//
-// Spans 5-6 months keep most initiatives within 1-2 quarters — wider spans
-// were producing 3-quarter chips on the middle-panel summary, which reads
-// as "too long" for one initiative. Two land on quarter boundaries and may
-// touch 3 quarters; everything else is 2.
+// Staircase layout: start months cascade so the 10 initiative rows form a
+// top-left → bottom-right diagonal on the all-quarters Gantt.
 //
 // Icons left blank intentionally: the Gantt's `InitiativeTimelineBar`
 // hardcodes the initiative bar icon to the lightning-bolt fallback
@@ -55,20 +64,20 @@ export interface DemoInitiativeSeed {
 // bolt — consistent with everywhere else in the app — instead of a
 // per-initiative emoji the rest of the UI doesn't surface.
 //
-// Epic widths produced by the 5-slot chaining math:
-//   span 5 → [1,1,1,1,1]
-//   span 6 → [1,1,1,1,2]
+// Each `epicLayout` has exactly 5 slots (one epic per team). Spans cover
+// 1/2/3/4 months across the dataset so the planner shows a real range of
+// epic widths; gaps (>0) leave breathing room between some epics.
 export const DEMO_INITIATIVES: DemoInitiativeSeed[] = [
-  { title: "Onboarding revamp", icon: "", startMonth: 1, monthSpan: 5 },
-  { title: "Payments platform v2", icon: "", startMonth: 1, monthSpan: 6 },
-  { title: "Mobile app redesign", icon: "", startMonth: 2, monthSpan: 5 },
-  { title: "Analytics data warehouse", icon: "", startMonth: 3, monthSpan: 6 },
-  { title: "Growth experiments Q2", icon: "", startMonth: 4, monthSpan: 5 },
-  { title: "Search & discovery", icon: "", startMonth: 4, monthSpan: 6 },
-  { title: "Reliability & SLOs", icon: "", startMonth: 5, monthSpan: 5 },
-  { title: "Customer self-serve", icon: "", startMonth: 6, monthSpan: 5 },
-  { title: "AI-assisted workflows", icon: "", startMonth: 7, monthSpan: 6 },
-  { title: "Year-end performance push", icon: "", startMonth: 8, monthSpan: 5 },
+  { title: "Onboarding revamp", icon: "", startMonth: 1, epicLayout: [{ span: 1, gap: 0 }, { span: 2, gap: 0 }, { span: 1, gap: 1 }, { span: 3, gap: 0 }, { span: 1, gap: 1 }] },
+  { title: "Payments platform v2", icon: "", startMonth: 1, epicLayout: [{ span: 2, gap: 0 }, { span: 1, gap: 1 }, { span: 4, gap: 0 }, { span: 1, gap: 1 }, { span: 1, gap: 0 }] },
+  { title: "Mobile app redesign", icon: "", startMonth: 2, epicLayout: [{ span: 1, gap: 0 }, { span: 3, gap: 0 }, { span: 1, gap: 1 }, { span: 1, gap: 0 }, { span: 2, gap: 1 }] },
+  { title: "Analytics data warehouse", icon: "", startMonth: 1, epicLayout: [{ span: 3, gap: 0 }, { span: 1, gap: 1 }, { span: 2, gap: 0 }, { span: 1, gap: 1 }, { span: 1, gap: 0 }] },
+  { title: "Growth experiments Q2", icon: "", startMonth: 4, epicLayout: [{ span: 1, gap: 0 }, { span: 2, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }] },
+  { title: "Search & discovery", icon: "", startMonth: 3, epicLayout: [{ span: 2, gap: 0 }, { span: 1, gap: 1 }, { span: 1, gap: 0 }, { span: 3, gap: 0 }, { span: 1, gap: 0 }] },
+  { title: "Reliability & SLOs", icon: "", startMonth: 5, epicLayout: [{ span: 1, gap: 0 }, { span: 2, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }] },
+  { title: "Customer self-serve", icon: "", startMonth: 3, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 1 }, { span: 3, gap: 0 }, { span: 1, gap: 1 }, { span: 1, gap: 0 }] },
+  { title: "AI-assisted workflows", icon: "", startMonth: 2, epicLayout: [{ span: 2, gap: 0 }, { span: 1, gap: 1 }, { span: 1, gap: 0 }, { span: 4, gap: 0 }, { span: 1, gap: 0 }] },
+  { title: "Year-end performance push", icon: "", startMonth: 8, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }] },
 ];
 
 /**

@@ -59,6 +59,7 @@ import { InitiativeStatus } from "@/lib/generated/prisma";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { resolveStoryYearSprint } from "@/lib/year-sprint";
 import { resolveAssigneeAvatar, UserAvatar } from "@/components/ui/user-avatar";
+import { TeamAvatar } from "@/components/ui/team-avatar";
 import { formatAssigneeShortLabel } from "@/lib/assignee-display";
 import { cn } from "@/lib/utils";
 
@@ -1081,7 +1082,7 @@ function InitiativeTreeEpicRow({
                   // aren't truncated — the chip auto-shrinks if the row is
                   // tight, but no longer caps at 7rem.
                   <span className={cn(epicTeamChip.className, epicBadgeBase, "max-w-[10rem] gap-1")}>
-                    <Users className="size-2.5 shrink-0" aria-hidden />
+                    <TeamAvatar slug={epicTeamChip.slug} sizePx={10} fallback={<Users className="size-2.5 shrink-0" aria-hidden />} />
                     {epicTeamChip.label}
                   </span>
                 ) : null}
@@ -1831,7 +1832,7 @@ function SprintEpicCard({
                   <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
                     {epicTeamChip ? (
                       <span className={cn(epicTeamChip.className, epicBadgeBase, "max-w-[10rem] gap-1")}>
-                        <Users className="size-2.5 shrink-0" aria-hidden />
+                        <TeamAvatar slug={epicTeamChip.slug} sizePx={10} fallback={<Users className="size-2.5 shrink-0" aria-hidden />} />
                         {epicTeamChip.label}
                       </span>
                     ) : null}
@@ -2206,7 +2207,13 @@ export function InitiativeListPanel({
       .map(([value, label]) => ({
         value,
         label,
-        icon: <span className="inline-block size-2.5 shrink-0 rounded-full bg-slate-400" aria-hidden />,
+        icon: (
+          <TeamAvatar
+            slug={value}
+            sizePx={14}
+            fallback={<span className="inline-block size-2.5 shrink-0 rounded-full bg-slate-400" aria-hidden />}
+          />
+        ),
       }));
     return [
       { value: "all", label: "All Teams", icon: <Users className="size-3.5 text-sky-400" /> },
@@ -2214,15 +2221,21 @@ export function InitiativeListPanel({
         value: team.id,
         label: team.label,
         icon: (
-          <span
-            className={cn(
-              "inline-block size-2.5 rounded-full",
-              team.id === "platform" && "bg-sky-500",
-              team.id === "experience" && "bg-violet-500",
-              team.id === "data" && "bg-amber-500",
-              team.id === "mobile" && "bg-emerald-500",
-              team.id === "growth" && "bg-rose-500",
-            )}
+          <TeamAvatar
+            slug={team.id}
+            sizePx={14}
+            fallback={
+              <span
+                className={cn(
+                  "inline-block size-2.5 rounded-full",
+                  team.id === "platform" && "bg-sky-500",
+                  team.id === "experience" && "bg-violet-500",
+                  team.id === "data" && "bg-amber-500",
+                  team.id === "mobile" && "bg-emerald-500",
+                  team.id === "growth" && "bg-rose-500",
+                )}
+              />
+            }
           />
         ),
       })),

@@ -8,6 +8,7 @@ import { StoryStatus } from "@/lib/generated/prisma";
 import { epicTimelineDraggableId, monthEpicKanbanDropId } from "@/lib/epic-dnd-ids";
 import { collectEpicsForMonthStatusBoard, deriveEpicAggregateStatus } from "@/lib/month-epic-kanban";
 import { epicDeliveryTeamAssignmentChip } from "@/lib/month-team-board";
+import { TeamAvatar } from "@/components/ui/team-avatar";
 import { EpicItem, InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
@@ -147,7 +148,7 @@ function MonthEpicKanbanCard({
           <div className="mt-2 flex flex-wrap items-center gap-1">
             {teamChip ? (
               <span className={cn("inline-flex items-center gap-0.5", chipBase, teamChip.className)}>
-                <Users className="size-2.5 shrink-0" aria-hidden />
+                <TeamAvatar slug={epic.team} sizePx={10} fallback={<Users className="size-2.5 shrink-0" aria-hidden />} />
                 {teamChip.label}
               </span>
             ) : null}
