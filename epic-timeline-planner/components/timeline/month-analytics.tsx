@@ -388,7 +388,7 @@ function EpicLegendRowButton({
         onBlur={() => setHover(false)}
         className={cn(
           "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left transition",
-          on && "bg-indigo-50 font-semibold ring-1 ring-indigo-200/70",
+          on && "bg-indigo-50 font-semibold",
           textClass,
         )}
       >
