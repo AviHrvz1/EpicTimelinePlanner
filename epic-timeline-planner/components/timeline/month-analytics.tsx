@@ -1091,9 +1091,9 @@ export function MonthAnalytics({
               onClick={() => onOpenEpic(epicId)}
               title="Open epic"
               aria-label="Open epic"
-              className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 text-indigo-700 ring-1 ring-indigo-200/80 hover:from-sky-200/80 hover:via-indigo-200/80 hover:to-violet-200/80 hover:text-indigo-900"
+              className="ml-1 inline-flex items-center justify-center text-indigo-500 hover:text-indigo-700"
             >
-              <ExternalLink className="size-3" />
+              <ExternalLink className="size-3.5" />
             </button>
           ) : null}
           {")"}
@@ -1115,9 +1115,9 @@ export function MonthAnalytics({
                 onClick={() => onOpenInitiative(initId)}
                 title="Open initiative"
                 aria-label="Open initiative"
-                className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 text-indigo-700 ring-1 ring-indigo-200/80 hover:from-sky-200/80 hover:via-indigo-200/80 hover:to-violet-200/80 hover:text-indigo-900"
+                className="ml-1 inline-flex items-center justify-center text-indigo-500 hover:text-indigo-700"
               >
-                <ExternalLink className="size-3" />
+                <ExternalLink className="size-3.5" />
               </button>
             ) : null}
             {")"}
@@ -2760,12 +2760,13 @@ export function MonthAnalytics({
     (burnUpEpicRows.length > 1 && burnUpVisibleKeys.length === 1);
 
   /**
-   * Title suffix for "Epic Scope Burndown" — `scopeTitleSuffix` (Epic/Initiative
-   * Scope filter) wins; otherwise, if the legend is narrowed to a single epic
-   * line, show that epic's title in brackets with an open-dialog icon.
+   * Title suffix for "Epic Scope Burndown" — a legend narrowed to one
+   * epic WINS (so clicking a single epic in the legend retitles the
+   * chart to that epic even when the scope picker is on \"All\" or on
+   * an initiative). Otherwise fall back to `scopeTitleSuffix` (the
+   * Epic/Initiative Scope picker selection).
    */
   const burndownTitleSuffix = useMemo<ReactNode>(() => {
-    if (scopeTitleSuffix) return scopeTitleSuffix;
     if (burndownVisibleKeys.length === 1) {
       const key = burndownVisibleKeys[0]!;
       if (key !== "epicIdeal") {
@@ -2793,12 +2794,13 @@ export function MonthAnalytics({
         }
       }
     }
+    if (scopeTitleSuffix) return scopeTitleSuffix;
     return "";
   }, [scopeTitleSuffix, burndownVisibleKeys, burndownLegendItems, onOpenEpic]);
 
-  /** Same shape as `burndownTitleSuffix`, against the Burnup legend. */
+  /** Same shape as `burndownTitleSuffix`, against the Burnup legend.
+   *  Single-epic legend pick WINS over the scope picker. */
   const burnUpTitleSuffix = useMemo<ReactNode>(() => {
-    if (scopeTitleSuffix) return scopeTitleSuffix;
     if (burnUpVisibleKeys.length === 1) {
       const row = burnUpEpicRows.find((r) => r.id === burnUpVisibleKeys[0]);
       if (row) {
@@ -2814,9 +2816,9 @@ export function MonthAnalytics({
                 onClick={() => onOpenEpic(rowId)}
                 title="Open epic"
                 aria-label="Open epic"
-                className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 text-indigo-700 ring-1 ring-indigo-200/80 hover:from-sky-200/80 hover:via-indigo-200/80 hover:to-violet-200/80 hover:text-indigo-900"
+                className="ml-1 inline-flex items-center justify-center text-indigo-500 hover:text-indigo-700"
               >
-                <ExternalLink className="size-3" />
+                <ExternalLink className="size-3.5" />
               </button>
             ) : null}
             {")"}
@@ -2824,6 +2826,7 @@ export function MonthAnalytics({
         );
       }
     }
+    if (scopeTitleSuffix) return scopeTitleSuffix;
     return "";
   }, [scopeTitleSuffix, burnUpVisibleKeys, burnUpEpicRows, onOpenEpic]);
 
