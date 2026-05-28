@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertOctagon, AlertTriangle, Check, GripHorizontal, X } from "lucide-react";
+import { AlertOctagon, AlertTriangle, Check, CheckCheck, GripHorizontal, X } from "lucide-react";
 
 import type { HealthStatus, ProgressBasis, ProgressResult } from "@/lib/progress";
 import { cn } from "@/lib/utils";
@@ -72,6 +72,13 @@ const STATUS_META: Record<
   HealthStatus,
   { label: string; icon: typeof Check; chip: string }
 > = {
+  done: {
+    label: "Done",
+    icon: CheckCheck,
+    // Saturated emerald so "Done" reads as a celebratory end-state and
+    // is visually distinct from the paler "On Track" pill.
+    chip: "bg-emerald-500 text-white ring-emerald-600/60",
+  },
   onTrack: {
     label: "On Track",
     icon: Check,

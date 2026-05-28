@@ -10,6 +10,8 @@ import confetti from "canvas-confetti";
 
 export function fireApprovalConfetti(): void {
   if (typeof window === "undefined") return;
+  // Temporarily disabled — remove this early return to re-enable.
+  return;
 
   const duration = 500;
   const end = Date.now() + duration;

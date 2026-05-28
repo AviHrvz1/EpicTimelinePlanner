@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Activity, AlertOctagon, AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronRight, Folder, GripHorizontal, Info, ListChecks, Search, StickyNote, X, Zap } from "lucide-react";
+import { Activity, AlertOctagon, AlertTriangle, Check, CheckCheck, CheckCircle2, ChevronDown, ChevronRight, Folder, GripHorizontal, Info, ListChecks, Search, StickyNote, X, Zap } from "lucide-react";
 
 import type { HealthStatus } from "@/lib/progress";
 import { cn } from "@/lib/utils";
@@ -619,7 +619,7 @@ function BasisHelp() {
   );
 }
 
-const STATUS_ORDER: HealthStatus[] = ["onTrack", "watch", "atRisk", "overdue"];
+const STATUS_ORDER: HealthStatus[] = ["done", "onTrack", "watch", "atRisk", "overdue"];
 
 const STATUS_META: Record<
   HealthStatus,
@@ -638,6 +638,16 @@ const STATUS_META: Record<
     countFg: string;
   }
 > = {
+  done: {
+    label: "Done",
+    icon: CheckCheck,
+    dotBg: "bg-emerald-600",
+    dotFg: "text-white",
+    activeBg: "bg-emerald-50",
+    activeBorder: "border-emerald-400",
+    fillBg: "bg-gradient-to-r from-emerald-300/80 to-transparent",
+    countFg: "text-emerald-800",
+  },
   onTrack: {
     label: "On Track",
     icon: Check,

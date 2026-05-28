@@ -14,7 +14,7 @@
  *   - daysLeft is initialized to estimatedDays when a story is sized
  *   - daysLeft <= estimatedDays always
  */
-export type HealthStatus = "onTrack" | "watch" | "atRisk" | "overdue";
+export type HealthStatus = "done" | "onTrack" | "watch" | "atRisk" | "overdue";
 
 /** Which formula drives the rendered progress %.
  *
@@ -220,7 +220,7 @@ export function computeProgress(input: ProgressInputs): ProgressResult {
   if (now > input.end && progressPercent < 100) {
     status = "overdue";
   } else if (progressPercent >= 100) {
-    status = "onTrack";
+    status = "done";
   } else if (deltaDays <= HEALTH_ON_TRACK_DELTA) {
     status = "onTrack";
   } else if (deltaDays < HEALTH_AT_RISK_DELTA) {
@@ -262,6 +262,9 @@ export interface InitiativeRollupInputs {
 }
 
 const STATUS_RANK: Record<HealthStatus, number> = {
+  // `done` ranks alongside onTrack (0) — a 100%-done epic shouldn't drag
+  // an initiative's worst-child rollup any worse than an on-track one.
+  done: 0,
   onTrack: 0,
   watch: 1,
   atRisk: 2,

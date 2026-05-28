@@ -4583,7 +4583,7 @@ export function TimelineGrid({
   // source rows based on whether a quarter is focused, so the popover's
   // counts always reflect what the user is actually looking at.
   const ganttHealthData = useMemo(() => {
-    const counts: Record<HealthStatus, number> = { onTrack: 0, watch: 0, atRisk: 0, overdue: 0 };
+    const counts: Record<HealthStatus, number> = { done: 0, onTrack: 0, watch: 0, atRisk: 0, overdue: 0 };
     const statusByBarId = new Map<string, HealthStatus>();
     // Items list parallel to `statusByBarId` so the popover can render an
     // autocomplete of "what's currently in scope on the Gantt" without

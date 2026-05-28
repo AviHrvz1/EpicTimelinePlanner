@@ -4401,7 +4401,7 @@ export function MonthAnalytics({
                 ) : (
                 <div className="absolute inset-0">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={burnUpDataTruncated} margin={{ top: 2, right: 26, left: 18, bottom: 0 }}>
+                    <LineChart data={burnUpDataTruncated} margin={{ top: 38, right: 60, left: 18, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                       <XAxis
                         dataKey="labelShort"
