@@ -191,6 +191,11 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
   let totalEpics = 0;
   let totalStories = 0;
   let totalSnapshots = 0;
+  // Running cursor for initiative timelineRow placement. Each initiative
+  // bumps it by its own `rowsReserved` (1 bar + 2–3 packed epic sub-rows)
+  // so initiatives stack vertically without overlap regardless of how
+  // tightly the epics packed.
+  let previousInitiativeBottomRow = 0;
   for (let initIdx = 0; initIdx < DEMO_INITIATIVES.length; initIdx++) {
     const seed = DEMO_INITIATIVES[initIdx]!;
     const startMonth = seed.startMonth;
@@ -216,6 +221,20 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
     const initRoster = membersByTeam.get(initTeam) ?? [];
     const initAssignee = initRoster[initIdx % Math.max(1, initRoster.length)] ?? null;
 
+    // Per-initiative row packing. `rowGroups` lists which epic indices share
+    // each Gantt sub-row (defaults to one-per-row stairs). We compute the
+    // resulting per-epic sub-row offset (1..N) here so it's used by both
+    // the initiative row reservation and the per-epic timelineRow below.
+    const rowGroups = seed.rowGroups ?? seed.epicLayout.map((_, i) => [i]);
+    const subRowByEpicIdx = new Map<number, number>();
+    rowGroups.forEach((group, rowIdx) => {
+      for (const epicIdx of group) subRowByEpicIdx.set(epicIdx, rowIdx + 1);
+    });
+    // Reserve `1 + max(rowGroups.length, 3)` rows per initiative — the bar
+    // itself plus enough sub-rows to fit the packed epics. The min of 3 keeps
+    // a consistent vertical rhythm even on initiatives that pack tightly.
+    const rowsReserved = 1 + Math.max(rowGroups.length, 3);
+
     const initiative = await db.initiative.create({
       data: {
         title: seed.title,
@@ -232,16 +251,16 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
         endMonth,
         year: planYear,
         team: initTeam,
-        // Reserve 6 Gantt rows per initiative: the initiative bar at the top
-        // and 5 sub-rows below — one for each of the 5 child epics. Placing
-        // each epic on its own row (see the team loop) produces a clean
-        // top-left → bottom-right "stairs" silhouette as time progresses,
-        // with no two epic bars on the same row.
-        timelineRow: initIdx * 6,
+        // Each initiative reserves `rowsReserved` Gantt rows: the bar at the
+        // top and 2–3 packed sub-rows below for child epics. Epics within
+        // each sub-row are sequenced in time so they don't overlap.
+        timelineRow: previousInitiativeBottomRow,
         roadmapId: DEMO_DEFAULT_ROADMAP_ID,
         labels: pickDemoLabels(initIdx, 2) ?? null,
       },
     });
+    const initiativeRow = previousInitiativeBottomRow;
+    previousInitiativeBottomRow += rowsReserved;
 
     // 5. Create 5 epics under this initiative — one per team. Each epic's
     //    month window comes from the precomputed `epicWindows` (sequential,
@@ -281,13 +300,11 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
           planStartMonth: epicStartMonth,
           planEndMonth: epicEndMonth,
           planEndSprint,
-          // Pure stair pattern: each epic gets its own sub-row directly
-          // beneath its initiative (initiative is at initIdx*6; epics live
-          // at +1..+5, one per teamIdx). Because the per-initiative
-          // `epicLayout` lays epics out sequentially in time, each lower
-          // sub-row also starts further right than the one above — the
-          // result on the Gantt is a clean cascading staircase.
-          timelineRow: initIdx * 6 + 1 + teamIdx,
+          // Packed stair pattern: per-initiative `rowGroups` defines which
+          // epics share a sub-row. Epics within a row are sequenced in time
+          // (epicLayout order = chronological) so no overlap. The result is
+          // a mix of 1–3 epic bars per row across the Gantt.
+          timelineRow: initiativeRow + (subRowByEpicIdx.get(teamIdx) ?? teamIdx + 1),
           team: teamSlug,
           originalEstimateDays: null,
           labels: pickDemoLabels(initIdx * 5 + teamIdx, 2) ?? null,

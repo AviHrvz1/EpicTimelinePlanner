@@ -52,6 +52,14 @@ export interface DemoInitiativeSeed {
    *  the Gantt shows realistic spread instead of uniform one-month blocks.
    *  The initiative's own end month is derived from the last epic's end. */
   epicLayout: DemoEpicSlot[];
+  /** Optional row-packing: each inner array is a set of epic indices that
+   *  share a Gantt sub-row. Epic indices line up with `epicLayout` (so 0 =
+   *  earliest-in-time, 4 = latest). Because epics within an initiative are
+   *  laid out sequentially with no time overlap, multiple indices on the
+   *  same row never collide. Defaults to one-epic-per-row (`[[0],[1],...,[4]]`)
+   *  when omitted. Patterns mix 1–3 epics per row across initiatives so the
+   *  Gantt visually breaks out of the "one epic per row" stairs. */
+  rowGroups?: number[][];
 }
 
 // Staircase layout: start months cascade so the 10 initiative rows form a
@@ -76,16 +84,20 @@ export interface DemoInitiativeSeed {
 // the catalogue still includes 1-month, 2-month, quarter (3-month), and
 // quarter-plus-a-month (4-month) epics, plus the occasional in-flight gap.
 export const DEMO_INITIATIVES: DemoInitiativeSeed[] = [
-  { title: "Onboarding revamp", icon: "", startMonth: 1, epicLayout: [{ span: 1, gap: 0 }, { span: 2, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }] },
-  { title: "Payments platform v2", icon: "", startMonth: 2, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 2, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }] },
-  { title: "Mobile app redesign", icon: "", startMonth: 3, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 3, gap: 0 }, { span: 1, gap: 0 }] },
-  { title: "Analytics data warehouse", icon: "", startMonth: 4, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }] },
-  { title: "Growth experiments Q2", icon: "", startMonth: 5, epicLayout: [{ span: 1, gap: 0 }, { span: 2, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }] },
-  { title: "Search & discovery", icon: "", startMonth: 4, epicLayout: [{ span: 2, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 4, gap: 0 }] },
-  { title: "Reliability & SLOs", icon: "", startMonth: 6, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }] },
-  { title: "Customer self-serve", icon: "", startMonth: 5, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 1 }, { span: 1, gap: 0 }, { span: 2, gap: 0 }] },
-  { title: "AI-assisted workflows", icon: "", startMonth: 7, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 2, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }] },
-  { title: "Year-end performance push", icon: "", startMonth: 8, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }] },
+  // rowGroups vary across initiatives so the Gantt mixes single, paired,
+  // and tripled epic rows (1–3 epics per row). Indices reference the
+  // epicLayout entries (0 = earliest, 4 = latest); same-row indices never
+  // overlap because epicLayout sequences epics in time.
+  { title: "Onboarding revamp", icon: "", startMonth: 1, epicLayout: [{ span: 1, gap: 0 }, { span: 2, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }], rowGroups: [[0, 1], [2], [3, 4]] },
+  { title: "Payments platform v2", icon: "", startMonth: 2, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 2, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }], rowGroups: [[0], [1, 2, 3], [4]] },
+  { title: "Mobile app redesign", icon: "", startMonth: 3, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 3, gap: 0 }, { span: 1, gap: 0 }], rowGroups: [[0, 1, 2], [3, 4]] },
+  { title: "Analytics data warehouse", icon: "", startMonth: 4, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }], rowGroups: [[0, 1], [2, 3], [4]] },
+  { title: "Growth experiments Q2", icon: "", startMonth: 5, epicLayout: [{ span: 1, gap: 0 }, { span: 2, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }], rowGroups: [[0], [1, 2], [3, 4]] },
+  { title: "Search & discovery", icon: "", startMonth: 4, epicLayout: [{ span: 2, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 4, gap: 0 }], rowGroups: [[0, 1], [2, 3, 4]] },
+  { title: "Reliability & SLOs", icon: "", startMonth: 6, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }], rowGroups: [[0, 1, 2], [3], [4]] },
+  { title: "Customer self-serve", icon: "", startMonth: 5, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 1 }, { span: 1, gap: 0 }, { span: 2, gap: 0 }], rowGroups: [[0], [1, 2, 3], [4]] },
+  { title: "AI-assisted workflows", icon: "", startMonth: 7, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 2, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }], rowGroups: [[0, 1], [2], [3, 4]] },
+  { title: "Year-end performance push", icon: "", startMonth: 8, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }], rowGroups: [[0, 1, 2], [3, 4]] },
 ];
 
 /**
