@@ -2428,7 +2428,7 @@ export function MonthAnalytics({
     const hasSnapshots = allStories.some((s) => (s.snapshots?.length ?? 0) > 0);
     const currentCompleted = allStories.filter((s) => storyDone(s.status)).reduce((sum, s) => sum + storyValue(s), 0);
 
-    return Array.from({ length: totalDays }, (_, idx): { labelShort: string; isToday: boolean; completed: number | null; scope: number; ideal: number | null } => {
+    return Array.from({ length: totalDays }, (_, idx): { labelShort: string; isToday: boolean; completed: number | null; scope: number; ideal: number | null; [epicKey: string]: number | string | boolean | null } => {
       const dayIdx = idx + 1;
       const dayDate = new Date(periodStartDate);
       dayDate.setDate(dayDate.getDate() + idx);
@@ -2436,47 +2436,53 @@ export function MonthAnalytics({
       const isToday = dayStart.getTime() === todayStart.getTime();
 
       let completed: number | null = null;
+      // Per-epic completed values — populated when snapshots are available
+      // so each epic in scope can render its own line on the chart (parity
+      // with the burndown view).
+      const perEpic: Record<string, number | null> = {};
+      for (const m of epicMeta) perEpic[m.id] = null;
       if (dayIdx <= elapsedDays) {
         if (hasSnapshots) {
-          // Burnup mirrors burndown: completed = totalScope − open work
-          // remaining. Counts in-progress daysLeft reductions, not just
-          // closed stories, so the two charts always agree.
-          // In `epicEst` basis, scale per-epic so units match: each epic's
-          // open story-days are mapped into its own `epicEst` slice of the
-          // axis via (open / startOpen) × epicEst.
-          let openRemainingScaled = 0;
-          if (useEpicEst && epicEstSum > 0) {
-            for (const m of epicMeta) {
-              let epicOpen = 0;
-              for (const story of m.stories) {
-                const snap = latestSnapshotAtDayCached(story, dayDate);
-                const status = snap?.status ?? story.status;
-                if (status !== "todo" && status !== "inProgress") continue;
-                const daysLeft = snap?.daysLeft ?? snap?.estimatedDays ?? story.daysLeft ?? story.estimatedDays ?? 1;
-                epicOpen += Math.max(0, daysLeft);
-              }
-              if (m.startOpenStoryDays > 0 && m.epicEst > 0) {
-                openRemainingScaled += (epicOpen / m.startOpenStoryDays) * m.epicEst;
-              } else if (m.epicEst > 0) {
-                openRemainingScaled += Math.min(epicOpen, m.epicEst);
-              } else {
-                openRemainingScaled += epicOpen;
-              }
-            }
-          } else {
-            for (const story of allStories) {
+          // Burnup mirrors burndown: completed = scope − open work remaining.
+          // Counts in-progress daysLeft reductions, not just closed stories.
+          // We compute per-epic completed inside the same pass (so the
+          // visible "All" toggle can render every epic's line), then sum
+          // for the aggregate `completed`.
+          let openRemainingScaledAgg = 0;
+          for (const m of epicMeta) {
+            let epicOpenStoryDays = 0;
+            let epicTotalStoryValue = 0;
+            for (const story of m.stories) {
+              epicTotalStoryValue += storyValue(story);
               const snap = latestSnapshotAtDayCached(story, dayDate);
               const status = snap?.status ?? story.status;
               if (status !== "todo" && status !== "inProgress") continue;
               if (isDays) {
                 const daysLeft = snap?.daysLeft ?? snap?.estimatedDays ?? story.daysLeft ?? story.estimatedDays ?? 1;
-                openRemainingScaled += Math.max(0, daysLeft);
+                epicOpenStoryDays += Math.max(0, daysLeft);
               } else {
-                openRemainingScaled += 1;
+                epicOpenStoryDays += 1;
               }
             }
+            // Per-epic scope + scaled open in the chart's units.
+            let epicScope: number;
+            let epicScaledOpen: number;
+            if (useEpicEst && m.epicEst > 0) {
+              epicScope = m.epicEst;
+              if (m.startOpenStoryDays > 0) {
+                epicScaledOpen = (epicOpenStoryDays / m.startOpenStoryDays) * m.epicEst;
+              } else {
+                epicScaledOpen = Math.min(epicOpenStoryDays, m.epicEst);
+              }
+            } else {
+              epicScope = epicTotalStoryValue;
+              epicScaledOpen = epicOpenStoryDays;
+            }
+            const epicCompleted = Math.max(0, epicScope - epicScaledOpen);
+            perEpic[m.id] = round(epicCompleted);
+            openRemainingScaledAgg += epicScaledOpen;
           }
-          completed = round(Math.max(0, totalScope - openRemainingScaled));
+          completed = round(Math.max(0, totalScope - openRemainingScaledAgg));
         } else {
           const raw = elapsedDays <= 1
             ? currentCompleted
@@ -2491,7 +2497,7 @@ export function MonthAnalytics({
         ideal = round(Math.max(0, Math.min(totalScope, raw)));
       }
 
-      return { labelShort: flowChartDayLabel(dayDate), isToday, completed, scope: round(totalScope), ideal };
+      return { labelShort: flowChartDayLabel(dayDate), isToday, completed, scope: round(totalScope), ideal, ...perEpic };
     });
   }, [selectedEpicOption, monthEpics, burnUpVisibleKeys, planYear, scopeStartMonth, scopeEndMonth, burnUpDueDate, burnUpMetric, burnupBasis]);
 
@@ -2548,27 +2554,10 @@ export function MonthAnalytics({
     return burnUpData.map((row, i) => (i > burnUpDoneAtIdx ? { ...row, completed: null } : row));
   }, [burnUpData, burnUpDoneAtIdx]);
   const isBurnUpDone = burnUpDoneAtIdx >= 0;
-  /** Color for the burnup completed line. Mirrors `burnUpEpicRows`'s
-   *  palette resolution so the line matches its legend marker when there's
-   *  a single visible epic: scope-pinned → palette[0] (epicsInScope length
-   *  is 1); legend-narrowed-to-one → that epic's index in monthEpics.
-   *  Multi-epic aggregate falls back to emerald. */
-  const burnUpCompletedStroke = useMemo(() => {
-    const fallback = "#10b981";
-    if (selectedEpicOption) {
-      // `burnUpEpicRows` builds epicsInScope=[selectedEpicOption.epic] and
-      // colors at idx=0 → palette[0]. Match that here.
-      return LINE_PALETTE[0] ?? fallback;
-    }
-    // When the legend is narrowed to a single visible epic, use its natural
-    // index in monthEpics (which is what burnUpEpicRows used to color it).
-    if (burnUpVisibleKeys.length === 1) {
-      const onlyKey = burnUpVisibleKeys[0]!;
-      const idx = monthEpics.findIndex((r) => r.epic.id === onlyKey);
-      if (idx >= 0) return LINE_PALETTE[idx % LINE_PALETTE.length] ?? fallback;
-    }
-    return fallback;
-  }, [selectedEpicOption, monthEpics, burnUpVisibleKeys]);
+  // (Previously: `burnUpCompletedStroke` resolved a single aggregate line
+  //  color. Replaced by per-epic <Line> rendering on the chart, each one
+  //  colored from LINE_PALETTE matching its legend row, so this memo is no
+  //  longer needed.)
 
   const burnUpEpicRows = useMemo(() => {
     const epicsInScope = selectedEpicOption != null ? [selectedEpicOption.epic] : monthEpics.map((r) => r.epic);
@@ -2758,7 +2747,7 @@ export function MonthAnalytics({
             <ChartNoAxesCombined className="size-4 text-slate-500" aria-hidden />
             Epic / Initiative Scope
           </label>
-          <div className="relative min-w-[22rem] flex-1 max-w-[34rem]">
+          <div className="relative min-w-[28rem] flex-1 max-w-[44rem]">
             <input
               id="month-insights-epic-filter"
               value={epicInput}
@@ -3455,22 +3444,43 @@ export function MonthAnalytics({
               className={INSIGHTS_SCROLL_MAIN}
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
-              <button
-                type="button"
-                onClick={showAllBurndownKeys}
-                className={cn(
-                  "mb-1 w-full rounded-md px-1 py-1 text-left font-medium transition",
-                  isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
-                  allBurndownKeysSelected
-                    ? "text-slate-900 hover:bg-slate-200/70"
-                    : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
-                )}
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  <Layers className="size-3.5" aria-hidden />
-                  All
-                </span>
-              </button>
+              {(() => {
+                // When the user has scoped Insights to a single initiative,
+                // the "All" button reads as that initiative — its title +
+                // Zap icon — and the child epics below sit under a tree
+                // connector. Otherwise it's the generic "All" with Layers.
+                const initiativeScope = selectedInitiativeId !== "all"
+                  ? scopeInitiativeOptions.find((i) => i.id === selectedInitiativeId) ?? null
+                  : null;
+                return (
+                  <button
+                    type="button"
+                    onClick={showAllBurndownKeys}
+                    className={cn(
+                      "mb-1 w-full rounded-md px-1 py-1 text-left font-medium transition",
+                      isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
+                      allBurndownKeysSelected
+                        ? "text-slate-900 hover:bg-slate-200/70"
+                        : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
+                    )}
+                  >
+                    <span className="inline-flex w-full items-center gap-1.5">
+                      {initiativeScope ? (
+                        <Zap className="size-3.5 shrink-0 text-blue-500" aria-hidden />
+                      ) : (
+                        <Layers className="size-3.5 shrink-0" aria-hidden />
+                      )}
+                      <span className="min-w-0 truncate">
+                        {initiativeScope?.title ?? "All"}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })()}
+              {/* Tree connector under the initiative row: when scoped to one,
+               *  child epics sit beneath a vertical line + horizontal stub
+               *  so the legend reads like a file tree. */}
+              <div className={cn(selectedInitiativeId !== "all" && "relative ml-3 border-l border-slate-200 pl-1")}>
               {burndownLegendItems.map((item) => {
                 const on = burndownVisibleKeys.includes(item.key);
                 // "epicIdeal" is the synthetic ideal-line series, not a real
@@ -3495,6 +3505,7 @@ export function MonthAnalytics({
                   />
                 );
               })}
+              </div>
               {burndownFocusedEpicOption ? (
                 <p className="text-[12px] text-slate-500">
                   Due: {selectedEpicDueDate ? selectedEpicDueDate.toLocaleDateString() : "N/A"}
@@ -4274,7 +4285,50 @@ export function MonthAnalytics({
                       })()}
                       <Line type="monotone" dataKey="scope" name="Total scope" stroke="#94a3b8" strokeWidth={1.5} dot={false} isAnimationActive={false} />
                       <Line type="monotone" dataKey="ideal" name={burnUpDueDateLabel ? `Ideal (due ${burnUpDueDateLabel})` : "Ideal"} stroke="#f97316" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} isAnimationActive={false} />
-                      <Line type="monotone" dataKey="completed" name="Completed" stroke={burnUpCompletedStroke} strokeWidth={2} dot={false} connectNulls={false} isAnimationActive={false} />
+                      {/* Per-epic completed lines — one per visible epic,
+                       *  colored with the same palette as the legend marker
+                       *  so each row's icon and its line match. Clicking
+                       *  "All" in the legend turns all of them on at once,
+                       *  matching the burndown's per-epic behavior. */}
+                      {burnUpEpicRows.map((row, rowIdx) =>
+                        burnUpVisibleKeys.includes(row.id) ? (
+                          <Line
+                            key={row.id}
+                            type="monotone"
+                            dataKey={row.id}
+                            name={row.title}
+                            stroke={LINE_PALETTE[rowIdx % LINE_PALETTE.length]}
+                            strokeWidth={2}
+                            dot={false}
+                            connectNulls={false}
+                            isAnimationActive={false}
+                          />
+                        ) : null,
+                      )}
+                      {/* Due target marker — same red BurndownTargetIcon
+                       *  the burndown chart uses, anchored at the burnup's
+                       *  due-date label so the two charts read symmetric.
+                       *  Sits at the scope total (top of the burnup line);
+                       *  the Done ✓ above stacks neatly on top. */}
+                      {burnUpDueDateLabel ? (
+                        <ReferenceDot
+                          x={burnUpDueDateLabel}
+                          y={burnUpScopeTotal}
+                          r={0}
+                          isFront
+                          ifOverflow="visible"
+                          shape={(shapeProps: { cx?: number; cy?: number }) => (
+                            <BurndownTargetIcon cx={shapeProps.cx} cy={shapeProps.cy ?? 0} color="#dc2626" />
+                          )}
+                          label={{
+                            value: `Due ${burnUpDueDateLabel}`,
+                            position: "top",
+                            fill: "#b91c1c",
+                            fontSize: 11,
+                            angle: 0,
+                          }}
+                        />
+                      ) : null}
                       {/* Done ✓ — anchored at the burnup due-date label
                        *  position when the completed line has reached scope.
                        *  Skipped on the story-count axis (no scope line to
@@ -4319,22 +4373,38 @@ export function MonthAnalytics({
                   className={INSIGHTS_SCROLL_MAIN}
                   style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
                 >
-                  {/* All button */}
-                  <button
-                    type="button"
-                    onClick={showAllBurnUpKeys}
-                    className={cn(
-                      "mb-1 w-full rounded-md px-1 py-1 text-left font-medium transition hover:bg-slate-200/70",
-                      isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
-                      allBurnUpKeysSelected ? "text-slate-900" : "text-slate-400",
-                    )}
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      <Layers className="size-3.5" aria-hidden />
-                      All
-                    </span>
-                  </button>
-                  {/* Epic rows */}
+                  {(() => {
+                    // Same "All" / initiative-scoped header pattern as the
+                    // burndown legend (see comment there).
+                    const initiativeScope = selectedInitiativeId !== "all"
+                      ? scopeInitiativeOptions.find((i) => i.id === selectedInitiativeId) ?? null
+                      : null;
+                    return (
+                      <button
+                        type="button"
+                        onClick={showAllBurnUpKeys}
+                        className={cn(
+                          "mb-1 w-full rounded-md px-1 py-1 text-left font-medium transition hover:bg-slate-200/70",
+                          isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
+                          allBurnUpKeysSelected ? "text-slate-900" : "text-slate-400",
+                        )}
+                      >
+                        <span className="inline-flex w-full items-center gap-1.5">
+                          {initiativeScope ? (
+                            <Zap className="size-3.5 shrink-0 text-blue-500" aria-hidden />
+                          ) : (
+                            <Layers className="size-3.5 shrink-0" aria-hidden />
+                          )}
+                          <span className="min-w-0 truncate">
+                            {initiativeScope?.title ?? "All"}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })()}
+                  {/* Epic rows — wrapped in a tree-connector container when
+                   *  scoped to a single initiative. */}
+                  <div className={cn(selectedInitiativeId !== "all" && "relative ml-3 border-l border-slate-200 pl-1")}>
                   {burnUpEpicRows.map((row) => {
                     const on = burnUpVisibleKeys.includes(row.id);
                     return (
@@ -4353,6 +4423,7 @@ export function MonthAnalytics({
                       />
                     );
                   })}
+                  </div>
                 </div>
                 <button
                   type="button"
