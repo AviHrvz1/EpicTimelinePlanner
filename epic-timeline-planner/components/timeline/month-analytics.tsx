@@ -1088,9 +1088,9 @@ export function MonthAnalytics({
               onClick={() => onOpenEpic(epicId)}
               title="Open epic"
               aria-label="Open epic"
-              className="ml-1 inline-flex items-center text-slate-400 hover:text-slate-700"
+              className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-200 hover:text-slate-700"
             >
-              <Eye className="size-3.5" />
+              <Eye className="size-3" />
             </button>
           ) : null}
           {")"}
@@ -1111,9 +1111,9 @@ export function MonthAnalytics({
                 onClick={() => onOpenInitiative(initId)}
                 title="Open initiative"
                 aria-label="Open initiative"
-                className="ml-1 inline-flex items-center text-slate-400 hover:text-slate-700"
+                className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-200 hover:text-slate-700"
               >
-                <Eye className="size-3.5" />
+                <Eye className="size-3" />
               </button>
             ) : null}
             {")"}
@@ -2715,9 +2715,9 @@ export function MonthAnalytics({
                   onClick={() => onOpenEpic(key)}
                   title="Open epic"
                   aria-label="Open epic"
-                  className="ml-1 inline-flex items-center text-slate-400 hover:text-slate-700"
+                  className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-200 hover:text-slate-700"
                 >
-                  <Eye className="size-3.5" />
+                  <Eye className="size-3" />
                 </button>
               ) : null}
               {")"}
@@ -2746,9 +2746,9 @@ export function MonthAnalytics({
                 onClick={() => onOpenEpic(rowId)}
                 title="Open epic"
                 aria-label="Open epic"
-                className="ml-1 inline-flex items-center text-slate-400 hover:text-slate-700"
+                className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-200 hover:text-slate-700"
               >
-                <Eye className="size-3.5" />
+                <Eye className="size-3" />
               </button>
             ) : null}
             {")"}
@@ -2879,6 +2879,14 @@ export function MonthAnalytics({
             Epic / Initiative Scope
           </label>
           <div className="relative min-w-[28rem] flex-1 max-w-[44rem]">
+            {/* Selected-scope glyph — Zap for initiative, Folder for epic.
+             *  Hidden when scope is "All"; sits inside the input so the
+             *  selected value reads "[icon] Epic Name". */}
+            {selectedEpicOption ? (
+              <Folder className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-slate-500" aria-hidden />
+            ) : selectedInitiativeId !== "all" ? (
+              <Zap className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-blue-500" aria-hidden />
+            ) : null}
             <input
               id="month-insights-epic-filter"
               value={epicInput}
@@ -2911,7 +2919,10 @@ export function MonthAnalytics({
                 if (exact) setSelectedEpicId(exact.id);
               }}
               placeholder="All Epics & Initiatives"
-              className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-[13px] font-semibold text-slate-700"
+              className={cn(
+                "h-9 w-full rounded-md border border-slate-200 bg-white pr-2 text-[13px] font-semibold text-slate-700",
+                selectedEpicOption || selectedInitiativeId !== "all" ? "pl-7" : "pl-2",
+              )}
               aria-label="Filter insights by epic or initiative"
             />
             <button
