@@ -7277,6 +7277,7 @@ export function TimelineGrid({
                     planYear={currentYear}
                     filterEpicTeamIds={sprintFilterTeamIds.length ? sprintFilterTeamIds : null}
                     onOpenEpic={onOpenEpic}
+                    onOpenInitiative={onOpenInitiative}
                     onOpenStory={onOpenStory ?? (() => {})}
                     onOpenSprintKanban={(yearSprint, teamId) =>
                       onEnterSprintStoryBoard?.(yearSprint, sprintStoryBoardEpicTeamFilter(teamId))
@@ -7757,6 +7758,7 @@ export function TimelineGrid({
               planYear={currentYear}
               filterEpicTeamIds={insightsTeamIds.length ? insightsTeamIds : null}
               onOpenEpic={onOpenEpic}
+              onOpenInitiative={onOpenInitiative}
               onOpenStory={onOpenStory ?? (() => {})}
               onOpenSprintKanban={(yearSprint, teamId) =>
                 onEnterSprintStoryBoard?.(yearSprint, isKnownEpicTeamId(teamId) ? teamId : null)
@@ -7779,6 +7781,7 @@ export function TimelineGrid({
               planYear={currentYear}
               filterEpicTeamIds={insightsTeamIds.length ? insightsTeamIds : null}
               onOpenEpic={onOpenEpic}
+              onOpenInitiative={onOpenInitiative}
               onOpenStory={onOpenStory ?? (() => {})}
               onOpenSprintKanban={(yearSprint, teamId) =>
                 onEnterSprintStoryBoard?.(yearSprint, isKnownEpicTeamId(teamId) ? teamId : null)

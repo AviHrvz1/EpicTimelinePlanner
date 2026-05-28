@@ -25,6 +25,7 @@ import {
   Eraser,
   Folder,
   Layers,
+  SquarePen,
   StickyNote,
   TrendingUp,
   User,
@@ -567,6 +568,7 @@ type MonthAnalyticsProps = {
   initialSelectedEpicId?: string;
   initialSelectedInitiativeId?: string;
   onOpenEpic?: (epicId: string) => void;
+  onOpenInitiative?: (initiativeId: string) => void;
   onOpenStory?: (storyId: string) => void;
   onOpenSprintKanban?: (yearSprint: number, teamId: string | null) => void;
   onScopeChange?: (type: "epic" | "initiative" | null, id: string | null, title: string | null) => void;
@@ -806,6 +808,7 @@ export function MonthAnalytics({
   initialSelectedEpicId,
   initialSelectedInitiativeId,
   onOpenEpic,
+  onOpenInitiative,
   onOpenStory,
   onOpenSprintKanban,
   onScopeChange,
@@ -1069,16 +1072,57 @@ export function MonthAnalytics({
     return { health: h.status, tooltip: formatHealthTooltip(h), result: h };
   }, [selectedInitiativeId, monthEpics, planYear, scopeStartMonth, scopeEndMonth, progressBasis]);
   /** Suffix appended to every chart title so they read e.g. "Status (Epic
-   *  Title)" or "Status (Initiative Title)" when a scope is pinned. Empty
-   *  when the scope is "all". */
-  const scopeTitleSuffix = useMemo(() => {
-    if (selectedEpicOption) return ` (${selectedEpicOption.epic.title})`;
+   *  Title)" or "Status (Initiative Title)" when a scope is pinned. The
+   *  title text is followed by a small clickable pencil icon that opens
+   *  the scoped epic/initiative dialog. Empty when the scope is "all". */
+  const scopeTitleSuffix = useMemo<ReactNode>(() => {
+    if (selectedEpicOption) {
+      const epicId = selectedEpicOption.epic.id;
+      return (
+        <>
+          {" ("}
+          <span>{selectedEpicOption.epic.title}</span>
+          {onOpenEpic ? (
+            <button
+              type="button"
+              onClick={() => onOpenEpic(epicId)}
+              title="Open epic"
+              aria-label="Open epic"
+              className="ml-1 inline-flex items-center text-slate-400 hover:text-slate-700"
+            >
+              <SquarePen className="size-3.5" />
+            </button>
+          ) : null}
+          {")"}
+        </>
+      );
+    }
     if (selectedInitiativeId !== "all") {
       const init = scopeInitiativeOptions.find((i) => i.id === selectedInitiativeId);
-      if (init) return ` (${init.title})`;
+      if (init) {
+        const initId = init.id;
+        return (
+          <>
+            {" ("}
+            <span>{init.title}</span>
+            {onOpenInitiative ? (
+              <button
+                type="button"
+                onClick={() => onOpenInitiative(initId)}
+                title="Open initiative"
+                aria-label="Open initiative"
+                className="ml-1 inline-flex items-center text-slate-400 hover:text-slate-700"
+              >
+                <SquarePen className="size-3.5" />
+              </button>
+            ) : null}
+            {")"}
+          </>
+        );
+      }
     }
     return "";
-  }, [selectedEpicOption, selectedInitiativeId, scopeInitiativeOptions]);
+  }, [selectedEpicOption, selectedInitiativeId, scopeInitiativeOptions, onOpenEpic, onOpenInitiative]);
   useEffect(() => {
     if (!initialSelectedEpicId) return;
     setSelectedEpicId(initialSelectedEpicId);
@@ -2604,29 +2648,68 @@ export function MonthAnalytics({
   /**
    * Title suffix for "Epic Scope Burndown" — `scopeTitleSuffix` (Epic/Initiative
    * Scope filter) wins; otherwise, if the legend is narrowed to a single epic
-   * line, show that epic's title in brackets.
+   * line, show that epic's title in brackets with an open-dialog icon.
    */
-  const burndownTitleSuffix = useMemo(() => {
+  const burndownTitleSuffix = useMemo<ReactNode>(() => {
     if (scopeTitleSuffix) return scopeTitleSuffix;
     if (burndownVisibleKeys.length === 1) {
       const key = burndownVisibleKeys[0]!;
       if (key !== "epicIdeal") {
         const item = burndownLegendItems.find((i) => i.key === key);
-        if (item) return ` (${item.label})`;
+        if (item) {
+          return (
+            <>
+              {" ("}
+              <span>{item.label}</span>
+              {onOpenEpic ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenEpic(key)}
+                  title="Open epic"
+                  aria-label="Open epic"
+                  className="ml-1 inline-flex items-center text-slate-400 hover:text-slate-700"
+                >
+                  <SquarePen className="size-3.5" />
+                </button>
+              ) : null}
+              {")"}
+            </>
+          );
+        }
       }
     }
     return "";
-  }, [scopeTitleSuffix, burndownVisibleKeys, burndownLegendItems]);
+  }, [scopeTitleSuffix, burndownVisibleKeys, burndownLegendItems, onOpenEpic]);
 
   /** Same shape as `burndownTitleSuffix`, against the Burnup legend. */
-  const burnUpTitleSuffix = useMemo(() => {
+  const burnUpTitleSuffix = useMemo<ReactNode>(() => {
     if (scopeTitleSuffix) return scopeTitleSuffix;
     if (burnUpVisibleKeys.length === 1) {
       const row = burnUpEpicRows.find((r) => r.id === burnUpVisibleKeys[0]);
-      if (row) return ` (${row.title})`;
+      if (row) {
+        const rowId = row.id;
+        return (
+          <>
+            {" ("}
+            <span>{row.title}</span>
+            {onOpenEpic ? (
+              <button
+                type="button"
+                onClick={() => onOpenEpic(rowId)}
+                title="Open epic"
+                aria-label="Open epic"
+                className="ml-1 inline-flex items-center text-slate-400 hover:text-slate-700"
+              >
+                <SquarePen className="size-3.5" />
+              </button>
+            ) : null}
+            {")"}
+          </>
+        );
+      }
     }
     return "";
-  }, [scopeTitleSuffix, burnUpVisibleKeys, burnUpEpicRows]);
+  }, [scopeTitleSuffix, burnUpVisibleKeys, burnUpEpicRows, onOpenEpic]);
 
   const workloadStoriesScrollRef = useRef<HTMLDivElement | null>(null);
   const [canScrollWorkloadUp, setCanScrollWorkloadUp] = useState(false);
