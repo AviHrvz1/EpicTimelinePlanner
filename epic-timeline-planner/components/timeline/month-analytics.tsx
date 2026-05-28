@@ -307,7 +307,17 @@ function InsightsTruncationTooltipPortal({
     const el = anchorRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    setCoords({ top: r.bottom + 6, left: r.left });
+    // Keep the tooltip on-screen when the anchor sits near the right edge
+    // (e.g. legend rows in the right-side column). The tooltip's
+    // max-width matches `INSIGHTS_TRUNCATION_PORTAL_TOOLTIP_CLASS`
+    // (`min(22rem, calc(100vw-2rem))` → at most 352px), so clamp the
+    // computed `left` so `left + estW` stays inside the viewport.
+    const viewportW = typeof window !== "undefined" ? window.innerWidth : 1024;
+    const estW = Math.min(352, viewportW - 32);
+    let left = r.left;
+    if (left + estW > viewportW - 8) left = Math.max(8, viewportW - estW - 8);
+    if (left < 8) left = 8;
+    setCoords({ top: r.bottom + 6, left });
   }, [anchorRef]);
 
   useLayoutEffect(() => {
@@ -333,6 +343,66 @@ function InsightsTruncationTooltipPortal({
       {text}
     </div>,
     document.body,
+  );
+}
+
+/**
+ * Legend row button shared by the Burndown and Burnup chart legends. Wraps
+ * a single togglable epic (or the synthetic ideal-line entry) and renders
+ * the project's standard portaled hover tooltip with the full epic title
+ * — useful when the legend row's `truncate` clips a long name. The portal
+ * already clamps to the viewport's right edge so it never gets cut off.
+ */
+function EpicLegendRowButton({
+  label,
+  color,
+  on,
+  isEpic,
+  onClick,
+  textClass,
+}: {
+  label: string;
+  color: string;
+  /** Toggle / visibility state — drives dot opacity and icon color. */
+  on: boolean;
+  /** Real epic gets the Folder glyph; synthetic ideal-line row skips it. */
+  isEpic: boolean;
+  onClick: () => void;
+  /** Outer button text-color classes (active/inactive variants from caller). */
+  textClass: string;
+}) {
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const [hover, setHover] = useState(false);
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={onClick}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        onFocus={() => setHover(true)}
+        onBlur={() => setHover(false)}
+        className={cn(
+          "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left transition",
+          textClass,
+        )}
+      >
+        <span
+          className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: color, opacity: on ? 1 : 0.35 }}
+        />
+        {isEpic ? (
+          <Folder
+            className={cn("size-3.5 shrink-0", on ? "text-sky-500" : "text-slate-400")}
+            strokeWidth={2}
+            aria-hidden
+          />
+        ) : null}
+        <span className="truncate">{label}</span>
+      </button>
+      <InsightsTruncationTooltipPortal show={hover} anchorRef={btnRef} text={label} />
+    </>
   );
 }
 
@@ -3268,34 +3338,20 @@ export function MonthAnalytics({
                 // as "this row = one epic".
                 const isEpic = item.key !== "epicIdeal";
                 return (
-                  <button
+                  <EpicLegendRowButton
                     key={item.key}
-                    type="button"
+                    label={item.label}
+                    color={item.color}
+                    on={on}
+                    isEpic={isEpic}
                     onClick={() => toggleBurndownKey(item.key)}
-                    className={cn(
-                      "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left transition",
+                    textClass={cn(
                       isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
                       on
                         ? "text-slate-900 hover:bg-slate-200/70"
                         : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
                     )}
-                  >
-                    <span
-                      className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: item.color, opacity: on ? 1 : 0.35 }}
-                    />
-                    {isEpic ? (
-                      <Folder
-                        className={cn(
-                          "size-3.5 shrink-0",
-                          on ? "text-sky-500" : "text-slate-400",
-                        )}
-                        strokeWidth={2}
-                        aria-hidden
-                      />
-                    ) : null}
-                    <span className="truncate">{item.label}</span>
-                  </button>
+                  />
                 );
               })}
               {burndownFocusedEpicOption ? (
@@ -4108,24 +4164,19 @@ export function MonthAnalytics({
                   {burnUpEpicRows.map((row) => {
                     const on = burnUpVisibleKeys.includes(row.id);
                     return (
-                      <button
+                      <EpicLegendRowButton
                         key={row.id}
-                        type="button"
+                        label={row.title}
+                        color={on ? row.color : "#cbd5e1"}
+                        on={on}
+                        isEpic
                         onClick={() => toggleBurnUpKey(row.id)}
-                        className={cn(
-                          "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left transition hover:bg-slate-200/70",
+                        textClass={cn(
+                          "hover:bg-slate-200/70",
                           isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
                           on ? "text-slate-900" : "text-slate-400",
                         )}
-                      >
-                        <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: on ? row.color : "#cbd5e1" }} />
-                        <Folder
-                          className={cn("size-3.5 shrink-0", on ? "text-sky-500" : "text-slate-400")}
-                          strokeWidth={2}
-                          aria-hidden
-                        />
-                        <span className="truncate">{row.title}</span>
-                      </button>
+                      />
                     );
                   })}
                 </div>

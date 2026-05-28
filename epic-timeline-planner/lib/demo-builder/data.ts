@@ -67,16 +67,24 @@ export interface DemoInitiativeSeed {
 // Each `epicLayout` has exactly 5 slots (one epic per team). Spans cover
 // 1/2/3/4 months across the dataset so the planner shows a real range of
 // epic widths; gaps (>0) leave breathing room between some epics.
+// Initiatives cascade by ~1 month each (1 → 8) and stay tight horizontally
+// (most windows are 5–7 months) so the Gantt reads as a clean diagonal
+// staircase instead of every initiative spanning the whole year. Each
+// initiative still ships exactly 5 epics, but every epic now gets its own
+// sub-row (see the seeder), so the visible pattern within an initiative is
+// also a step pattern. Epic-size variety preserved across the dataset:
+// the catalogue still includes 1-month, 2-month, quarter (3-month), and
+// quarter-plus-a-month (4-month) epics, plus the occasional in-flight gap.
 export const DEMO_INITIATIVES: DemoInitiativeSeed[] = [
-  { title: "Onboarding revamp", icon: "", startMonth: 1, epicLayout: [{ span: 1, gap: 0 }, { span: 2, gap: 0 }, { span: 1, gap: 1 }, { span: 3, gap: 0 }, { span: 1, gap: 1 }] },
-  { title: "Payments platform v2", icon: "", startMonth: 1, epicLayout: [{ span: 2, gap: 0 }, { span: 1, gap: 1 }, { span: 4, gap: 0 }, { span: 1, gap: 1 }, { span: 1, gap: 0 }] },
-  { title: "Mobile app redesign", icon: "", startMonth: 2, epicLayout: [{ span: 1, gap: 0 }, { span: 3, gap: 0 }, { span: 1, gap: 1 }, { span: 1, gap: 0 }, { span: 2, gap: 1 }] },
-  { title: "Analytics data warehouse", icon: "", startMonth: 1, epicLayout: [{ span: 3, gap: 0 }, { span: 1, gap: 1 }, { span: 2, gap: 0 }, { span: 1, gap: 1 }, { span: 1, gap: 0 }] },
-  { title: "Growth experiments Q2", icon: "", startMonth: 4, epicLayout: [{ span: 1, gap: 0 }, { span: 2, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }] },
-  { title: "Search & discovery", icon: "", startMonth: 3, epicLayout: [{ span: 2, gap: 0 }, { span: 1, gap: 1 }, { span: 1, gap: 0 }, { span: 3, gap: 0 }, { span: 1, gap: 0 }] },
-  { title: "Reliability & SLOs", icon: "", startMonth: 5, epicLayout: [{ span: 1, gap: 0 }, { span: 2, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }] },
-  { title: "Customer self-serve", icon: "", startMonth: 3, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 1 }, { span: 3, gap: 0 }, { span: 1, gap: 1 }, { span: 1, gap: 0 }] },
-  { title: "AI-assisted workflows", icon: "", startMonth: 2, epicLayout: [{ span: 2, gap: 0 }, { span: 1, gap: 1 }, { span: 1, gap: 0 }, { span: 4, gap: 0 }, { span: 1, gap: 0 }] },
+  { title: "Onboarding revamp", icon: "", startMonth: 1, epicLayout: [{ span: 1, gap: 0 }, { span: 2, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }] },
+  { title: "Payments platform v2", icon: "", startMonth: 2, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 2, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }] },
+  { title: "Mobile app redesign", icon: "", startMonth: 3, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 3, gap: 0 }, { span: 1, gap: 0 }] },
+  { title: "Analytics data warehouse", icon: "", startMonth: 4, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }] },
+  { title: "Growth experiments Q2", icon: "", startMonth: 5, epicLayout: [{ span: 1, gap: 0 }, { span: 2, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }] },
+  { title: "Search & discovery", icon: "", startMonth: 4, epicLayout: [{ span: 2, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 4, gap: 0 }] },
+  { title: "Reliability & SLOs", icon: "", startMonth: 6, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }] },
+  { title: "Customer self-serve", icon: "", startMonth: 5, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 1 }, { span: 1, gap: 0 }, { span: 2, gap: 0 }] },
+  { title: "AI-assisted workflows", icon: "", startMonth: 7, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 2, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }] },
   { title: "Year-end performance push", icon: "", startMonth: 8, epicLayout: [{ span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }, { span: 1, gap: 0 }] },
 ];
 

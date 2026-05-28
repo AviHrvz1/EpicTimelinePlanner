@@ -232,12 +232,12 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
         endMonth,
         year: planYear,
         team: initTeam,
-        // Reserve 4 Gantt rows per initiative: the initiative bar at the top
-        // and up to 3 sub-rows below for its epics. Spreading the 5 epics
-        // across sub-rows (see the team loop) keeps no more than 2 bars on
-        // any single row and produces a cascading top-left → bottom-right
-        // "stairs" silhouette as time progresses.
-        timelineRow: initIdx * 4,
+        // Reserve 6 Gantt rows per initiative: the initiative bar at the top
+        // and 5 sub-rows below — one for each of the 5 child epics. Placing
+        // each epic on its own row (see the team loop) produces a clean
+        // top-left → bottom-right "stairs" silhouette as time progresses,
+        // with no two epic bars on the same row.
+        timelineRow: initIdx * 6,
         roadmapId: DEMO_DEFAULT_ROADMAP_ID,
         labels: pickDemoLabels(initIdx, 2) ?? null,
       },
@@ -281,13 +281,13 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
           planStartMonth: epicStartMonth,
           planEndMonth: epicEndMonth,
           planEndSprint,
-          // Stair pattern: spread 5 epics across 3 sub-rows below the
-          // initiative bar (initiative is at initIdx*4; epics live at +1,
-          // +2, +3). Pairing teamIdx 0+1 on the first sub-row, 2+3 on the
-          // second, and 4 alone on the third keeps each Gantt row to at
-          // most 2 bars and produces a visible staircase as later epics
-          // start further right AND one row lower.
-          timelineRow: initIdx * 4 + 1 + Math.floor(teamIdx / 2),
+          // Pure stair pattern: each epic gets its own sub-row directly
+          // beneath its initiative (initiative is at initIdx*6; epics live
+          // at +1..+5, one per teamIdx). Because the per-initiative
+          // `epicLayout` lays epics out sequentially in time, each lower
+          // sub-row also starts further right than the one above — the
+          // result on the Gantt is a clean cascading staircase.
+          timelineRow: initIdx * 6 + 1 + teamIdx,
           team: teamSlug,
           originalEstimateDays: null,
           labels: pickDemoLabels(initIdx * 5 + teamIdx, 2) ?? null,
