@@ -1127,23 +1127,36 @@ export function MonthAnalytics({
   useEffect(() => {
     if (!initialSelectedEpicId) return;
     setSelectedEpicId(initialSelectedEpicId);
-    const selected = monthEpics.find(({ epic }) => epic.id === initialSelectedEpicId);
-    setEpicInput(selected ? selected.epic.title : "");
-  }, [initialSelectedEpicId, monthEpics]);
+    // Search ALL initiatives' epics for the title — not just monthEpics —
+    // so we still surface the title when the requested epic is outside the
+    // current month/team-filter scope (e.g. the user clicked Insights from
+    // an epic panel for an epic that doesn't fall in the active period).
+    let title: string | null = null;
+    for (const init of initiatives) {
+      const found = (init.epics ?? []).find((e) => e.id === initialSelectedEpicId);
+      if (found) { title = found.title; break; }
+    }
+    setEpicInput(title ?? "");
+  }, [initialSelectedEpicId, initiatives]);
   useEffect(() => {
     if (!initialSelectedInitiativeId) return;
     setSelectedInitiativeId(initialSelectedInitiativeId);
     const init = scopeInitiativeOptions.find((i) => i.id === initialSelectedInitiativeId);
     if (init) setEpicInput(init.title);
   }, [initialSelectedInitiativeId, scopeInitiativeOptions]);
-  // Clear epic selection when the initiative filter changes and the epic is no longer in scope
+  // Clear epic selection when the initiative filter changes and the epic is
+  // no longer in scope. Skip when the selection matches the externally-
+  // requested `initialSelectedEpicId` — otherwise a "View Insights" click
+  // from an epic panel briefly shows the title and then this effect wipes
+  // it on the next render when monthEpics doesn't include that epic.
   useEffect(() => {
     if (selectedEpicId === "all") return;
+    if (initialSelectedEpicId && selectedEpicId === initialSelectedEpicId) return;
     if (!monthEpics.some(({ epic }) => epic.id === selectedEpicId)) {
       setSelectedEpicId("all");
       setEpicInput("");
     }
-  }, [monthEpics, selectedEpicId]);
+  }, [monthEpics, selectedEpicId, initialSelectedEpicId]);
   // Only call onScopeChange when the SCOPE itself actually changes — not when
   // `epicComboOptions` / `scopeInitiativeOptions` re-derive (which happens
   // whenever `filterEpicTeamIds` changes upstream). Without this guard,
@@ -3548,12 +3561,11 @@ export function MonthAnalytics({
                         }}
                       />
                     ) : null}
-                    {/* Done ✓ — sits BELOW the red due-date marker when the
-                     *  focused epic's burndown has reached 0. Placed below
-                     *  (not above) so the "Due X/Y" label above the target
-                     *  stays unobstructed. Per the user's request for the
-                     *  burndown chart specifically (mirror of burnup, where
-                     *  Done sits above since the line ends at the top). */}
+                    {/* Done ✓ — sits ABOVE the due-date target (and above
+                     *  the "Due X/Y" label) when the focused epic's burndown
+                     *  has reached 0. Pushed up far enough (cy - 32) that
+                     *  the red Due label sits cleanly between the target
+                     *  bullseye and the green Done circle. */}
                     {burndownFocusedEpicOption && selectedEpicDueMarker && isFocusedBurndownDone ? (
                       <ReferenceDot
                         x={selectedEpicDueMarker.axisLabel}
@@ -3563,7 +3575,7 @@ export function MonthAnalytics({
                         ifOverflow="visible"
                         shape={(shapeProps: { cx?: number; cy?: number }) => {
                           const cx = shapeProps.cx ?? 0;
-                          const cy = (shapeProps.cy ?? 0) + 16;
+                          const cy = (shapeProps.cy ?? 0) - 32;
                           return (
                             <g>
                               <circle cx={cx} cy={cy} r={8} fill="#10b981" stroke="#ffffff" strokeWidth={1.5} />
@@ -3573,10 +3585,10 @@ export function MonthAnalytics({
                         }}
                         label={{
                           value: "Done",
-                          position: "bottom",
+                          position: "top",
                           fill: "#047857",
                           fontSize: 10,
-                          offset: 16,
+                          offset: 6,
                         }}
                       />
                     ) : null}
