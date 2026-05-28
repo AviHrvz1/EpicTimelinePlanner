@@ -267,7 +267,7 @@ function KanbanStoryCard({
           {dragDisabled ? null : (
             <button
               type="button"
-              className="mt-1 shrink-0 cursor-grab rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+              className="mt-0.5 shrink-0 cursor-grab rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
               aria-label="Drag story"
               {...attributes}
               {...listeners}
@@ -281,12 +281,10 @@ function KanbanStoryCard({
             className="min-w-0 flex-1 rounded-md py-0.5 pl-0 pr-1 text-left transition hover:bg-slate-50"
             aria-label="Open user story details"
           >
-            <p className="min-w-0 text-[15px] font-semibold leading-snug text-slate-900">
-              <span className="mr-1.5 inline-flex h-4 w-4 shrink-0 items-center justify-center align-middle" aria-hidden>
-                <UserStoryIcon />
-              </span>
-              {story.title}
-            </p>
+            <div className="flex min-w-0 items-start gap-1.5 text-[15px] font-semibold leading-snug text-slate-900">
+              <UserStoryIcon className="mt-[2px] size-4 shrink-0" />
+              <span className="min-w-0">{story.title}</span>
+            </div>
             <p className="mt-1.5 truncate text-[13px] text-slate-500">{epic.title}</p>
           </button>
           {onUnscheduleStory ? (
