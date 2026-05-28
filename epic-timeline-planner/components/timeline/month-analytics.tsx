@@ -1753,7 +1753,8 @@ export function MonthAnalytics({
     const now = new Date();
     const periodStartMs = new Date(planYear, scopeStartMonth - 1, 1).getTime();
     const nowDayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const rawElapsed = Math.floor((nowDayMs - periodStartMs) / 86400000) + 1;
+    // Math.round (not floor) to survive DST hour shifts — see burnup notes.
+    const rawElapsed = Math.round((nowDayMs - periodStartMs) / 86400000) + 1;
     const elapsedDays = Math.max(0, Math.min(horizon, rawElapsed));
     const seriesKeys = monthBurndownEpics.map((epic) => epic.id);
     const nextRows = monthBurndown.map((row) => ({ ...row })) as Array<
@@ -1787,7 +1788,7 @@ export function MonthAnalytics({
     const now = new Date();
     const periodStartMs2 = new Date(planYear, scopeStartMonth - 1, 1).getTime();
     const nowDayMs2 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const rawElapsed2 = Math.floor((nowDayMs2 - periodStartMs2) / 86400000) + 1;
+    const rawElapsed2 = Math.round((nowDayMs2 - periodStartMs2) / 86400000) + 1;
     const elapsedDays = Math.max(0, Math.min(monthBurndown.length, rawElapsed2));
     const rows = monthBurndown.map((row) => ({ ...row })) as Array<Record<string, number | string | boolean | null | undefined>>;
 
@@ -2192,7 +2193,7 @@ export function MonthAnalytics({
     const now = new Date();
     const periodStartMs3 = new Date(planYear, scopeStartMonth - 1, 1).getTime();
     const nowDayMs3 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const rawElapsed3 = Math.floor((nowDayMs3 - periodStartMs3) / 86400000) + 1;
+    const rawElapsed3 = Math.round((nowDayMs3 - periodStartMs3) / 86400000) + 1;
     const elapsedDays = Math.max(0, Math.min(totalDays, rawElapsed3));
 
     return dayDates.map((dayDate, index) => {
@@ -2465,7 +2466,13 @@ export function MonthAnalytics({
 
     const periodStartDate = new Date(planYear, scopeStartMonth - 1, 1);
     const periodEndDate = new Date(planYear, scopeEndMonth, 0);
-    const totalDays = Math.floor((periodEndDate.getTime() - periodStartDate.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+    // Use Math.round (not Math.floor) for ms→day so a DST hour shift can't
+    // truncate a day. With Math.floor, going from a no-DST date to a DST
+    // date subtracts one hour, dropping the floor by 1 → today gets treated
+    // as "past elapsed range" → every per-epic line goes null from day 2 on
+    // and Recharts paints flat 0.
+    const msToDays = (ms: number) => Math.round(ms / (24 * 60 * 60 * 1000));
+    const totalDays = msToDays(periodEndDate.getTime() - periodStartDate.getTime()) + 1;
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const afterPeriod = todayStart.getTime() > periodEndDate.getTime();
@@ -2474,11 +2481,11 @@ export function MonthAnalytics({
       ? totalDays
       : beforePeriod
         ? 0
-        : Math.max(1, Math.min(totalDays, Math.floor((todayStart.getTime() - periodStartDate.getTime()) / (24 * 60 * 60 * 1000)) + 1));
+        : Math.max(1, Math.min(totalDays, msToDays(todayStart.getTime() - periodStartDate.getTime()) + 1));
 
     const dueDate = burnUpDueDate;
     const dueDayIndex = dueDate != null
-      ? Math.max(1, Math.floor((dueDate.getTime() - periodStartDate.getTime()) / (24 * 60 * 60 * 1000)) + 1)
+      ? Math.max(1, msToDays(dueDate.getTime() - periodStartDate.getTime()) + 1)
       : totalDays;
 
     return Array.from({ length: totalDays }, (_, idx): { labelShort: string; isToday: boolean; completed: number | null; scope: number; ideal: number | null; [epicKey: string]: number | string | boolean | null } => {
