@@ -1126,16 +1126,17 @@ export function MonthAnalytics({
   }, [selectedEpicOption, selectedInitiativeId, scopeInitiativeOptions, onOpenEpic, onOpenInitiative]);
   useEffect(() => {
     if (!initialSelectedEpicId) return;
-    setSelectedEpicId(initialSelectedEpicId);
-    // Search ALL initiatives' epics for the title — not just monthEpics —
-    // so we still surface the title when the requested epic is outside the
-    // current month/team-filter scope (e.g. the user clicked Insights from
-    // an epic panel for an epic that doesn't fall in the active period).
     let title: string | null = null;
     for (const init of initiatives) {
       const found = (init.epics ?? []).find((e) => e.id === initialSelectedEpicId);
       if (found) { title = found.title; break; }
     }
+    console.log("[INSIGHTS_DEBUG] effect-A initial-id-sync", {
+      initialSelectedEpicId,
+      foundTitle: title,
+      initiativesCount: initiatives.length,
+    });
+    setSelectedEpicId(initialSelectedEpicId);
     setEpicInput(title ?? "");
   }, [initialSelectedEpicId, initiatives]);
   useEffect(() => {
@@ -1146,13 +1147,21 @@ export function MonthAnalytics({
   }, [initialSelectedInitiativeId, scopeInitiativeOptions]);
   // Clear epic selection when the initiative filter changes and the epic is
   // no longer in scope. Skip when the selection matches the externally-
-  // requested `initialSelectedEpicId` — otherwise a "View Insights" click
-  // from an epic panel briefly shows the title and then this effect wipes
-  // it on the next render when monthEpics doesn't include that epic.
+  // requested `initialSelectedEpicId`.
   useEffect(() => {
     if (selectedEpicId === "all") return;
-    if (initialSelectedEpicId && selectedEpicId === initialSelectedEpicId) return;
-    if (!monthEpics.some(({ epic }) => epic.id === selectedEpicId)) {
+    const sticky = initialSelectedEpicId && selectedEpicId === initialSelectedEpicId;
+    const inMonth = monthEpics.some(({ epic }) => epic.id === selectedEpicId);
+    console.log("[INSIGHTS_DEBUG] effect-B monthEpics-auto-clear check", {
+      selectedEpicId,
+      initialSelectedEpicId,
+      sticky,
+      inMonthEpics: inMonth,
+      monthEpicsCount: monthEpics.length,
+    });
+    if (sticky) return;
+    if (!inMonth) {
+      console.log("[INSIGHTS_DEBUG] effect-B CLEARING (not in monthEpics, not sticky)");
       setSelectedEpicId("all");
       setEpicInput("");
     }
@@ -1175,6 +1184,10 @@ export function MonthAnalytics({
     const nextId: string | null =
       nextType === "epic" ? selectedEpicId : nextType === "initiative" ? selectedInitiativeId : null;
     if (lastScopeRef.current.type === nextType && lastScopeRef.current.id === nextId) return;
+    console.log("[INSIGHTS_DEBUG] effect-D onScopeChange firing", {
+      from: lastScopeRef.current,
+      to: { type: nextType, id: nextId },
+    });
     lastScopeRef.current = { type: nextType, id: nextId };
     if (nextType === "epic") {
       const selected = epicComboOptions.find((opt) => opt.id === nextId);
@@ -1308,20 +1321,26 @@ export function MonthAnalytics({
   useEffect(() => {
     if (selectedEpicId !== "all") {
       const selected = epicComboOptions.find((opt) => opt.id === selectedEpicId);
+      const sticky = initialSelectedEpicId && selectedEpicId === initialSelectedEpicId;
+      console.log("[INSIGHTS_DEBUG] effect-C epicComboOptions-auto-clear check", {
+        selectedEpicId,
+        initialSelectedEpicId,
+        sticky,
+        foundInComboOptions: !!selected,
+        comboOptionsCount: epicComboOptions.length,
+      });
       if (!selected) {
-        // Sticky View-Insights deep link: if the requested epic is the
-        // externally-injected `initialSelectedEpicId`, don't clear — fall
-        // back to a flat search across ALL initiatives for the title so
-        // the picker still shows it even when filters exclude the epic.
-        if (initialSelectedEpicId && selectedEpicId === initialSelectedEpicId) {
+        if (sticky) {
           let title: string | null = null;
           for (const init of initiatives) {
             const found = (init.epics ?? []).find((e) => e.id === selectedEpicId);
             if (found) { title = found.title; break; }
           }
+          console.log("[INSIGHTS_DEBUG] effect-C STICKY (kept selection, title via flat search)", { title });
           setEpicInput(title ?? "");
           return;
         }
+        console.log("[INSIGHTS_DEBUG] effect-C CLEARING (not in comboOptions, not sticky)");
         setSelectedEpicId("all");
         setEpicInput("");
       } else {
