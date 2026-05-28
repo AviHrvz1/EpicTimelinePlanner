@@ -4656,14 +4656,16 @@ export function MonthAnalytics({
                       <EpicLegendRowButton
                         key={row.id}
                         label={row.title}
-                        color={on ? row.color : "#cbd5e1"}
+                        // Always pass the row's natural color — don't fade the
+                        // glyph to slate-300 when off (matches burndown).
+                        color={row.color}
                         on={on}
                         isEpic
                         onClick={() => toggleBurnUpKey(row.id)}
                         textClass={cn(
                           "hover:bg-slate-200/70",
                           isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
-                          on ? "text-slate-900" : "text-slate-400",
+                          on ? "text-slate-900" : "text-slate-500",
                         )}
                       />
                     );
