@@ -2393,7 +2393,14 @@ export function MonthAnalytics({
   // component (Y-axis follows basis: stories basis → storyCount,
   // otherwise daysLeft). No separate metric toggle exists anymore.
   const burnUpDueDate = useMemo(() => {
-    const epicsToCheck = selectedEpicOption != null ? [selectedEpicOption.epic] : monthEpics.map((r) => r.epic);
+    // Respect the legend filter: if the user has narrowed the burnup to a
+    // single epic via the legend (or scope picker), use THAT epic's due
+    // date. Otherwise fall back to the latest among all month epics.
+    const epicsToCheck = selectedEpicOption != null
+      ? [selectedEpicOption.epic]
+      : monthEpics
+          .map((r) => r.epic)
+          .filter((e) => burnUpVisibleKeys.length === 0 || burnUpVisibleKeys.includes(e.id));
     if (epicsToCheck.length === 0) return null;
     let latestMs = -Infinity;
     let latestDate: Date | null = null;
@@ -2406,7 +2413,7 @@ export function MonthAnalytics({
       if (d.getTime() > latestMs) { latestMs = d.getTime(); latestDate = d; }
     }
     return latestDate;
-  }, [selectedEpicOption, monthEpics, scopeEndMonth, planYear]);
+  }, [selectedEpicOption, monthEpics, burnUpVisibleKeys, scopeEndMonth, planYear]);
 
   const burnUpData = useMemo(() => {
     const epicsInScope = selectedEpicOption != null
@@ -3402,7 +3409,7 @@ export function MonthAnalytics({
             {monthBurndownEpics.length > 0 ? (
               <div className="absolute inset-0">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={monthBurndownWithDueTarget} margin={{ top: 2, right: 26, left: 18, bottom: 0 }}>
+                  <LineChart data={monthBurndownWithDueTarget} margin={{ top: 38, right: 60, left: 18, bottom: 18 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis
                       dataKey="axisLabel"
@@ -3541,10 +3548,12 @@ export function MonthAnalytics({
                         }}
                       />
                     ) : null}
-                    {/* Done ✓ — sits just above the red due-date marker when
-                     *  the focused epic's burndown has reached 0. Signals
-                     *  completion clearly so the user doesn't have to infer
-                     *  it from the truncated line tail. */}
+                    {/* Done ✓ — sits BELOW the red due-date marker when the
+                     *  focused epic's burndown has reached 0. Placed below
+                     *  (not above) so the "Due X/Y" label above the target
+                     *  stays unobstructed. Per the user's request for the
+                     *  burndown chart specifically (mirror of burnup, where
+                     *  Done sits above since the line ends at the top). */}
                     {burndownFocusedEpicOption && selectedEpicDueMarker && isFocusedBurndownDone ? (
                       <ReferenceDot
                         x={selectedEpicDueMarker.axisLabel}
@@ -3554,7 +3563,7 @@ export function MonthAnalytics({
                         ifOverflow="visible"
                         shape={(shapeProps: { cx?: number; cy?: number }) => {
                           const cx = shapeProps.cx ?? 0;
-                          const cy = (shapeProps.cy ?? 0) - 14;
+                          const cy = (shapeProps.cy ?? 0) + 16;
                           return (
                             <g>
                               <circle cx={cx} cy={cy} r={8} fill="#10b981" stroke="#ffffff" strokeWidth={1.5} />
@@ -3564,10 +3573,10 @@ export function MonthAnalytics({
                         }}
                         label={{
                           value: "Done",
-                          position: "top",
+                          position: "bottom",
                           fill: "#047857",
                           fontSize: 10,
-                          offset: 18,
+                          offset: 16,
                         }}
                       />
                     ) : null}
@@ -4426,7 +4435,7 @@ export function MonthAnalytics({
                         tick={{ fontSize: 10 }}
                         width={44}
                         label={{ value: burnUpMetric === "daysLeft" ? "Days completed" : "Stories", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 13 }}
-                        domain={[0, (dataMax: number) => Math.ceil(Math.max(dataMax, allBurnUpKeysSelected ? 0 : burnUpScopeTotal) * 1.08)]}
+                        domain={[0, (dataMax: number) => Math.ceil(Math.max(dataMax, allBurnUpKeysSelected ? 0 : burnUpScopeTotal) * 1.22)]}
                         padding={{ bottom: 4 }}
                       />
                       <Tooltip
