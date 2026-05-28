@@ -37,23 +37,33 @@ export function pickDemoStoryCurve(seed: string): DemoStoryCurve {
 /**
  * Optional epic-level curve override. When set, every story under that epic
  * gets this curve regardless of `pickDemoStoryCurve`. Lets the seeder
- * deliberately push 2–3 epics into At Risk and 2–3 into Watch so the
- * Roadmap Health popover and the Insights chart verdicts show variety
- * instead of "everything On Track / Done".
+ * deliberately push specific epics into At Risk and Watch so the Roadmap
+ * Health popover and the Insights chart verdicts show variety instead of
+ * "everything On Track / Done".
  *
- * Distribution (designated by `initIdx` + `teamIdx`):
- *   - At Risk: 3 epics (initIdx 0/teamIdx 1, 2/3, 5/0)
- *   - Watch:   3 epics (initIdx 1/teamIdx 2, 3/4, 4/1)
- * The picks land on initiatives whose plan windows overlap May–Aug, so the
- * health verdict reads against an in-flight period (not future or done).
+ * IMPORTANT: the chosen (initIdx / teamIdx) pairs must point at epics
+ * whose sprint windows STRADDLE today. The closed-sprint cleanup pass in
+ * the seeder force-promotes any non-approved story from a closed sprint to
+ * `done`, which would wipe out the slow-burn remaining work and silently
+ * push the override epic back into On Track. Today ≈ end-of-May 2026, so
+ * the picks below all land on epics whose plan window contains May.
+ *
+ * Distribution (3 At Risk + 2 Watch, per the demo-data spec):
+ *   - At Risk:
+ *       initIdx 0 / teamIdx 3  → "Onboarding revamp" epic at month 4
+ *       initIdx 2 / teamIdx 2  → "Mobile app redesign" epic at month 5
+ *       initIdx 4 / teamIdx 0  → "Growth experiments Q2" epic at month 5
+ *   - Watch:
+ *       initIdx 1 / teamIdx 2  → "Payments platform v2" epic at months 4–5
+ *       initIdx 3 / teamIdx 1  → "Analytics data warehouse" epic at month 5
  */
 export function pickDemoEpicHealthOverride(
   initIdx: number,
   teamIdx: number,
 ): DemoStoryCurve | null {
   const key = `${initIdx}/${teamIdx}`;
-  if (key === "0/1" || key === "2/3" || key === "5/0") return "atRisk";
-  if (key === "1/2" || key === "3/4" || key === "4/1") return "watch";
+  if (key === "0/3" || key === "2/2" || key === "4/0") return "atRisk";
+  if (key === "1/2" || key === "3/1") return "watch";
   return null;
 }
 

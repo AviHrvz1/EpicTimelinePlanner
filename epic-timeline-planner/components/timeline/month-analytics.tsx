@@ -2655,7 +2655,40 @@ export function MonthAnalytics({
     });
   }, [selectedEpicOption, monthEpics, planYear, month, scopeStartMonth, scopeEndMonth]);
 
-  const cfdDataResolved = cfdMetric === "daysLeft" ? flowDaysData : flowResolved;
+  const cfdDataResolvedRaw = cfdMetric === "daysLeft" ? flowDaysData : flowResolved;
+  // After the chart has fully drained — every story moved to done/approved
+  // and stays that way — null the status counts so the area chart stops
+  // drawing. Without this the CFD shows a wide flat band of green/violet
+  // for the rest of the period, adding no information. labelShort + isToday
+  // stay so X-axis ticks + the Today line still render.
+  const cfdDataResolved = useMemo(() => {
+    const rows = cfdDataResolvedRaw as Array<Record<string, unknown>>;
+    let doneAtIdx = -1;
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i]!;
+      const todo = typeof r.todo === "number" ? r.todo : 0;
+      const inProgress = typeof r.inProgress === "number" ? r.inProgress : 0;
+      const done = typeof r.done === "number" ? r.done : 0;
+      const approved = typeof r.approved === "number" ? r.approved : 0;
+      // "Done" = no open work AND at least one story has reached the right
+      // side of the stack. The second check avoids treating a future-only
+      // window (all zeros across the board) as "done".
+      if (todo === 0 && inProgress === 0 && (done > 0 || approved > 0)) {
+        doneAtIdx = i;
+        break;
+      }
+    }
+    if (doneAtIdx < 0) return cfdDataResolvedRaw;
+    return rows.map((row, i) => {
+      if (i <= doneAtIdx) return row;
+      const blanked: Record<string, unknown> = {};
+      for (const key of Object.keys(row)) {
+        const v = row[key];
+        blanked[key] = typeof v === "number" ? null : v;
+      }
+      return blanked;
+    }) as typeof cfdDataResolvedRaw;
+  }, [cfdDataResolvedRaw]);
 
   const cfdAxisTicks = useMemo(() => {
     const labels = cfdDataResolved
@@ -3028,7 +3061,19 @@ export function MonthAnalytics({
   }, [burnUpData, burnUpScopeTotal]);
   const burnUpDataTruncated = useMemo(() => {
     if (burnUpDoneAtIdx < 0) return burnUpData;
-    return burnUpData.map((row, i) => (i > burnUpDoneAtIdx ? { ...row, completed: null } : row));
+    // After the chart reaches scope, null EVERY numeric field (completed,
+    // scope, ideal, every per-epic key) so the scope / ideal / completed /
+    // per-epic lines all stop drawing. The labelShort + isToday string
+    // fields stay so the X-axis ticks + Today reference line still render.
+    return burnUpData.map((row, i) => {
+      if (i <= burnUpDoneAtIdx) return row;
+      const blanked: Record<string, number | string | boolean | null> = {};
+      for (const key of Object.keys(row)) {
+        const v = (row as Record<string, unknown>)[key];
+        blanked[key] = typeof v === "number" ? null : (v as string | boolean | null);
+      }
+      return blanked;
+    });
   }, [burnUpData, burnUpDoneAtIdx]);
   const isBurnUpDone = burnUpDoneAtIdx >= 0;
   // (Previously: `burnUpCompletedStroke` resolved a single aggregate line

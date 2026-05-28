@@ -262,7 +262,7 @@ export function RoadmapHealthPopover({
       // popover's bottom edge. Drop it and clip the gradient header on its
       // own (`rounded-t-2xl`) so the rounded-corner look is preserved while
       // descendants like the picker dropdown can extend past the popover.
-      className="fixed z-[9000] w-[600px] rounded-2xl border border-slate-200/70 bg-white shadow-2xl shadow-slate-900/15 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150"
+      className="fixed z-[9000] w-[720px] rounded-2xl border border-slate-200/70 bg-white shadow-2xl shadow-slate-900/15 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150"
     >
       {/* Gradient header — drag handle + title + close */}
       <div
@@ -379,7 +379,7 @@ export function RoadmapHealthPopover({
                   onClick={() => toggle(status)}
                   aria-pressed={isActive}
                   className={cn(
-                    "group relative inline-flex items-center gap-1 overflow-hidden whitespace-nowrap rounded-lg border px-1.5 py-1 text-left transition-colors",
+                    "group relative inline-flex items-center gap-1 rounded-lg border px-1.5 py-2 text-left transition-colors",
                     isActive
                       ? `${meta.activeBg} ${meta.activeBorder}`
                       : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
@@ -394,7 +394,9 @@ export function RoadmapHealthPopover({
                   >
                     <Icon className={cn("size-2 stroke-[2.5]", meta.dotFg)} aria-hidden />
                   </span>
-                  <span className="truncate text-[10.5px] font-semibold text-slate-800">{meta.label}</span>
+                  {/* Label is allowed to wrap to two lines — long ones
+                   *  like "At Risk" / "Overdue" no longer truncate. */}
+                  <span className="min-w-0 break-words text-[11px] font-semibold leading-tight text-slate-800">{meta.label}</span>
                   <span
                     className={cn(
                       "ml-auto text-[12px] font-extrabold tabular-nums leading-none",

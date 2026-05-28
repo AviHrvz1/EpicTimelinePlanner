@@ -197,6 +197,12 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
   // so initiatives stack vertically without overlap regardless of how
   // tightly the epics packed.
   let previousInitiativeBottomRow = 0;
+  // Epics whose health curve was overridden to "watch" or "atRisk" — kept
+  // here so a post-cleanup pass can re-mark their stories with the right
+  // open/done mix to land the verdict. Without this final pass the
+  // closed-sprint cleanup + current-sprint diversify steps would wipe
+  // the slow-burn snapshots and push the epic back to On Track / Done.
+  const overrideEpicsByCurve: Record<"watch" | "atRisk", string[]> = { watch: [], atRisk: [] };
   for (let initIdx = 0; initIdx < DEMO_INITIATIVES.length; initIdx++) {
     const seed = DEMO_INITIATIVES[initIdx]!;
     const startMonth = seed.startMonth;
@@ -324,6 +330,8 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
       // Force every story under this epic to a slow burn curve when the
       // epic was designated as Watch or At Risk (see pickDemoEpicHealthOverride).
       const epicHealthOverride = pickDemoEpicHealthOverride(initIdx, teamIdx);
+      if (epicHealthOverride === "atRisk") overrideEpicsByCurve.atRisk.push(epic.id);
+      else if (epicHealthOverride === "watch") overrideEpicsByCurve.watch.push(epic.id);
 
       // Build the snapshot+story rows in-memory first, then bulk-insert.
       const storiesData: Array<{
@@ -715,6 +723,58 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
       console.log("[demo-builder] audit", { targetSprint, teamSlug, storyCount: count });
     }
   }
+
+  // ── Final pass: lock the override epics into Watch / At Risk health ──
+  //
+  // The closed-sprint cleanup + current-sprint diversify steps above
+  // overwrite the slow-burn snapshot final-state for stories in
+  // pickDemoEpicHealthOverride epics — so without this pass the verdict
+  // collapses back to On Track / Done.
+  //
+  // For each override epic we explicitly set a story open/done mix
+  // chosen so progress.ts lands in the desired band:
+  //   - atRisk: 60 % stories `todo` with full estimatedDays remaining;
+  //             40 % `done` with daysLeft=0. With ~33 d total scope and
+  //             ~3-4 idealRemaining at end of May, deltaDays ~16 → At Risk.
+  //   - watch:  30 % stories `todo` with full estimatedDays remaining;
+  //             70 % `done` with daysLeft=0. deltaDays ~6 → Watch.
+  // Picks are deterministic via a per-id hash so the same seed keeps the
+  // same stories in each bucket across reseeds.
+  const forceEpicHealth = async (epicIds: string[], openFraction: number) => {
+    for (const epicId of epicIds) {
+      const stories = await db.userStory.findMany({
+        where: { epicId, sprint: { not: null } },
+        select: { id: true, estimatedDays: true },
+      });
+      if (stories.length === 0) continue;
+      // Deterministic sort by id-hash, then mark the first `openFraction`
+      // share as todo (full daysLeft) and the rest as done (daysLeft 0).
+      const hashed = stories.map((s) => {
+        let h = 0;
+        for (let i = 0; i < s.id.length; i++) h = (h * 31 + s.id.charCodeAt(i)) | 0;
+        return { id: s.id, est: s.estimatedDays ?? 3, hash: Math.abs(h) };
+      });
+      hashed.sort((a, b) => a.hash - b.hash);
+      const openCount = Math.max(1, Math.round(stories.length * openFraction));
+      const todoIds = hashed.slice(0, openCount).map((s) => s.id);
+      const doneIds = hashed.slice(openCount).map((s) => s.id);
+      for (const t of hashed.slice(0, openCount)) {
+        await db.userStory.update({
+          where: { id: t.id },
+          data: { status: StoryStatus.todo, daysLeft: t.est },
+        });
+      }
+      if (doneIds.length > 0) {
+        await db.userStory.updateMany({
+          where: { id: { in: doneIds } },
+          data: { status: StoryStatus.done, daysLeft: 0 },
+        });
+      }
+      console.log("[demo-builder] force epic health", { epicId, todoCount: todoIds.length, doneCount: doneIds.length });
+    }
+  };
+  await forceEpicHealth(overrideEpicsByCurve.atRisk, 0.6);
+  await forceEpicHealth(overrideEpicsByCurve.watch, 0.3);
 
   return {
     initiatives: DEMO_INITIATIVES.length,

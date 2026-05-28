@@ -23,6 +23,7 @@ import {
   PieChart,
   Plus,
   Search,
+  StickyNote,
   Thermometer,
   Trash2,
   User,
@@ -5716,11 +5717,11 @@ export function TimelineGrid({
         </button>
       ) : null}
       {ganttSearchOpen && (ganttSearchResults.initiatives.length > 0 || ganttSearchResults.epics.length > 0) ? (
-        /* Anchored to the LEFT edge of the search field (parent's left=0)
-         * so the dropdown reads as a continuation of the input rather than
-         * a detached panel floating off the right. Wider too — we now render
-         * team + assignee + health chips per row. */
-        <div className="absolute left-0 top-[calc(100%+4px)] z-[130] w-[34rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+        /* Anchored to the RIGHT edge of the search field so the 34rem
+         * panel grows leftward from there instead of off the right edge
+         * of the viewport. This matters most in the All-Quarters view,
+         * where the search sits far right and was being clipped. */
+        <div className="absolute right-0 top-[calc(100%+4px)] z-[130] w-[34rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
           {ganttSearchResults.initiatives.length > 0 ? (
             <div>
               <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
@@ -5757,8 +5758,6 @@ export function TimelineGrid({
             <div className={cn(ganttSearchResults.initiatives.length > 0 ? "border-t border-slate-100" : "")}>
               <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Epics</p>
               {ganttSearchResults.epics.map(({ epic, quarterLabels }) => {
-                const teamLabel = estimatePanelTeamLabel(epic.team);
-                const assigneeLabel = estimatePanelAssigneeLabel(epic.assignee);
                 const health = ganttSearchEpicHealth(epic, currentYear, progressBasis);
                 return (
                   <button
@@ -5774,18 +5773,6 @@ export function TimelineGrid({
                       {quarterLabels.length > 0 ? (
                         <span className="inline-flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[11px] font-semibold text-indigo-700 ring-1 ring-indigo-200/80">
                           {quarterLabels.join(" · ")}
-                        </span>
-                      ) : null}
-                      {teamLabel && teamLabel !== "—" ? (
-                        <span className="inline-flex items-center gap-1 rounded bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">
-                          <TeamAvatar slug={epic.team} sizePx={10} fallback={<Users className="size-2.5 shrink-0 opacity-70" aria-hidden />} />
-                          {teamLabel}
-                        </span>
-                      ) : null}
-                      {assigneeLabel && assigneeLabel !== "—" ? (
-                        <span className="inline-flex items-center gap-1 rounded bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">
-                          <User className="size-2.5 shrink-0 opacity-70" aria-hidden />
-                          {assigneeLabel}
                         </span>
                       ) : null}
                       {health ? (
@@ -6201,14 +6188,18 @@ export function TimelineGrid({
                                   }}
                                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] hover:bg-slate-50"
                                 >
-                                  <span className={cn(
-                                    "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold leading-none",
-                                    s.kind === "story" && "bg-sky-100 text-sky-950",
-                                    s.kind === "epic" && "bg-violet-100 text-violet-950",
-                                    s.kind === "initiative" && "bg-amber-100 text-amber-700",
-                                  )}>
-                                    {s.kind === "story" ? "Story" : s.kind === "epic" ? "Epic" : "Initiative"}
-                                  </span>
+                                  {/* Replace the text "Story" / "Epic" /
+                                   *  "Initiative" pill with just the icon
+                                   *  the rest of the app uses for each
+                                   *  type — sky StickyNote, slate Folder,
+                                   *  blue Zap. */}
+                                  {s.kind === "story" ? (
+                                    <StickyNote className="size-3.5 shrink-0 text-sky-500" aria-hidden />
+                                  ) : s.kind === "epic" ? (
+                                    <Folder className="size-3.5 shrink-0 text-slate-500" aria-hidden />
+                                  ) : (
+                                    <Zap className="size-3.5 shrink-0 text-blue-500" aria-hidden />
+                                  )}
                                   <span className="min-w-0 truncate text-slate-800">{s.label}</span>
                                 </button>
                               </li>
