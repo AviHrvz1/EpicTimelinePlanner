@@ -2431,10 +2431,6 @@ export function MonthAnalytics({
     // status across every historical day).
     const epicMeta = epicsInScope.map((e) => {
       const stories = (e.userStories ?? []).filter((s) => s.sprint != null);
-      const startOpenStoryDays = stories.reduce((sum, s) => {
-        if (s.status !== "todo" && s.status !== "inProgress") return sum;
-        return sum + Math.max(0, s.estimatedDays ?? s.daysLeft ?? 0);
-      }, 0);
       const hasSnap = stories.some((s) => (s.snapshots?.length ?? 0) > 0);
       const totalStoryValue = stories.reduce((sum, s) => sum + storyValue(s), 0);
       const currentOpen = stories.reduce((sum, s) => {
@@ -2445,7 +2441,6 @@ export function MonthAnalytics({
       return {
         id: e.id,
         epicEst: e.originalEstimateDays ?? 0,
-        startOpenStoryDays,
         stories,
         hasSnap,
         totalStoryValue,
@@ -2527,10 +2522,18 @@ export function MonthAnalytics({
             }
             if (useEpicEst && m.epicEst > 0) {
               epicScope = m.epicEst;
-              if (m.startOpenStoryDays > 0) {
-                epicScaledOpen = (epicOpenStoryDays / m.startOpenStoryDays) * m.epicEst;
+              // Scale open story-days into epicEst units using the epic's
+              // TOTAL story value (constant across time), not the current
+              // open story-days. The previous formula used
+              // `startOpenStoryDays` which excluded stories that are
+              // currently done — but historically those stories WERE open,
+              // so `epicOpenStoryDays` could exceed `startOpenStoryDays`,
+              // making the ratio > 1 and clamping every per-epic line to 0.
+              if (epicTotalStoryValue > 0) {
+                const openRatio = Math.min(1, Math.max(0, epicOpenStoryDays / epicTotalStoryValue));
+                epicScaledOpen = m.epicEst * openRatio;
               } else {
-                epicScaledOpen = Math.min(epicOpenStoryDays, m.epicEst);
+                epicScaledOpen = m.epicEst;
               }
             } else {
               epicScope = epicTotalStoryValue;
