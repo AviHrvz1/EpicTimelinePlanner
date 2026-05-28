@@ -6430,8 +6430,13 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         onExitComplete={() => {
           setEditingEpic(undefined);
           setEditingEpicInitiativeId(null);
-          setInsightsScopeEpicId(null);
-          setInsightsScopeInitId(null);
+          // Do NOT clear insightsScope* here — the gate effect that
+          // watches activeQuarterViewTab / epicDialogOpen already wipes
+          // them when the user is no longer on an Insights surface.
+          // Clearing unconditionally here breaks the "Insights" CTA
+          // inside this dialog: clicking it sets the scope AND closes
+          // the dialog, then this onExitComplete fires ~300 ms later
+          // and wipes the scope we just set.
         }}
         onSubmit={handleUpsertEpic}
         storyRefById={storyRefMaps.byId}
