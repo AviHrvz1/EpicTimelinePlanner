@@ -1083,7 +1083,7 @@ export function MonthAnalytics({
       return (
         <>
           {" ("}
-          <Folder className="mr-1 inline-block size-3.5 shrink-0 align-[-2px] text-slate-500" aria-hidden />
+          <Folder className="mr-0.5 inline-block size-3.5 shrink-0 align-[-2px] text-blue-500" aria-hidden />
           <span>{selectedEpicOption.epic.title}</span>
           {onOpenEpic ? (
             <button
@@ -1107,7 +1107,7 @@ export function MonthAnalytics({
         return (
           <>
             {" ("}
-            <Zap className="mr-1 inline-block size-3.5 shrink-0 align-[-2px] text-blue-500" aria-hidden />
+            <Zap className="mr-0.5 inline-block size-3.5 shrink-0 align-[-2px] text-blue-500" aria-hidden />
             <span>{init.title}</span>
             {onOpenInitiative ? (
               <button
@@ -2775,7 +2775,7 @@ export function MonthAnalytics({
           return (
             <>
               {" ("}
-              <Folder className="mr-1 inline-block size-3.5 shrink-0 align-[-2px] text-slate-500" aria-hidden />
+              <Folder className="mr-0.5 inline-block size-3.5 shrink-0 align-[-2px] text-blue-500" aria-hidden />
               <span>{item.label}</span>
               {onOpenEpic ? (
                 <button
@@ -2783,9 +2783,9 @@ export function MonthAnalytics({
                   onClick={() => onOpenEpic(key)}
                   title="Open epic"
                   aria-label="Open epic"
-                  className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 text-indigo-700 ring-1 ring-indigo-200/80 hover:from-sky-200/80 hover:via-indigo-200/80 hover:to-violet-200/80 hover:text-indigo-900"
+                  className="ml-1 inline-flex items-center justify-center text-indigo-500 hover:text-indigo-700"
                 >
-                  <ExternalLink className="size-3" />
+                  <ExternalLink className="size-3.5" />
                 </button>
               ) : null}
               {")"}
@@ -2808,7 +2808,7 @@ export function MonthAnalytics({
         return (
           <>
             {" ("}
-            <Folder className="mr-1 inline-block size-3.5 shrink-0 align-[-2px] text-slate-500" aria-hidden />
+            <Folder className="mr-0.5 inline-block size-3.5 shrink-0 align-[-2px] text-blue-500" aria-hidden />
             <span>{row.title}</span>
             {onOpenEpic ? (
               <button
