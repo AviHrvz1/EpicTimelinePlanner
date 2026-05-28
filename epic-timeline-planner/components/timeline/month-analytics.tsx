@@ -4562,6 +4562,7 @@ export function MonthAnalytics({
                             fill: "#b91c1c",
                             fontSize: 11,
                             angle: 0,
+                            offset: 8,
                           }}
                         />
                       ) : null}
