@@ -150,6 +150,7 @@ export function HealthBadgeWithDetail({
   basisLabel,
   scopeLabel,
   className,
+  badgeClassName,
   size = "sm",
   chartKind,
 }: {
@@ -161,6 +162,10 @@ export function HealthBadgeWithDetail({
   /** What the verdict applies to: e.g. "Mobile platform v2 (initiative)". */
   scopeLabel?: string;
   className?: string;
+  /** Forwarded to the inner `HealthBadge` so callers can fine-tune the
+   *  badge itself (e.g. tighter padding next to chart titles) without
+   *  also styling the anchor wrapper. */
+  badgeClassName?: string;
   size?: "sm" | "md";
   /** Adjusts the "Why this status?" wording so the popover speaks the
    *  chart's language. Omit for the generic popover (defaults to neutral
@@ -374,6 +379,7 @@ export function HealthBadgeWithDetail({
           tooltip={tooltip}
           onClick={() => setOpen((v) => !v)}
           size={size}
+          className={badgeClassName}
         />
       </div>
       {popover}

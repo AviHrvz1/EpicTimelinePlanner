@@ -14,6 +14,7 @@ import {
 import { createPortal } from "react-dom";
 import {
   Activity,
+  AlertOctagon,
   AlertTriangle,
   ArrowLeft,
   CheckCheck,
@@ -423,13 +424,38 @@ function DrilldownFilterDropdown({
   );
 }
 
+/** Per-epic entry inside a team's flagged-epic list. Carries the full
+ *  ProgressResult so the popover can show *why* this epic is in its
+ *  bucket (delta vs ideal, working days left, etc.). */
+type FlaggedEpicEntry = {
+  title: string;
+  epic: EpicItem;
+  result: ProgressResult;
+  /** Epic's planned end date — used to print "due X/Y" in the popover. */
+  end: Date;
+};
+
+/** Format a fractional-days value the same way HealthBadgeWithDetail does. */
+function fmtDays(n: number): string {
+  if (!Number.isFinite(n)) return "—";
+  const sign = n < 0 ? "-" : "";
+  const abs = Math.abs(n);
+  return `${sign}${Number.isInteger(abs) ? abs : abs.toFixed(1)}d`;
+}
+
+/** Compact "D/M" date label used by the per-epic explainer line. */
+function fmtDM(d: Date): string {
+  return `${d.getDate()}/${d.getMonth() + 1}`;
+}
+
 /**
  * Click-to-open popover for the Team Progress health badge. Shows the
  * team's rolled-up status (worst child epic) and lists which epics drove
- * the verdict (At Risk / Overdue / Watch) so the user can see exactly
- * what's contributing. Each epic title is a button that opens the epic
- * dialog via the optional onOpenEpic callback. Closes on click-outside
- * or Escape.
+ * the verdict (At Risk / Overdue / Watch) with a one-line explanation of
+ * *why* each one is in its bucket — remaining work vs. working days left
+ * and how far above the ideal pace line it sits. Each epic title is a
+ * button that opens the epic dialog via the optional onOpenEpic
+ * callback. Closes on click-outside or Escape.
  */
 function TeamHealthBadgeWithList({
   status,
@@ -440,18 +466,55 @@ function TeamHealthBadgeWithList({
   onOpenEpic,
 }: {
   status: HealthStatus;
-  atRiskEpics: { title: string; epic: EpicItem }[];
-  watchEpics: { title: string; epic: EpicItem }[];
-  overdueEpics: { title: string; epic: EpicItem }[];
+  atRiskEpics: FlaggedEpicEntry[];
+  watchEpics: FlaggedEpicEntry[];
+  overdueEpics: FlaggedEpicEntry[];
   teamLabel: string;
   onOpenEpic?: (epicId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLSpanElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  // Portal-positioned popover: anchored to the badge but rendered to
+  // document.body so it escapes any `overflow:hidden` ancestor (the
+  // Team Progress rows scroll inside a clipped container, which is
+  // why z-index alone couldn't lift the panel out). Opens ABOVE the
+  // badge by default — the Team Progress list often sits near the
+  // bottom of a card and a downward-opening popover would clip.
+  const [pos, setPos] = useState<{ left: number; bottom: number } | null>(null);
+  useEffect(() => {
+    if (!open) {
+      setPos(null);
+      return;
+    }
+    const place = () => {
+      const el = wrapRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const popW = 384; // matches w-96
+      const right = Math.min(window.innerWidth - 8, r.right);
+      const left = Math.max(8, right - popW);
+      // Anchor by the popover's bottom edge: it stays 6px ABOVE the
+      // badge's top edge regardless of the popover's own height (which
+      // varies with how many epics are flagged).
+      const bottom = Math.max(8, window.innerHeight - r.top + 6);
+      setPos({ left, bottom });
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node | null;
+      if (wrapRef.current?.contains(t)) return;
+      if (popoverRef.current?.contains(t)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("mousedown", handler);
@@ -470,6 +533,7 @@ function TeamHealthBadgeWithList({
     : "On Track";
   const tipLines: string[] = [`${teamLabel} — ${verdict}`, "Click for details."];
   const flagged = overdueEpics.length + atRiskEpics.length + watchEpics.length;
+
   // The badge sits inside the row's <button>, so nesting another <button>
   // (HealthBadge with onClick) would be invalid HTML and browsers split
   // it inconsistently — that's why "nothing happens" on click. Render
@@ -499,76 +563,88 @@ function TeamHealthBadgeWithList({
       aria-expanded={open}
     >
       <HealthBadge status={status} tooltip={tipLines.join("\n")} />
-      {open ? (
+      {open && pos && typeof document !== "undefined" ? createPortal(
         <div
-          className="absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border border-slate-200 bg-white p-2.5 text-left text-slate-800 shadow-xl"
+          ref={popoverRef}
+          role="dialog"
+          aria-label={`${teamLabel} — ${verdict} details`}
+          style={{ position: "fixed", left: pos.left, bottom: pos.bottom, zIndex: 1000 }}
+          className="w-96 max-w-[calc(100vw-2rem)] rounded-lg border border-slate-200 bg-white p-3.5 text-left text-slate-800 shadow-xl"
           onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
         >
-          <p className="mb-1.5 inline-flex w-full items-center justify-between text-[11px] font-bold uppercase tracking-wide text-slate-500">
+          <p className="mb-2 inline-flex w-full items-center justify-between text-[12.5px] font-bold uppercase tracking-wide text-slate-500">
             <span>{teamLabel} · {verdict}</span>
-            {flagged > 0 ? <span className="text-slate-400">{flagged} flagged</span> : null}
+            {flagged > 0 ? <span className="text-[12px] font-semibold normal-case tracking-normal text-slate-400">{flagged} flagged</span> : null}
           </p>
-          {overdueEpics.length > 0 ? (
-            <div className="mb-1.5">
-              <p className="text-[11px] font-semibold text-rose-900">Overdue ({overdueEpics.length}) — planned end passed</p>
-              <ul className="mt-0.5 space-y-0.5">
-                {overdueEpics.map((e) => (
-                  <li key={e.epic.id}>
-                    <button
-                      type="button"
-                      onClick={() => { onOpenEpic?.(e.epic.id); setOpen(false); }}
-                      className="block w-full truncate text-left text-[12px] text-blue-700 underline-offset-2 hover:underline"
-                    >
-                      {e.title}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          {atRiskEpics.length > 0 ? (
-            <div className="mb-1.5">
-              <p className="text-[11px] font-semibold text-rose-800">At Risk ({atRiskEpics.length}) — projected to miss</p>
-              <ul className="mt-0.5 space-y-0.5">
-                {atRiskEpics.map((e) => (
-                  <li key={e.epic.id}>
-                    <button
-                      type="button"
-                      onClick={() => { onOpenEpic?.(e.epic.id); setOpen(false); }}
-                      className="block w-full truncate text-left text-[12px] text-blue-700 underline-offset-2 hover:underline"
-                    >
-                      {e.title}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          {watchEpics.length > 0 ? (
-            <div className="mb-1.5">
-              <p className="text-[11px] font-semibold text-amber-800">Watch ({watchEpics.length}) — slipping vs pace</p>
-              <ul className="mt-0.5 space-y-0.5">
-                {watchEpics.map((e) => (
-                  <li key={e.epic.id}>
-                    <button
-                      type="button"
-                      onClick={() => { onOpenEpic?.(e.epic.id); setOpen(false); }}
-                      className="block w-full truncate text-left text-[12px] text-blue-700 underline-offset-2 hover:underline"
-                    >
-                      {e.title}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+          {/** One-line reason for a flagged epic. The verdict is set by
+           *  `deltaDays = remaining − ideal` where ideal interpolates
+           *  linearly from total-effort at the epic's planned start to 0
+           *  at its planned end. We surface the same numbers so the user
+           *  can sanity-check the verdict against the chart. */}
+          {(() => {
+            const reasonFor = (entry: FlaggedEpicEntry, kind: "overdue" | "atRisk" | "watch") => {
+              const r = entry.result;
+              if (kind === "overdue") {
+                return `${fmtDays(r.remainingEffort)} still open · due ${fmtDM(entry.end)} (passed)`;
+              }
+              const delta = r.deltaDays;
+              const ahead = delta < 0 ? `-${fmtDays(-delta)}` : `+${fmtDays(delta)}`;
+              return `${fmtDays(r.remainingEffort)} left · ${r.daysRemaining}d to ${fmtDM(entry.end)} · ${ahead} vs ideal`;
+            };
+            const renderList = (
+              key: "overdue" | "atRisk" | "watch",
+              entries: FlaggedEpicEntry[],
+              titleClass: string,
+              heading: string,
+            ) => {
+              // Per-bucket warning glyph + tint — overdue uses an octagon
+              // since "past deadline" is a harder failure than "drifting".
+              const warnIcon = key === "overdue"
+                ? { Icon: AlertOctagon, className: "text-rose-700" }
+                : key === "atRisk"
+                  ? { Icon: AlertTriangle, className: "text-rose-600" }
+                  : { Icon: AlertTriangle, className: "text-amber-600" };
+              const WarnIcon = warnIcon.Icon;
+              return entries.length === 0 ? null : (
+                <div className="mb-2.5">
+                  <p className={cn("text-[13px] font-semibold", titleClass)}>{heading} ({entries.length})</p>
+                  <ul className="mt-1.5 space-y-1.5">
+                    {entries.map((e) => (
+                      <li key={e.epic.id} className="leading-snug">
+                        <button
+                          type="button"
+                          onClick={() => { onOpenEpic?.(e.epic.id); setOpen(false); }}
+                          className="inline-flex w-full items-center gap-1.5 text-left text-[13.5px] font-medium text-blue-700 underline-offset-2 hover:underline"
+                        >
+                          <Folder className="size-3.5 shrink-0 text-slate-500" aria-hidden />
+                          <span className="min-w-0 truncate">{e.title}</span>
+                          <WarnIcon className={cn("size-3.5 shrink-0", warnIcon.className)} aria-hidden />
+                        </button>
+                        <p className="truncate text-[12px] tabular-nums text-slate-500">{reasonFor(e, key)}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            };
+            return (
+              <>
+                {renderList("overdue", overdueEpics, "text-rose-900", "Overdue — planned end passed")}
+                {renderList("atRisk", atRiskEpics, "text-rose-800", "At Risk — ≥4d above ideal")}
+                {renderList("watch", watchEpics, "text-amber-800", "Watch — 1–4d above ideal")}
+              </>
+            );
+          })()}
           {flagged === 0 ? (
-            <p className="text-[11px] text-slate-500">No flagged epics — everything is on or ahead of pace.</p>
+            <p className="text-[13px] text-slate-500">No flagged epics — everything is on or ahead of pace.</p>
           ) : null}
-          <p className="mt-1.5 border-t border-slate-100 pt-1.5 text-[10.5px] text-slate-500">
-            Each epic uses its own planned start/end window — not the chart period.
-          </p>
-        </div>
+          <div className="mt-2 border-t border-slate-100 pt-2.5 text-[12.5px] leading-snug text-slate-500">
+            <p className="mb-1"><span className="font-semibold text-slate-600">How we score:</span> at each point in an epic's window we compare its remaining work to the ideal linear burndown — Δ = remaining − ideal.</p>
+            <p>≤ 1d → On Track · 1–4d → Watch · ≥ 4d → At Risk · past planned end → Overdue.</p>
+          </div>
+        </div>,
+        document.body,
       ) : null}
     </span>
   );
@@ -1584,12 +1660,9 @@ export function MonthAnalytics({
     if (selectedEpicOption) {
       const epicId = selectedEpicOption.epic.id;
       return (
-        <span className="ml-1 inline-flex items-baseline gap-1 text-[11px] font-normal text-slate-400">
+        <span className="ml-1 inline-flex translate-y-[2px] items-center gap-1 text-[13px] font-normal text-slate-400">
           <span>(</span>
-          <span className="inline-flex items-center gap-1">
-            <Folder className="size-3 shrink-0 text-slate-400" aria-hidden />
-            <span className="text-slate-500">{selectedEpicOption.epic.title}</span>
-          </span>
+          <span className="text-slate-500">{selectedEpicOption.epic.title}</span>
           {onOpenEpic ? (
             <button
               type="button"
@@ -1598,7 +1671,7 @@ export function MonthAnalytics({
               aria-label="Open epic"
               className="inline-flex items-center justify-center text-slate-400 hover:text-slate-600"
             >
-              <ExternalLink className="size-3" />
+              <ExternalLink className="size-3.5" />
             </button>
           ) : null}
           <span>)</span>
@@ -1610,10 +1683,10 @@ export function MonthAnalytics({
       if (init) {
         const initId = init.id;
         return (
-          <span className="ml-1 inline-flex items-baseline gap-1 text-[11px] font-normal text-slate-400">
+          <span className="ml-1 inline-flex translate-y-[2px] items-center gap-1 text-[13px] font-normal text-slate-400">
             <span>(</span>
             <span className="inline-flex items-center gap-1">
-              <Zap className="size-3 shrink-0 text-slate-400" aria-hidden />
+              <Zap className="size-3.5 shrink-0 text-slate-400" aria-hidden />
               <span className="text-slate-500">{init.title}</span>
             </span>
             {onOpenInitiative ? (
@@ -1624,7 +1697,7 @@ export function MonthAnalytics({
                 aria-label="Open initiative"
                 className="inline-flex items-center justify-center text-slate-400 hover:text-slate-600"
               >
-                <ExternalLink className="size-3" />
+                <ExternalLink className="size-3.5" />
               </button>
             ) : null}
             <span>)</span>
@@ -2301,9 +2374,9 @@ export function MonthAnalytics({
   const teamHealthByTeamKey = useMemo(() => {
     const map = new Map<string, {
       status: HealthStatus;
-      atRiskEpics: { title: string; epic: EpicItem }[];
-      watchEpics: { title: string; epic: EpicItem }[];
-      overdueEpics: { title: string; epic: EpicItem }[];
+      atRiskEpics: FlaggedEpicEntry[];
+      watchEpics: FlaggedEpicEntry[];
+      overdueEpics: FlaggedEpicEntry[];
     }>();
     const STATUS_RANK_LOCAL: Record<HealthStatus, number> = {
       done: 0,
@@ -2339,9 +2412,10 @@ export function MonthAnalytics({
         watchEpics: [],
         overdueEpics: [],
       };
-      if (h.status === "atRisk") entry.atRiskEpics.push({ title: epic.title, epic });
-      else if (h.status === "watch") entry.watchEpics.push({ title: epic.title, epic });
-      else if (h.status === "overdue") entry.overdueEpics.push({ title: epic.title, epic });
+      const flagged: FlaggedEpicEntry = { title: epic.title, epic, result: h, end };
+      if (h.status === "atRisk") entry.atRiskEpics.push(flagged);
+      else if (h.status === "watch") entry.watchEpics.push(flagged);
+      else if (h.status === "overdue") entry.overdueEpics.push(flagged);
       if (STATUS_RANK_LOCAL[h.status] > STATUS_RANK_LOCAL[entry.status]) entry.status = h.status;
       map.set(teamKey, entry);
     }
@@ -2587,15 +2661,33 @@ export function MonthAnalytics({
     if (burndownBasis !== "epicEst" && aggregateStories.length === 0) return null;
     const periodStartDate = new Date(planYear, scopeStartMonth - 1, 1);
     const periodEndDate = new Date(planYear, scopeEndMonth, 0);
+    // Each epic's verdict must use ITS OWN planned start/end window — the
+    // chart's ideal line for a focused single epic is anchored to the
+    // epic's due date, not the scope period. Using period bounds instead
+    // makes a 31/5-due epic look "mildly behind" in late May even when
+    // the chart shows it cliff-diving — because the period extends out
+    // to year-end, inflating "working days left". Fall back to the
+    // period bounds only when the epic has no plan dates.
+    const epicBounds = (epic: EpicItem): { start: Date; end: Date } => {
+      const epicYear = epic.planYear ?? planYear;
+      const start = epic.planStartMonth != null
+        ? sprintStartDate(epicYear, globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1))
+        : periodStartDate;
+      const end = epic.planEndMonth != null
+        ? sprintEndDate(epicYear, globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2))
+        : periodEndDate;
+      return { start, end };
+    };
     const epicOriginalEstSum = epicsInScope.reduce(
       (sum, e) => sum + (e.originalEstimateDays ?? 0),
       0,
     );
     if (epicsInScope.length === 1) {
+      const bounds = epicBounds(epicsInScope[0]);
       const h = computeProgress({
         stories: epicsInScope[0].userStories ?? [],
-        start: periodStartDate,
-        end: periodEndDate,
+        start: bounds.start,
+        end: bounds.end,
         basis: burndownBasis,
         epicOriginalEstimateDays: epicsInScope[0].originalEstimateDays ?? null,
       });
@@ -2606,20 +2698,27 @@ export function MonthAnalytics({
       return { status: h.status, tooltip: formatHealthTooltip(h), result: h };
     }
     const childStatuses: HealthStatus[] = epicsInScope.map((epic) => {
+      const bounds = epicBounds(epic);
       const h = computeProgress({
         stories: epic.userStories ?? [],
-        start: periodStartDate,
-        end: periodEndDate,
+        start: bounds.start,
+        end: bounds.end,
         basis: burndownBasis,
         epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
       });
       return h.status;
     });
+    // Aggregate window = span of all child epics' planned bounds (min
+    // start, max end) — so the rolled-up delta-vs-ideal reflects the
+    // overall portfolio window, not a fixed period.
+    const childBoundsList = epicsInScope.map(epicBounds);
+    const aggStart = childBoundsList.reduce((min, b) => b.start < min ? b.start : min, childBoundsList[0].start);
+    const aggEnd = childBoundsList.reduce((max, b) => b.end > max ? b.end : max, childBoundsList[0].end);
     const h = computeInitiativeProgress({
       stories: aggregateStories,
       childStatuses,
-      start: periodStartDate,
-      end: periodEndDate,
+      start: aggStart,
+      end: aggEnd,
       basis: burndownBasis,
       epicOriginalEstimateDays: epicOriginalEstSum > 0 ? epicOriginalEstSum : null,
     });
@@ -2780,12 +2879,8 @@ export function MonthAnalytics({
     for (let i = 0; i < labels.length; i += step) ticks.push(labels[i]);
     const last = labels[labels.length - 1];
     if (ticks[ticks.length - 1] !== last) ticks.push(last);
-    if (selectedEpicDueMarker && !ticks.includes(selectedEpicDueMarker.axisLabel)) {
-      ticks.push(selectedEpicDueMarker.axisLabel);
-      ticks.sort((a, b) => labels.indexOf(a) - labels.indexOf(b));
-    }
     return ticks;
-  }, [monthBurndownWithDueTarget, selectedEpicDueMarker]);
+  }, [monthBurndownWithDueTarget]);
   const burndownLegendItems = useMemo(() => {
     if (selectedEpicOption) {
       return [
@@ -3049,15 +3144,28 @@ export function MonthAnalytics({
     if (burnupBasis !== "epicEst" && aggregateStories.length === 0) return null;
     const periodStartDate = new Date(planYear, scopeStartMonth - 1, 1);
     const periodEndDate = new Date(planYear, scopeEndMonth, 0);
+    // Same anchor rule as burndownHealth — verdict reads off each epic's
+    // own planned window, not the scope period.
+    const epicBounds = (epic: EpicItem): { start: Date; end: Date } => {
+      const epicYear = epic.planYear ?? planYear;
+      const start = epic.planStartMonth != null
+        ? sprintStartDate(epicYear, globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1))
+        : periodStartDate;
+      const end = epic.planEndMonth != null
+        ? sprintEndDate(epicYear, globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2))
+        : periodEndDate;
+      return { start, end };
+    };
     const epicOriginalEstSum = epicsInScope.reduce(
       (sum, e) => sum + (e.originalEstimateDays ?? 0),
       0,
     );
     if (epicsInScope.length === 1) {
+      const bounds = epicBounds(epicsInScope[0]);
       const h = computeProgress({
         stories: epicsInScope[0].userStories ?? [],
-        start: periodStartDate,
-        end: periodEndDate,
+        start: bounds.start,
+        end: bounds.end,
         basis: burnupBasis,
         epicOriginalEstimateDays: epicsInScope[0].originalEstimateDays ?? null,
       });
@@ -3068,20 +3176,24 @@ export function MonthAnalytics({
       return { status: h.status, tooltip: formatHealthTooltip(h), result: h };
     }
     const childStatuses: HealthStatus[] = epicsInScope.map((epic) => {
+      const bounds = epicBounds(epic);
       const h = computeProgress({
         stories: epic.userStories ?? [],
-        start: periodStartDate,
-        end: periodEndDate,
+        start: bounds.start,
+        end: bounds.end,
         basis: burnupBasis,
         epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
       });
       return h.status;
     });
+    const childBoundsList = epicsInScope.map(epicBounds);
+    const aggStart = childBoundsList.reduce((min, b) => b.start < min ? b.start : min, childBoundsList[0].start);
+    const aggEnd = childBoundsList.reduce((max, b) => b.end > max ? b.end : max, childBoundsList[0].end);
     const h = computeInitiativeProgress({
       stories: aggregateStories,
       childStatuses,
-      start: periodStartDate,
-      end: periodEndDate,
+      start: aggStart,
+      end: aggEnd,
       basis: burnupBasis,
       epicOriginalEstimateDays: epicOriginalEstSum > 0 ? epicOriginalEstSum : null,
     });
@@ -3151,6 +3263,24 @@ export function MonthAnalytics({
         if (isDays) return sum + Math.max(0, s.daysLeft ?? s.estimatedDays ?? 0);
         return sum + 1;
       }, 0);
+      // For each story, resolve the timestamp of its FIRST known snapshot.
+      // We treat that moment as when the story became "real" in the
+      // reconstruction window — before that, the story is assumed to be
+      // todo with its full estimate (since story.createdAt in demo /
+      // bulk-seeded data is effectively `now()` and can't be trusted for
+      // back-in-time scope). Stories with no snapshots at all default to
+      // 0 (always present), preserving the pre-snapshot fallback path.
+      const firstSnapMsByStory = new Map<string, number>(
+        stories.map((s) => {
+          const snaps = s.snapshots ?? [];
+          let earliest = Number.POSITIVE_INFINITY;
+          for (const sn of snaps) {
+            const t = new Date(sn.snapshotDate).getTime();
+            if (Number.isFinite(t) && t < earliest) earliest = t;
+          }
+          return [s.id, Number.isFinite(earliest) ? earliest : 0];
+        }),
+      );
       return {
         id: e.id,
         epicEst: e.originalEstimateDays ?? 0,
@@ -3158,6 +3288,7 @@ export function MonthAnalytics({
         hasSnap,
         totalStoryValue,
         currentCompleted: Math.max(0, totalStoryValue - currentOpen),
+        firstSnapMsByStory,
       };
     });
 
@@ -3208,12 +3339,30 @@ export function MonthAnalytics({
       const isToday = dayStart.getTime() === todayStart.getTime();
 
       let completed: number | null = null;
+      // End-of-day (23:59:59.999 local) — used as both the firstSnap
+      // cutoff AND the snapshot-bisection cutoff, matching the burndown's
+      // `monthBurndownFromSnapshots` which queries snapshots with an
+      // end-of-day Date. Without this, a snapshot stored at e.g.
+      // `2026-05-28T00:00:00.000Z` (which is local 03:00 on 28/5 in
+      // UTC+3) would be excluded as "tomorrow's snapshot" because local
+      // midnight cuts off before it — that was the exact reason the
+      // burnup wasn't dropping on 28/5 when the burndown spiked up.
+      const dayEnd = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), 23, 59, 59, 999);
+      const dayEndMs = dayEnd.getTime();
       // Per-epic completed values — one entry per epic in scope so that the
       // legend's "All" toggle can render every epic's line. Each epic uses
       // snapshot reconstruction when it has snapshot history, and a linear
       // ramp (0 → currentCompleted across elapsedDays) when it doesn't.
       const perEpic: Record<string, number | null> = {};
       for (const m of epicMeta) perEpic[m.id] = null;
+      // Per-day scope aggregate — a story enters scope the day its first
+      // snapshot was recorded (the moment it became "real" in the chart's
+      // historical view). Before that, it contributes nothing to either
+      // scope or open work, so completed = scope − open is preserved AND
+      // the scope line correctly steps up when stories were attached
+      // mid-period. Stories with no snapshots at all are always in scope
+      // (firstSnapMs = 0).
+      let dayScopeAgg = 0;
       if (dayIdx <= elapsedDays) {
         // Burnup mirrors burndown: completed = scope − open work remaining.
         // We compute per-epic completed inside the same pass, then sum for
@@ -3222,75 +3371,84 @@ export function MonthAnalytics({
         const rampRatio = elapsedDays <= 1 ? 1 : (dayIdx - 1) / Math.max(elapsedDays - 1, 1);
         const isFinalDay = dayIdx === elapsedDays;
         for (const m of epicMeta) {
+          // Stories that have appeared in the snapshot record by this day.
+          // No-snapshot stories (firstSnap = 0) are always present.
+          const dayStories = m.stories.filter((s) => (m.firstSnapMsByStory.get(s.id) ?? 0) <= dayEndMs);
+          const dayTotalStoryValue = dayStories.reduce((sum, s) => sum + storyValue(s), 0);
           let epicScope: number;
           let epicScaledOpen: number;
           if (m.hasSnap) {
             let epicOpenStoryDays = 0;
             let epicTotalStoryValue = 0;
-            for (const story of m.stories) {
+            for (const story of dayStories) {
               epicTotalStoryValue += storyValue(story);
-              const snap = latestSnapshotAtDayCached(story, dayDate);
-              const status = snap?.status ?? story.status;
+              const snap = latestSnapshotAtDayCached(story, dayEnd);
+              // Before the story's first snapshot the only sane assumption
+              // is that it was "open with full estimate" — the burndown's
+              // line wouldn't drop on that day either. Falling back to
+              // story.status (which is the CURRENT state) here was the
+              // original bug: a now-done story leaked back to "done on
+              // day 1" and the completed line ran above scope.
+              const status = snap?.status ?? "todo";
               if (status !== "todo" && status !== "inProgress") continue;
               if (isDays) {
-                const daysLeft = snap?.daysLeft ?? snap?.estimatedDays ?? story.daysLeft ?? story.estimatedDays ?? 1;
+                const daysLeft = snap?.daysLeft ?? snap?.estimatedDays ?? story.estimatedDays ?? story.daysLeft ?? 1;
                 epicOpenStoryDays += Math.max(0, daysLeft);
               } else {
                 epicOpenStoryDays += 1;
               }
             }
             if (useEpicEst && m.epicEst > 0) {
-              epicScope = m.epicEst;
-              // Scale open story-days into epicEst units using the epic's
-              // TOTAL story value (constant across time), not the current
-              // open story-days. The previous formula used
-              // `startOpenStoryDays` which excluded stories that are
-              // currently done — but historically those stories WERE open,
-              // so `epicOpenStoryDays` could exceed `startOpenStoryDays`,
-              // making the ratio > 1 and clamping every per-epic line to 0.
+              // epicEst basis: scope is the epic's own promise — but
+              // only once the epic has any visible story-record. Before
+              // that, scope is 0 (matching the burndown's empty state).
+              epicScope = epicTotalStoryValue > 0 ? m.epicEst : 0;
               if (epicTotalStoryValue > 0) {
                 const openRatio = Math.min(1, Math.max(0, epicOpenStoryDays / epicTotalStoryValue));
                 epicScaledOpen = m.epicEst * openRatio;
               } else {
-                epicScaledOpen = m.epicEst;
+                epicScaledOpen = 0;
               }
             } else {
               epicScope = epicTotalStoryValue;
               epicScaledOpen = epicOpenStoryDays;
             }
           } else {
-            // No snapshot history for this epic → linear ramp from 0 →
-            // currentCompleted. Without this fallback the snapshot path
-            // would freeze every story at its CURRENT status across the
-            // whole timeline, leaving epics with no completed stories
-            // showing as flat 0.
+            // No snapshot history → linear ramp from 0 → currentCompleted
+            // across the elapsed window.
             const mCompletedRamped = isFinalDay ? m.currentCompleted : m.currentCompleted * rampRatio;
             if (useEpicEst && m.epicEst > 0) {
               epicScope = m.epicEst;
-              if (m.totalStoryValue > 0) {
-                epicScaledOpen = m.epicEst * (1 - mCompletedRamped / m.totalStoryValue);
+              if (dayTotalStoryValue > 0) {
+                epicScaledOpen = m.epicEst * (1 - mCompletedRamped / dayTotalStoryValue);
               } else {
                 epicScaledOpen = m.epicEst;
               }
             } else {
-              epicScope = m.totalStoryValue;
-              epicScaledOpen = Math.max(0, m.totalStoryValue - mCompletedRamped);
+              epicScope = dayTotalStoryValue;
+              epicScaledOpen = Math.max(0, dayTotalStoryValue - mCompletedRamped);
             }
           }
           const epicCompleted = Math.max(0, epicScope - epicScaledOpen);
           perEpic[m.id] = round(epicCompleted);
           openRemainingScaledAgg += epicScaledOpen;
+          dayScopeAgg += epicScope;
         }
-        completed = round(Math.max(0, totalScope - openRemainingScaledAgg));
+        completed = round(Math.max(0, dayScopeAgg - openRemainingScaledAgg));
+      } else {
+        // Future day — scope falls back to "stories existing now" so the
+        // post-today projection doesn't collapse.
+        dayScopeAgg = totalScope;
       }
 
+      const scopeForRow = round(dayScopeAgg);
       let ideal: number | null = null;
       if (totalScope > 0 && dayIdx <= dueDayIndex) {
         const raw = dueDayIndex <= 1 ? totalScope : totalScope * (dayIdx - 1) / (dueDayIndex - 1);
         ideal = round(Math.max(0, Math.min(totalScope, raw)));
       }
 
-      return { labelShort: flowChartDayLabel(dayDate), isToday, completed, scope: round(totalScope), ideal, ...perEpic };
+      return { labelShort: flowChartDayLabel(dayDate), isToday, completed, scope: scopeForRow, ideal, ...perEpic };
     });
   }, [selectedEpicOption, monthEpics, burnUpVisibleKeys, planYear, scopeStartMonth, scopeEndMonth, burnUpDueDate, burnUpMetric, burnupBasis]);
 
@@ -3330,28 +3488,26 @@ export function MonthAnalytics({
 
   const burnUpAxisTicks = useMemo(() => {
     const labels = burnUpData.map((r) => r.labelShort).filter((l) => l.length > 0);
-    const baseTicks =
-      labels.length <= 10
-        ? labels.slice()
-        : (() => {
-            const step = Math.max(1, Math.ceil(labels.length / 10));
-            const out: string[] = [];
-            for (let i = 0; i < labels.length; i += step) out.push(labels[i]);
-            const last = labels[labels.length - 1];
-            if (out[out.length - 1] !== last) out.push(last);
-            return out;
-          })();
-    // Mirror the burndown axis logic: inject the due-date tick if it isn't
-    // already in the set so the `ReferenceDot x={dueTickLabel}` marker can
-    // actually position. Without this the Due target silently vanishes on
-    // epics whose deadline falls between two of the auto-spaced ticks.
-    if (burnUpDueDateTickLabel && !baseTicks.includes(burnUpDueDateTickLabel)) {
-      baseTicks.push(burnUpDueDateTickLabel);
-    }
-    return baseTicks;
-  }, [burnUpData, burnUpDueDateTickLabel]);
+    if (labels.length <= 10) return labels;
+    const step = Math.max(1, Math.ceil(labels.length / 10));
+    const out: string[] = [];
+    for (let i = 0; i < labels.length; i += step) out.push(labels[i]);
+    const last = labels[labels.length - 1];
+    if (out[out.length - 1] !== last) out.push(last);
+    return out;
+  }, [burnUpData]);
 
-  const burnUpScopeTotal = burnUpData.length > 0 ? burnUpData[0]?.scope ?? 0 : 0;
+  // Final scope across the window — scope is now per-day (steps up when
+  // stories are added), so the static markers anchored at the due-date
+  // (red target + green ✓) need the END-of-period value, not day-0's.
+  const burnUpScopeTotal = useMemo(() => {
+    if (burnUpData.length === 0) return 0;
+    let max = 0;
+    for (const row of burnUpData) {
+      if (typeof row?.scope === "number" && row.scope > max) max = row.scope;
+    }
+    return max;
+  }, [burnUpData]);
 
   const burnUpCompletedNow = useMemo(() => {
     for (let i = burnUpData.length - 1; i >= 0; i--) {
@@ -3363,15 +3519,19 @@ export function MonthAnalytics({
   /** Truncate the `completed` line after it first reaches the scope total —
    *  same reasoning as the burndown's done-truncation: a flat line at scope
    *  adds no information. Also surface whether the scope was reached at all
-   *  so the chart can paint a "Done ✓" marker on the due date. */
+   *  so the chart can paint a "Done ✓" marker on the due date. Compares
+   *  against THAT day's scope so a late scope bump doesn't make a row that
+   *  was "at scope" yesterday look like it's still done today. */
   const burnUpDoneAtIdx = useMemo(() => {
-    if (burnUpScopeTotal <= 0) return -1;
     for (let i = 0; i < burnUpData.length; i++) {
-      const v = burnUpData[i]?.completed;
-      if (typeof v === "number" && v >= burnUpScopeTotal) return i;
+      const row = burnUpData[i];
+      if (!row) continue;
+      const v = row.completed;
+      const s = row.scope;
+      if (typeof v === "number" && typeof s === "number" && s > 0 && v >= s) return i;
     }
     return -1;
-  }, [burnUpData, burnUpScopeTotal]);
+  }, [burnUpData]);
   const burnUpDataTruncated = useMemo(() => {
     if (burnUpDoneAtIdx < 0) return burnUpData;
     // After the chart reaches scope, null EVERY numeric field (completed,
@@ -3460,25 +3620,22 @@ export function MonthAnalytics({
         const item = burndownLegendItems.find((i) => i.key === key);
         if (item) {
           return (
-            <>
-              {" ("}
-              <span className="inline-flex items-center gap-1 align-[-2px]">
-                <Folder className="size-3.5 shrink-0 text-slate-800" aria-hidden />
-                <span>{item.label}</span>
-              </span>
+            <span className="ml-1 inline-flex translate-y-[2px] items-center gap-1 text-[13px] font-normal text-slate-400">
+              <span>(</span>
+              <span className="text-slate-500">{item.label}</span>
               {onOpenEpic ? (
                 <button
                   type="button"
                   onClick={() => onOpenEpic(key)}
                   title="Open epic"
                   aria-label="Open epic"
-                  className="ml-1 inline-flex items-center justify-center text-indigo-500 hover:text-indigo-700"
+                  className="inline-flex items-center justify-center text-slate-400 hover:text-slate-600"
                 >
                   <ExternalLink className="size-3.5" />
                 </button>
               ) : null}
-              {")"}
-            </>
+              <span>)</span>
+            </span>
           );
         }
       }
@@ -3495,25 +3652,22 @@ export function MonthAnalytics({
       if (row) {
         const rowId = row.id;
         return (
-          <>
-            {" ("}
-            <span className="inline-flex items-center gap-1 align-[-2px]">
-              <Folder className="size-3.5 shrink-0 text-slate-800" aria-hidden />
-              <span>{row.title}</span>
-            </span>
+          <span className="ml-1 inline-flex translate-y-[2px] items-center gap-1 text-[13px] font-normal text-slate-400">
+            <span>(</span>
+            <span className="text-slate-500">{row.title}</span>
             {onOpenEpic ? (
               <button
                 type="button"
                 onClick={() => onOpenEpic(rowId)}
                 title="Open epic"
                 aria-label="Open epic"
-                className="ml-1 inline-flex items-center justify-center text-indigo-500 hover:text-indigo-700"
+                className="inline-flex items-center justify-center text-slate-400 hover:text-slate-600"
               >
                 <ExternalLink className="size-3.5" />
               </button>
             ) : null}
-            {")"}
-          </>
+            <span>)</span>
+          </span>
         );
       }
     }
@@ -4299,6 +4453,8 @@ export function MonthAnalytics({
                   basisLabel={basisDisplayLabel(burndownBasis, focused ? "epic" : selectedInit ? "initiative" : "initiative")}
                   scopeLabel={scopeLabel}
                   chartKind="burndown"
+                  className="ml-1"
+                  badgeClassName="py-0 text-[11.5px]"
                 />
               );
             })() : null}
@@ -5148,7 +5304,7 @@ export function MonthAnalytics({
                      *  doesn't fit. */}
                     {teamMode ? "Team Progress" : "User Progress"}
                     {isMultiPeriodInsights ? "" : (
-                      <span className="ml-1 text-[11px] font-normal text-slate-400">(this month)</span>
+                      <span className="ml-1 inline-block translate-y-[2px] text-[11px] font-normal text-slate-400">(this month)</span>
                     )}
                     {scopeTitleSuffix}
                   </h3>
@@ -5472,6 +5628,8 @@ export function MonthAnalytics({
                       basisLabel={basisDisplayLabel(burnupBasis, focusedBurnupRow ? "epic" : "initiative")}
                       scopeLabel={scopeLabel}
                       chartKind="burnup"
+                      className="ml-1"
+                      badgeClassName="py-0 text-[11.5px]"
                     />
                   );
                 })() : null}

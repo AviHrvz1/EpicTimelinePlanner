@@ -5792,7 +5792,21 @@ export function TimelineGrid({
   const timelineHeaderRow = (
       <div
         className={cn(
+          // Ribbon fold-back tabs: two small triangles drawn via ::before
+          // and ::after pseudo-elements, sitting just under the bottom
+          // corners and pointing inward+down. Drawn with clip-path (vs.
+          // the older CSS border trick) so the shape stays reliable
+          // regardless of theme borders. Uses indigo-300 — darker than
+          // the lightest part of the ribbon gradient so the fold reads.
+          // Fold-back ribbon tabs: two small triangles drawn via ::before
+          // and ::after pseudo-elements, sitting just under the bottom
+          // corners and pointing inward+down. Uses the CSS border trick
+          // (width:0 height:0 + one transparent + one colored border
+          // produces a right-triangle) with indigo-200 — slightly
+          // shaded against the lighter pastel ribbon body.
           "relative z-30 mt-2 mb-5 -ml-5 -mr-4 flex min-w-0 shrink-0 items-center gap-2 overflow-visible rounded-none border-0 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 py-2 pl-5 pr-4 shadow-[inset_0_4px_6px_-4px_rgba(15,23,42,0.10),inset_0_-4px_6px_-4px_rgba(15,23,42,0.08)] ring-0",
+          "before:content-[''] before:absolute before:left-0 before:-bottom-2 before:w-0 before:h-0 before:border-l-[10px] before:border-l-transparent before:border-t-[8px] before:border-t-indigo-200",
+          "after:content-[''] after:absolute after:right-0 after:-bottom-2 after:w-0 after:h-0 after:border-r-[10px] after:border-r-transparent after:border-t-[8px] after:border-t-indigo-200",
           useRoadmapGanttChipTrack && "min-w-0",
         )}
       >

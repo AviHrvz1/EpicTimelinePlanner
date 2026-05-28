@@ -2425,7 +2425,7 @@ export function UsersWorkspacePanel() {
                 <Layers3 className="size-3.5 shrink-0 text-indigo-500/90" strokeWidth={2} aria-hidden />
                 Group by
               </span>
-              <span className="ml-1 flex max-w-[7rem] items-center justify-end truncate font-medium leading-none text-slate-600">
+              <span className="ml-3 flex items-center justify-end whitespace-nowrap font-medium leading-none text-slate-600">
                 {userDirGroupSummaryLabel}
               </span>
             </button>
