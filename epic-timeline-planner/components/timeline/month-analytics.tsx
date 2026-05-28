@@ -2841,34 +2841,43 @@ export function MonthAnalytics({
                           </span>
                         ) : null}
                       </button>
-                      {group.epics.map((opt) => (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => {
-                            setSelectedEpicId(opt.id);
-                            setEpicInput(opt.label);
-                            setIsEpicDropdownOpen(false);
-                            setShowAllEpicSuggestions(false);
-                          }}
-                          className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[13px] text-slate-700 transition hover:bg-slate-100"
-                        >
-                          <Folder className="size-3.5 shrink-0 text-slate-500" aria-hidden />
-                          <span className="truncate">{opt.label}</span>
-                          {opt.teamLabel ? (
-                            <span className="ml-auto inline-flex items-center gap-1 rounded bg-slate-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-slate-600 ring-1 ring-slate-200">
-                              <TeamAvatar slug={opt.teamId} sizePx={10} fallback={<Users className="size-2.5 shrink-0 opacity-70" aria-hidden />} />
-                              {opt.teamLabel}
-                            </span>
-                          ) : null}
-                          {opt.health ? (
-                            <span className={cn("inline-flex shrink-0", !opt.teamLabel && "ml-auto")}>
-                              <HealthBadge status={opt.health} tooltip={opt.healthTooltip ?? undefined} />
-                            </span>
-                          ) : null}
-                        </button>
-                      ))}
+                      {/* Tree-connector for the epics under this initiative.
+                       *  A vertical line on the left + a small horizontal
+                       *  stub before each Folder glyph reads as a typical
+                       *  file-tree, matching how the backlog renders
+                       *  nested rows. */}
+                      {group.epics.length > 0 ? (
+                        <div className="relative ml-3 border-l border-slate-200 pl-1">
+                          {group.epics.map((opt) => (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setSelectedEpicId(opt.id);
+                                setEpicInput(opt.label);
+                                setIsEpicDropdownOpen(false);
+                                setShowAllEpicSuggestions(false);
+                              }}
+                              className="relative flex w-full items-center gap-1.5 rounded-md py-1.5 pl-3 pr-2 text-left text-[13px] text-slate-700 transition before:absolute before:left-0 before:top-1/2 before:h-px before:w-2.5 before:bg-slate-200 hover:bg-slate-100"
+                            >
+                              <Folder className="size-3.5 shrink-0 text-slate-500" aria-hidden />
+                              <span className="truncate">{opt.label}</span>
+                              {opt.teamLabel ? (
+                                <span className="ml-auto inline-flex items-center gap-1 rounded bg-slate-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-slate-600 ring-1 ring-slate-200">
+                                  <TeamAvatar slug={opt.teamId} sizePx={10} fallback={<Users className="size-2.5 shrink-0 opacity-70" aria-hidden />} />
+                                  {opt.teamLabel}
+                                </span>
+                              ) : null}
+                              {opt.health ? (
+                                <span className={cn("inline-flex shrink-0", !opt.teamLabel && "ml-auto")}>
+                                  <HealthBadge status={opt.health} tooltip={opt.healthTooltip ?? undefined} />
+                                </span>
+                              ) : null}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   ))
                 ) : (

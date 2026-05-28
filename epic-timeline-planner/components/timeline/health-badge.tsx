@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { AlertOctagon, AlertTriangle, Check, X } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { AlertOctagon, AlertTriangle, Check, GripHorizontal, X } from "lucide-react";
 
 import type { HealthStatus, ProgressBasis, ProgressResult } from "@/lib/progress";
 import { cn } from "@/lib/utils";
@@ -160,60 +161,158 @@ export function HealthBadgeWithDetail({
   chartKind?: "burndown" | "burnup";
 }) {
   const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement | null>(null);
+  const anchorRef = useRef<HTMLDivElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  /** Committed popover position. Null until first anchor measurement. */
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  /** Once dragged, stop snapping back to the anchor on scroll/resize. */
+  const userMovedRef = useRef(false);
+  /** Live drag state — kept off React's render loop so dragging is 1:1
+   *  with the cursor (mutates `style.left/top` directly, commits to React
+   *  state only on pointer-up). Mirrors the same pattern as
+   *  RoadmapHealthPopover. */
+  const dragRef = useRef<{
+    pointerId: number;
+    grabX: number;
+    grabY: number;
+    currentLeft: number;
+    currentTop: number;
+  } | null>(null);
+
+  // Anchor on open; track scroll/resize *only* until the user moves it,
+  // then leave the popover wherever they dropped it.
+  useLayoutEffect(() => {
+    if (!open) {
+      setPos(null);
+      userMovedRef.current = false;
+      return;
+    }
+    const snapToAnchor = () => {
+      if (userMovedRef.current) return;
+      const el = anchorRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      // Default: open below the badge, right-aligned to the badge so the
+      // popover doesn't blow off the chart's right edge.
+      const popW = 320; // matches w-[20rem]
+      const right = Math.min(window.innerWidth - 8, r.right);
+      const left = Math.max(8, right - popW);
+      setPos({ left, top: r.bottom + 6 });
+    };
+    snapToAnchor();
+    window.addEventListener("scroll", snapToAnchor, true);
+    window.addEventListener("resize", snapToAnchor);
+    return () => {
+      window.removeEventListener("scroll", snapToAnchor, true);
+      window.removeEventListener("resize", snapToAnchor);
+    };
+  }, [open]);
+
+  // Escape closes; click-outside no longer closes (was too easy to lose
+  // the popover by accident while dragging or interacting with the page).
   useEffect(() => {
     if (!open) return;
-    function onPointerDown(event: PointerEvent) {
-      if (!rootRef.current) return;
-      if (!rootRef.current.contains(event.target as Node)) setOpen(false);
-    }
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") setOpen(false);
     }
-    window.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("keydown", onKey);
     return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  const onHandlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const el = popoverRef.current;
+    if (!el) return;
+    // Don't start a drag from the close button.
+    if ((e.target as HTMLElement).closest("[data-popover-no-drag]")) return;
+    e.stopPropagation();
+    const rect = el.getBoundingClientRect();
+    dragRef.current = {
+      pointerId: e.pointerId,
+      grabX: e.clientX - rect.left,
+      grabY: e.clientY - rect.top,
+      currentLeft: rect.left,
+      currentTop: rect.top,
+    };
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // pointer capture can fail in rare cases — keep moving via global listeners
+    }
+    userMovedRef.current = true;
+  }, []);
+
+  const onHandlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    const el = popoverRef.current;
+    if (!drag || !el) return;
+    e.stopPropagation();
+    const w = el.offsetWidth || 320;
+    const h = el.offsetHeight || 260;
+    const maxLeft = Math.max(8, window.innerWidth - w - 8);
+    const maxTop = Math.max(8, window.innerHeight - h - 8);
+    const left = Math.max(8, Math.min(maxLeft, e.clientX - drag.grabX));
+    const top = Math.max(8, Math.min(maxTop, e.clientY - drag.grabY));
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+    drag.currentLeft = left;
+    drag.currentTop = top;
+  }, []);
+
+  const onHandlePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    e.stopPropagation();
+    try {
+      e.currentTarget.releasePointerCapture(drag.pointerId);
+    } catch {
+      // capture may have been lost — fine
+    }
+    setPos({ left: drag.currentLeft, top: drag.currentTop });
+    dragRef.current = null;
+  }, []);
 
   const meta = STATUS_META[status];
   const Icon = meta.icon;
   const tooltip = formatHealthTooltip(result);
   const reason = buildHealthReason(result, basis, chartKind);
 
-  return (
-    <div ref={rootRef} className={cn("relative inline-flex shrink-0", className)}>
-      <HealthBadge
-        status={status}
-        tooltip={tooltip}
-        onClick={() => setOpen((v) => !v)}
-        size={size}
-      />
-      {open ? (
-        <div
-          role="dialog"
-          aria-label={`${meta.label} details`}
-          className="absolute right-0 top-[calc(100%+6px)] z-[1000] w-[20rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150"
+  const popover = open && pos && typeof document !== "undefined" ? createPortal(
+    <div
+      ref={popoverRef}
+      role="dialog"
+      aria-label={`${meta.label} details`}
+      style={{ position: "fixed", left: pos.left, top: pos.top, zIndex: 1000 }}
+      className="w-[20rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150"
+    >
+      {/* Header doubles as the drag handle — grab anywhere on the colored
+       *  band to relocate the popover. The close button opts out via
+       *  `data-popover-no-drag`. */}
+      <div
+        onPointerDown={onHandlePointerDown}
+        onPointerMove={onHandlePointerMove}
+        onPointerUp={onHandlePointerUp}
+        onPointerCancel={onHandlePointerUp}
+        className={cn("flex cursor-move select-none items-center justify-between gap-2 px-3 py-2 touch-none", meta.chip, "rounded-none")}
+      >
+        <div className="inline-flex items-center gap-1.5">
+          <GripHorizontal className="size-3 shrink-0 opacity-60" aria-hidden />
+          <Icon className="size-4 shrink-0" aria-hidden />
+          <span className="text-[13px] font-bold">{meta.label}</span>
+          <span className="text-[12px] font-semibold opacity-80">· {result.progressPercent}% complete</span>
+        </div>
+        <button
+          type="button"
+          data-popover-no-drag
+          onClick={() => setOpen(false)}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="inline-flex size-5 items-center justify-center rounded hover:bg-white/40"
+          aria-label="Close details"
         >
-          {/* Header — colored band matching the verdict, with icon + label
-           *  + close button. Same color family as the chip itself. */}
-          <div className={cn("flex items-center justify-between gap-2 px-3 py-2", meta.chip, "rounded-none")}>
-            <div className="inline-flex items-center gap-1.5">
-              <Icon className="size-4 shrink-0" aria-hidden />
-              <span className="text-[13px] font-bold">{meta.label}</span>
-              <span className="text-[12px] font-semibold opacity-80">· {result.progressPercent}% complete</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="inline-flex size-5 items-center justify-center rounded hover:bg-white/40"
-              aria-label="Close details"
-            >
-              <X className="size-3" aria-hidden />
-            </button>
-          </div>
+          <X className="size-3" aria-hidden />
+        </button>
+      </div>
           {/* Body — plain-English reason + a small table of the math. */}
           <div className="space-y-3 px-3 py-3 text-[12px] text-slate-700">
             {scopeLabel ? (
@@ -256,9 +355,22 @@ export function HealthBadgeWithDetail({
               </span>
             </div>
           </div>
-        </div>
-      ) : null}
-    </div>
+    </div>,
+    document.body,
+  ) : null;
+
+  return (
+    <>
+      <div ref={anchorRef} className={cn("inline-flex shrink-0", className)}>
+        <HealthBadge
+          status={status}
+          tooltip={tooltip}
+          onClick={() => setOpen((v) => !v)}
+          size={size}
+        />
+      </div>
+      {popover}
+    </>
   );
 }
 
