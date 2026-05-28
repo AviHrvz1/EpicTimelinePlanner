@@ -1101,7 +1101,7 @@ export function InitiativeFormDialog({
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div
-                      className="inline-flex h-8 w-full cursor-not-allowed items-center gap-2 rounded-lg border border-slate-200 bg-slate-100 pl-2.5 pr-2 text-[13px] text-slate-600 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.55)]"
+                      className="inline-flex h-8 w-full cursor-not-allowed items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 pl-1.5 pr-2 text-[13px] text-slate-600 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.55)]"
                       aria-label="Earliest start across epics"
                       title="Earliest start date across the initiative's epics"
                     >
@@ -1111,7 +1111,7 @@ export function InitiativeFormDialog({
                       </span>
                     </div>
                     <div
-                      className="inline-flex h-8 w-full cursor-not-allowed items-center gap-2 rounded-lg border border-slate-200 bg-slate-100 pl-2.5 pr-2 text-[13px] text-slate-600 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.55)]"
+                      className="inline-flex h-8 w-full cursor-not-allowed items-center gap-1 rounded-lg border border-slate-200 bg-slate-100 pl-1.5 pr-2 text-[13px] text-slate-600 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.55)]"
                       aria-label="Latest end across epics"
                       title="Latest end date across the initiative's epics"
                     >

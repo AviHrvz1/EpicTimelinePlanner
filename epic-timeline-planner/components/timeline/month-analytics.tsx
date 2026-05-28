@@ -1913,10 +1913,51 @@ export function MonthAnalytics({
     const dueDay = dueSprint === 1 ? 15 : new Date(dueYear, dueMonth, 0).getDate();
     return new Date(dueYear, dueMonth - 1, dueDay);
   }, [burndownFocusedEpicOption, scopeEndMonth, planYear]);
+  /**
+   * Truncate each burndown series after the first day it reaches 0 — once
+   * an epic is fully burned down (or the aggregate hits 0) there's nothing
+   * more to plot, and the flat-line tail just adds visual noise. We swap
+   * subsequent values to `null` per series so the line ends cleanly and
+   * the chart shows a "Done ✓" marker on the due date instead.
+   */
+  const monthBurndownDoneByKey = useMemo(() => {
+    const m = new Map<string, number>();
+    if (monthBurndownResolved.length === 0) return m;
+    const keys: string[] = ["actual", ...monthBurndownEpics.map((e) => e.id)];
+    for (const key of keys) {
+      for (let i = 0; i < monthBurndownResolved.length; i++) {
+        const v = monthBurndownResolved[i]?.[key];
+        if (typeof v === "number" && v === 0) {
+          m.set(key, i);
+          break;
+        }
+      }
+    }
+    return m;
+  }, [monthBurndownResolved, monthBurndownEpics]);
+  const monthBurndownTruncated = useMemo(() => {
+    if (monthBurndownDoneByKey.size === 0) return monthBurndownResolved;
+    return monthBurndownResolved.map((row, i) => {
+      let next: Record<string, unknown> | null = null;
+      for (const [key, doneIdx] of monthBurndownDoneByKey) {
+        if (i > doneIdx) {
+          if (next == null) next = { ...row };
+          next[key] = null;
+        }
+      }
+      return (next ?? row) as (typeof monthBurndownResolved)[number];
+    }) as typeof monthBurndownResolved;
+  }, [monthBurndownResolved, monthBurndownDoneByKey]);
+  /** True when the focused epic's actual line hits 0 anywhere in the
+   *  rendered window — drives the "Done ✓" marker on the due date. */
+  const isFocusedBurndownDone = useMemo(() => {
+    if (!burndownFocusedEpicOption) return false;
+    return monthBurndownDoneByKey.has(burndownFocusedEpicOption.epic.id);
+  }, [burndownFocusedEpicOption, monthBurndownDoneByKey]);
   const monthBurndownWithDueTarget = useMemo(() => {
-    if (!burndownFocusedEpicOption || selectedEpicDueDate == null) return monthBurndownResolved;
-    const totalDays = monthBurndownResolved.length;
-    if (totalDays === 0) return monthBurndownResolved;
+    if (!burndownFocusedEpicOption || selectedEpicDueDate == null) return monthBurndownTruncated;
+    const totalDays = monthBurndownTruncated.length;
+    if (totalDays === 0) return monthBurndownTruncated;
     // Ideal line's starting value follows the basis so the chart matches
     // what the user picked in the toggle:
     //   - epicEst → epic.originalEstimateDays (linear burn against the epic
@@ -1935,7 +1976,7 @@ export function MonthAnalytics({
     const msPerDay = 24 * 60 * 60 * 1000;
     const dueDayIndex = Math.floor((selectedEpicDueDate.getTime() - monthStart.getTime()) / msPerDay) + 1;
     const targetDayIndex = Math.max(1, dueDayIndex);
-    const withIdeal = monthBurndownResolved.map((row, idx) => {
+    const withIdeal = monthBurndownTruncated.map((row, idx) => {
       const dayIdx = idx + 1;
       if (dayIdx > targetDayIndex) {
         return { ...row, epicIdeal: null };
@@ -1970,7 +2011,7 @@ export function MonthAnalytics({
       });
     }
     return extended as typeof monthBurndownResolved;
-  }, [monthBurndownResolved, burndownFocusedEpicOption, selectedEpicDueDate, metric, burndownBasis, planYear, month, scopeStartMonth]);
+  }, [monthBurndownTruncated, burndownFocusedEpicOption, selectedEpicDueDate, metric, burndownBasis, planYear, month, scopeStartMonth]);
   const selectedEpicDueMarker = useMemo(() => {
     if (!selectedEpicDueDate || !burndownFocusedEpicOption) return null;
     if (monthBurndownWithDueTarget.length === 0) return null;
@@ -2483,6 +2524,23 @@ export function MonthAnalytics({
     }
     return 0;
   }, [burnUpData]);
+  /** Truncate the `completed` line after it first reaches the scope total —
+   *  same reasoning as the burndown's done-truncation: a flat line at scope
+   *  adds no information. Also surface whether the scope was reached at all
+   *  so the chart can paint a "Done ✓" marker on the due date. */
+  const burnUpDoneAtIdx = useMemo(() => {
+    if (burnUpScopeTotal <= 0) return -1;
+    for (let i = 0; i < burnUpData.length; i++) {
+      const v = burnUpData[i]?.completed;
+      if (typeof v === "number" && v >= burnUpScopeTotal) return i;
+    }
+    return -1;
+  }, [burnUpData, burnUpScopeTotal]);
+  const burnUpDataTruncated = useMemo(() => {
+    if (burnUpDoneAtIdx < 0) return burnUpData;
+    return burnUpData.map((row, i) => (i > burnUpDoneAtIdx ? { ...row, completed: null } : row));
+  }, [burnUpData, burnUpDoneAtIdx]);
+  const isBurnUpDone = burnUpDoneAtIdx >= 0;
 
   const burnUpEpicRows = useMemo(() => {
     const epicsInScope = selectedEpicOption != null ? [selectedEpicOption.epic] : monthEpics.map((r) => r.epic);
@@ -3231,17 +3289,30 @@ export function MonthAnalytics({
                         }}
                       />
                     ) : null}
-                    {burndownFocusedEpicOption && burndownVisibleKeys.includes(burndownFocusedEpicOption.epic.id) ? (
-                      <Line
-                        type="monotone"
-                        dataKey={burndownFocusedEpicOption.epic.id}
-                        stroke={LINE_PALETTE[0]}
-                        strokeWidth={2}
-                        dot={false}
-                        name={burndownFocusedEpicOption.epic.title}
-                        isAnimationActive={false}
-                      />
-                    ) : monthBurndownEpics.map((epic, idx) =>
+                    {burndownFocusedEpicOption && burndownVisibleKeys.includes(burndownFocusedEpicOption.epic.id) ? (() => {
+                      // Use the focused epic's NATURAL palette index (its
+                      // position in `monthBurndownEpics`) so the line color
+                      // matches its legend dot. Previously this always used
+                      // `LINE_PALETTE[0]`, which mismatched whenever the
+                      // user focused an epic via legend click without
+                      // changing the scope picker (legend dot stayed on
+                      // palette[its-index] but the line painted palette[0]).
+                      const naturalIdx = monthBurndownEpics.findIndex(
+                        (e) => e.id === burndownFocusedEpicOption.epic.id,
+                      );
+                      const palette = LINE_PALETTE[(naturalIdx >= 0 ? naturalIdx : 0) % LINE_PALETTE.length];
+                      return (
+                        <Line
+                          type="monotone"
+                          dataKey={burndownFocusedEpicOption.epic.id}
+                          stroke={palette}
+                          strokeWidth={2}
+                          dot={false}
+                          name={burndownFocusedEpicOption.epic.title}
+                          isAnimationActive={false}
+                        />
+                      );
+                    })() : monthBurndownEpics.map((epic, idx) =>
                       burndownVisibleKeys.includes(epic.id) ? (
                       <Line
                         key={epic.id}
@@ -3295,6 +3366,36 @@ export function MonthAnalytics({
                           fill: "#b91c1c",
                           fontSize: 11,
                           angle: 0,
+                        }}
+                      />
+                    ) : null}
+                    {/* Done ✓ — sits just above the red due-date marker when
+                     *  the focused epic's burndown has reached 0. Signals
+                     *  completion clearly so the user doesn't have to infer
+                     *  it from the truncated line tail. */}
+                    {burndownFocusedEpicOption && selectedEpicDueMarker && isFocusedBurndownDone ? (
+                      <ReferenceDot
+                        x={selectedEpicDueMarker.axisLabel}
+                        y={Math.max(selectedEpicDueMarker.y + (metric === "storyCount" ? 0.35 : 0.25), metric === "storyCount" ? 1 : 0.8)}
+                        r={0}
+                        isFront
+                        ifOverflow="visible"
+                        shape={(shapeProps: { cx?: number; cy?: number }) => {
+                          const cx = shapeProps.cx ?? 0;
+                          const cy = (shapeProps.cy ?? 0) - 14;
+                          return (
+                            <g>
+                              <circle cx={cx} cy={cy} r={8} fill="#10b981" stroke="#ffffff" strokeWidth={1.5} />
+                              <path d={`M ${cx - 3.5} ${cy} L ${cx - 0.8} ${cy + 2.6} L ${cx + 3.8} ${cy - 2.6}`} stroke="#ffffff" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                            </g>
+                          );
+                        }}
+                        label={{
+                          value: "Done",
+                          position: "top",
+                          fill: "#047857",
+                          fontSize: 10,
+                          offset: 18,
                         }}
                       />
                     ) : null}
@@ -4069,7 +4170,7 @@ export function MonthAnalytics({
                 ) : (
                 <div className="absolute inset-0">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={burnUpData} margin={{ top: 2, right: 26, left: 18, bottom: 0 }}>
+                    <LineChart data={burnUpDataTruncated} margin={{ top: 2, right: 26, left: 18, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                       <XAxis
                         dataKey="labelShort"
@@ -4131,6 +4232,36 @@ export function MonthAnalytics({
                       <Line type="monotone" dataKey="scope" name="Total scope" stroke="#94a3b8" strokeWidth={1.5} dot={false} isAnimationActive={false} />
                       <Line type="monotone" dataKey="ideal" name={burnUpDueDateLabel ? `Ideal (due ${burnUpDueDateLabel})` : "Ideal"} stroke="#f97316" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} isAnimationActive={false} />
                       <Line type="monotone" dataKey="completed" name="Completed" stroke="#10b981" strokeWidth={2} dot={false} connectNulls={false} isAnimationActive={false} />
+                      {/* Done ✓ — anchored at the burnup due-date label
+                       *  position when the completed line has reached scope.
+                       *  Skipped on the story-count axis (no scope line to
+                       *  reach) and when the due-date label isn't known. */}
+                      {isBurnUpDone && burnUpDueDateLabel ? (
+                        <ReferenceDot
+                          x={burnUpDueDateLabel}
+                          y={burnUpScopeTotal}
+                          r={0}
+                          isFront
+                          ifOverflow="visible"
+                          shape={(shapeProps: { cx?: number; cy?: number }) => {
+                            const cx = shapeProps.cx ?? 0;
+                            const cy = (shapeProps.cy ?? 0) - 14;
+                            return (
+                              <g>
+                                <circle cx={cx} cy={cy} r={8} fill="#10b981" stroke="#ffffff" strokeWidth={1.5} />
+                                <path d={`M ${cx - 3.5} ${cy} L ${cx - 0.8} ${cy + 2.6} L ${cx + 3.8} ${cy - 2.6}`} stroke="#ffffff" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                              </g>
+                            );
+                          }}
+                          label={{
+                            value: "Done",
+                            position: "top",
+                            fill: "#047857",
+                            fontSize: 10,
+                            offset: 18,
+                          }}
+                        />
+                      ) : null}
                     </LineChart>
                   </ResponsiveContainer>
                 </div>

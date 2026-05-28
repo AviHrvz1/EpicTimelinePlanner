@@ -6,9 +6,12 @@ import {
   Bold,
   CalendarDays,
   Check,
+  CheckCheck,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  Circle,
   ClipboardList,
   FileText,
   Heading2,
@@ -19,9 +22,11 @@ import {
   Link as LinkIcon,
   List,
   ListOrdered,
+  ListTodo,
   ListTree,
   Map as MapIcon,
   MessageSquare,
+  PlayCircle,
   Quote,
   Tag,
   Trash,
@@ -1275,13 +1280,38 @@ export function EpicFormDialog({
                       </span>
                     </span>
                   </div>
-                  <input
-                    value={derivedEpicStatus.label}
-                    readOnly
-                    aria-label="Status (read-only)"
-                    title="Status is calculated from the user stories"
-                    className="h-7 w-full cursor-not-allowed rounded-md border border-slate-300 bg-slate-100 px-2 text-[14px] font-medium text-slate-500 shadow-sm"
-                  />
+                  {(() => {
+                    // Icon + colored glyph for the rolled-up status, matching
+                    // the convention used by the backlog and the Insights
+                    // drilldown StoryStatusPill (ListTodo amber / PlayCircle
+                    // blue / CheckCheck emerald / CheckCircle2 violet, with
+                    // an empty Circle for the "no child stories" case).
+                    const meta = (() => {
+                      switch (derivedEpicStatus.key) {
+                        case "approved":
+                          return { Icon: CheckCircle2, color: "text-violet-600" };
+                        case "done":
+                          return { Icon: CheckCheck, color: "text-emerald-600" };
+                        case "inProgress":
+                          return { Icon: PlayCircle, color: "text-blue-600" };
+                        case "todo":
+                          return { Icon: ListTodo, color: "text-amber-600" };
+                        default:
+                          return { Icon: Circle, color: "text-slate-400" };
+                      }
+                    })();
+                    const { Icon } = meta;
+                    return (
+                      <div
+                        aria-label="Status (read-only)"
+                        title="Status is calculated from the user stories"
+                        className="inline-flex h-7 w-full cursor-not-allowed items-center gap-1.5 rounded-md border border-slate-300 bg-slate-100 px-2 text-[14px] font-semibold text-slate-700 shadow-sm"
+                      >
+                        <Icon className={cn("size-3.5 shrink-0", meta.color)} aria-hidden />
+                        <span className="truncate">{derivedEpicStatus.label}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
                 <label className="grid grid-cols-[9rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Team</p>
@@ -1381,7 +1411,7 @@ export function EpicFormDialog({
                       onClick={() => setStartCalendarOpen((p) => !p)}
                       aria-label="Pick start date"
                       aria-expanded={startCalendarOpen}
-                      className="group inline-flex h-8 w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/80 pl-2.5 pr-2 text-left text-[13px] text-slate-800 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.7)] transition-colors hover:border-slate-300 hover:bg-white focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
+                      className="group inline-flex h-8 w-full items-center gap-1 rounded-lg border border-slate-200 bg-slate-50/80 pl-1.5 pr-2 text-left text-[13px] text-slate-800 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.7)] transition-colors hover:border-slate-300 hover:bg-white focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
                     >
                       <CalendarDays className="size-3.5 shrink-0 text-slate-400 transition-colors group-focus:text-indigo-500" aria-hidden />
                       <span className={formatShortDate(planStartDateDraft) ? "text-slate-800" : "text-slate-400"}>
@@ -1394,7 +1424,7 @@ export function EpicFormDialog({
                       onClick={() => setEndCalendarOpen((p) => !p)}
                       aria-label="Pick end date"
                       aria-expanded={endCalendarOpen}
-                      className="group inline-flex h-8 w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/80 pl-2.5 pr-2 text-left text-[13px] text-slate-800 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.7)] transition-colors hover:border-slate-300 hover:bg-white focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
+                      className="group inline-flex h-8 w-full items-center gap-1 rounded-lg border border-slate-200 bg-slate-50/80 pl-1.5 pr-2 text-left text-[13px] text-slate-800 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.7)] transition-colors hover:border-slate-300 hover:bg-white focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
                     >
                       <CalendarDays className="size-3.5 shrink-0 text-slate-400 transition-colors group-focus:text-indigo-500" aria-hidden />
                       <span className={formatShortDate(planEndDateDraft) ? "text-slate-800" : "text-slate-400"}>
