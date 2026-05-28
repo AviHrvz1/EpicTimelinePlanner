@@ -362,8 +362,10 @@ function EpicLegendRowButton({
   textClass,
 }: {
   label: string;
+  /** The chart-line color for this series; used to tint the Folder glyph so
+   *  the legend marker visually matches the actual line on the chart. */
   color: string;
-  /** Toggle / visibility state — drives dot opacity and icon color. */
+  /** Toggle / visibility state — drives glyph opacity (dimmed when off). */
   on: boolean;
   /** Real epic gets the Folder glyph; synthetic ideal-line row skips it. */
   isEpic: boolean;
@@ -388,17 +390,22 @@ function EpicLegendRowButton({
           textClass,
         )}
       >
-        <span
-          className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-          style={{ backgroundColor: color, opacity: on ? 1 : 0.35 }}
-        />
         {isEpic ? (
           <Folder
-            className={cn("size-3.5 shrink-0", on ? "text-sky-500" : "text-slate-400")}
+            className="size-3.5 shrink-0"
+            style={{ color, opacity: on ? 1 : 0.35 }}
             strokeWidth={2}
             aria-hidden
           />
-        ) : null}
+        ) : (
+          // Non-epic rows (e.g. "Epic ideal to due") keep a small colored
+          // square so the marker still reads as a series swatch.
+          <span
+            className="inline-block size-3 shrink-0 rounded-[3px]"
+            style={{ backgroundColor: color, opacity: on ? 1 : 0.35 }}
+            aria-hidden
+          />
+        )}
         <span className="truncate">{label}</span>
       </button>
       <InsightsTruncationTooltipPortal show={hover} anchorRef={btnRef} text={label} />
@@ -2541,6 +2548,27 @@ export function MonthAnalytics({
     return burnUpData.map((row, i) => (i > burnUpDoneAtIdx ? { ...row, completed: null } : row));
   }, [burnUpData, burnUpDoneAtIdx]);
   const isBurnUpDone = burnUpDoneAtIdx >= 0;
+  /** Color for the burnup completed line. Mirrors `burnUpEpicRows`'s
+   *  palette resolution so the line matches its legend marker when there's
+   *  a single visible epic: scope-pinned → palette[0] (epicsInScope length
+   *  is 1); legend-narrowed-to-one → that epic's index in monthEpics.
+   *  Multi-epic aggregate falls back to emerald. */
+  const burnUpCompletedStroke = useMemo(() => {
+    const fallback = "#10b981";
+    if (selectedEpicOption) {
+      // `burnUpEpicRows` builds epicsInScope=[selectedEpicOption.epic] and
+      // colors at idx=0 → palette[0]. Match that here.
+      return LINE_PALETTE[0] ?? fallback;
+    }
+    // When the legend is narrowed to a single visible epic, use its natural
+    // index in monthEpics (which is what burnUpEpicRows used to color it).
+    if (burnUpVisibleKeys.length === 1) {
+      const onlyKey = burnUpVisibleKeys[0]!;
+      const idx = monthEpics.findIndex((r) => r.epic.id === onlyKey);
+      if (idx >= 0) return LINE_PALETTE[idx % LINE_PALETTE.length] ?? fallback;
+    }
+    return fallback;
+  }, [selectedEpicOption, monthEpics, burnUpVisibleKeys]);
 
   const burnUpEpicRows = useMemo(() => {
     const epicsInScope = selectedEpicOption != null ? [selectedEpicOption.epic] : monthEpics.map((r) => r.epic);
@@ -4231,7 +4259,7 @@ export function MonthAnalytics({
                       })()}
                       <Line type="monotone" dataKey="scope" name="Total scope" stroke="#94a3b8" strokeWidth={1.5} dot={false} isAnimationActive={false} />
                       <Line type="monotone" dataKey="ideal" name={burnUpDueDateLabel ? `Ideal (due ${burnUpDueDateLabel})` : "Ideal"} stroke="#f97316" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} isAnimationActive={false} />
-                      <Line type="monotone" dataKey="completed" name="Completed" stroke="#10b981" strokeWidth={2} dot={false} connectNulls={false} isAnimationActive={false} />
+                      <Line type="monotone" dataKey="completed" name="Completed" stroke={burnUpCompletedStroke} strokeWidth={2} dot={false} connectNulls={false} isAnimationActive={false} />
                       {/* Done ✓ — anchored at the burnup due-date label
                        *  position when the completed line has reached scope.
                        *  Skipped on the story-count axis (no scope line to
