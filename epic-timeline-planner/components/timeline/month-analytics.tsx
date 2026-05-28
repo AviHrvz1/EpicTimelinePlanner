@@ -122,10 +122,9 @@ function WorkloadXAxisTick({
 }) {
   if (x == null || y == null) return null;
   const label = payload?.value ?? "";
-  // Bumped tick row + icon so uploaded photos read as proper avatars (was 16px,
-  // visually too small next to the text label). 22px matches the scope-panel
-  // user chip's avatar so the bar-chart axis reads as a row of "people".
-  const iconSize = 22;
+  // User photos benefit from being readable (22px); team glyphs/logos
+  // overpower the axis at that size, so they get a tighter 16px puck.
+  const iconSize = teamMode ? 16 : 22;
   const rowY = y + iconSize / 2 + 3;
   // Left-align the icon + text under the LEFT EDGE of the bar group instead
   // of centering on the category. The category's center is `x`; with 4
@@ -198,6 +197,64 @@ const LINE_PALETTE = ["#2563eb", "#0d9488", "#7c3aed", "#ea580c", "#14b8a6", "#b
  *  load / status pie). All three tables share the same column set so the
  *  sort/filter helpers are shared too. */
 type DrilldownSortKey = "id" | "title" | "sprint" | "assignee" | "status";
+/** Same idea but for the Epic Progress drilldown — replaces "sprint" with
+ *  "initiative" since epics belong to initiatives, not sprints. */
+type EpicDrilldownSortKey = "id" | "title" | "initiative" | "assignee" | "status";
+interface EpicDrilldownFilter {
+  title: string;
+  initiative: string | null;
+  assignee: string | null;
+  status: string | null;
+}
+const EMPTY_EPIC_DRILLDOWN_FILTER: EpicDrilldownFilter = {
+  title: "",
+  initiative: null,
+  assignee: null,
+  status: null,
+};
+const EPIC_STATUS_RANK: Record<string, number> = {
+  Unscheduled: 0,
+  "To do": 1,
+  "In progress": 2,
+  Done: 3,
+  Approved: 4,
+};
+
+/** Filter + sort an epic drilldown list. Shape mirrors `applyDrilldownFilterSort`
+ *  but operates on epic rows + an epic-status / initiative-title lookup. */
+function applyEpicDrilldownFilterSort<T extends { id: string; title: string; assignee?: string | null }>(
+  rows: T[],
+  filter: EpicDrilldownFilter,
+  sort: { key: EpicDrilldownSortKey; dir: "asc" | "desc" } | null,
+  epicDisplayId: (epicId: string) => string,
+  initiativeTitle: (epicId: string) => string,
+  epicStatusLabel: (epicId: string) => string,
+): T[] {
+  const titleQ = filter.title.trim().toLowerCase();
+  let filtered = rows;
+  if (titleQ) filtered = filtered.filter((r) => r.title.toLowerCase().includes(titleQ));
+  if (filter.initiative != null) filtered = filtered.filter((r) => initiativeTitle(r.id) === filter.initiative);
+  if (filter.assignee != null) filtered = filtered.filter((r) => (r.assignee?.trim() || "Unassigned") === filter.assignee);
+  if (filter.status != null) filtered = filtered.filter((r) => epicStatusLabel(r.id) === filter.status);
+  if (!sort) return filtered;
+  const dir = sort.dir === "asc" ? 1 : -1;
+  return [...filtered].sort((a, b) => {
+    switch (sort.key) {
+      case "id":
+        return epicDisplayId(a.id).localeCompare(epicDisplayId(b.id), undefined, { numeric: true }) * dir;
+      case "title":
+        return a.title.localeCompare(b.title) * dir;
+      case "initiative":
+        return initiativeTitle(a.id).localeCompare(initiativeTitle(b.id)) * dir;
+      case "assignee":
+        return (a.assignee ?? "").localeCompare(b.assignee ?? "") * dir;
+      case "status":
+        return ((EPIC_STATUS_RANK[epicStatusLabel(a.id)] ?? 99) - (EPIC_STATUS_RANK[epicStatusLabel(b.id)] ?? 99)) * dir;
+      default:
+        return 0;
+    }
+  });
+}
 
 /** Per-column filter state for the drilldown tables. Empty/null means
  *  "show all". `title` is a substring match; the others are exact match. */
@@ -363,6 +420,157 @@ function DrilldownFilterDropdown({
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Click-to-open popover for the Team Progress health badge. Shows the
+ * team's rolled-up status (worst child epic) and lists which epics drove
+ * the verdict (At Risk / Overdue / Watch) so the user can see exactly
+ * what's contributing. Each epic title is a button that opens the epic
+ * dialog via the optional onOpenEpic callback. Closes on click-outside
+ * or Escape.
+ */
+function TeamHealthBadgeWithList({
+  status,
+  atRiskEpics,
+  watchEpics,
+  overdueEpics,
+  teamLabel,
+  onOpenEpic,
+}: {
+  status: HealthStatus;
+  atRiskEpics: { title: string; epic: EpicItem }[];
+  watchEpics: { title: string; epic: EpicItem }[];
+  overdueEpics: { title: string; epic: EpicItem }[];
+  teamLabel: string;
+  onOpenEpic?: (epicId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLSpanElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const verdict =
+    status === "overdue" ? "Overdue"
+    : status === "atRisk" ? "At Risk"
+    : status === "watch" ? "Watch"
+    : status === "done" ? "Done"
+    : "On Track";
+  const tipLines: string[] = [`${teamLabel} — ${verdict}`, "Click for details."];
+  const flagged = overdueEpics.length + atRiskEpics.length + watchEpics.length;
+  // The badge sits inside the row's <button>, so nesting another <button>
+  // (HealthBadge with onClick) would be invalid HTML and browsers split
+  // it inconsistently — that's why "nothing happens" on click. Render
+  // HealthBadge as a plain span (no onClick) and put the toggle on this
+  // wrapper span, stopping propagation so the row's onClick (which opens
+  // the drilldown) doesn't also fire.
+  return (
+    <span
+      ref={wrapRef}
+      className="relative inline-flex cursor-pointer"
+      onClick={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        setOpen((v) => !v);
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }
+      }}
+      aria-haspopup="dialog"
+      aria-expanded={open}
+    >
+      <HealthBadge status={status} tooltip={tipLines.join("\n")} />
+      {open ? (
+        <div
+          className="absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border border-slate-200 bg-white p-2.5 text-left text-slate-800 shadow-xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="mb-1.5 inline-flex w-full items-center justify-between text-[11px] font-bold uppercase tracking-wide text-slate-500">
+            <span>{teamLabel} · {verdict}</span>
+            {flagged > 0 ? <span className="text-slate-400">{flagged} flagged</span> : null}
+          </p>
+          {overdueEpics.length > 0 ? (
+            <div className="mb-1.5">
+              <p className="text-[11px] font-semibold text-rose-900">Overdue ({overdueEpics.length}) — planned end passed</p>
+              <ul className="mt-0.5 space-y-0.5">
+                {overdueEpics.map((e) => (
+                  <li key={e.epic.id}>
+                    <button
+                      type="button"
+                      onClick={() => { onOpenEpic?.(e.epic.id); setOpen(false); }}
+                      className="block w-full truncate text-left text-[12px] text-blue-700 underline-offset-2 hover:underline"
+                    >
+                      {e.title}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {atRiskEpics.length > 0 ? (
+            <div className="mb-1.5">
+              <p className="text-[11px] font-semibold text-rose-800">At Risk ({atRiskEpics.length}) — projected to miss</p>
+              <ul className="mt-0.5 space-y-0.5">
+                {atRiskEpics.map((e) => (
+                  <li key={e.epic.id}>
+                    <button
+                      type="button"
+                      onClick={() => { onOpenEpic?.(e.epic.id); setOpen(false); }}
+                      className="block w-full truncate text-left text-[12px] text-blue-700 underline-offset-2 hover:underline"
+                    >
+                      {e.title}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {watchEpics.length > 0 ? (
+            <div className="mb-1.5">
+              <p className="text-[11px] font-semibold text-amber-800">Watch ({watchEpics.length}) — slipping vs pace</p>
+              <ul className="mt-0.5 space-y-0.5">
+                {watchEpics.map((e) => (
+                  <li key={e.epic.id}>
+                    <button
+                      type="button"
+                      onClick={() => { onOpenEpic?.(e.epic.id); setOpen(false); }}
+                      className="block w-full truncate text-left text-[12px] text-blue-700 underline-offset-2 hover:underline"
+                    >
+                      {e.title}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {flagged === 0 ? (
+            <p className="text-[11px] text-slate-500">No flagged epics — everything is on or ahead of pace.</p>
+          ) : null}
+          <p className="mt-1.5 border-t border-slate-100 pt-1.5 text-[10.5px] text-slate-500">
+            Each epic uses its own planned start/end window — not the chart period.
+          </p>
+        </div>
+      ) : null}
+    </span>
   );
 }
 
@@ -1182,6 +1390,11 @@ export function MonthAnalytics({
    *  the per-column filter inside the drilldown table.) */
   const [statusDrilldownColFilter, setStatusDrilldownColFilter] = useState<DrilldownFilter>(EMPTY_DRILLDOWN_FILTER);
   const [statusDrilldownSort, setStatusDrilldownSort] = useState<{ key: DrilldownSortKey; dir: "asc" | "desc" } | null>(null);
+  /** Epic-variant filter + sort for the status drilldown when it's
+   *  showing epics (Quarter / Year insights). Columns: id, title,
+   *  initiative, assignee, status. */
+  const [statusDrilldownEpicFilter, setStatusDrilldownEpicFilter] = useState<EpicDrilldownFilter>(EMPTY_EPIC_DRILLDOWN_FILTER);
+  const [statusDrilldownEpicSort, setStatusDrilldownEpicSort] = useState<{ key: EpicDrilldownSortKey; dir: "asc" | "desc" } | null>(null);
   const [monthLoadDrilldownAssignee, setMonthLoadDrilldownAssignee] = useState<string | null>(null);
   const [monthLoadDrilldownIsTeam, setMonthLoadDrilldownIsTeam] = useState(false);
   // When the breadcrumb team filter changes (e.g. user switches between
@@ -1363,14 +1576,19 @@ export function MonthAnalytics({
    *  a Zap glyph (blue-500). The trailing ExternalLink pill opens the scoped
    *  epic / initiative dialog. Empty when the scope is "all". */
   const scopeTitleSuffix = useMemo<ReactNode>(() => {
+    // Comment-style suffix appended to chart titles when an epic /
+    // initiative is pinned. Smaller font, gray throughout (icons +
+    // brackets included) so it reads as supporting context, not a
+    // second heading. The ExternalLink stays clickable but inherits
+    // the same gray with a darker hover.
     if (selectedEpicOption) {
       const epicId = selectedEpicOption.epic.id;
       return (
-        <>
-          {" ("}
-          <span className="inline-flex items-center gap-1 align-[-2px]">
-            <Folder className="size-3.5 shrink-0 text-slate-800" aria-hidden />
-            <span>{selectedEpicOption.epic.title}</span>
+        <span className="ml-1 inline-flex items-baseline gap-1 text-[11px] font-normal text-slate-400">
+          <span>(</span>
+          <span className="inline-flex items-center gap-1">
+            <Folder className="size-3 shrink-0 text-slate-400" aria-hidden />
+            <span className="text-slate-500">{selectedEpicOption.epic.title}</span>
           </span>
           {onOpenEpic ? (
             <button
@@ -1378,13 +1596,13 @@ export function MonthAnalytics({
               onClick={() => onOpenEpic(epicId)}
               title="Open epic"
               aria-label="Open epic"
-              className="ml-1 inline-flex items-center justify-center text-indigo-500 hover:text-indigo-700"
+              className="inline-flex items-center justify-center text-slate-400 hover:text-slate-600"
             >
-              <ExternalLink className="size-3.5" />
+              <ExternalLink className="size-3" />
             </button>
           ) : null}
-          {")"}
-        </>
+          <span>)</span>
+        </span>
       );
     }
     if (selectedInitiativeId !== "all") {
@@ -1392,11 +1610,11 @@ export function MonthAnalytics({
       if (init) {
         const initId = init.id;
         return (
-          <>
-            {" ("}
-            <span className="inline-flex items-center gap-1 align-[-2px]">
-              <Zap className="size-3.5 shrink-0 text-slate-800" aria-hidden />
-              <span>{init.title}</span>
+          <span className="ml-1 inline-flex items-baseline gap-1 text-[11px] font-normal text-slate-400">
+            <span>(</span>
+            <span className="inline-flex items-center gap-1">
+              <Zap className="size-3 shrink-0 text-slate-400" aria-hidden />
+              <span className="text-slate-500">{init.title}</span>
             </span>
             {onOpenInitiative ? (
               <button
@@ -1404,13 +1622,13 @@ export function MonthAnalytics({
                 onClick={() => onOpenInitiative(initId)}
                 title="Open initiative"
                 aria-label="Open initiative"
-                className="ml-1 inline-flex items-center justify-center text-indigo-500 hover:text-indigo-700"
+                className="inline-flex items-center justify-center text-slate-400 hover:text-slate-600"
               >
-                <ExternalLink className="size-3.5" />
+                <ExternalLink className="size-3" />
               </button>
             ) : null}
-            {")"}
-          </>
+            <span>)</span>
+          </span>
         );
       }
     }
@@ -1906,6 +2124,31 @@ export function MonthAnalytics({
     });
     return map;
   }, [initiatives]);
+  // Also hoisted (used by the epic-variant of the status drilldown).
+  const scopedEpicDisplayIdsHoisted = useMemo(() => {
+    const rows = initiatives
+      .flatMap((initiative) => initiative.epics ?? [])
+      .sort((a, b) => {
+        const aTs = new Date(a.createdAt).getTime();
+        const bTs = new Date(b.createdAt).getTime();
+        if (aTs !== bTs) return aTs - bTs;
+        return a.title.localeCompare(b.title);
+      });
+    const map = new Map<string, string>();
+    rows.forEach((epic, idx) => {
+      map.set(epic.id, `EPIC-${String(idx + 1).padStart(2, "0")}`);
+    });
+    return map;
+  }, [initiatives]);
+  const initiativeTitleByEpicIdHoisted = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const initiative of initiatives) {
+      for (const epic of initiative.epics ?? []) {
+        map.set(epic.id, initiative.title);
+      }
+    }
+    return map;
+  }, [initiatives]);
   const statusDrilldownStoriesRaw = useMemo(() => {
     if (statusDrilldownFilter == null) return [];
     if (statusDrilldownFilter === "All") return scopedStories;
@@ -1928,11 +2171,22 @@ export function MonthAnalytics({
     ),
     [statusDrilldownStoriesRaw, statusDrilldownColFilter, statusDrilldownSort, scopedStoryDisplayIds, scopeStartMonth],
   );
-  const statusDrilldownEpics = useMemo(() => {
+  const statusDrilldownEpicsRaw = useMemo(() => {
     if (!statusChartShowsEpics || statusDrilldownFilter == null) return [];
     if (statusDrilldownFilter === "All") return scopedEpics;
     return scopedEpics.filter((epic) => epicStatusById.get(epic.id) === statusDrilldownFilter);
   }, [statusChartShowsEpics, statusDrilldownFilter, scopedEpics, epicStatusById]);
+  const statusDrilldownEpics = useMemo(
+    () => applyEpicDrilldownFilterSort(
+      statusDrilldownEpicsRaw,
+      statusDrilldownEpicFilter,
+      statusDrilldownEpicSort,
+      (id) => scopedEpicDisplayIdsHoisted.get(id) ?? id.slice(0, 8),
+      (id) => initiativeTitleByEpicIdHoisted.get(id) ?? "—",
+      (id) => epicStatusById.get(id) ?? "To do",
+    ),
+    [statusDrilldownEpicsRaw, statusDrilldownEpicFilter, statusDrilldownEpicSort, scopedEpicDisplayIdsHoisted, initiativeTitleByEpicIdHoisted, epicStatusById],
+  );
   const statusDrilldownRowCount = statusChartShowsEpics ? statusDrilldownEpics.length : statusDrilldownStories.length;
   const tableTargetRows = 6;
   const statusDrilldownEmptyRows = Math.max(0, tableTargetRows - statusDrilldownRowCount);
@@ -1980,11 +2234,6 @@ export function MonthAnalytics({
     });
     return map;
   }, [initiatives]);
-  const initiativeTitleByEpicId = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const row of monthEpics) map.set(row.epic.id, row.initiative.title);
-    return map;
-  }, [monthEpics]);
   const epicTeamByStoryId = useMemo(() => {
     const map = new Map<string, string | null>();
     for (const initiative of initiatives) {
@@ -2040,6 +2289,65 @@ export function MonthAnalytics({
     [monthLoadDrilldownStoriesRaw, monthLoadDrilldownFilter, monthLoadDrilldownSort, scopedStoryDisplayIds, scopeStartMonth],
   );
   const monthLoadDrilldownEmptyRows = Math.max(0, tableTargetRows - monthLoadDrilldownStories.length);
+
+  /**
+   * Team health rollup for the Team Progress chart. For each in-scope team:
+   *  1. Compute per-epic health via `computeProgress` (uses each epic's own
+   *     planned start/end — period-agnostic, matches the Roadmap Health
+   *     popover and chart badges).
+   *  2. Pick the worst child status (overdue > atRisk > watch > onTrack/done).
+   *  3. Capture the at-risk + watch epic titles so the popover can list them.
+   */
+  const teamHealthByTeamKey = useMemo(() => {
+    const map = new Map<string, {
+      status: HealthStatus;
+      atRiskEpics: { title: string; epic: EpicItem }[];
+      watchEpics: { title: string; epic: EpicItem }[];
+      overdueEpics: { title: string; epic: EpicItem }[];
+    }>();
+    const STATUS_RANK_LOCAL: Record<HealthStatus, number> = {
+      done: 0,
+      onTrack: 0,
+      watch: 1,
+      atRisk: 2,
+      overdue: 3,
+    };
+    for (const { epic } of monthEpics) {
+      if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
+      const teamKey = epic.team ?? "__unassigned__";
+      const start = sprintStartDate(
+        planYear,
+        globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1),
+      );
+      const end = sprintEndDate(
+        planYear,
+        globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2),
+      );
+      const h = computeProgress({
+        stories: epic.userStories ?? [],
+        start,
+        end,
+        basis: progressBasis,
+        epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
+      });
+      // Skip epics that have no measurable work in the current basis (else
+      // every unestimated epic in epicEst mode would dominate the rollup).
+      if (progressBasis !== "epicEst" && (epic.userStories ?? []).length === 0) continue;
+      const entry = map.get(teamKey) ?? {
+        status: "onTrack" as HealthStatus,
+        atRiskEpics: [],
+        watchEpics: [],
+        overdueEpics: [],
+      };
+      if (h.status === "atRisk") entry.atRiskEpics.push({ title: epic.title, epic });
+      else if (h.status === "watch") entry.watchEpics.push({ title: epic.title, epic });
+      else if (h.status === "overdue") entry.overdueEpics.push({ title: epic.title, epic });
+      if (STATUS_RANK_LOCAL[h.status] > STATUS_RANK_LOCAL[entry.status]) entry.status = h.status;
+      map.set(teamKey, entry);
+    }
+    return map;
+  }, [monthEpics, planYear, progressBasis]);
+
   const teamByAssigneeFallback = useMemo(() => {
     const counts = new Map<string, Map<string, number>>();
     for (const story of scopedStories) {
@@ -2264,11 +2572,16 @@ export function MonthAnalytics({
    *   - "All" → aggregate verdict across the visible burndown epics
    */
   const burndownHealth = useMemo(() => {
-    const epicsInScope = selectedEpicOption != null
-      ? [selectedEpicOption.epic]
+    // Health must describe what the chart visually shows — if the legend
+    // (or scope picker) has narrowed to one epic, the popover speaks for
+    // THAT epic, not the full in-scope aggregate. Otherwise respect any
+    // partial legend toggle so e.g. "7 of 10 epics visible" doesn't tally
+    // numbers from epics that aren't being plotted.
+    const epicsInScope = burndownFocusedEpicOption != null
+      ? [burndownFocusedEpicOption.epic]
       : selectedInitiativeId !== "all"
         ? monthEpics.filter((row) => row.initiative.id === selectedInitiativeId).map((row) => row.epic)
-        : monthBurndownEpics;
+        : monthBurndownEpics.filter((epic) => burndownVisibleKeys.length === 0 || burndownVisibleKeys.includes(epic.id));
     if (epicsInScope.length === 0) return null;
     const aggregateStories = epicsInScope.flatMap((epic) => epic.userStories ?? []);
     if (burndownBasis !== "epicEst" && aggregateStories.length === 0) return null;
@@ -2315,7 +2628,7 @@ export function MonthAnalytics({
       : h.totalEffort > 0;
     if (!hasData) return null;
     return { status: h.status, tooltip: formatHealthTooltip(h), result: h };
-  }, [burndownBasis, selectedEpicOption, selectedInitiativeId, monthEpics, monthBurndownEpics, planYear, scopeStartMonth, scopeEndMonth]);
+  }, [burndownBasis, burndownFocusedEpicOption, selectedInitiativeId, monthEpics, monthBurndownEpics, burndownVisibleKeys, planYear, scopeStartMonth, scopeEndMonth]);
   const selectedEpicDueDate = useMemo(() => {
     if (!burndownFocusedEpicOption) return null;
     const dueSprint = burndownFocusedEpicOption.epic.planEndSprint;
@@ -3310,6 +3623,14 @@ export function MonthAnalytics({
       <col className="w-[16%]" />
     </colgroup>
   );
+  const drilldownColgroupEpic = (
+    <colgroup>
+      <col className="w-[12%]" />
+      <col className="w-[50%]" />
+      <col className="w-[22%]" />
+      <col className="w-[16%]" />
+    </colgroup>
+  );
   const sharedDrilldownArrowClass =
     "absolute -right-[2px] inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800";
 
@@ -3369,7 +3690,7 @@ export function MonthAnalytics({
               }}
               placeholder="All Epics & Initiatives"
               className={cn(
-                "h-9 w-full rounded-md border border-slate-200 bg-white pr-2 text-[13px] font-semibold text-slate-700",
+                "h-10 w-full rounded-md border border-slate-200 bg-white pr-2 text-[13px] font-semibold text-slate-700",
                 selectedEpicOption || selectedInitiativeId !== "all" ? "pl-7" : "pl-2",
               )}
               aria-label="Filter insights by epic or initiative"
@@ -3384,7 +3705,7 @@ export function MonthAnalytics({
                 setIsEpicDropdownOpen(true);
                 setShowAllEpicSuggestions(true);
               }}
-              className="absolute right-1 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+              className="absolute right-1 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
               aria-label="Clear scope filter"
               title="Clear filter (show all)"
             >
@@ -3584,6 +3905,10 @@ export function MonthAnalytics({
           const uniqueSprints = statusChartShowsEpics ? [] : Array.from(new Set(statusDrilldownStoriesRaw.map((s) => storySprintDisplayLabel(s.sprint, scopeStartMonth)))).filter(Boolean).sort();
           const uniqueAssignees = statusChartShowsEpics ? [] : Array.from(new Set(statusDrilldownStoriesRaw.map((s) => s.assignee?.trim() || "Unassigned"))).filter(Boolean).sort();
           const uniqueStatuses = statusChartShowsEpics ? [] : Array.from(new Set(statusDrilldownStoriesRaw.map((s) => s.status))).sort();
+          // Epic-variant unique sets — populated only when the table is
+          // showing epics (statusChartShowsEpics = true).
+          const uniqueEpicAssignees = !statusChartShowsEpics ? [] : Array.from(new Set(statusDrilldownEpicsRaw.map((e) => e.assignee?.trim() || "Unassigned"))).filter(Boolean).sort();
+          const uniqueEpicStatuses = !statusChartShowsEpics ? [] : Array.from(new Set(statusDrilldownEpicsRaw.map((e) => epicStatusById.get(e.id) ?? "To do"))).sort();
           return (
           <div className={cn("mt-0 flex w-full min-w-0 flex-col overflow-hidden", INSIGHTS_CHART_BAND, INSIGHTS_CHART_FRAME)}>
             <div className="relative flex-1 min-h-0 min-w-0">
@@ -3594,16 +3919,59 @@ export function MonthAnalytics({
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
               <table className={drilldownTableClass}>
-                {drilldownColgroup}
+                {statusChartShowsEpics ? drilldownColgroupEpic : drilldownColgroup}
                 <thead className="sticky top-0 z-10 overflow-hidden rounded-t-md border-b border-[#19abeb]/70 bg-[#0897d5] text-white shadow-[0_1px_0_rgba(15,23,42,0.04)]">
                   {statusChartShowsEpics ? (
+                    <>
                     <tr>
-                      <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Epic ID</th>
-                      <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Epic name</th>
-                      <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Initiative</th>
-                      <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Assignee</th>
-                      <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Status</th>
+                      <th className="min-w-0 px-2 py-1 text-[14px] text-left">
+                        <DrilldownSortHeader label="Epic ID" column={"id" as DrilldownSortKey} sort={statusDrilldownEpicSort as { key: DrilldownSortKey; dir: "asc" | "desc" } | null} onSortChange={(next) => setStatusDrilldownEpicSort(next as { key: EpicDrilldownSortKey; dir: "asc" | "desc" } | null)} />
+                      </th>
+                      <th className="min-w-0 px-2 py-1 text-[14px] text-left">
+                        <DrilldownSortHeader label="Epic name" column={"title" as DrilldownSortKey} sort={statusDrilldownEpicSort as { key: DrilldownSortKey; dir: "asc" | "desc" } | null} onSortChange={(next) => setStatusDrilldownEpicSort(next as { key: EpicDrilldownSortKey; dir: "asc" | "desc" } | null)} />
+                      </th>
+                      <th className="min-w-0 px-2 py-1 text-[14px] text-left">
+                        <DrilldownSortHeader label="Assignee" column={"assignee" as DrilldownSortKey} sort={statusDrilldownEpicSort as { key: DrilldownSortKey; dir: "asc" | "desc" } | null} onSortChange={(next) => setStatusDrilldownEpicSort(next as { key: EpicDrilldownSortKey; dir: "asc" | "desc" } | null)} />
+                      </th>
+                      <th className="min-w-0 px-2 py-1 text-[14px] text-left">
+                        <DrilldownSortHeader label="Status" column={"status" as DrilldownSortKey} sort={statusDrilldownEpicSort as { key: DrilldownSortKey; dir: "asc" | "desc" } | null} onSortChange={(next) => setStatusDrilldownEpicSort(next as { key: EpicDrilldownSortKey; dir: "asc" | "desc" } | null)} />
+                      </th>
                     </tr>
+                    <tr className="bg-white/95">
+                      <th className="min-w-0 px-1 py-0.5" />
+                      <th className="min-w-0 px-1 py-0.5">
+                        <DrilldownFilterInputText value={statusDrilldownEpicFilter.title} onChange={(v) => setStatusDrilldownEpicFilter((p) => ({ ...p, title: v }))} ariaLabel="Filter epic progress by epic name" />
+                      </th>
+                      <th className="min-w-0 px-1 py-0.5">
+                        <DrilldownFilterDropdown
+                          value={statusDrilldownEpicFilter.assignee}
+                          options={uniqueEpicAssignees}
+                          renderOption={(name) => {
+                            const resolved = resolveAssigneeAvatar(name, workspaceDirectoryUsers);
+                            return (
+                              <span className="inline-flex items-center gap-1.5">
+                                <UserAvatar name={resolved.name} image={resolved.image} size={16} className="ring-0" />
+                                <span className="truncate">{name}</span>
+                              </span>
+                            );
+                          }}
+                          onChange={(v) => setStatusDrilldownEpicFilter((p) => ({ ...p, assignee: v }))}
+                          ariaLabel="Filter epic progress by assignee"
+                        />
+                      </th>
+                      <th className="min-w-0 px-1 py-0.5">
+                        <DrilldownFilterDropdown
+                          value={statusDrilldownEpicFilter.status}
+                          options={uniqueEpicStatuses}
+                          renderOption={(label) => (
+                            <span className="inline-flex items-center gap-1.5 truncate">{label}</span>
+                          )}
+                          onChange={(v) => setStatusDrilldownEpicFilter((p) => ({ ...p, status: v }))}
+                          ariaLabel="Filter epic progress by status"
+                        />
+                      </th>
+                    </tr>
+                    </>
                   ) : (
                     <>
                     <tr>
@@ -3659,26 +4027,47 @@ export function MonthAnalytics({
                   {statusChartShowsEpics
                     ? statusDrilldownEpics.map((epic) => {
                         const epicStatusLabel = epicStatusById.get(epic.id) ?? "To do";
+                        // Map the epic-status label back to a story-status
+                        // key so we can reuse StoryStatusPill's colored icon
+                        // language. Epics introduce one extra "Unscheduled"
+                        // bucket that has no story-side analogue — render
+                        // a neutral Circle for it.
+                        const epicStatusKey =
+                          epicStatusLabel === "Approved" ? "approved"
+                          : epicStatusLabel === "Done" ? "done"
+                          : epicStatusLabel === "In progress" ? "inProgress"
+                          : epicStatusLabel === "To do" ? "todo"
+                          : null;
                         return (
                         <tr key={epic.id} className={drilldownTableRowZebra}>
                           <td className="min-w-0 px-2 py-0.5">
-                            <InsightsTruncatedHoverButton
-                              label={scopedEpicDisplayIds.get(epic.id) ?? epic.id.slice(0, 8)}
-                              onClick={() => onOpenEpic?.(epic.id)}
-                              className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
-                            />
+                            <span className="inline-flex min-w-0 items-center gap-1.5">
+                              <Folder className="size-3.5 shrink-0 text-slate-500" aria-hidden />
+                              <InsightsTruncatedHoverButton
+                                label={scopedEpicDisplayIds.get(epic.id) ?? epic.id.slice(0, 8)}
+                                onClick={() => onOpenEpic?.(epic.id)}
+                                className="block min-w-0 max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
+                              />
+                            </span>
                           </td>
                           <td className="min-w-0 px-2 py-0.5">
-                            <InsightsTruncatedHoverLabel text={epic.title} />
+                            <span className="inline-flex min-w-0 items-center gap-1.5">
+                              <Folder className="size-3.5 shrink-0 text-slate-500" aria-hidden />
+                              <InsightsTruncatedHoverLabel text={epic.title} />
+                            </span>
                           </td>
                           <td className="min-w-0 px-2 py-0.5">
-                            <InsightsTruncatedHoverLabel text={initiativeTitleByEpicId.get(epic.id) ?? "—"} />
+                            <DrilldownAssigneeCell assignee={epic.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
                           </td>
                           <td className="min-w-0 px-2 py-0.5">
-                            <InsightsTruncatedHoverLabel text={epic.assignee?.trim() || "Unassigned"} />
-                          </td>
-                          <td className="min-w-0 px-2 py-0.5">
-                            <InsightsTruncatedHoverLabel text={epicStatusLabel} />
+                            {epicStatusKey ? (
+                              <StoryStatusPill status={epicStatusKey} />
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 font-semibold">
+                                <Circle className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+                                <span className="truncate text-slate-700">{epicStatusLabel}</span>
+                              </span>
+                            )}
                           </td>
                         </tr>
                         );
@@ -3727,7 +4116,7 @@ export function MonthAnalytics({
                   {statusDrilldownEmptyRows > 0
                     ? Array.from({ length: statusDrilldownEmptyRows }).map((_, index) => (
                         <tr key={`status-empty-${index}`} className={drilldownTableEmptyRowZebra}>
-                          <td colSpan={5} className="px-3 py-0.5 text-[13px]">
+                          <td colSpan={statusChartShowsEpics ? 4 : 5} className="px-3 py-0.5 text-[13px]">
                             {"\u00A0"}
                           </td>
                         </tr>
@@ -3884,20 +4273,35 @@ export function MonthAnalytics({
           >
             <Activity className="size-4 text-slate-600" />
             Epic Scope Burndown{burndownTitleSuffix}
-            {burndownHealth ? (
-              <HealthBadgeWithDetail
-                status={burndownHealth.status}
-                result={burndownHealth.result}
-                basis={burndownBasis}
-                basisLabel={basisDisplayLabel(burndownBasis, selectedEpicOption ? "epic" : "initiative")}
-                scopeLabel={selectedEpicOption
-                  ? `${selectedEpicOption.epic.title} (epic)`
-                  : selectedInitiativeId !== "all"
-                    ? "Selected initiative"
-                    : "All epics in scope"}
-                chartKind="burndown"
-              />
-            ) : null}
+            {burndownHealth ? (() => {
+              // Build a scope label that matches what the chart actually
+              // plots: a single focused epic (via scope picker OR legend
+              // toggled down to one) wins, then the initiative title if
+              // pinned, then "Visible N / Total" so partial legend
+              // toggles read accurately.
+              const focused = burndownFocusedEpicOption;
+              const selectedInit = selectedInitiativeId !== "all"
+                ? monthEpics.find((r) => r.initiative.id === selectedInitiativeId)?.initiative ?? null
+                : null;
+              const visibleEpicCount = monthBurndownEpics.filter((epic) => burndownVisibleKeys.length === 0 || burndownVisibleKeys.includes(epic.id)).length;
+              const scopeLabel = focused
+                ? `${focused.epic.title} (epic)`
+                : selectedInit
+                  ? `${selectedInit.title} (initiative)`
+                  : visibleEpicCount < monthBurndownEpics.length
+                    ? `${visibleEpicCount} of ${monthBurndownEpics.length} epics visible`
+                    : `All ${monthBurndownEpics.length} epics in scope`;
+              return (
+                <HealthBadgeWithDetail
+                  status={burndownHealth.status}
+                  result={burndownHealth.result}
+                  basis={burndownBasis}
+                  basisLabel={basisDisplayLabel(burndownBasis, focused ? "epic" : selectedInit ? "initiative" : "initiative")}
+                  scopeLabel={scopeLabel}
+                  chartKind="burndown"
+                />
+              );
+            })() : null}
           </h3>
           <div className="flex flex-wrap items-center gap-2">
             {/* Per-chart basis toggle. Initialized from the popover's
@@ -4736,7 +5140,17 @@ export function MonthAnalytics({
                 <div className={cn("mb-2 flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
                   <h3 className={cn("inline-flex items-center gap-1.5 font-semibold text-slate-800", isMultiPeriodInsights ? "text-[16px]" : "text-[15px]")}>
                     <Users className="size-4 text-slate-600" />
-                    Month Load{scopeTitleSuffix}
+                    {/* Title tracks the chart's mode: teams when nothing /
+                     *  multiple teams are filtered (rows = team bars);
+                     *  users when a single team is pinned (rows = user
+                     *  bars). The "(this month)" suffix is dropped in
+                     *  multi-period insights views since the period label
+                     *  doesn't fit. */}
+                    {teamMode ? "Team Progress" : "User Progress"}
+                    {isMultiPeriodInsights ? "" : (
+                      <span className="ml-1 text-[11px] font-normal text-slate-400">(this month)</span>
+                    )}
+                    {scopeTitleSuffix}
                   </h3>
                   {monthLoadDrilldownAssignee && (
                     <button
@@ -4865,9 +5279,17 @@ export function MonthAnalytics({
                   {loadRows.map((row) => {
                     const doneDays = Math.max(0, row.estTotal - row.daysLeft);
                     const donePct = row.estTotal > 0 ? Math.round((doneDays / row.estTotal) * 100) : 100;
-                    const atRisk = monthDaysLeft > 0 && row.daysLeft > monthDaysLeft;
-                    const overByDays = atRisk ? row.daysLeft - monthDaysLeft : 0;
                     const allDone = row.daysLeft === 0 && row.estTotal > 0;
+                    // Team-level health from the per-epic rollup. Only set
+                    // for teams (rows generated from analytics.workloadByTeam).
+                    // User-mode rows don't get a health pill since the
+                    // computation is per-EPIC, not per-assignee.
+                    const teamHealth = row.teamSlug ? teamHealthByTeamKey.get(row.teamSlug) : undefined;
+                    // Visual hint for the avatar ring and bar color falls
+                    // back to the old "all done" / default tone when no
+                    // team health is available (user rows).
+                    const atRisk = teamHealth ? (teamHealth.status === "atRisk" || teamHealth.status === "overdue") : false;
+                    const watch = teamHealth?.status === "watch";
                     return (
                       <button
                         key={row.key}
@@ -4933,28 +5355,36 @@ export function MonthAnalytics({
                             </span>
                           )}
                           <div className="min-w-0 flex-1">
+                            {/* Two-line layout, bar leads via a clear h-2
+                             *  pill but doesn't dominate the row. The over-
+                             *  capacity chip + est done / est left numbers
+                             *  sit inline on the same row as the name. */}
                             <div className="flex items-center justify-between gap-2">
-                              <span className="truncate text-[12.5px] font-semibold text-slate-800">{row.label}</span>
-                              <div className="flex shrink-0 items-center gap-3">
-                                {atRisk && (
-                                  <span
-                                    className="inline-flex items-center gap-0.5 rounded bg-amber-50 px-1.5 py-px text-[10px] font-semibold text-amber-800 ring-1 ring-amber-200/80"
-                                    title={`${row.daysLeft}d of work left but only ${monthDaysLeft}d remain in the period — ${overByDays}d over capacity`}
-                                  >
-                                    <AlertTriangle className="size-2.5 shrink-0" aria-hidden />
-                                    +{overByDays}d over
-                                  </span>
-                                )}
-                                <span className="text-[11.5px] tabular-nums text-slate-600">
+                              <span className="inline-flex min-w-0 items-baseline gap-1.5">
+                                <span className="truncate text-[12.5px] font-semibold text-slate-800">{row.label}</span>
+                                <span className="shrink-0 text-[10.5px] font-semibold tabular-nums text-slate-500">{donePct}%</span>
+                              </span>
+                              <div className="flex shrink-0 items-center gap-2">
+                                {teamHealth ? (
+                                  <TeamHealthBadgeWithList
+                                    status={teamHealth.status}
+                                    atRiskEpics={teamHealth.atRiskEpics}
+                                    watchEpics={teamHealth.watchEpics}
+                                    overdueEpics={teamHealth.overdueEpics}
+                                    teamLabel={row.label}
+                                    onOpenEpic={onOpenEpic}
+                                  />
+                                ) : null}
+                                <span className="text-[11px] tabular-nums text-slate-600">
                                   <span className="font-semibold text-slate-800">{doneDays}d</span>
                                   <span className="ml-0.5 text-slate-400">est done</span>
                                   <span className="mx-1 text-slate-300">·</span>
-                                  <span className={cn("font-semibold", atRisk ? "text-amber-700" : "text-slate-800")}>{row.daysLeft}d</span>
+                                  <span className={cn("font-semibold", atRisk ? "text-amber-700" : watch ? "text-amber-700" : "text-slate-800")}>{row.daysLeft}d</span>
                                   <span className="ml-0.5 text-slate-400">est left</span>
                                 </span>
                               </div>
                             </div>
-                            <div className="mt-1 relative h-1.5 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/50">
+                            <div className="mt-1 relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/50">
                               <div
                                 className={cn(
                                   "absolute inset-y-0 left-0 rounded-full transition-all",
@@ -5011,20 +5441,40 @@ export function MonthAnalytics({
               >
                 <TrendingUp className="size-4 text-slate-600" />
                 Epic Scope Burnup{burnUpTitleSuffix}
-                {burnupHealth ? (
-                  <HealthBadgeWithDetail
-                    status={burnupHealth.status}
-                    result={burnupHealth.result}
-                    basis={burnupBasis}
-                    basisLabel={basisDisplayLabel(burnupBasis, selectedEpicOption ? "epic" : "initiative")}
-                    scopeLabel={selectedEpicOption
-                      ? `${selectedEpicOption.epic.title} (epic)`
-                      : selectedInitiativeId !== "all"
-                        ? "Selected initiative"
-                        : "All epics in scope"}
-                    chartKind="burnup"
-                  />
-                ) : null}
+                {burnupHealth ? (() => {
+                  // Same scope-resolution rule as burndown: focused epic
+                  // wins (scope picker OR legend filtered to 1), then
+                  // initiative title, then a count-aware fallback.
+                  const focusedBurnupRow = selectedEpicOption
+                    ? selectedEpicOption
+                    : burnUpVisibleKeys.length === 1
+                      ? monthEpics.find((row) => row.epic.id === burnUpVisibleKeys[0]) ?? null
+                      : null;
+                  const selectedInit = selectedInitiativeId !== "all"
+                    ? monthEpics.find((r) => r.initiative.id === selectedInitiativeId)?.initiative ?? null
+                    : null;
+                  const totalEpics = monthEpics.length;
+                  const visibleEpicCount = burnUpVisibleKeys.length === 0
+                    ? totalEpics
+                    : monthEpics.filter((r) => burnUpVisibleKeys.includes(r.epic.id)).length;
+                  const scopeLabel = focusedBurnupRow
+                    ? `${focusedBurnupRow.epic.title} (epic)`
+                    : selectedInit
+                      ? `${selectedInit.title} (initiative)`
+                      : visibleEpicCount < totalEpics
+                        ? `${visibleEpicCount} of ${totalEpics} epics visible`
+                        : `All ${totalEpics} epics in scope`;
+                  return (
+                    <HealthBadgeWithDetail
+                      status={burnupHealth.status}
+                      result={burnupHealth.result}
+                      basis={burnupBasis}
+                      basisLabel={basisDisplayLabel(burnupBasis, focusedBurnupRow ? "epic" : "initiative")}
+                      scopeLabel={scopeLabel}
+                      chartKind="burnup"
+                    />
+                  );
+                })() : null}
               </h3>
               <div className="flex flex-wrap items-center gap-2">
                 {/* Per-chart basis toggle — same shape as the burndown

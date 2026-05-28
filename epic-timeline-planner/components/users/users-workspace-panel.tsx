@@ -1884,7 +1884,7 @@ export function UsersWorkspacePanel() {
                     data-users-zebra-row="true"
                     className="border-t border-[#7cd3f7]/95 text-[15px] text-slate-800 transition-colors hover:!bg-[#c5ebff]"
                   >
-                    <td colSpan={columnOrder.length} className={cn("px-2 py-1.5", levelIndex > 0 && "relative")}>
+                    <td colSpan={columnOrder.length} className={cn("px-2 py-2.5", levelIndex > 0 && "relative")}>
                       {levelIndex > 0 && <UserDirTreeConnector depth={levelIndex} />}
                       <button
                         type="button"
