@@ -2632,14 +2632,26 @@ export function MonthAnalytics({
 
   const burnUpAxisTicks = useMemo(() => {
     const labels = burnUpData.map((r) => r.labelShort).filter((l) => l.length > 0);
-    if (labels.length <= 10) return labels;
-    const step = Math.max(1, Math.ceil(labels.length / 10));
-    const ticks: string[] = [];
-    for (let i = 0; i < labels.length; i += step) ticks.push(labels[i]);
-    const last = labels[labels.length - 1];
-    if (ticks[ticks.length - 1] !== last) ticks.push(last);
-    return ticks;
-  }, [burnUpData]);
+    const baseTicks =
+      labels.length <= 10
+        ? labels.slice()
+        : (() => {
+            const step = Math.max(1, Math.ceil(labels.length / 10));
+            const out: string[] = [];
+            for (let i = 0; i < labels.length; i += step) out.push(labels[i]);
+            const last = labels[labels.length - 1];
+            if (out[out.length - 1] !== last) out.push(last);
+            return out;
+          })();
+    // Mirror the burndown axis logic: inject the due-date tick if it isn't
+    // already in the set so the `ReferenceDot x={dueTickLabel}` marker can
+    // actually position. Without this the Due target silently vanishes on
+    // epics whose deadline falls between two of the auto-spaced ticks.
+    if (burnUpDueDateTickLabel && !baseTicks.includes(burnUpDueDateTickLabel)) {
+      baseTicks.push(burnUpDueDateTickLabel);
+    }
+    return baseTicks;
+  }, [burnUpData, burnUpDueDateTickLabel]);
 
   const burnUpScopeTotal = burnUpData.length > 0 ? burnUpData[0]?.scope ?? 0 : 0;
 
@@ -3563,9 +3575,11 @@ export function MonthAnalytics({
                     ) : null}
                     {/* Done ✓ — sits ABOVE the due-date target (and above
                      *  the "Due X/Y" label) when the focused epic's burndown
-                     *  has reached 0. Pushed up far enough (cy - 32) that
-                     *  the red Due label sits cleanly between the target
-                     *  bullseye and the green Done circle. */}
+                     *  has reached 0. Visual stacking top-to-bottom:
+                     *  "Done" text → green ✓ circle → "Due X/Y" label →
+                     *  red bullseye target. The label uses an offset large
+                     *  enough to clear the shape-drawn circle (which is at
+                     *  cy - 32 visually, not at the dot's anchor cy). */}
                     {burndownFocusedEpicOption && selectedEpicDueMarker && isFocusedBurndownDone ? (
                       <ReferenceDot
                         x={selectedEpicDueMarker.axisLabel}
@@ -3588,7 +3602,10 @@ export function MonthAnalytics({
                           position: "top",
                           fill: "#047857",
                           fontSize: 10,
-                          offset: 6,
+                          // offset measured from the dot's anchor y; the
+                          // visual shape is at cy - 32, so we need to clear
+                          // it by another ~12px (circle r=8 + gap).
+                          offset: 44,
                         }}
                       />
                     ) : null}
@@ -4540,9 +4557,12 @@ export function MonthAnalytics({
                       ) : null}
                       {/* Done ✓ — anchored at the burnup due-date label
                        *  position when the completed line has reached scope.
+                       *  Sits BELOW the red due-date target so the visual
+                       *  stack reads top-to-bottom:
+                       *  "Due X/Y" label → red bullseye → green ✓ → "Done".
                        *  Skipped on the story-count axis (no scope line to
-                       *  reach), when the due-date label isn't known, and in
-                       *  All view (each epic has its own due date). */}
+                       *  reach), when the due-date label isn't known, and
+                       *  in All view (each epic has its own due date). */}
                       {!allBurnUpKeysSelected && isBurnUpDone && burnUpDueDateTickLabel ? (
                         <ReferenceDot
                           x={burnUpDueDateTickLabel}
@@ -4552,7 +4572,7 @@ export function MonthAnalytics({
                           ifOverflow="visible"
                           shape={(shapeProps: { cx?: number; cy?: number }) => {
                             const cx = shapeProps.cx ?? 0;
-                            const cy = (shapeProps.cy ?? 0) - 14;
+                            const cy = (shapeProps.cy ?? 0) + 18;
                             return (
                               <g>
                                 <circle cx={cx} cy={cy} r={8} fill="#10b981" stroke="#ffffff" strokeWidth={1.5} />
@@ -4562,10 +4582,12 @@ export function MonthAnalytics({
                           }}
                           label={{
                             value: "Done",
-                            position: "top",
+                            position: "bottom",
                             fill: "#047857",
                             fontSize: 10,
-                            offset: 18,
+                            // Shape is drawn at cy + 18 visually — push label
+                            // another ~12px below so it clears the circle.
+                            offset: 32,
                           }}
                         />
                       ) : null}
