@@ -1084,7 +1084,7 @@ export function MonthAnalytics({
         <>
           {" ("}
           <span className="inline-flex items-center gap-1 align-[-2px]">
-            <Folder className="size-3.5 shrink-0 text-blue-500" aria-hidden />
+            <Folder className="size-3.5 shrink-0 text-slate-800" aria-hidden />
             <span>{selectedEpicOption.epic.title}</span>
           </span>
           {onOpenEpic ? (
@@ -1110,7 +1110,7 @@ export function MonthAnalytics({
           <>
             {" ("}
             <span className="inline-flex items-center gap-1 align-[-2px]">
-              <Zap className="size-3.5 shrink-0 text-blue-500" aria-hidden />
+              <Zap className="size-3.5 shrink-0 text-slate-800" aria-hidden />
               <span>{init.title}</span>
             </span>
             {onOpenInitiative ? (
@@ -2780,7 +2780,7 @@ export function MonthAnalytics({
             <>
               {" ("}
               <span className="inline-flex items-center gap-1 align-[-2px]">
-                <Folder className="size-3.5 shrink-0 text-blue-500" aria-hidden />
+                <Folder className="size-3.5 shrink-0 text-slate-800" aria-hidden />
                 <span>{item.label}</span>
               </span>
               {onOpenEpic ? (
@@ -2815,7 +2815,7 @@ export function MonthAnalytics({
           <>
             {" ("}
             <span className="inline-flex items-center gap-1 align-[-2px]">
-              <Folder className="size-3.5 shrink-0 text-blue-500" aria-hidden />
+              <Folder className="size-3.5 shrink-0 text-slate-800" aria-hidden />
               <span>{row.title}</span>
             </span>
             {onOpenEpic ? (
