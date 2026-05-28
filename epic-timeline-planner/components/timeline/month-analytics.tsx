@@ -67,6 +67,8 @@ import { ToggleGroup } from "@/components/timeline/basis-toggle-group";
 import { HealthBadge, HealthBadgeWithDetail, formatHealthTooltip } from "@/components/timeline/health-badge";
 import { UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
+import { TeamAvatar } from "@/components/ui/team-avatar";
+import { useTeamImages } from "@/lib/use-team-images";
 
 type BurndownMetric = "daysLeft" | "storyCount";
 type WorkloadStatusKey = "todo" | "inProgress" | "done" | "approved";
@@ -102,6 +104,7 @@ function WorkloadXAxisTick({
   payload,
   teamMode,
   avatarByFirstName,
+  teamImageByLabel,
 }: {
   x?: number;
   y?: number;
@@ -111,6 +114,9 @@ function WorkloadXAxisTick({
    *  present, the tick swaps the generic UserRound for the photo. Mirrors
    *  the same prop on sprint-analytics' WorkloadXAxisTick. */
   avatarByFirstName?: Map<string, string | null>;
+  /** Team-mode equivalent: label → team logo URL. Falls back to the generic
+   *  Users glyph when the team has no logo. */
+  teamImageByLabel?: Map<string, string | null>;
 }) {
   if (x == null || y == null) return null;
   const label = payload?.value ?? "";
@@ -123,7 +129,9 @@ function WorkloadXAxisTick({
   const totalWidth = iconSize + 4 + estTextWidth;
   const iconX = x - totalWidth / 2;
   const textStartX = iconX + iconSize + 4;
-  const photoUrl = !teamMode ? avatarByFirstName?.get(label) ?? null : null;
+  const photoUrl = teamMode
+    ? teamImageByLabel?.get(label) ?? null
+    : avatarByFirstName?.get(label) ?? null;
   // Label may contain spaces / dots (e.g. "John S.") which break SVG ID
   // references — sanitize before embedding into the clipPath id/url.
   const safeId = label.replace(/\W+/g, "-");
@@ -768,6 +776,11 @@ export function MonthAnalytics({
    * At year scope (12 months, ~250 workdays, dozens of stories per epic,
    * 5+ time-series charts each iterating day-by-story) this is the hot path.
    */
+  // App-wide team slug → logo URL map; used to paint team logos on chart
+  // ticks (Workload Balance in team mode) and elsewhere this component
+  // renders teams. Auto-loads once via the shared singleton store.
+  const teamImagesBySlug = useTeamImages();
+
   const storySnapshotCache = useMemo(() => {
     const map = new Map<string, { ts: number; snap: StoryDailySnapshotItem }[]>();
     for (const init of initiatives) {
@@ -2689,7 +2702,7 @@ export function MonthAnalytics({
                           <span className="truncate">{opt.label}</span>
                           {opt.teamLabel ? (
                             <span className="ml-auto inline-flex items-center gap-1 rounded bg-slate-50 px-1.5 py-0.5 text-[10.5px] font-semibold text-slate-600 ring-1 ring-slate-200">
-                              <Users className="size-2.5 shrink-0 opacity-70" aria-hidden />
+                              <TeamAvatar slug={opt.teamId} sizePx={10} fallback={<Users className="size-2.5 shrink-0 opacity-70" aria-hidden />} />
                               {opt.teamLabel}
                             </span>
                           ) : null}
@@ -2725,7 +2738,7 @@ export function MonthAnalytics({
             <div className="ml-auto flex shrink-0 flex-wrap items-center gap-3">
               {selectedEpicMeta.teamLabel ? (
                 <span className="inline-flex items-center gap-1.5 rounded-md bg-white px-2.5 py-1.5 text-[13px] font-semibold text-slate-700 ring-1 ring-slate-200 shadow-sm">
-                  <Users className="size-4 shrink-0 opacity-70" aria-hidden />
+                  <TeamAvatar slug={selectedEpicOption.epic.team} sizePx={16} fallback={<Users className="size-4 shrink-0 opacity-70" aria-hidden />} />
                   {selectedEpicMeta.teamLabel}
                 </span>
               ) : null}
@@ -3446,8 +3459,10 @@ export function MonthAnalytics({
               }));
           // Pre-resolve avatar URLs keyed by the X-axis label ("First L.") so
           // the custom tick can paint a photo per bar without each tick re-
-          // walking the directory. Team mode → empty map (no avatars).
+          // walking the directory. Team mode uses the parallel
+          // `teamImageByLabel` (label → team logo) instead.
           const avatarByFirstName = new Map<string, string | null>();
+          const teamImageByLabel = new Map<string, string | null>();
           if (!teamMode) {
             for (const item of analytics.workloadByAssignee) {
               const label = compactAssigneeName(item.assignee);
@@ -3456,6 +3471,11 @@ export function MonthAnalytics({
                 label,
                 resolveAssigneeAvatar(item.assignee, workspaceDirectoryUsers).image,
               );
+            }
+          } else {
+            for (const t of analytics.workloadByTeam) {
+              if (!t.teamLabel || teamImageByLabel.has(t.teamLabel)) continue;
+              teamImageByLabel.set(t.teamLabel, t.teamId ? teamImagesBySlug.get(t.teamId) ?? null : null);
             }
           }
           return (
@@ -3482,7 +3502,7 @@ export function MonthAnalytics({
                   >
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                     {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    <XAxis dataKey="name" tick={(props: any) => <WorkloadXAxisTick {...props} teamMode={teamMode} avatarByFirstName={avatarByFirstName} />} height={34} axisLine={false} tickLine={false} />
+                    <XAxis dataKey="name" tick={(props: any) => <WorkloadXAxisTick {...props} teamMode={teamMode} avatarByFirstName={avatarByFirstName} teamImageByLabel={teamImageByLabel} />} height={34} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} allowDecimals={false} width={44} label={{ value: "Stories", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 13 }} />
                     <Tooltip
                       contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", padding: "6px 10px" }}
@@ -3673,6 +3693,7 @@ export function MonthAnalytics({
                   label: t.teamLabel,
                   initials: t.teamLabel.slice(0, 2).toUpperCase(),
                   image: null as string | null,
+                  teamSlug: t.teamId ?? null,
                   daysLeft: t.daysLeftTotal,
                   estTotal: t.estimatedTotal,
                   onRowClick: () => { setMonthLoadDrilldownIsTeam(true); setMonthLoadDrilldownAssignee(t.teamId ?? ""); },
@@ -3684,6 +3705,7 @@ export function MonthAnalytics({
                   // Resolve avatar URL up-front so the per-row circle can
                   // render the photo instead of initials when available.
                   image: resolveAssigneeAvatar(row.assignee, workspaceDirectoryUsers).image,
+                  teamSlug: null as string | null,
                   daysLeft: row.daysLeftTotal,
                   estTotal: row.estimatedTotal,
                   onRowClick: () => { setMonthLoadDrilldownIsTeam(false); setMonthLoadDrilldownAssignee(row.assignee); },
@@ -3787,7 +3809,35 @@ export function MonthAnalytics({
                         className="w-full rounded-lg bg-white px-2 py-1.5 text-left transition-colors hover:bg-slate-50/60"
                       >
                         <div className="flex items-center gap-2">
-                          {row.image ? (
+                          {row.teamSlug ? (
+                            <TeamAvatar
+                              slug={row.teamSlug}
+                              sizePx={24}
+                              rounded="rounded-full"
+                              className={cn(
+                                "ring-1",
+                                atRisk
+                                  ? "ring-amber-200/80"
+                                  : allDone
+                                    ? "ring-emerald-200/80"
+                                    : "ring-violet-200/80",
+                              )}
+                              fallback={
+                                <span
+                                  className={cn(
+                                    "inline-flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ring-1",
+                                    atRisk
+                                      ? "bg-amber-100 text-amber-800 ring-amber-200/80"
+                                      : allDone
+                                        ? "bg-emerald-100 text-emerald-700 ring-emerald-200/80"
+                                        : "bg-violet-100 text-violet-700 ring-violet-200/80",
+                                  )}
+                                >
+                                  {row.initials || <Users className="size-3" />}
+                                </span>
+                              }
+                            />
+                          ) : row.image ? (
                             <UserAvatar
                               name={row.label}
                               image={row.image}

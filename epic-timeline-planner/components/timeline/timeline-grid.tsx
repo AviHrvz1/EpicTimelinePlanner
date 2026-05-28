@@ -4860,7 +4860,13 @@ export function TimelineGrid({
       .map(([value, label]) => ({
         value,
         label,
-        icon: <span className="inline-block size-2.5 shrink-0 rounded-full bg-slate-400" aria-hidden />,
+        icon: (
+          <TeamAvatar
+            slug={value}
+            sizePx={14}
+            fallback={<span className="inline-block size-2.5 shrink-0 rounded-full bg-slate-400" aria-hidden />}
+          />
+        ),
       }));
     const base = [
       {
@@ -4872,16 +4878,22 @@ export function TimelineGrid({
         value: team.id,
         label: team.label,
         icon: (
-          <span
-            className={cn(
-              "inline-block size-2.5 rounded-full",
-              team.id === "platform" && "bg-sky-500",
-              team.id === "experience" && "bg-violet-500",
-              team.id === "data" && "bg-amber-500",
-              team.id === "mobile" && "bg-emerald-500",
-              team.id === "growth" && "bg-rose-500",
-            )}
-            aria-hidden
+          <TeamAvatar
+            slug={team.id}
+            sizePx={14}
+            fallback={
+              <span
+                className={cn(
+                  "inline-block size-2.5 rounded-full",
+                  team.id === "platform" && "bg-sky-500",
+                  team.id === "experience" && "bg-violet-500",
+                  team.id === "data" && "bg-amber-500",
+                  team.id === "mobile" && "bg-emerald-500",
+                  team.id === "growth" && "bg-rose-500",
+                )}
+                aria-hidden
+              />
+            }
           />
         ),
       })),
@@ -4892,7 +4904,13 @@ export function TimelineGrid({
       base.push({
         value: st,
         label: teamLabelForWorkspaceUser(st),
-        icon: <span className="inline-block size-2.5 shrink-0 rounded-full bg-slate-400" aria-hidden />,
+        icon: (
+          <TeamAvatar
+            slug={st}
+            sizePx={14}
+            fallback={<span className="inline-block size-2.5 shrink-0 rounded-full bg-slate-400" aria-hidden />}
+          />
+        ),
       });
     }
     return base;

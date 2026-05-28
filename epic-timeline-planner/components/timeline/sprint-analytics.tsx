@@ -3,6 +3,8 @@
 import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, AlertTriangle, ArrowLeft, CalendarDays, ChartNoAxesCombined, CheckCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Layers, ListTodo, PieChart as PieChartIcon, PlayCircle, User, UserRound, Users } from "lucide-react";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
+import { TeamAvatar } from "@/components/ui/team-avatar";
+import { useTeamImages } from "@/lib/use-team-images";
 import { SprintTimelinePopup } from "@/components/timeline/sprint-end-countdown";
 import {
   Area,
@@ -151,6 +153,7 @@ function WorkloadXAxisTick({
   payload,
   teamMode,
   avatarByFirstName,
+  teamImageByLabel,
 }: {
   x?: number;
   y?: number;
@@ -159,6 +162,9 @@ function WorkloadXAxisTick({
   /** Map keyed by the X-axis label (first name) → uploaded image URL.
    *  When present, the tick swaps the generic UserRound for the photo. */
   avatarByFirstName?: Map<string, string | null>;
+  /** Team-mode parallel: team label → team logo URL. Falls back to Users
+   *  glyph when the team has no logo. */
+  teamImageByLabel?: Map<string, string | null>;
 }) {
   if (x == null || y == null) return null;
   const label = payload?.value ?? "";
@@ -170,9 +176,12 @@ function WorkloadXAxisTick({
   const totalWidth = iconSize + 4 + estTextWidth;
   const iconX = x - totalWidth / 2;
   const textStartX = iconX + iconSize + 4;
-  // Person rows: use the user's photo when available; fall back to UserRound.
-  // Team rows: stick with the existing Users icon (no per-team avatar).
-  const photoUrl = !teamMode ? avatarByFirstName?.get(label) ?? null : null;
+  // Person rows: user's photo when available, else UserRound.
+  // Team rows: team logo when available, else Users glyph.
+  const photoUrl = teamMode
+    ? teamImageByLabel?.get(label) ?? null
+    : avatarByFirstName?.get(label) ?? null;
+  const safeId = label.replace(/\W+/g, "-");
   return (
     <g>
       {photoUrl ? (
@@ -181,7 +190,7 @@ function WorkloadXAxisTick({
            *  an avatar instead of a square. Unique clipId per tick so several
            *  ticks in the same chart don't share clipping. */}
           <defs>
-            <clipPath id={`workload-avatar-clip-${label}`}>
+            <clipPath id={`workload-avatar-clip-${safeId}`}>
               <circle cx={iconX + iconSize / 2} cy={rowY} r={iconSize / 2} />
             </clipPath>
           </defs>
@@ -192,7 +201,7 @@ function WorkloadXAxisTick({
             width={iconSize}
             height={iconSize}
             preserveAspectRatio="xMidYMid slice"
-            clipPath={`url(#workload-avatar-clip-${label})`}
+            clipPath={`url(#workload-avatar-clip-${safeId})`}
           />
         </>
       ) : (
@@ -318,6 +327,9 @@ export function SprintAnalytics({
   workspaceDirectoryUsers = [],
   onOpenStory,
 }: SprintAnalyticsProps) {
+  // App-wide team slug → logo URL map; used to paint team logos on
+  // workload-chart ticks and other team renders in this component.
+  const teamImagesBySlug = useTeamImages();
   const [metric, setMetric] = useState<BurndownMetric>("daysLeft");
   const [estimateSource, setEstimateSource] = useState<EstimateSource>("stories");
   const [workloadStatusFilters, setWorkloadStatusFilters] = useState<SprintWorkloadFilterKey[]>(["all"]);
@@ -1000,6 +1012,7 @@ export function SprintAnalytics({
               // so the custom tick can paint a photo per bar without each tick
               // re-walking the directory. Team mode → empty map (no avatars).
               const avatarByFirstName = new Map<string, string | null>();
+              const teamImageByLabel = new Map<string, string | null>();
               if (!teamMode) {
                 for (const item of analytics.workloadByAssignee) {
                   const first = item.assignee.split(/\s+/)[0];
@@ -1008,6 +1021,11 @@ export function SprintAnalytics({
                     first,
                     resolveAssigneeAvatar(item.assignee, workspaceDirectoryUsers).image,
                   );
+                }
+              } else {
+                for (const t of analytics.workloadByTeam) {
+                  if (!t.teamLabel || teamImageByLabel.has(t.teamLabel)) continue;
+                  teamImageByLabel.set(t.teamLabel, t.teamId ? teamImagesBySlug.get(t.teamId) ?? null : null);
                 }
               }
               return (
@@ -1034,7 +1052,7 @@ export function SprintAnalytics({
                       >
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                        <XAxis dataKey="name" tick={(props: any) => <WorkloadXAxisTick {...props} teamMode={teamMode} avatarByFirstName={avatarByFirstName} />} height={26} axisLine={false} tickLine={false} />
+                        <XAxis dataKey="name" tick={(props: any) => <WorkloadXAxisTick {...props} teamMode={teamMode} avatarByFirstName={avatarByFirstName} teamImageByLabel={teamImageByLabel} />} height={26} axisLine={false} tickLine={false} />
                         <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} allowDecimals={false} width={44} label={{ value: "Stories", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 13 }} />
                         <Tooltip
                           contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0", padding: "6px 10px" }}

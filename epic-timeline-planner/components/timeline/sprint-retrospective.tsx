@@ -31,6 +31,7 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 
 import { BurndownChart } from "@/components/dashboard/charts/burndown-chart";
+import { TeamAvatar } from "@/components/ui/team-avatar";
 import { CfdChart } from "@/components/dashboard/charts/cfd-chart";
 import { StoryStatusChart } from "@/components/dashboard/charts/story-status-chart";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
@@ -486,8 +487,8 @@ export function SprintRetrospectiveEditor({
               <h2 className="flex flex-wrap items-center gap-2 text-2xl font-bold tracking-tight text-slate-800 sm:text-[28px]">
                 {sprintLabel}
                 {teamName ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-0.5 text-sm font-semibold text-indigo-700 ring-1 ring-indigo-200">
-                    <Users className="size-3.5 shrink-0" aria-hidden />
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 px-2.5 py-0.5 text-sm font-semibold text-indigo-700 ring-1 ring-indigo-200">
+                    <TeamAvatar slug={teamId} sizePx={14} fallback={<Users className="size-3.5 shrink-0" aria-hidden />} />
                     {teamName}
                   </span>
                 ) : null}
