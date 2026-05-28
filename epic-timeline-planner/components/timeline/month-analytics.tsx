@@ -3249,7 +3249,10 @@ export function MonthAnalytics({
         </div>
         <div
           className={cn(
-            "grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_12.5rem] md:items-stretch",
+            // Burndown chart + legend split. Legend column widened so epic
+            // titles read in full (the previous 12.5rem column truncated
+            // most names); the plot area shrinks slightly to compensate.
+            "grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_16rem] md:items-stretch",
             INSIGHTS_CHART_GRID_GAP,
             INSIGHTS_CONTENT_HEIGHT,
           )}
@@ -4184,7 +4187,10 @@ export function MonthAnalytics({
             </div>
             <div
               className={cn(
-                "grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_12.5rem] md:items-stretch",
+                // Burnup chart + legend split — matches the widened burndown
+                // column (16rem) so the two charts stay symmetric and epic
+                // titles fit without truncation.
+                "grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_16rem] md:items-stretch",
                 INSIGHTS_CHART_GRID_GAP,
                 INSIGHTS_CONTENT_HEIGHT,
               )}
