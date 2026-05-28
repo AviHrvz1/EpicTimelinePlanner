@@ -25,7 +25,7 @@ import {
   Eraser,
   Folder,
   Layers,
-  Eye,
+  ExternalLink,
   StickyNote,
   TrendingUp,
   User,
@@ -1072,16 +1072,18 @@ export function MonthAnalytics({
     });
     return { health: h.status, tooltip: formatHealthTooltip(h), result: h };
   }, [selectedInitiativeId, monthEpics, planYear, scopeStartMonth, scopeEndMonth, progressBasis]);
-  /** Suffix appended to every chart title so they read e.g. "Status (Epic
-   *  Title)" or "Status (Initiative Title)" when a scope is pinned. The
-   *  title text is followed by a small clickable pencil icon that opens
-   *  the scoped epic/initiative dialog. Empty when the scope is "all". */
+  /** Suffix appended to every chart title so they read e.g. "Status (📁 Epic
+   *  Title ↗)" or "Status (⚡ Initiative Title ↗)" when a scope is pinned.
+   *  Epic scope gets a Folder glyph (slate-500) prefix; initiative scope gets
+   *  a Zap glyph (blue-500). The trailing ExternalLink pill opens the scoped
+   *  epic / initiative dialog. Empty when the scope is "all". */
   const scopeTitleSuffix = useMemo<ReactNode>(() => {
     if (selectedEpicOption) {
       const epicId = selectedEpicOption.epic.id;
       return (
         <>
           {" ("}
+          <Folder className="mr-1 inline-block size-3.5 shrink-0 align-[-2px] text-slate-500" aria-hidden />
           <span>{selectedEpicOption.epic.title}</span>
           {onOpenEpic ? (
             <button
@@ -1091,7 +1093,7 @@ export function MonthAnalytics({
               aria-label="Open epic"
               className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 text-indigo-700 ring-1 ring-indigo-200/80 hover:from-sky-200/80 hover:via-indigo-200/80 hover:to-violet-200/80 hover:text-indigo-900"
             >
-              <Eye className="size-3" />
+              <ExternalLink className="size-3" />
             </button>
           ) : null}
           {")"}
@@ -1105,6 +1107,7 @@ export function MonthAnalytics({
         return (
           <>
             {" ("}
+            <Zap className="mr-1 inline-block size-3.5 shrink-0 align-[-2px] text-blue-500" aria-hidden />
             <span>{init.title}</span>
             {onOpenInitiative ? (
               <button
@@ -1114,7 +1117,7 @@ export function MonthAnalytics({
                 aria-label="Open initiative"
                 className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 text-indigo-700 ring-1 ring-indigo-200/80 hover:from-sky-200/80 hover:via-indigo-200/80 hover:to-violet-200/80 hover:text-indigo-900"
               >
-                <Eye className="size-3" />
+                <ExternalLink className="size-3" />
               </button>
             ) : null}
             {")"}
@@ -2771,6 +2774,7 @@ export function MonthAnalytics({
           return (
             <>
               {" ("}
+              <Folder className="mr-1 inline-block size-3.5 shrink-0 align-[-2px] text-slate-500" aria-hidden />
               <span>{item.label}</span>
               {onOpenEpic ? (
                 <button
@@ -2780,7 +2784,7 @@ export function MonthAnalytics({
                   aria-label="Open epic"
                   className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 text-indigo-700 ring-1 ring-indigo-200/80 hover:from-sky-200/80 hover:via-indigo-200/80 hover:to-violet-200/80 hover:text-indigo-900"
                 >
-                  <Eye className="size-3" />
+                  <ExternalLink className="size-3" />
                 </button>
               ) : null}
               {")"}
@@ -2802,6 +2806,7 @@ export function MonthAnalytics({
         return (
           <>
             {" ("}
+            <Folder className="mr-1 inline-block size-3.5 shrink-0 align-[-2px] text-slate-500" aria-hidden />
             <span>{row.title}</span>
             {onOpenEpic ? (
               <button
@@ -2811,7 +2816,7 @@ export function MonthAnalytics({
                 aria-label="Open epic"
                 className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 text-indigo-700 ring-1 ring-indigo-200/80 hover:from-sky-200/80 hover:via-indigo-200/80 hover:to-violet-200/80 hover:text-indigo-900"
               >
-                <Eye className="size-3" />
+                <ExternalLink className="size-3" />
               </button>
             ) : null}
             {")"}
