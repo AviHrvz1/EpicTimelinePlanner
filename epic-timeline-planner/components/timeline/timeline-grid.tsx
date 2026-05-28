@@ -5669,7 +5669,7 @@ export function TimelineGrid({
           placeholder={roadmapBarMode === "initiatives" ? "Search initiatives…" : "Search epics…"}
           style={searchInputWidthPx != null ? { width: `${searchInputWidthPx}px` } : undefined}
           className={cn(
-            "h-8 rounded-lg border border-slate-200 bg-white/80 pl-7 pr-6 text-[13.5px] text-slate-950 placeholder:text-slate-400 outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200 transition-[width] duration-200 shadow-[inset_0_2px_4px_-1px_rgba(15,23,42,0.12),inset_0_-1px_2px_-1px_rgba(15,23,42,0.06)]",
+            "h-8 rounded-lg border border-slate-300 bg-white/80 pl-7 pr-6 text-[13.5px] text-slate-950 placeholder:text-slate-400 outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200 transition-[width] duration-200 shadow-[inset_0_2px_4px_-1px_rgba(15,23,42,0.12),inset_0_-1px_2px_-1px_rgba(15,23,42,0.06)]",
             !searchAlignMetrics && "w-[30rem] focus:w-[36rem]",
           )}
         />

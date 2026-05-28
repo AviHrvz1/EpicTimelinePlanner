@@ -35,6 +35,7 @@ import {
 } from "@/lib/demo-builder/data";
 import {
   buildDemoSnapshotSeries,
+  pickDemoEpicHealthOverride,
   pickDemoStoryCurve,
 } from "@/lib/demo-builder/snapshots";
 import { buildTeamLogoDataUrl } from "@/lib/demo-builder/team-logos";
@@ -320,6 +321,9 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
       const sprintRange: number[] = [];
       for (let s = sprintStart; s <= sprintEnd; s++) sprintRange.push(s);
       const storyTitles = DEMO_STORY_TEMPLATES_BY_TEAM[teamSlug];
+      // Force every story under this epic to a slow burn curve when the
+      // epic was designated as Watch or At Risk (see pickDemoEpicHealthOverride).
+      const epicHealthOverride = pickDemoEpicHealthOverride(initIdx, teamIdx);
 
       // Build the snapshot+story rows in-memory first, then bulk-insert.
       const storiesData: Array<{
@@ -375,7 +379,7 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
           estimatedDays: story.estimatedDays,
           today,
           planYear,
-          curve: pickDemoStoryCurve(created.id),
+          curve: epicHealthOverride ?? pickDemoStoryCurve(created.id),
           assignee: story.assignee,
         });
         if (snapshots.length > 0) {

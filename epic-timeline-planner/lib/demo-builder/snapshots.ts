@@ -15,7 +15,10 @@ import { StoryStatus } from "@/lib/generated/prisma";
 import { workingDaysBetween } from "@/lib/progress";
 import { sprintEndDate, sprintStartDate } from "@/lib/year-sprint";
 
-export type DemoStoryCurve = "onIdeal" | "ahead" | "behind";
+/** Adds "watch" + "atRisk" variants used by the seeder to force specific
+ *  epics into Watch / At Risk health states for the demo, on top of the
+ *  random 70/15/15 onIdeal/ahead/behind mix used for everything else. */
+export type DemoStoryCurve = "onIdeal" | "ahead" | "behind" | "watch" | "atRisk";
 
 /**
  * Deterministic pick of a per-story curve given its index. ~70/15/15.
@@ -29,6 +32,29 @@ export function pickDemoStoryCurve(seed: string): DemoStoryCurve {
   if (bucket < 70) return "onIdeal";
   if (bucket < 85) return "ahead";
   return "behind";
+}
+
+/**
+ * Optional epic-level curve override. When set, every story under that epic
+ * gets this curve regardless of `pickDemoStoryCurve`. Lets the seeder
+ * deliberately push 2–3 epics into At Risk and 2–3 into Watch so the
+ * Roadmap Health popover and the Insights chart verdicts show variety
+ * instead of "everything On Track / Done".
+ *
+ * Distribution (designated by `initIdx` + `teamIdx`):
+ *   - At Risk: 3 epics (initIdx 0/teamIdx 1, 2/3, 5/0)
+ *   - Watch:   3 epics (initIdx 1/teamIdx 2, 3/4, 4/1)
+ * The picks land on initiatives whose plan windows overlap May–Aug, so the
+ * health verdict reads against an in-flight period (not future or done).
+ */
+export function pickDemoEpicHealthOverride(
+  initIdx: number,
+  teamIdx: number,
+): DemoStoryCurve | null {
+  const key = `${initIdx}/${teamIdx}`;
+  if (key === "0/1" || key === "2/3" || key === "5/0") return "atRisk";
+  if (key === "1/2" || key === "3/4" || key === "4/1") return "watch";
+  return null;
 }
 
 export type DemoSnapshotInput = {
@@ -92,11 +118,18 @@ export function buildDemoSnapshotSeries(
 
   // Curve coefficients — how aggressively `daysLeft` drops relative to the
   // pure ideal line. >1 means faster burn (ahead), <1 means slower (behind).
-  // Picked to look distinct on the chart without screaming.
-  const speed = curve === "ahead" ? 1.25 : curve === "behind" ? 0.78 : 1.0;
+  // Picked to look distinct on the chart without screaming. `watch` and
+  // `atRisk` are slow enough that the epic-level deltaDays = remaining −
+  // ideal lands in the Watch (>1 d) / At Risk (>4 d) bands of progress.ts.
+  const speed =
+    curve === "ahead" ? 1.25
+    : curve === "behind" ? 0.78
+    : curve === "watch" ? 0.55
+    : curve === "atRisk" ? 0.35
+    : 1.0;
   // Sprint-level finished flag: ahead stories finish ~75% into the sprint;
-  // on-ideal stories finish exactly at sprint end; behind stories *may* not
-  // finish even by cutoff (chart shows leftover days).
+  // on-ideal stories finish exactly at sprint end; behind / watch / atRisk
+  // stories *may* not finish even by cutoff (chart shows leftover days).
   const idealFinishFraction = curve === "ahead" ? 0.75 : 1.0;
 
   const snapshots: DemoSnapshotRecord[] = [];

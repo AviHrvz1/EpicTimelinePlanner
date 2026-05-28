@@ -23,9 +23,10 @@ import {
   ChevronUp,
   Circle,
   Eraser,
+  ExternalLink,
+  Flag,
   Folder,
   Layers,
-  ExternalLink,
   StickyNote,
   TrendingUp,
   User,
@@ -126,9 +127,13 @@ function WorkloadXAxisTick({
   // user chip's avatar so the bar-chart axis reads as a row of "people".
   const iconSize = 22;
   const rowY = y + iconSize / 2 + 3;
-  const estTextWidth = Math.min(label.length * 5.5, 70);
-  const totalWidth = iconSize + 4 + estTextWidth;
-  const iconX = x - totalWidth / 2;
+  // Left-align the icon + text under the LEFT EDGE of the bar group instead
+  // of centering on the category. The category's center is `x`; with 4
+  // grouped bars at maxBarSize=14 and barGap=2, the group width is
+  // 4*14 + 3*2 = 62 px, so the left edge sits ~31 px left of x. We use a
+  // slightly conservative 28 px so the tick still aligns when bars shrink
+  // below max in narrow charts.
+  const iconX = x - 28;
   const textStartX = iconX + iconSize + 4;
   const photoUrl = teamMode
     ? teamImageByLabel?.get(label) ?? null
@@ -189,8 +194,250 @@ const INSIGHTS_SCROLL_SIDE =
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const LINE_PALETTE = ["#2563eb", "#0d9488", "#7c3aed", "#ea580c", "#14b8a6", "#be185d", "#0284c7"];
 
+/** Sortable column keys for the drilldown stories tables (workload / month
+ *  load / status pie). All three tables share the same column set so the
+ *  sort/filter helpers are shared too. */
+type DrilldownSortKey = "id" | "title" | "sprint" | "assignee" | "status";
+
+/** Per-column filter state for the drilldown tables. Empty/null means
+ *  "show all". `title` is a substring match; the others are exact match. */
+interface DrilldownFilter {
+  title: string;
+  sprint: string | null;
+  assignee: string | null;
+  status: string | null;
+}
+
+const EMPTY_DRILLDOWN_FILTER: DrilldownFilter = {
+  title: "",
+  sprint: null,
+  assignee: null,
+  status: null,
+};
+
+/** Order used when sorting by status — todo first, approved last — so the
+ *  ascending direction reads as "earliest in the workflow first". */
+const STORY_STATUS_RANK: Record<string, number> = {
+  todo: 0,
+  inProgress: 1,
+  done: 2,
+  approved: 3,
+};
+
+/**
+ * Filter + sort a drilldown stories list by the user's per-column filters
+ * and active column sort. When sort is null the rows fall back to their
+ * input order (caller's existing sort, e.g. title ASC).
+ */
+function applyDrilldownFilterSort<T extends { id: string; title: string; sprint: number | null; assignee?: string | null; status: string }>(
+  rows: T[],
+  filter: DrilldownFilter,
+  sort: { key: DrilldownSortKey; dir: "asc" | "desc" } | null,
+  storyDisplayId: (storyId: string) => string,
+  sprintLabel: (sprint: number | null) => string,
+): T[] {
+  const titleQ = filter.title.trim().toLowerCase();
+  let filtered = rows;
+  if (titleQ) filtered = filtered.filter((r) => r.title.toLowerCase().includes(titleQ));
+  if (filter.sprint != null) filtered = filtered.filter((r) => sprintLabel(r.sprint) === filter.sprint);
+  if (filter.assignee != null) filtered = filtered.filter((r) => (r.assignee?.trim() || "Unassigned") === filter.assignee);
+  if (filter.status != null) filtered = filtered.filter((r) => r.status === filter.status);
+  if (!sort) return filtered;
+  const dir = sort.dir === "asc" ? 1 : -1;
+  return [...filtered].sort((a, b) => {
+    switch (sort.key) {
+      case "id":
+        return storyDisplayId(a.id).localeCompare(storyDisplayId(b.id), undefined, { numeric: true }) * dir;
+      case "title":
+        return a.title.localeCompare(b.title) * dir;
+      case "sprint":
+        return ((a.sprint ?? Number.POSITIVE_INFINITY) - (b.sprint ?? Number.POSITIVE_INFINITY)) * dir;
+      case "assignee":
+        return (a.assignee ?? "").localeCompare(b.assignee ?? "") * dir;
+      case "status":
+        return ((STORY_STATUS_RANK[a.status] ?? 99) - (STORY_STATUS_RANK[b.status] ?? 99)) * dir;
+      default:
+        return 0;
+    }
+  });
+}
+
 function isStoryOpen(status: UserStoryItem["status"] | null | undefined) {
   return status === "todo" || status === "inProgress";
+}
+
+/** Compact per-column filter cells rendered as a second row in the drilldown
+ *  table's <thead>. Title is a substring text input; sprint/assignee/status
+ *  are <select> dropdowns of the unique values present in the raw rows. */
+function DrilldownFilterInputText({
+  value,
+  onChange,
+  placeholder = "Filter…",
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  ariaLabel: string;
+}) {
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+      autoComplete="off"
+      className="block h-6 w-full rounded-sm border border-slate-300 bg-white px-1.5 text-[11px] !text-slate-800 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300/40"
+    />
+  );
+}
+
+/**
+ * Custom filter dropdown that supports icons/avatars in both the trigger and
+ * each option (native <select> can't render JSX inside <option>). Closes on
+ * outside click or option select. `renderOption(value)` is invoked for both
+ * the trigger label and each menu row so the visual stays consistent.
+ */
+function DrilldownFilterDropdown({
+  value,
+  options,
+  renderOption,
+  onChange,
+  ariaLabel,
+  emptyLabel = "All",
+}: {
+  value: string | null;
+  options: string[];
+  renderOption: (opt: string) => React.ReactNode;
+  onChange: (v: string | null) => void;
+  ariaLabel: string;
+  emptyLabel?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label={ariaLabel}
+        // `!text-slate-800` (important variant) so the parent thead's
+        // `text-white` can't bleed through into the trigger label.
+        className="flex h-6 w-full items-center gap-1 rounded-sm border border-slate-300 bg-white px-1.5 text-[11px] !text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300/40"
+      >
+        <span className="min-w-0 flex-1 truncate text-left">
+          {value == null ? <span className="text-slate-500">{emptyLabel}</span> : renderOption(value)}
+        </span>
+        <ChevronDown className="size-3 shrink-0 opacity-60" aria-hidden />
+      </button>
+      {open ? (
+        // Explicit `text-slate-800` so the option labels don't inherit the
+        // thead's `text-white` color (which made the entire menu invisible).
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded border border-slate-200 bg-white py-0.5 text-slate-800 shadow-md">
+          <button
+            type="button"
+            onClick={() => { onChange(null); setOpen(false); }}
+            className={cn("block w-full truncate px-2 py-1 text-left text-[11px] text-slate-800 hover:bg-slate-50", value == null && "bg-indigo-50 font-semibold")}
+          >
+            {emptyLabel}
+          </button>
+          {options.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => { onChange(opt); setOpen(false); }}
+              className={cn("block w-full truncate px-2 py-1 text-left text-[11px] text-slate-800 hover:bg-slate-50", value === opt && "bg-indigo-50 font-semibold")}
+            >
+              {renderOption(opt)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Renderer for a Sprint dropdown row — adds a Flag glyph (matches the
+ *  rest of the app where sprint = flag) before the label. */
+function renderSprintOption(label: string) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Flag className="size-3.5 shrink-0 text-rose-500" aria-hidden />
+      <span className="truncate">{label}</span>
+    </span>
+  );
+}
+
+/** Renderer for a Status dropdown row — adds the colored status pill icon
+ *  + the readable label (StoryStatusPill's existing meta). */
+function renderStatusOption(key: string) {
+  // Same meta lookup StoryStatusPill uses; inlined here so the dropdown
+  // option doesn't pull in the full pill chrome (no extra padding).
+  const meta = (() => {
+    switch (key) {
+      case "approved": return { label: "Approved", Icon: CheckCircle2, color: "text-violet-600" };
+      case "done": return { label: "Done", Icon: CheckCheck, color: "text-emerald-600" };
+      case "inProgress": return { label: "In progress", Icon: PlayCircle, color: "text-blue-600" };
+      case "todo": return { label: "To do", Icon: ListTodo, color: "text-amber-600" };
+      default: return { label: key, Icon: Circle, color: "text-slate-500" };
+    }
+  })();
+  const { Icon } = meta;
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Icon className={cn("size-3.5 shrink-0", meta.color)} aria-hidden />
+      <span className="truncate text-slate-700">{meta.label}</span>
+    </span>
+  );
+}
+
+/** Clickable column header for the drilldown tables. Click cycles
+ *  none → asc → desc → none for that column. Active column shows a small
+ *  arrow indicator. */
+function DrilldownSortHeader({
+  label,
+  column,
+  sort,
+  onSortChange,
+  className,
+}: {
+  label: string;
+  column: DrilldownSortKey;
+  sort: { key: DrilldownSortKey; dir: "asc" | "desc" } | null;
+  onSortChange: (next: { key: DrilldownSortKey; dir: "asc" | "desc" } | null) => void;
+  className?: string;
+}) {
+  const active = sort?.key === column;
+  const dir = active ? sort!.dir : null;
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (!active) onSortChange({ key: column, dir: "asc" });
+        else if (dir === "asc") onSortChange({ key: column, dir: "desc" });
+        else onSortChange(null);
+      }}
+      className={cn("inline-flex items-center gap-0.5 font-semibold transition-opacity hover:opacity-90", className)}
+    >
+      <span>{label}</span>
+      {dir === "asc" ? (
+        <ChevronUp className="size-3" aria-hidden />
+      ) : dir === "desc" ? (
+        <ChevronDown className="size-3" aria-hidden />
+      ) : (
+        <span className="inline-block w-3" aria-hidden />
+      )}
+    </button>
+  );
 }
 
 function basisDisplayLabel(basis: ProgressBasis, scope: "epic" | "initiative"): string {
@@ -908,6 +1155,10 @@ export function MonthAnalytics({
   const [selectedEpicId, setSelectedEpicId] = useState<string>(initialSelectedEpicId ?? "all");
   const [epicInput, setEpicInput] = useState("");
   const [isEpicDropdownOpen, setIsEpicDropdownOpen] = useState(false);
+  /** Status filter for the scope picker dropdown. Empty set = show all
+   *  epics; otherwise only epics whose computed health is in the set are
+   *  surfaced. Tied to the dropdown — clearing it shows everything again. */
+  const [scopeHealthFilter, setScopeHealthFilter] = useState<Set<HealthStatus>>(() => new Set());
   const [showAllEpicSuggestions, setShowAllEpicSuggestions] = useState(false);
   const [burndownVisibleKeys, setBurndownVisibleKeys] = useState<string[]>([]);
   const [burnUpVisibleKeys, setBurnUpVisibleKeys] = useState<string[]>([]);
@@ -915,8 +1166,36 @@ export function MonthAnalytics({
   const [statusDrilldownFilter, setStatusDrilldownFilter] = useState<string | null>(null);
   const [workloadDrilldownAssignee, setWorkloadDrilldownAssignee] = useState<string | null>(null);
   const [workloadDrilldownIsTeam, setWorkloadDrilldownIsTeam] = useState(false);
+  /** Statuses hidden from the Workload Balance chart + drilldown table when
+   *  the user clicks a status pill in the legend. Stored by WORKLOAD_BAR_SEGMENTS
+   *  key (todo / inProgress / done / approved). */
+  const [workloadHiddenStatuses, setWorkloadHiddenStatuses] = useState<Set<string>>(() => new Set());
+  /** Per-column filter + sort state for the workload drilldown table. */
+  const [workloadDrilldownFilter, setWorkloadDrilldownFilter] = useState<DrilldownFilter>(EMPTY_DRILLDOWN_FILTER);
+  const [workloadDrilldownSort, setWorkloadDrilldownSort] = useState<{ key: DrilldownSortKey; dir: "asc" | "desc" } | null>(null);
+  /** Same for Month Load drilldown table. */
+  const [monthLoadDrilldownFilter, setMonthLoadDrilldownFilter] = useState<DrilldownFilter>(EMPTY_DRILLDOWN_FILTER);
+  const [monthLoadDrilldownSort, setMonthLoadDrilldownSort] = useState<{ key: DrilldownSortKey; dir: "asc" | "desc" } | null>(null);
+  /** Same for the Status pie drilldown table. (Naming note:
+   *  `statusDrilldownFilter` is the pie-slice status the user clicked
+   *  (e.g. "To do"), distinct from `statusDrilldownColFilter` which is
+   *  the per-column filter inside the drilldown table.) */
+  const [statusDrilldownColFilter, setStatusDrilldownColFilter] = useState<DrilldownFilter>(EMPTY_DRILLDOWN_FILTER);
+  const [statusDrilldownSort, setStatusDrilldownSort] = useState<{ key: DrilldownSortKey; dir: "asc" | "desc" } | null>(null);
   const [monthLoadDrilldownAssignee, setMonthLoadDrilldownAssignee] = useState<string | null>(null);
   const [monthLoadDrilldownIsTeam, setMonthLoadDrilldownIsTeam] = useState(false);
+  // When the breadcrumb team filter changes (e.g. user switches between
+  // "All teams" and a specific team while a drilldown is open), reset any
+  // open drilldown — the assignee/team pinned by the previous filter is
+  // unlikely to map onto the new story set, which would leave both tables
+  // showing zero rows. Resetting forces the user to re-click into a bar
+  // against the fresh scope.
+  useEffect(() => {
+    setWorkloadDrilldownAssignee(null);
+    setWorkloadDrilldownIsTeam(false);
+    setMonthLoadDrilldownAssignee(null);
+    setMonthLoadDrilldownIsTeam(false);
+  }, [filterEpicTeamIds]);
   const [selectedInitiativeId, setSelectedInitiativeId] = useState<string>(initialSelectedInitiativeId ?? "all");
 
   const scopeMonths = useMemo(() => {
@@ -1200,11 +1479,16 @@ export function MonthAnalytics({
     }
   }, [selectedEpicId, selectedInitiativeId, epicComboOptions, scopeInitiativeOptions, onScopeChange]);
   const filteredEpicOptions = useMemo(() => {
-    if (showAllEpicSuggestions) return epicComboOptions;
-    const query = epicInput.trim().toLowerCase();
-    if (!query) return epicComboOptions;
-    return epicComboOptions.filter((opt) => opt.searchText.includes(query));
-  }, [epicComboOptions, epicInput, showAllEpicSuggestions]);
+    let opts = epicComboOptions;
+    const query = showAllEpicSuggestions ? "" : epicInput.trim().toLowerCase();
+    if (query) opts = opts.filter((opt) => opt.searchText.includes(query));
+    // Health filter — empty set means "show all"; otherwise only surface
+    // epics whose computed status is in the set.
+    if (scopeHealthFilter.size > 0) {
+      opts = opts.filter((opt) => opt.health != null && scopeHealthFilter.has(opt.health));
+    }
+    return opts;
+  }, [epicComboOptions, epicInput, showAllEpicSuggestions, scopeHealthFilter]);
   const filteredEpicGroups = useMemo(() => {
     const groups: Array<{
       initiativeId: string;
@@ -1604,7 +1888,25 @@ export function MonthAnalytics({
     () => (selectedEpicOption != null ? (selectedEpicOption.epic.userStories ?? []) : monthStories),
     [selectedEpicOption, monthStories],
   );
-  const statusDrilldownStories = useMemo(() => {
+  // Hoisted ABOVE the drilldown story memos so those memos can reference
+  // it for their search/sort key lookups without hitting a TDZ error.
+  const scopedStoryDisplayIds = useMemo(() => {
+    const rows = initiatives
+      .flatMap((initiative) => initiative.epics ?? [])
+      .flatMap((epic) => epic.userStories ?? [])
+      .sort((a, b) => {
+      const aTs = new Date(a.createdAt).getTime();
+      const bTs = new Date(b.createdAt).getTime();
+      if (aTs !== bTs) return aTs - bTs;
+      return a.title.localeCompare(b.title);
+    });
+    const map = new Map<string, string>();
+    rows.forEach((story, idx) => {
+      map.set(story.id, `US-${String(idx + 1).padStart(2, "0")}`);
+    });
+    return map;
+  }, [initiatives]);
+  const statusDrilldownStoriesRaw = useMemo(() => {
     if (statusDrilldownFilter == null) return [];
     if (statusDrilldownFilter === "All") return scopedStories;
     return scopedStories.filter((story) => {
@@ -1616,6 +1918,16 @@ export function MonthAnalytics({
       return false;
     });
   }, [statusDrilldownFilter, scopedStories]);
+  const statusDrilldownStories = useMemo(
+    () => applyDrilldownFilterSort(
+      statusDrilldownStoriesRaw,
+      statusDrilldownColFilter,
+      statusDrilldownSort,
+      (id) => scopedStoryDisplayIds.get(id) ?? id.slice(0, 8),
+      (sprint) => storySprintDisplayLabel(sprint, scopeStartMonth),
+    ),
+    [statusDrilldownStoriesRaw, statusDrilldownColFilter, statusDrilldownSort, scopedStoryDisplayIds, scopeStartMonth],
+  );
   const statusDrilldownEpics = useMemo(() => {
     if (!statusChartShowsEpics || statusDrilldownFilter == null) return [];
     if (statusDrilldownFilter === "All") return scopedEpics;
@@ -1650,22 +1962,9 @@ export function MonthAnalytics({
     updateStatusDrilldownArrowState();
   }, [statusDrilldownFilter, statusDrilldownRowCount, statusChartShowsEpics]);
   const statusPanelTitle = statusChartShowsEpics ? "Epic Progress" : "User Story Progress";
-  const scopedStoryDisplayIds = useMemo(() => {
-    const rows = initiatives
-      .flatMap((initiative) => initiative.epics ?? [])
-      .flatMap((epic) => epic.userStories ?? [])
-      .sort((a, b) => {
-      const aTs = new Date(a.createdAt).getTime();
-      const bTs = new Date(b.createdAt).getTime();
-      if (aTs !== bTs) return aTs - bTs;
-      return a.title.localeCompare(b.title);
-    });
-    const map = new Map<string, string>();
-    rows.forEach((story, idx) => {
-      map.set(story.id, `US-${String(idx + 1).padStart(2, "0")}`);
-    });
-    return map;
-  }, [initiatives]);
+  // scopedStoryDisplayIds was moved above the drilldown story memos to avoid
+  // a TDZ error — keep the original definition site untouched aside from this
+  // pointer comment so anyone scrolling here knows where to find it.
   const scopedEpicDisplayIds = useMemo(() => {
     const rows = initiatives
       .flatMap((initiative) => initiative.epics ?? [])
@@ -1697,7 +1996,7 @@ export function MonthAnalytics({
     }
     return map;
   }, [initiatives]);
-  const workloadDrilldownStories = useMemo(() => {
+  const workloadDrilldownStoriesRaw = useMemo(() => {
     if (workloadDrilldownAssignee == null) return [];
     return scopedStories
       .filter((story) => story.sprint != null)
@@ -1708,8 +2007,18 @@ export function MonthAnalytics({
       )
       .sort((a, b) => a.title.localeCompare(b.title));
   }, [workloadDrilldownAssignee, workloadDrilldownIsTeam, scopedStories, epicTeamByStoryId]);
+  const workloadDrilldownStories = useMemo(
+    () => applyDrilldownFilterSort(
+      workloadDrilldownStoriesRaw,
+      workloadDrilldownFilter,
+      workloadDrilldownSort,
+      (id) => scopedStoryDisplayIds.get(id) ?? id.slice(0, 8),
+      (sprint) => storySprintDisplayLabel(sprint, scopeStartMonth),
+    ),
+    [workloadDrilldownStoriesRaw, workloadDrilldownFilter, workloadDrilldownSort, scopedStoryDisplayIds, scopeStartMonth],
+  );
   const workloadDrilldownEmptyRows = Math.max(0, tableTargetRows - workloadDrilldownStories.length);
-  const monthLoadDrilldownStories = useMemo(() => {
+  const monthLoadDrilldownStoriesRaw = useMemo(() => {
     if (monthLoadDrilldownAssignee == null) return [];
     return scopedStories
       .filter((story) => story.sprint != null)
@@ -1720,6 +2029,16 @@ export function MonthAnalytics({
       )
       .sort((a, b) => a.title.localeCompare(b.title));
   }, [monthLoadDrilldownAssignee, monthLoadDrilldownIsTeam, scopedStories, epicTeamByStoryId]);
+  const monthLoadDrilldownStories = useMemo(
+    () => applyDrilldownFilterSort(
+      monthLoadDrilldownStoriesRaw,
+      monthLoadDrilldownFilter,
+      monthLoadDrilldownSort,
+      (id) => scopedStoryDisplayIds.get(id) ?? id.slice(0, 8),
+      (sprint) => storySprintDisplayLabel(sprint, scopeStartMonth),
+    ),
+    [monthLoadDrilldownStoriesRaw, monthLoadDrilldownFilter, monthLoadDrilldownSort, scopedStoryDisplayIds, scopeStartMonth],
+  );
   const monthLoadDrilldownEmptyRows = Math.max(0, tableTargetRows - monthLoadDrilldownStories.length);
   const teamByAssigneeFallback = useMemo(() => {
     const counts = new Map<string, Map<string, number>>();
@@ -2940,10 +3259,10 @@ export function MonthAnalytics({
   const drilldownColgroup = (
     <colgroup>
       <col className="w-[12%]" />
-      <col className="w-[30%]" />
-      <col className="w-[26%]" />
-      <col className="w-[17%]" />
-      <col className="w-[15%]" />
+      <col className="w-[32%]" />
+      <col className="w-[20%]" />
+      <col className="w-[20%]" />
+      <col className="w-[16%]" />
     </colgroup>
   );
   const sharedDrilldownArrowClass =
@@ -3028,12 +3347,63 @@ export function MonthAnalytics({
             </button>
             {isEpicDropdownOpen ? (
               <div
-                className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 max-h-56 overflow-auto rounded-xl bg-white p-1.5 shadow-xl"
+                className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 max-h-72 overflow-auto rounded-xl bg-white p-1.5 shadow-xl"
                 onMouseLeave={() => {
                   setIsEpicDropdownOpen(false);
                   setShowAllEpicSuggestions(false);
                 }}
               >
+                {/* Status filter chips — toggle to narrow the dropdown to
+                 *  epics whose computed health matches the selected set.
+                 *  Empty selection = show all. Clear button removes all
+                 *  status filters with one click. */}
+                <div
+                  className="sticky top-0 z-10 -mt-1.5 mb-1 flex flex-wrap items-center gap-2 border-b border-slate-100 bg-white/95 px-1 pb-1 pt-1.5"
+                  onMouseDown={(e) => e.preventDefault()}
+                >
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Status</span>
+                  {(["done", "onTrack", "watch", "atRisk", "overdue"] as HealthStatus[]).map((status) => {
+                    const meta = (() => {
+                      switch (status) {
+                        case "done": return { label: "Done", chip: "bg-emerald-500 text-white ring-emerald-600/60" };
+                        case "onTrack": return { label: "On Track", chip: "bg-emerald-100 text-emerald-800 ring-emerald-300/60" };
+                        case "watch": return { label: "Watch", chip: "bg-amber-100 text-amber-800 ring-amber-300/60" };
+                        case "atRisk": return { label: "At Risk", chip: "bg-rose-100 text-rose-800 ring-rose-300/60" };
+                        case "overdue": return { label: "Overdue", chip: "bg-rose-200 text-rose-900 ring-rose-400/70" };
+                      }
+                    })();
+                    const active = scopeHealthFilter.has(status);
+                    return (
+                      <button
+                        key={status}
+                        type="button"
+                        onClick={() => {
+                          setScopeHealthFilter((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(status)) next.delete(status);
+                            else next.add(status);
+                            return next;
+                          });
+                        }}
+                        className={cn(
+                          "inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-semibold ring-1 transition",
+                          active ? meta.chip : "bg-white text-slate-500 ring-slate-200 hover:bg-slate-50",
+                        )}
+                      >
+                        {meta.label}
+                      </button>
+                    );
+                  })}
+                  {scopeHealthFilter.size > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setScopeHealthFilter(new Set())}
+                      className="ml-auto text-[10.5px] font-semibold text-indigo-600 hover:text-indigo-700"
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
                 {filteredEpicGroups.length > 0 ? (
                   filteredEpicGroups.map((group) => (
                     <div key={group.initiativeId} className="mb-1 rounded-lg border border-slate-100 bg-slate-50/60 p-1">
@@ -3165,9 +3535,13 @@ export function MonthAnalytics({
             </button>
           ) : null}
         </div>
-        {statusDrilldownFilter ? (
-          <div className={cn("mt-0 flex-1 min-h-0 w-full min-w-0 overflow-hidden", INSIGHTS_CHART_FRAME)}>
-            <div className="relative h-full min-h-0 min-w-0">
+        {statusDrilldownFilter ? (() => {
+          const uniqueSprints = statusChartShowsEpics ? [] : Array.from(new Set(statusDrilldownStoriesRaw.map((s) => storySprintDisplayLabel(s.sprint, scopeStartMonth)))).filter(Boolean).sort();
+          const uniqueAssignees = statusChartShowsEpics ? [] : Array.from(new Set(statusDrilldownStoriesRaw.map((s) => s.assignee?.trim() || "Unassigned"))).filter(Boolean).sort();
+          const uniqueStatuses = statusChartShowsEpics ? [] : Array.from(new Set(statusDrilldownStoriesRaw.map((s) => s.status))).sort();
+          return (
+          <div className={cn("mt-0 flex w-full min-w-0 flex-col overflow-hidden", INSIGHTS_CHART_BAND, INSIGHTS_CHART_FRAME)}>
+            <div className="relative flex-1 min-h-0 min-w-0">
               <div
                 ref={statusDrilldownScrollRef}
                 onScroll={updateStatusDrilldownArrowState}
@@ -3186,13 +3560,54 @@ export function MonthAnalytics({
                       <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Status</th>
                     </tr>
                   ) : (
+                    <>
                     <tr>
-                      <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Story ID</th>
-                      <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Story name</th>
-                      <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Sprint</th>
-                      <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Assignee</th>
-                      <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Status</th>
+                      <th className="min-w-0 px-2 py-1 text-[14px] text-left">
+                        <DrilldownSortHeader label="Story ID" column="id" sort={statusDrilldownSort} onSortChange={setStatusDrilldownSort} />
+                      </th>
+                      <th className="min-w-0 px-2 py-1 text-[14px] text-left">
+                        <DrilldownSortHeader label="Story name" column="title" sort={statusDrilldownSort} onSortChange={setStatusDrilldownSort} />
+                      </th>
+                      <th className="min-w-0 px-2 py-1 text-[14px] text-left">
+                        <DrilldownSortHeader label="Sprint" column="sprint" sort={statusDrilldownSort} onSortChange={setStatusDrilldownSort} />
+                      </th>
+                      <th className="min-w-0 px-2 py-1 text-[14px] text-left">
+                        <DrilldownSortHeader label="Assignee" column="assignee" sort={statusDrilldownSort} onSortChange={setStatusDrilldownSort} />
+                      </th>
+                      <th className="min-w-0 px-2 py-1 text-[14px] text-left">
+                        <DrilldownSortHeader label="Status" column="status" sort={statusDrilldownSort} onSortChange={setStatusDrilldownSort} />
+                      </th>
                     </tr>
+                    <tr className="bg-white/95">
+                      <th className="min-w-0 px-1 py-0.5" />
+                      <th className="min-w-0 px-1 py-0.5">
+                        <DrilldownFilterInputText value={statusDrilldownColFilter.title} onChange={(v) => setStatusDrilldownColFilter((p) => ({ ...p, title: v }))} ariaLabel="Filter status drilldown by story name" />
+                      </th>
+                      <th className="min-w-0 px-1 py-0.5">
+                        <DrilldownFilterDropdown value={statusDrilldownColFilter.sprint} options={uniqueSprints} renderOption={renderSprintOption} onChange={(v) => setStatusDrilldownColFilter((p) => ({ ...p, sprint: v }))} ariaLabel="Filter status drilldown by sprint" />
+                      </th>
+                      <th className="min-w-0 px-1 py-0.5">
+                        <DrilldownFilterDropdown
+                          value={statusDrilldownColFilter.assignee}
+                          options={uniqueAssignees}
+                          renderOption={(name) => {
+                            const resolved = resolveAssigneeAvatar(name, workspaceDirectoryUsers);
+                            return (
+                              <span className="inline-flex items-center gap-1.5">
+                                <UserAvatar name={resolved.name} image={resolved.image} size={16} className="ring-0" />
+                                <span className="truncate">{name}</span>
+                              </span>
+                            );
+                          }}
+                          onChange={(v) => setStatusDrilldownColFilter((p) => ({ ...p, assignee: v }))}
+                          ariaLabel="Filter status drilldown by assignee"
+                        />
+                      </th>
+                      <th className="min-w-0 px-1 py-0.5">
+                        <DrilldownFilterDropdown value={statusDrilldownColFilter.status} options={uniqueStatuses} renderOption={renderStatusOption} onChange={(v) => setStatusDrilldownColFilter((p) => ({ ...p, status: v }))} ariaLabel="Filter status drilldown by status" />
+                      </th>
+                    </tr>
+                    </>
                   )}
                 </thead>
                 <tbody>
@@ -3223,18 +3638,7 @@ export function MonthAnalytics({
                         </tr>
                         );
                       })
-                    : statusDrilldownStories.map((story) => {
-                        const storyStatusLabel =
-                          story.sprint == null
-                            ? "Unscheduled"
-                            : story.status === "todo"
-                              ? "To do"
-                              : story.status === "inProgress"
-                                ? "In progress"
-                                : story.status === "done"
-                                  ? "Done"
-                                  : "Approved";
-                        return (
+                    : statusDrilldownStories.map((story) => (
                         <tr key={story.id} className={drilldownTableRowZebra}>
                           <td className="min-w-0 px-2 py-0.5">
                             <InsightsTruncatedHoverButton
@@ -3247,29 +3651,34 @@ export function MonthAnalytics({
                             <InsightsTruncatedHoverLabel text={story.title} />
                           </td>
                           <td className="min-w-0 px-2 py-0.5">
-                            {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
-                              <InsightsTruncatedHoverButton
-                                label={storySprintDisplayLabel(story.sprint, scopeStartMonth)}
-                                onClick={() => {
-                                  const targetYearSprint = normalizeStoryYearSprint(story.sprint, scopeStartMonth);
-                                  if (targetYearSprint == null) return;
-                                  onOpenSprintKanban?.(targetYearSprint, resolveStoryTeamForSprintNav(story));
-                                }}
-                                className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
-                              />
-                            ) : (
-                              <InsightsTruncatedHoverLabel text="Unscheduled" />
-                            )}
+                            <span className="inline-flex min-w-0 items-center gap-1.5">
+                              <Flag className="size-3.5 shrink-0 text-rose-500" aria-hidden />
+                              {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
+                                <InsightsTruncatedHoverButton
+                                  label={storySprintDisplayLabel(story.sprint, scopeStartMonth)}
+                                  onClick={() => {
+                                    const targetYearSprint = normalizeStoryYearSprint(story.sprint, scopeStartMonth);
+                                    if (targetYearSprint == null) return;
+                                    onOpenSprintKanban?.(targetYearSprint, resolveStoryTeamForSprintNav(story));
+                                  }}
+                                  className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
+                                />
+                              ) : (
+                                <InsightsTruncatedHoverLabel text="Unscheduled" />
+                              )}
+                            </span>
+                          </td>
+                          {/* Match the workload + month-load drilldowns:
+                           *  avatar + "First L." for the assignee, and the
+                           *  colored StoryStatusPill for the status. */}
+                          <td className="min-w-0 px-2 py-0.5">
+                            <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
                           </td>
                           <td className="min-w-0 px-2 py-0.5">
-                            <InsightsTruncatedHoverLabel text={story.assignee?.trim() || "Unassigned"} />
-                          </td>
-                          <td className="min-w-0 px-2 py-0.5">
-                            <InsightsTruncatedHoverLabel text={storyStatusLabel} />
+                            <StoryStatusPill status={story.status} />
                           </td>
                         </tr>
-                        );
-                      })}
+                      ))}
                   {statusDrilldownEmptyRows > 0
                     ? Array.from({ length: statusDrilldownEmptyRows }).map((_, index) => (
                         <tr key={`status-empty-${index}`} className={drilldownTableEmptyRowZebra}>
@@ -3308,7 +3717,8 @@ export function MonthAnalytics({
               </button>
             </div>
           </div>
-        ) : (
+          );
+        })() : (
           <div
             className={cn(
               "grid flex-1 lg:grid-cols-[minmax(0,1fr)_12.5rem] lg:items-stretch",
@@ -3477,7 +3887,7 @@ export function MonthAnalytics({
             // Burndown chart + legend split. Legend column sized so epic
             // titles read most of the way through before truncating
             // (hover gives the full title via tooltip).
-            "grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_13rem] md:items-stretch",
+            "grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_24rem] md:items-stretch",
             INSIGHTS_CHART_GRID_GAP,
             INSIGHTS_CONTENT_HEIGHT,
           )}
@@ -3486,7 +3896,7 @@ export function MonthAnalytics({
             {monthBurndownEpics.length > 0 ? (
               <div className="absolute inset-0">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={monthBurndownWithDueTarget} margin={{ top: 38, right: 60, left: 18, bottom: 18 }}>
+                  <LineChart data={monthBurndownWithDueTarget} margin={{ top: 38, right: 24, left: 18, bottom: 18 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis
                       dataKey="axisLabel"
@@ -3692,8 +4102,13 @@ export function MonthAnalytics({
                     className={cn(
                       "mb-1 w-full rounded-md px-1 py-1 text-left font-medium transition",
                       isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
+                      // When the legend is in "show all" state, the highlight
+                      // belongs HERE (on the All / Initiative row) — not on
+                      // every epic below. The epic rows render flat in that
+                      // state so the user can clearly see which item drives
+                      // the chart scope.
                       allBurndownKeysSelected
-                        ? "text-slate-900 hover:bg-slate-200/70"
+                        ? "bg-indigo-50 font-semibold text-slate-900 hover:bg-slate-200/70"
                         : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
                     )}
                   >
@@ -3721,12 +4136,17 @@ export function MonthAnalytics({
                 // is a real epic and gets the canonical Folder icon to read
                 // as "this row = one epic".
                 const isEpic = item.key !== "epicIdeal";
+                // Suppress the indigo highlight when the chart is in
+                // "show all" mode — the All-row carries the highlight then.
+                // Per-epic highlight only kicks in when the user has narrowed
+                // to a specific subset.
+                const showHighlight = on && !allBurndownKeysSelected;
                 return (
                   <EpicLegendRowButton
                     key={item.key}
                     label={item.label}
                     color={item.color}
-                    on={on}
+                    on={showHighlight}
                     isEpic={isEpic}
                     onClick={() => toggleBurndownKey(item.key)}
                     treeRow={selectedInitiativeId !== "all" && isEpic}
@@ -3741,7 +4161,7 @@ export function MonthAnalytics({
               })}
               </div>
               {burndownFocusedEpicOption ? (
-                <p className="text-[12px] text-slate-500">
+                <p className="mt-1 pl-0 text-[12px] text-slate-500">
                   Due: {selectedEpicDueDate ? selectedEpicDueDate.toLocaleDateString() : "N/A"}
                 </p>
               ) : null}
@@ -3797,9 +4217,15 @@ export function MonthAnalytics({
             </button>
           ) : null}
         </div>
-        {workloadDrilldownAssignee ? (
-          <div className={cn("mt-0 flex-1 min-h-0 w-full min-w-0 overflow-hidden", INSIGHTS_CHART_FRAME)}>
-            <div className="relative h-full min-h-0 min-w-0">
+        {workloadDrilldownAssignee ? (() => {
+          // Unique values for the per-column dropdowns. Computed from the
+          // RAW (unfiltered) rows so removing a filter restores all options.
+          const uniqueSprints = Array.from(new Set(workloadDrilldownStoriesRaw.map((s) => storySprintDisplayLabel(s.sprint, scopeStartMonth)))).filter(Boolean).sort();
+          const uniqueAssignees = Array.from(new Set(workloadDrilldownStoriesRaw.map((s) => s.assignee?.trim() || "Unassigned"))).filter(Boolean).sort();
+          const uniqueStatuses = Array.from(new Set(workloadDrilldownStoriesRaw.map((s) => s.status))).sort();
+          return (
+          <div className={cn("mt-0 flex w-full min-w-0 flex-col overflow-hidden", INSIGHTS_CHART_BAND, INSIGHTS_CHART_FRAME)}>
+            <div className="relative flex-1 min-h-0 min-w-0">
             <div
               ref={workloadDrilldownScrollRef}
               onScroll={updateWorkloadDrilldownArrowState}
@@ -3810,11 +4236,69 @@ export function MonthAnalytics({
                 {drilldownColgroup}
                 <thead className="sticky top-0 z-10 overflow-hidden rounded-t-md border-b border-[#19abeb]/70 bg-[#0897d5] text-white shadow-[0_1px_0_rgba(15,23,42,0.04)]">
                   <tr>
-                    <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Story ID</th>
-                    <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Story name</th>
-                    <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Sprint</th>
-                    <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Assignee</th>
-                    <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Status</th>
+                    <th className="min-w-0 px-2 py-1 text-[14px] text-left">
+                      <DrilldownSortHeader label="Story ID" column="id" sort={workloadDrilldownSort} onSortChange={setWorkloadDrilldownSort} />
+                    </th>
+                    <th className="min-w-0 px-2 py-1 text-[14px] text-left">
+                      <DrilldownSortHeader label="Story name" column="title" sort={workloadDrilldownSort} onSortChange={setWorkloadDrilldownSort} />
+                    </th>
+                    <th className="min-w-0 px-2 py-1 text-[14px] text-left">
+                      <DrilldownSortHeader label="Sprint" column="sprint" sort={workloadDrilldownSort} onSortChange={setWorkloadDrilldownSort} />
+                    </th>
+                    <th className="min-w-0 px-2 py-1 text-[14px] text-left">
+                      <DrilldownSortHeader label="Assignee" column="assignee" sort={workloadDrilldownSort} onSortChange={setWorkloadDrilldownSort} />
+                    </th>
+                    <th className="min-w-0 px-2 py-1 text-[14px] text-left">
+                      <DrilldownSortHeader label="Status" column="status" sort={workloadDrilldownSort} onSortChange={setWorkloadDrilldownSort} />
+                    </th>
+                  </tr>
+                  {/* Per-column filter row — Title is a substring text input;
+                   *  Sprint / Assignee / Status are dropdowns of unique
+                   *  values from the raw (pre-filter) rows. */}
+                  <tr className="bg-white/95">
+                    <th className="min-w-0 px-1 py-0.5" />
+                    <th className="min-w-0 px-1 py-0.5">
+                      <DrilldownFilterInputText
+                        value={workloadDrilldownFilter.title}
+                        onChange={(v) => setWorkloadDrilldownFilter((p) => ({ ...p, title: v }))}
+                        ariaLabel="Filter workload by story name"
+                      />
+                    </th>
+                    <th className="min-w-0 px-1 py-0.5">
+                      <DrilldownFilterDropdown
+                        value={workloadDrilldownFilter.sprint}
+                        options={uniqueSprints}
+                        renderOption={renderSprintOption}
+                        onChange={(v) => setWorkloadDrilldownFilter((p) => ({ ...p, sprint: v }))}
+                        ariaLabel="Filter workload by sprint"
+                      />
+                    </th>
+                    <th className="min-w-0 px-1 py-0.5">
+                      <DrilldownFilterDropdown
+                        value={workloadDrilldownFilter.assignee}
+                        options={uniqueAssignees}
+                        renderOption={(name) => {
+                          const resolved = resolveAssigneeAvatar(name, workspaceDirectoryUsers);
+                          return (
+                            <span className="inline-flex items-center gap-1.5">
+                              <UserAvatar name={resolved.name} image={resolved.image} size={16} className="ring-0" />
+                              <span className="truncate">{name}</span>
+                            </span>
+                          );
+                        }}
+                        onChange={(v) => setWorkloadDrilldownFilter((p) => ({ ...p, assignee: v }))}
+                        ariaLabel="Filter workload by assignee"
+                      />
+                    </th>
+                    <th className="min-w-0 px-1 py-0.5">
+                      <DrilldownFilterDropdown
+                        value={workloadDrilldownFilter.status}
+                        options={uniqueStatuses}
+                        renderOption={renderStatusOption}
+                        onChange={(v) => setWorkloadDrilldownFilter((p) => ({ ...p, status: v }))}
+                        ariaLabel="Filter workload by status"
+                      />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3834,19 +4318,22 @@ export function MonthAnalytics({
                         <InsightsTruncatedHoverLabel text={story.title} />
                       </td>
                       <td className="min-w-0 px-2 py-0.5">
-                        {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
-                          <InsightsTruncatedHoverButton
-                            label={storySprintDisplayLabel(story.sprint, scopeStartMonth)}
-                            onClick={() => {
-                              const targetYearSprint = normalizeStoryYearSprint(story.sprint, scopeStartMonth);
-                              if (targetYearSprint == null) return;
-                              onOpenSprintKanban?.(targetYearSprint, resolveStoryTeamForSprintNav(story));
-                            }}
-                            className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
-                          />
-                        ) : (
-                          <InsightsTruncatedHoverLabel text="Unscheduled" />
-                        )}
+                        <span className="inline-flex min-w-0 items-center gap-1.5">
+                          <Flag className="size-3.5 shrink-0 text-rose-500" aria-hidden />
+                          {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
+                            <InsightsTruncatedHoverButton
+                              label={storySprintDisplayLabel(story.sprint, scopeStartMonth)}
+                              onClick={() => {
+                                const targetYearSprint = normalizeStoryYearSprint(story.sprint, scopeStartMonth);
+                                if (targetYearSprint == null) return;
+                                onOpenSprintKanban?.(targetYearSprint, resolveStoryTeamForSprintNav(story));
+                              }}
+                              className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
+                            />
+                          ) : (
+                            <InsightsTruncatedHoverLabel text="Unscheduled" />
+                          )}
+                        </span>
                       </td>
                       <td className="min-w-0 px-2 py-0.5">
                         <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
@@ -3894,25 +4381,29 @@ export function MonthAnalytics({
             </button>
             </div>
           </div>
-        ) : null}
+          );
+        })() : null}
         {!workloadDrilldownAssignee ? (() => {
           const teamMode = !forceUserMode && (!filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1) && analytics.workloadByTeam.length > 0;
+          // Statuses hidden via the legend show 0 in the chart bars.
+          const statusVal = (s: typeof WORKLOAD_BAR_SEGMENTS[number], n: number) =>
+            workloadHiddenStatuses.has(s.key) ? 0 : n;
           const barData = teamMode
             ? analytics.workloadByTeam.map((t) => ({
                 name: t.teamLabel,
                 fullName: t.teamLabel,
-                "To do": t.storiesByStatus.todo,
-                "In progress": t.storiesByStatus.inProgress,
-                "Done": t.storiesByStatus.done,
-                "Approved": t.storiesByStatus.approved,
+                "To do": statusVal(WORKLOAD_BAR_SEGMENTS[0], t.storiesByStatus.todo),
+                "In progress": statusVal(WORKLOAD_BAR_SEGMENTS[1], t.storiesByStatus.inProgress),
+                "Done": statusVal(WORKLOAD_BAR_SEGMENTS[2], t.storiesByStatus.done),
+                "Approved": statusVal(WORKLOAD_BAR_SEGMENTS[3], t.storiesByStatus.approved),
               }))
             : analytics.workloadByAssignee.map((item) => ({
                 name: compactAssigneeName(item.assignee),
                 fullName: item.assignee,
-                "To do": item.storiesByStatus.todo,
-                "In progress": item.storiesByStatus.inProgress,
-                "Done": item.storiesByStatus.done,
-                "Approved": item.storiesByStatus.approved,
+                "To do": statusVal(WORKLOAD_BAR_SEGMENTS[0], item.storiesByStatus.todo),
+                "In progress": statusVal(WORKLOAD_BAR_SEGMENTS[1], item.storiesByStatus.inProgress),
+                "Done": statusVal(WORKLOAD_BAR_SEGMENTS[2], item.storiesByStatus.done),
+                "Approved": statusVal(WORKLOAD_BAR_SEGMENTS[3], item.storiesByStatus.approved),
               }));
           // Pre-resolve avatar URLs keyed by the X-axis label ("First L.") so
           // the custom tick can paint a photo per bar without each tick re-
@@ -3971,14 +4462,41 @@ export function MonthAnalytics({
                       wrapperStyle={{ paddingTop: 6 }}
                       // We render our own legend from WORKLOAD_BAR_SEGMENTS so the order is fixed
                       // (To do → In progress → Done → Approved) and the items get proper gaps.
+                      // Each pill is clickable: clicking toggles whether that
+                      // status's bars + drilldown-table rows are shown.
                       content={() => (
-                        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 pt-1.5 text-[13px]">
-                          {WORKLOAD_BAR_SEGMENTS.map((s) => (
-                            <span key={s.key} className="inline-flex items-center gap-1.5">
-                              <span className="inline-block size-2.5 rounded-full" style={{ backgroundColor: s.color }} />
-                              <span className="font-medium text-slate-700">{s.label}</span>
-                            </span>
-                          ))}
+                        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 pt-1.5 text-[13px]">
+                          {WORKLOAD_BAR_SEGMENTS.map((s) => {
+                            const hidden = workloadHiddenStatuses.has(s.key);
+                            return (
+                              <button
+                                key={s.key}
+                                type="button"
+                                onClick={(e) => {
+                                  // Stop the click from bubbling to the
+                                  // BarChart's onClick (which would otherwise
+                                  // attempt to open a drilldown). Legend
+                                  // clicks should ONLY toggle the bar
+                                  // visibility, never trigger a drilldown.
+                                  e.stopPropagation();
+                                  setWorkloadHiddenStatuses((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(s.key)) next.delete(s.key);
+                                    else next.add(s.key);
+                                    return next;
+                                  });
+                                }}
+                                title={hidden ? `Show ${s.label}` : `Hide ${s.label}`}
+                                className={cn(
+                                  "inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 transition hover:bg-slate-100",
+                                  hidden && "opacity-40",
+                                )}
+                              >
+                                <span className="inline-block size-2.5 rounded-full" style={{ backgroundColor: s.color }} />
+                                <span className={cn("font-medium text-slate-700", hidden && "line-through")}>{s.label}</span>
+                              </button>
+                            );
+                          })}
                         </div>
                       )}
                     />
@@ -4003,7 +4521,7 @@ export function MonthAnalytics({
           );
         })() : null}
         <p className="mt-2 shrink-0 text-[12px] text-slate-600">
-          {analytics.openStories} open stories, <span className="text-amber-700">{analytics.atRiskStories} at risk</span>.
+          {analytics.openStories} open stories.
         </p>
       </article>
 
@@ -4021,7 +4539,7 @@ export function MonthAnalytics({
         </div>
         <div
           className={cn(
-            "grid md:grid-cols-[minmax(0,1fr)_12.5rem] md:items-stretch",
+            "grid md:grid-cols-[minmax(0,1fr)_10rem] md:items-stretch",
             INSIGHTS_CHART_GRID_GAP,
             INSIGHTS_CHART_BAND,
           )}
@@ -4030,7 +4548,7 @@ export function MonthAnalytics({
             {cfdDataResolved.length > 0 ? (
               <div className="absolute inset-0">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={cfdDataResolved} margin={{ top: 2, right: 26, left: 18, bottom: 0 }}>
+                  <AreaChart data={cfdDataResolved} margin={{ top: 2, right: 12, left: 18, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis
                       dataKey="labelShort"
@@ -4187,9 +4705,13 @@ export function MonthAnalytics({
                     </button>
                   )}
                 </div>
-                {monthLoadDrilldownAssignee ? (
-                  <div className={cn("mt-0 flex-1 min-h-0 w-full min-w-0 overflow-hidden", INSIGHTS_CHART_FRAME)}>
-                    <div className="relative h-full min-h-0 min-w-0">
+                {monthLoadDrilldownAssignee ? (() => {
+                  const uniqueSprints = Array.from(new Set(monthLoadDrilldownStoriesRaw.map((s) => storySprintDisplayLabel(s.sprint, scopeStartMonth)))).filter(Boolean).sort();
+                  const uniqueAssignees = Array.from(new Set(monthLoadDrilldownStoriesRaw.map((s) => s.assignee?.trim() || "Unassigned"))).filter(Boolean).sort();
+                  const uniqueStatuses = Array.from(new Set(monthLoadDrilldownStoriesRaw.map((s) => s.status))).sort();
+                  return (
+                  <div className={cn("mt-0 flex w-full min-w-0 flex-col overflow-hidden", INSIGHTS_CHART_BAND, INSIGHTS_CHART_FRAME)}>
+                    <div className="relative flex-1 min-h-0 min-w-0">
                       <div
                         ref={monthLoadDrilldownScrollRef}
                         onScroll={updateMonthLoadDrilldownArrowState}
@@ -4200,11 +4722,50 @@ export function MonthAnalytics({
                           {drilldownColgroup}
                           <thead className="sticky top-0 z-10 overflow-hidden rounded-t-md border-b border-[#19abeb]/70 bg-[#0897d5] text-white shadow-[0_1px_0_rgba(15,23,42,0.04)]">
                             <tr>
-                              <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Story ID</th>
-                              <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Story name</th>
-                              <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Sprint</th>
-                              <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Assignee</th>
-                              <th className="min-w-0 px-2 py-1 text-[14px] font-semibold">Status</th>
+                              <th className="min-w-0 px-2 py-1 text-[14px] text-left">
+                                <DrilldownSortHeader label="Story ID" column="id" sort={monthLoadDrilldownSort} onSortChange={setMonthLoadDrilldownSort} />
+                              </th>
+                              <th className="min-w-0 px-2 py-1 text-[14px] text-left">
+                                <DrilldownSortHeader label="Story name" column="title" sort={monthLoadDrilldownSort} onSortChange={setMonthLoadDrilldownSort} />
+                              </th>
+                              <th className="min-w-0 px-2 py-1 text-[14px] text-left">
+                                <DrilldownSortHeader label="Sprint" column="sprint" sort={monthLoadDrilldownSort} onSortChange={setMonthLoadDrilldownSort} />
+                              </th>
+                              <th className="min-w-0 px-2 py-1 text-[14px] text-left">
+                                <DrilldownSortHeader label="Assignee" column="assignee" sort={monthLoadDrilldownSort} onSortChange={setMonthLoadDrilldownSort} />
+                              </th>
+                              <th className="min-w-0 px-2 py-1 text-[14px] text-left">
+                                <DrilldownSortHeader label="Status" column="status" sort={monthLoadDrilldownSort} onSortChange={setMonthLoadDrilldownSort} />
+                              </th>
+                            </tr>
+                            <tr className="bg-white/95">
+                              <th className="min-w-0 px-1 py-0.5" />
+                              <th className="min-w-0 px-1 py-0.5">
+                                <DrilldownFilterInputText value={monthLoadDrilldownFilter.title} onChange={(v) => setMonthLoadDrilldownFilter((p) => ({ ...p, title: v }))} ariaLabel="Filter month load by story name" />
+                              </th>
+                              <th className="min-w-0 px-1 py-0.5">
+                                <DrilldownFilterDropdown value={monthLoadDrilldownFilter.sprint} options={uniqueSprints} renderOption={renderSprintOption} onChange={(v) => setMonthLoadDrilldownFilter((p) => ({ ...p, sprint: v }))} ariaLabel="Filter month load by sprint" />
+                              </th>
+                              <th className="min-w-0 px-1 py-0.5">
+                                <DrilldownFilterDropdown
+                                  value={monthLoadDrilldownFilter.assignee}
+                                  options={uniqueAssignees}
+                                  renderOption={(name) => {
+                                    const resolved = resolveAssigneeAvatar(name, workspaceDirectoryUsers);
+                                    return (
+                                      <span className="inline-flex items-center gap-1.5">
+                                        <UserAvatar name={resolved.name} image={resolved.image} size={16} className="ring-0" />
+                                        <span className="truncate">{name}</span>
+                                      </span>
+                                    );
+                                  }}
+                                  onChange={(v) => setMonthLoadDrilldownFilter((p) => ({ ...p, assignee: v }))}
+                                  ariaLabel="Filter month load by assignee"
+                                />
+                              </th>
+                              <th className="min-w-0 px-1 py-0.5">
+                                <DrilldownFilterDropdown value={monthLoadDrilldownFilter.status} options={uniqueStatuses} renderOption={renderStatusOption} onChange={(v) => setMonthLoadDrilldownFilter((p) => ({ ...p, status: v }))} ariaLabel="Filter month load by status" />
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -4218,11 +4779,14 @@ export function MonthAnalytics({
                                 </td>
                                 <td className="min-w-0 px-2 py-0.5"><InsightsTruncatedHoverLabel text={story.title} /></td>
                                 <td className="min-w-0 px-2 py-0.5">
-                                  {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
-                                    <InsightsTruncatedHoverButton label={storySprintDisplayLabel(story.sprint, scopeStartMonth)} onClick={() => { const t = normalizeStoryYearSprint(story.sprint, scopeStartMonth); if (t) onOpenSprintKanban?.(t, resolveStoryTeamForSprintNav(story)); }} className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline" />
-                                  ) : (
-                                    <InsightsTruncatedHoverLabel text="Unscheduled" />
-                                  )}
+                                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                                    <Flag className="size-3.5 shrink-0 text-rose-500" aria-hidden />
+                                    {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
+                                      <InsightsTruncatedHoverButton label={storySprintDisplayLabel(story.sprint, scopeStartMonth)} onClick={() => { const t = normalizeStoryYearSprint(story.sprint, scopeStartMonth); if (t) onOpenSprintKanban?.(t, resolveStoryTeamForSprintNav(story)); }} className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline" />
+                                    ) : (
+                                      <InsightsTruncatedHoverLabel text="Unscheduled" />
+                                    )}
+                                  </span>
                                 </td>
                                 <td className="min-w-0 px-2 py-0.5">
                                   <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
@@ -4244,7 +4808,8 @@ export function MonthAnalytics({
                       <button type="button" onClick={() => scrollMonthLoadDrilldownBy(96)} className={cn(sharedDrilldownArrowClass, "bottom-0", canScrollMonthLoadDrilldownDown && "bg-slate-200/70 text-slate-800")} aria-label="Scroll down"><ChevronDown className="size-3.5" /></button>
                     </div>
                   </div>
-                ) : (
+                  );
+                })() : (
                 <div className={cn("relative", INSIGHTS_CHART_BAND)}>
                   <div
                     ref={monthLoadScrollRef}
@@ -4383,6 +4948,9 @@ export function MonthAnalytics({
                   </button>
                 </div>
                 )}
+                <p className="mt-2 shrink-0 text-[12px] text-slate-600">
+                  {analytics.openStories} open stories.
+                </p>
               </div>
             );
           })()}
@@ -4445,7 +5013,7 @@ export function MonthAnalytics({
                 // so the two charts stay symmetric. 13rem is tight enough to
                 // pull the legend close to the chart; truncated titles get
                 // their full text via the hover tooltip.
-                "grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_13rem] md:items-stretch",
+                "grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_24rem] md:items-stretch",
                 INSIGHTS_CHART_GRID_GAP,
                 INSIGHTS_CONTENT_HEIGHT,
               )}
@@ -4459,7 +5027,7 @@ export function MonthAnalytics({
                 ) : (
                 <div className="absolute inset-0">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={burnUpDataTruncated} margin={{ top: 38, right: 60, left: 18, bottom: 0 }}>
+                    <LineChart data={burnUpDataTruncated} margin={{ top: 38, right: 24, left: 18, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                       <XAxis
                         dataKey="labelShort"
@@ -4639,7 +5207,12 @@ export function MonthAnalytics({
                         className={cn(
                           "mb-1 w-full rounded-md px-1 py-1 text-left font-medium transition hover:bg-slate-200/70",
                           isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
-                          allBurnUpKeysSelected ? "text-slate-900" : "text-slate-400",
+                          // Highlight the All/Initiative row (not the epic
+                          // rows below) when all keys are visible — matches
+                          // the burndown legend behavior.
+                          allBurnUpKeysSelected
+                            ? "bg-indigo-50 font-semibold text-slate-900"
+                            : "text-slate-400",
                         )}
                       >
                         <span className="inline-flex w-full items-center gap-1.5">
@@ -4660,6 +5233,9 @@ export function MonthAnalytics({
                   <div className={cn(selectedInitiativeId !== "all" && "relative ml-3 border-l border-slate-200 pl-1")}>
                   {burnUpEpicRows.map((row) => {
                     const on = burnUpVisibleKeys.includes(row.id);
+                    // Suppress the indigo highlight when all are visible —
+                    // the All-row carries the highlight in that state.
+                    const showHighlight = on && !allBurnUpKeysSelected;
                     return (
                       <EpicLegendRowButton
                         key={row.id}
@@ -4667,7 +5243,7 @@ export function MonthAnalytics({
                         // Always pass the row's natural color — don't fade the
                         // glyph to slate-300 when off (matches burndown).
                         color={row.color}
-                        on={on}
+                        on={showHighlight}
                         isEpic
                         onClick={() => toggleBurnUpKey(row.id)}
                         treeRow={selectedInitiativeId !== "all"}
@@ -4680,6 +5256,14 @@ export function MonthAnalytics({
                     );
                   })}
                   </div>
+                  {/* Mirror the burndown's "Due:" footer — shown when the
+                   *  burnup is focused on a single epic (scope picker or
+                   *  legend narrowed to one). */}
+                  {burnUpSingleEpicVisible && burnUpDueDate ? (
+                    <p className="mt-1 pl-0 text-[12px] text-slate-500">
+                      Due: {burnUpDueDate.toLocaleDateString()}
+                    </p>
+                  ) : null}
                 </div>
                 <button
                   type="button"
