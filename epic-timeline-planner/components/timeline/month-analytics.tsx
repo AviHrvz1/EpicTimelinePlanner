@@ -394,7 +394,7 @@ function EpicLegendRowButton({
         {isEpic ? (
           <Folder
             className="size-3.5 shrink-0"
-            style={{ color, opacity: on ? 1 : 0.35 }}
+            style={{ color }}
             strokeWidth={2}
             aria-hidden
           />
@@ -403,7 +403,7 @@ function EpicLegendRowButton({
           // square so the marker still reads as a series swatch.
           <span
             className="inline-block size-3 shrink-0 rounded-[3px]"
-            style={{ backgroundColor: color, opacity: on ? 1 : 0.35 }}
+            style={{ backgroundColor: color }}
             aria-hidden
           />
         )}
