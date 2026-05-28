@@ -4450,6 +4450,12 @@ export function MonthAnalytics({
                       })()}
                       <Line type="monotone" dataKey="scope" name="Total scope" stroke="#94a3b8" strokeWidth={1.5} dot={false} isAnimationActive={false} />
                       <Line type="monotone" dataKey="ideal" name={burnUpDueDateLabel ? `Ideal (due ${burnUpDueDateLabel})` : "Ideal"} stroke="#f97316" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} isAnimationActive={false} />
+                      {/* Aggregate completed line — sums per-epic completed
+                       *  into the chart's units. When "All" is selected this
+                       *  is the primary visualization (per-epic lines each
+                       *  peak at small individual epicEst values and look
+                       *  flat at 0 against the totalScope-scaled Y-axis). */}
+                      <Line type="monotone" dataKey="completed" name="Completed" stroke="#0ea5e9" strokeWidth={2.5} dot={false} connectNulls={false} isAnimationActive={false} />
                       {/* Per-epic completed lines — one per visible epic,
                        *  colored with the same palette as the legend marker
                        *  so each row's icon and its line match. Clicking
