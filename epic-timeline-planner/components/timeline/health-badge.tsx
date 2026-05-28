@@ -107,15 +107,20 @@ export function formatHealthTooltip(args: {
 }): string {
   const { status, progressPercent, remainingEffort, daysRemaining, deltaDays, unestimatedCount } = args;
   const label = STATUS_META[status].label;
+  // 1-decimal day formatter — keeps headline numbers readable. Whole-day
+  // values render without a trailing ".0" so common cases (e.g. "12d") stay
+  // tight. The previous template-literal `${deltaDays}d` would print the
+  // raw float (e.g. "26.758620689655146d"), which read as a bug.
+  const fmt = (n: number) => (Number.isInteger(n) ? `${n}d` : `${n.toFixed(1)}d`);
   const parts: string[] = [`${label} · ${progressPercent}% complete`];
   if (status === "overdue") {
-    parts.push(`Past deadline with ${remainingEffort}d of work remaining.`);
+    parts.push(`Past deadline with ${fmt(remainingEffort)} of work remaining.`);
   } else if (remainingEffort === 0) {
     parts.push("All estimated effort burned down.");
   } else {
-    parts.push(`${remainingEffort}d of work · ${daysRemaining} working days left`);
-    if (deltaDays > 0) parts.push(`${deltaDays}d over budget`);
-    else if (deltaDays < 0) parts.push(`${-deltaDays}d of buffer`);
+    parts.push(`${fmt(remainingEffort)} of work · ${daysRemaining} working days left`);
+    if (deltaDays > 0) parts.push(`${fmt(deltaDays)} over budget`);
+    else if (deltaDays < 0) parts.push(`${fmt(-deltaDays)} of buffer`);
   }
   if (unestimatedCount > 0) {
     parts.push(`${unestimatedCount} unestimated ${unestimatedCount === 1 ? "story" : "stories"} excluded`);

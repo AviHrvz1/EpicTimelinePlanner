@@ -125,23 +125,43 @@ export function computeProgress(input: ProgressInputs): ProgressResult {
     }
   }
 
-  // `epicEst` basis: ignore the child-story rollup entirely and treat the
-  // epic as a single unit of effort with an "ideal linear burn-down".
+  // `epicEst` basis: scale ACTUAL story progress into epic-estimate units.
   // - totalEffort = the epic's own originalEstimateDays
-  // - remainingEffort = totalEffort − workingDaysElapsed(start → now),
-  //   clamped to [0, totalEffort]
-  // This gives early-stage epics (no child stories yet) a deterministic
-  // verdict against the picked Gantt window, without leaning on stories
-  // that haven't been written.
+  // - remainingEffort = epicEst × (currentOpenStoryDays / totalStoryDays)
+  // The previous formula used `epicEst − workingDaysElapsed`, which counts
+  // calendar time as if it were work delivered — that gave "100% complete"
+  // for any epic whose start was far in the past, regardless of whether
+  // child stories had actually burned down. Scaling against the same
+  // story-day rollup the burndown chart uses keeps the popover honest with
+  // the visualization. Fallback to time-based burn only when the epic has
+  // no estimated stories yet (early-stage), so a freshly-created epic
+  // doesn't immediately show "—".
   if (basis === "epicEst") {
     const epicEst = input.epicOriginalEstimateDays ?? null;
     if (epicEst != null && epicEst > 0) {
-      const elapsedWorkingDays = workingDaysBetween(input.start, now);
-      const burned = Math.min(epicEst, Math.max(0, elapsedWorkingDays));
+      let totalStoryDays = 0;
+      let currentOpenStoryDays = 0;
+      for (const story of input.stories) {
+        if (story.estimatedDays == null) continue;
+        totalStoryDays += story.estimatedDays;
+        if (!DONE_STATUSES.has(story.status)) {
+          currentOpenStoryDays += story.daysLeft ?? story.estimatedDays;
+        }
+      }
       totalEffort = epicEst;
-      remainingEffort = Math.max(0, epicEst - burned);
+      if (totalStoryDays > 0) {
+        const ratio = Math.min(1, Math.max(0, currentOpenStoryDays / totalStoryDays));
+        remainingEffort = epicEst * ratio;
+      } else {
+        // No estimated stories yet → fall back to the time-elapsed burn so
+        // the verdict isn't stuck at "all done" the moment the period
+        // starts (and isn't stuck at "all remaining" forever).
+        const elapsedWorkingDays = workingDaysBetween(input.start, now);
+        const burned = Math.min(epicEst, Math.max(0, elapsedWorkingDays));
+        remainingEffort = Math.max(0, epicEst - burned);
+      }
       // `unestimatedCount` represents child-story coverage; in epicEst mode
-      // we surface 0 since the verdict doesn't depend on child stories.
+      // we surface 0 since the verdict doesn't depend on per-story coverage.
       unestimatedCount = 0;
     } else {
       // Epic has no estimate in epicEst mode → treat as unestimated; the
