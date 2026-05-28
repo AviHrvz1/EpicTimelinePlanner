@@ -3262,6 +3262,11 @@ export function MonthAnalytics({
               </button>
               {burndownLegendItems.map((item) => {
                 const on = burndownVisibleKeys.includes(item.key);
+                // "epicIdeal" is the synthetic ideal-line series, not a real
+                // epic — skip the folder glyph for it. Every other legend row
+                // is a real epic and gets the canonical Folder icon to read
+                // as "this row = one epic".
+                const isEpic = item.key !== "epicIdeal";
                 return (
                   <button
                     key={item.key}
@@ -3279,6 +3284,16 @@ export function MonthAnalytics({
                       className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
                       style={{ backgroundColor: item.color, opacity: on ? 1 : 0.35 }}
                     />
+                    {isEpic ? (
+                      <Folder
+                        className={cn(
+                          "size-3.5 shrink-0",
+                          on ? "text-sky-500" : "text-slate-400",
+                        )}
+                        strokeWidth={2}
+                        aria-hidden
+                      />
+                    ) : null}
                     <span className="truncate">{item.label}</span>
                   </button>
                 );
@@ -4104,6 +4119,11 @@ export function MonthAnalytics({
                         )}
                       >
                         <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: on ? row.color : "#cbd5e1" }} />
+                        <Folder
+                          className={cn("size-3.5 shrink-0", on ? "text-sky-500" : "text-slate-400")}
+                          strokeWidth={2}
+                          aria-hidden
+                        />
                         <span className="truncate">{row.title}</span>
                       </button>
                     );
