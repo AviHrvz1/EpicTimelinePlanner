@@ -1309,6 +1309,19 @@ export function MonthAnalytics({
     if (selectedEpicId !== "all") {
       const selected = epicComboOptions.find((opt) => opt.id === selectedEpicId);
       if (!selected) {
+        // Sticky View-Insights deep link: if the requested epic is the
+        // externally-injected `initialSelectedEpicId`, don't clear — fall
+        // back to a flat search across ALL initiatives for the title so
+        // the picker still shows it even when filters exclude the epic.
+        if (initialSelectedEpicId && selectedEpicId === initialSelectedEpicId) {
+          let title: string | null = null;
+          for (const init of initiatives) {
+            const found = (init.epics ?? []).find((e) => e.id === selectedEpicId);
+            if (found) { title = found.title; break; }
+          }
+          setEpicInput(title ?? "");
+          return;
+        }
         setSelectedEpicId("all");
         setEpicInput("");
       } else {
@@ -1322,7 +1335,7 @@ export function MonthAnalytics({
       return;
     }
     setEpicInput("");
-  }, [selectedEpicId, selectedInitiativeId, epicComboOptions, scopeInitiativeOptions]);
+  }, [selectedEpicId, selectedInitiativeId, epicComboOptions, scopeInitiativeOptions, initialSelectedEpicId, initiatives]);
 
   const analytics = useMemo(() => {
     const scopeStories =
