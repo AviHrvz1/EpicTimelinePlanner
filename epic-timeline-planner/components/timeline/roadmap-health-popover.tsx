@@ -238,17 +238,18 @@ export function RoadmapHealthPopover({
     onFilterChange(next);
   };
 
-  // Total of the four status counts — used to size the proportional
+  // Total of the five status counts — used to size the proportional
   // progress bar at the bottom.
   const statusTotal =
-    counts.onTrack + counts.watch + counts.atRisk + counts.overdue;
-  // "Healthy share" — On Track + Watch over the rest. Drives the colored
-  // scrubber so the bar reads green→amber→red→deep-red left to right.
+    counts.done + counts.onTrack + counts.watch + counts.atRisk + counts.overdue;
+  // "Healthy share" — Done + On Track + Watch over the rest. Drives the
+  // colored scrubber so the bar reads green→amber→red→deep-red left to right.
+  const donePct = statusTotal > 0 ? (counts.done / statusTotal) * 100 : 0;
   const onTrackPct = statusTotal > 0 ? (counts.onTrack / statusTotal) * 100 : 0;
   const watchPct = statusTotal > 0 ? (counts.watch / statusTotal) * 100 : 0;
   const atRiskPct = statusTotal > 0 ? (counts.atRisk / statusTotal) * 100 : 0;
   const overduePct = statusTotal > 0 ? (counts.overdue / statusTotal) * 100 : 0;
-  const healthyPct = onTrackPct + watchPct;
+  const healthyPct = donePct + onTrackPct + watchPct;
 
   return createPortal(
     <div
@@ -364,7 +365,7 @@ export function RoadmapHealthPopover({
               </button>
             ) : null}
           </div>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-5 gap-1.5">
             {STATUS_ORDER.map((status) => {
               const meta = STATUS_META[status];
               const count = counts[status];
@@ -378,7 +379,7 @@ export function RoadmapHealthPopover({
                   onClick={() => toggle(status)}
                   aria-pressed={isActive}
                   className={cn(
-                    "group relative inline-flex items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-lg border px-2 py-1.5 text-left transition-colors",
+                    "group relative inline-flex items-center gap-1 overflow-hidden whitespace-nowrap rounded-lg border px-1.5 py-1 text-left transition-colors",
                     isActive
                       ? `${meta.activeBg} ${meta.activeBorder}`
                       : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
@@ -387,16 +388,16 @@ export function RoadmapHealthPopover({
                 >
                   <span
                     className={cn(
-                      "inline-flex size-4 shrink-0 items-center justify-center rounded-full shadow-sm ring-2 ring-white",
+                      "inline-flex size-3.5 shrink-0 items-center justify-center rounded-full shadow-sm ring-2 ring-white",
                       meta.dotBg,
                     )}
                   >
                     <Icon className={cn("size-2 stroke-[2.5]", meta.dotFg)} aria-hidden />
                   </span>
-                  <span className="text-[11.5px] font-semibold text-slate-800">{meta.label}</span>
+                  <span className="truncate text-[10.5px] font-semibold text-slate-800">{meta.label}</span>
                   <span
                     className={cn(
-                      "ml-auto text-[14px] font-extrabold tabular-nums leading-none",
+                      "ml-auto text-[12px] font-extrabold tabular-nums leading-none",
                       isZero ? "text-slate-300" : meta.countFg,
                     )}
                   >
@@ -418,6 +419,7 @@ export function RoadmapHealthPopover({
           <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
             {statusTotal > 0 ? (
               <div className="flex h-full w-full">
+                <div className="h-full bg-emerald-600" style={{ width: `${donePct}%` }} />
                 <div className="h-full bg-emerald-500" style={{ width: `${onTrackPct}%` }} />
                 <div className="h-full bg-amber-400" style={{ width: `${watchPct}%` }} />
                 <div className="h-full bg-rose-500" style={{ width: `${atRiskPct}%` }} />
