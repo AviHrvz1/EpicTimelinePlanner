@@ -17,6 +17,7 @@ import { UsersWorkspacePanel } from "@/components/users/users-workspace-panel";
 import { DemoBuilderPanel } from "@/components/demo-builder/demo-builder-panel";
 import { DashboardPage } from "@/components/dashboard/dashboard-page";
 import { GanttDebugOverlay } from "@/components/debug/gantt-debug-overlay";
+import { DebugLogPanel } from "@/components/debug-log-panel";
 import { BacklogPanelSkeleton } from "@/components/deferred-mount";
 import { EpicDeleteDialog } from "@/components/epics/epic-delete-dialog";
 import { InitiativeDeleteDialog } from "@/components/initiatives/initiative-delete-dialog";
@@ -6632,7 +6633,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           deleting={deletingEpic}
         />
       )}
-      {/* <DebugLogPanel /> hidden in production look */}
+      <DebugLogPanel />
       <GanttDebugOverlay />
     </DragContext>
   );

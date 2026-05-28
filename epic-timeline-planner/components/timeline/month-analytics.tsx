@@ -2575,9 +2575,18 @@ export function MonthAnalytics({
     });
   }, [selectedEpicOption, monthEpics, burnUpVisibleKeys, planYear, scopeStartMonth, scopeEndMonth, burnUpDueDate, burnUpMetric, burnupBasis]);
 
+  /** Short date label used in tooltip text (e.g. "Due 31/12"). */
   const burnUpDueDateLabel = useMemo(() => {
     if (!burnUpDueDate) return null;
     return `${burnUpDueDate.getDate()}/${burnUpDueDate.getMonth() + 1}`;
+  }, [burnUpDueDate]);
+  /** Full tick label (matches `flowChartDayLabel` format) — required for
+   *  `ReferenceDot x={...}` to land on the correct X-axis position.
+   *  Without this, Recharts can't match the short label to any tick and
+   *  renders the target marker at x=0 (far left). */
+  const burnUpDueDateTickLabel = useMemo(() => {
+    if (!burnUpDueDate) return null;
+    return flowChartDayLabel(burnUpDueDate);
   }, [burnUpDueDate]);
 
   const burnUpLegendScrollRef = useRef<HTMLDivElement | null>(null);
@@ -4291,6 +4300,40 @@ export function MonthAnalytics({
                     chartKind="burnup"
                   />
                 ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const dump = {
+                      title: "Epic Scope Burnup debug",
+                      basis: burnupBasis,
+                      visibleKeys: burnUpVisibleKeys,
+                      scopeTotal: burnUpScopeTotal,
+                      dueDate: burnUpDueDate?.toISOString() ?? null,
+                      dueDateLabel: burnUpDueDateLabel,
+                      dueDateTickLabel: burnUpDueDateTickLabel,
+                      epics: burnUpEpicRows.map((r) => ({
+                        id: r.id,
+                        title: r.title,
+                        totalStories: r.totalStories,
+                        completed: r.completed,
+                        daysLeft: r.daysLeft,
+                      })),
+                      sampleRows: [
+                        burnUpData[0],
+                        burnUpData[Math.floor(burnUpData.length / 4)],
+                        burnUpData[Math.floor(burnUpData.length / 2)],
+                        burnUpData.find((r) => r.isToday) ?? null,
+                        burnUpData[burnUpData.length - 1],
+                      ].filter(Boolean),
+                      totalDays: burnUpData.length,
+                    };
+                    console.log("[BURNUP_DEBUG]", JSON.stringify(dump, null, 2));
+                  }}
+                  className="ml-1 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-100"
+                  title="Dump burnup data to debug log (click the ⌥ button bottom-right to copy)"
+                >
+                  Debug
+                </button>
               </h3>
               <div className="flex flex-wrap items-center gap-2">
                 {/* Per-chart basis toggle — same shape as the burndown
@@ -4423,9 +4466,9 @@ export function MonthAnalytics({
                        *  due-date label so the two charts read symmetric.
                        *  Sits at the scope total (top of the burnup line);
                        *  the Done ✓ above stacks neatly on top. */}
-                      {burnUpDueDateLabel ? (
+                      {burnUpDueDateTickLabel ? (
                         <ReferenceDot
-                          x={burnUpDueDateLabel}
+                          x={burnUpDueDateTickLabel}
                           y={burnUpScopeTotal}
                           r={0}
                           isFront
@@ -4446,9 +4489,9 @@ export function MonthAnalytics({
                        *  position when the completed line has reached scope.
                        *  Skipped on the story-count axis (no scope line to
                        *  reach) and when the due-date label isn't known. */}
-                      {isBurnUpDone && burnUpDueDateLabel ? (
+                      {isBurnUpDone && burnUpDueDateTickLabel ? (
                         <ReferenceDot
-                          x={burnUpDueDateLabel}
+                          x={burnUpDueDateTickLabel}
                           y={burnUpScopeTotal}
                           r={0}
                           isFront
