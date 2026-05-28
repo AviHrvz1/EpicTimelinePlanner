@@ -2622,40 +2622,6 @@ export function MonthAnalytics({
 
   const burnUpScopeTotal = burnUpData.length > 0 ? burnUpData[0]?.scope ?? 0 : 0;
 
-  // [BURNUP_DEBUG] auto-log on data changes so flat-0 / mis-position issues
-  // can be diagnosed from the DebugLogPanel without needing a button click.
-  // Logs once per data change. Filter by `BURNUP_DEBUG_AUTO` in the panel.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const todayRow = burnUpData.find((r) => r.isToday);
-    const sampleEpic = (() => {
-      if (burnUpData.length === 0) return null;
-      const today = todayRow ?? burnUpData[burnUpData.length - 1];
-      if (!today) return null;
-      const epicVals: Record<string, unknown> = {};
-      for (const key of Object.keys(today)) {
-        if (["labelShort", "isToday", "completed", "scope", "ideal"].includes(key)) continue;
-        epicVals[key] = today[key];
-      }
-      return epicVals;
-    })();
-    const dump = {
-      basis: burnupBasis,
-      visibleKeys: burnUpVisibleKeys,
-      selectedEpic: selectedEpicOption?.epic.title ?? null,
-      selectedInitiative: selectedInitiativeId,
-      monthEpicsCount: monthEpics.length,
-      totalDays: burnUpData.length,
-      scopeTotal: burnUpScopeTotal,
-      dueDateLabel: burnUpDueDateLabel,
-      todayRow: todayRow ? { label: todayRow.labelShort, completed: todayRow.completed, scope: todayRow.scope, ideal: todayRow.ideal } : null,
-      todayPerEpic: sampleEpic,
-      firstRow: burnUpData[0],
-      lastRow: burnUpData[burnUpData.length - 1],
-    };
-    console.log("[BURNUP_DEBUG_AUTO]", JSON.stringify(dump, null, 2));
-  }, [burnUpData, burnupBasis, burnUpVisibleKeys, burnUpScopeTotal, burnUpDueDateLabel, selectedEpicOption, selectedInitiativeId, monthEpics.length]);
-
   const burnUpCompletedNow = useMemo(() => {
     for (let i = burnUpData.length - 1; i >= 0; i--) {
       const v = burnUpData[i]?.completed;
