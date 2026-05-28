@@ -2725,6 +2725,16 @@ export function MonthAnalytics({
   const showAllBurnUpKeys = () => setBurnUpVisibleKeys(burnUpEpicRows.map((r) => r.id));
   const allBurnUpKeysSelected =
     burnUpEpicRows.length > 0 && burnUpEpicRows.every((r) => burnUpVisibleKeys.includes(r.id));
+  // True when the chart is focused on exactly one epic (either via the
+  // scope picker or via the legend filter). Drives whether shared
+  // scope/ideal/due/done markers render — they only make sense when one
+  // due date applies. When `selectedEpicOption` is set, burnUpEpicRows
+  // also collapses to that one epic, so `allBurnUpKeysSelected` becomes
+  // true — we use this stronger signal instead to keep the markers visible.
+  const burnUpSingleEpicVisible =
+    selectedEpicOption != null ||
+    (burnUpEpicRows.length === 1 && burnUpVisibleKeys.includes(burnUpEpicRows[0]!.id)) ||
+    (burnUpEpicRows.length > 1 && burnUpVisibleKeys.length === 1);
 
   /**
    * Title suffix for "Epic Scope Burndown" — `scopeTitleSuffix` (Epic/Initiative
@@ -4463,8 +4473,8 @@ export function MonthAnalytics({
                         allowDecimals={false}
                         tick={{ fontSize: 10 }}
                         width={44}
-                        label={{ value: burnUpMetric === "daysLeft" ? "Days completed" : "Stories", angle: -90, position: "insideLeft", fill: "#64748b", fontSize: 13 }}
-                        domain={[0, (dataMax: number) => Math.ceil(Math.max(dataMax, allBurnUpKeysSelected ? 0 : burnUpScopeTotal) * 1.22)]}
+                        label={{ value: burnUpMetric === "daysLeft" ? "Days completed" : "Stories", angle: -90, position: "insideLeft", offset: 12, dy: 50, fill: "#64748b", fontSize: 13 }}
+                        domain={[0, (dataMax: number) => Math.ceil(Math.max(dataMax, burnUpSingleEpicVisible ? burnUpScopeTotal : 0) * 1.22)]}
                         padding={{ bottom: 4 }}
                       />
                       <Tooltip
@@ -4503,7 +4513,7 @@ export function MonthAnalytics({
                        *  carries its own due date, so a single shared scope/
                        *  ideal is meaningless in the All view (mirrors the
                        *  burndown chart's All-view behavior). */}
-                      {!allBurnUpKeysSelected ? (
+                      {burnUpSingleEpicVisible ? (
                         <>
                           <Line type="monotone" dataKey="scope" name="Total scope" stroke="#94a3b8" strokeWidth={1.5} dot={false} isAnimationActive={false} />
                           <Line type="monotone" dataKey="ideal" name={burnUpDueDateLabel ? `Ideal (due ${burnUpDueDateLabel})` : "Ideal"} stroke="#f97316" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} isAnimationActive={false} />
@@ -4536,7 +4546,7 @@ export function MonthAnalytics({
                        *  due-date label so the two charts read symmetric.
                        *  Sits at the scope total (top of the burnup line);
                        *  the Done ✓ above stacks neatly on top. */}
-                      {!allBurnUpKeysSelected && burnUpDueDateTickLabel ? (
+                      {burnUpSingleEpicVisible && burnUpDueDateTickLabel ? (
                         <ReferenceDot
                           x={burnUpDueDateTickLabel}
                           y={burnUpScopeTotal}
@@ -4563,7 +4573,7 @@ export function MonthAnalytics({
                        *  Skipped on the story-count axis (no scope line to
                        *  reach), when the due-date label isn't known, and
                        *  in All view (each epic has its own due date). */}
-                      {!allBurnUpKeysSelected && isBurnUpDone && burnUpDueDateTickLabel ? (
+                      {burnUpSingleEpicVisible && isBurnUpDone && burnUpDueDateTickLabel ? (
                         <ReferenceDot
                           x={burnUpDueDateTickLabel}
                           y={burnUpScopeTotal}
