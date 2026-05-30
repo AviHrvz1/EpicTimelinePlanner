@@ -13,6 +13,8 @@ import {
   Flag,
   Folder,
   ListTodo,
+  Pin,
+  PinOff,
   PlayCircle,
   UserRound,
   Users,
@@ -760,6 +762,10 @@ export function SprintKanbanBoard({
 
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [assigneeFilterExpanded, setAssigneeFilterExpanded] = useState(false);
+  // When the pin is on, the assignee chips stay expanded even after the user
+  // moves the cursor off the panel. Clicking the pin toggles it; default off.
+  const [assigneeFilterPinned, setAssigneeFilterPinned] = useState(false);
+  const showAssigneeChipsExpanded = assigneeFilterPinned || assigneeFilterExpanded;
   const searchQuery = searchQueryProp;
 
   useEffect(() => {
@@ -907,7 +913,7 @@ export function SprintKanbanBoard({
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
             <div
               className={cn(
-                "flex min-w-0 flex-1 items-center py-0.5",
+                "flex min-w-0 flex-1 flex-wrap items-center gap-y-1.5 py-0.5",
                 !(showAssigneePeopleFilter && assigneeOptions.length > 0) && "min-h-[2.25rem]",
               )}
               onMouseEnter={() =>
@@ -948,39 +954,95 @@ export function SprintKanbanBoard({
                         aria-pressed={on}
                         onClick={() => toggleAssigneeFilter(name)}
                         className={cn(
-                          "relative inline-flex h-9 shrink-0 items-center rounded-full text-left text-[11px] font-semibold tracking-[0.02em] ring-1 transition-[margin,transform,background-color,color,box-shadow,width,padding] duration-200",
-                          assigneeFilterExpanded ? "w-auto gap-1.5 px-2.5" : "w-9 justify-center px-0",
+                          "relative inline-flex shrink-0 items-center rounded-full text-left font-semibold tracking-[0.02em] ring-1 transition-[margin,transform,background-color,color,box-shadow,height,width,padding] duration-200",
+                          // Both states render as an ellipse with the avatar at
+                          // the left edge + a label on the right, so each chip
+                          // reads as ONE shape (no "circle around image, second
+                          // circle around name"). Collapsed = smaller height +
+                          // 2-letter initials; expanded = taller pill + the
+                          // longer "First L." label.
+                          showAssigneeChipsExpanded
+                            ? "h-9 w-auto gap-1.5 pl-0.5 pr-2.5 text-[11px]"
+                            : "h-7 w-auto gap-1 pl-0.5 pr-2 text-[10.5px]",
                           on
                             ? "bg-sky-600 text-white ring-sky-700"
                             : "bg-white text-slate-800 ring-slate-200 hover:bg-slate-100",
                         )}
                         title={name}
-                        style={{
-                          marginLeft: assigneeFilterExpanded ? 6 : -12,
-                          zIndex: assigneeFilterExpanded ? 10 : 10 - Math.min(idx, 9),
-                        }}
+                        style={{ marginLeft: 4, zIndex: 10 }}
                       >
-                        {/* Collapsed: show photo / initials inside the circle.
-                            Expanded: small avatar + the full name. */}
                         {isUnassigned ? (
                           <Icon className="size-[15px] shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
-                        ) : !assigneeFilterExpanded ? (
-                          resolved.image ? (
-                            <UserAvatar name={resolved.name} image={resolved.image} size={32} className="ring-0" />
-                          ) : (
-                            <span>{assigneeBadgeLabel(name)}</span>
-                          )
                         ) : (
-                          <UserAvatar name={resolved.name} image={resolved.image} size={22} className="ring-0" />
+                          <UserAvatar
+                            name={resolved.name}
+                            image={resolved.image}
+                            size={showAssigneeChipsExpanded ? 28 : 22}
+                            className="ring-0"
+                          />
                         )}
-                        {assigneeFilterExpanded ? (
-                          <span className="max-w-[12rem] truncate text-[12px]">
-                            {isUnassigned ? name : formatAssigneeShortLabel(name)}
-                          </span>
-                        ) : null}
+                        <span className="max-w-[12rem] truncate">
+                          {isUnassigned
+                            ? name
+                            : showAssigneeChipsExpanded
+                              ? formatAssigneeShortLabel(name)
+                              : assigneeBadgeLabel(name)}
+                        </span>
                       </button>
                     );
                   })}
+                  {/* Clear-all selections: visible only when at least one
+                   *  assignee is selected (otherwise the action would be a
+                   *  no-op). Sits immediately before the pin so the row always
+                   *  reads "[chips…] [clear] [pin]". */}
+                  {selectedAssignees.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAssignees([])}
+                      onMouseEnter={(event) => event.stopPropagation()}
+                      title="Clear all selected assignees"
+                      aria-label="Clear all selected assignees"
+                      style={{ marginLeft: 6 }}
+                      className="relative z-20 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-slate-600 ring-1 ring-slate-200 transition hover:bg-rose-50 hover:text-rose-600 hover:ring-rose-200"
+                    >
+                      <X className="size-4 shrink-0" strokeWidth={2.25} aria-hidden />
+                    </button>
+                  ) : null}
+                  {/* Pin toggle: when pressed, the chips above stay expanded
+                   *  even after the cursor leaves the panel. Press again to
+                   *  return to hover-only expansion. Sits at the end of the
+                   *  row so it can't be hidden when the chips wrap. */}
+                  <button
+                    type="button"
+                    aria-pressed={assigneeFilterPinned}
+                    title={assigneeFilterPinned ? "Unpin — collapse now" : "Pin — keep expanded"}
+                    aria-label={assigneeFilterPinned ? "Unpin assignee chips" : "Pin assignee chips open"}
+                    onClick={() => {
+                      setAssigneeFilterPinned((v) => {
+                        // When transitioning to unpinned, force the hover-driven
+                        // expanded flag off too so the chips collapse instantly
+                        // — without this the cursor still sits over the pin
+                        // (the panel reads as hovered), and the chips would
+                        // stay expanded until the user moved the mouse away.
+                        if (v) setAssigneeFilterExpanded(false);
+                        return !v;
+                      });
+                    }}
+                    onMouseEnter={(event) => event.stopPropagation()}
+                    style={{ marginLeft: 6 }}
+                    className={cn(
+                      "relative z-20 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold ring-1 transition",
+                      assigneeFilterPinned
+                        ? "bg-amber-500 text-white ring-amber-600"
+                        : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-100",
+                    )}
+                  >
+                    {assigneeFilterPinned ? (
+                      <Pin className="size-4 shrink-0 -rotate-45" strokeWidth={2.25} aria-hidden />
+                    ) : (
+                      <PinOff className="size-4 shrink-0" strokeWidth={2.25} aria-hidden />
+                    )}
+                  </button>
                 </>
               ) : null}
             </div>

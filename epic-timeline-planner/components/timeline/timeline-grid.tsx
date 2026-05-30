@@ -63,6 +63,7 @@ import { SprintRetrospectiveEditor, type SprintRetrospectiveDoc } from "@/compon
 import { QuarterYearProgressIcon } from "@/components/ui/quarter-year-progress-icon";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { computeSprintKanbanSummaryStats, collectStoriesForSprintBoard, collectEpicsForSprintKanban } from "@/lib/sprint-plan";
+import { buildSprintAnalytics } from "@/lib/sprint-analytics";
 import { sprintStoryBoardEpicTeamFilter, type SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { TIMELINE_GANTT_ROWS_CONTAINER_ID } from "@/lib/gantt-lane-from-pointer";
 import {
@@ -4946,6 +4947,49 @@ export function TimelineGrid({
     const sprintNumber = activeSprint ?? activeYearSprintForMonthDrill;
     return sprintNumber != null ? `Sprint ${sprintNumber} Insights` : "Sprint Insights";
   })();
+  // Sprint-level health verdict used by the right-side breadcrumb chip on the
+  // Sprint Insights surface. Same burndown formula as Sprint Load rows: gap =
+  // remaining − ideal; ≤1d → On Track · 1–4d → Watch · ≥4d → At Risk · sprint
+  // ended with work left → Overdue · 0d → Done. Reads aggregate workload
+  // numbers from `buildSprintAnalytics` so it's consistent with the chart's
+  // own view (incl. the active team filter). Returns null off-surface so the
+  // chip is hidden everywhere else.
+  const sprintInsightsHealth = useMemo<{
+    status: "done" | "overdue" | "atRisk" | "watch" | "onTrack";
+    estTotal: number;
+    daysLeft: number;
+    sprintDaysLeft: number;
+    sprintDaysTotal: number;
+  } | null>(() => {
+    if (monthPlanTab !== "sprint-status") return null;
+    const month = sprintBoardContextMonth ?? activeMonth ?? null;
+    const yearSprintLocal = resolvedActiveYearSprint ?? null;
+    if (month == null || yearSprintLocal == null) return null;
+    const analytics = buildSprintAnalytics(
+      initiatives,
+      month,
+      yearSprintLocal,
+      "daysLeft",
+      currentYear,
+      sprintFilterTeamIds.length ? sprintFilterTeamIds : null,
+    );
+    const estTotal = analytics.workloadByAssignee.reduce((s, r) => s + r.estimatedTotal, 0);
+    const daysLeft = analytics.workloadByAssignee.reduce((s, r) => s + r.daysLeftTotal, 0);
+    const sprintDaysLeft = analytics.workloadSprintCalendarDaysLeft;
+    const sprintDaysTotal = analytics.workloadSprintCalendarDaysTotal;
+    const status: "done" | "overdue" | "atRisk" | "watch" | "onTrack" = (() => {
+      if (estTotal <= 0 || sprintDaysTotal <= 0) return "onTrack";
+      if (daysLeft <= 0) return "done";
+      if (sprintDaysLeft <= 0) return "overdue";
+      const elapsed = Math.min(1, Math.max(0, (sprintDaysTotal - sprintDaysLeft) / sprintDaysTotal));
+      const ideal = estTotal * (1 - elapsed);
+      const gap = daysLeft - ideal;
+      if (gap >= 4) return "atRisk";
+      if (gap >= 1) return "watch";
+      return "onTrack";
+    })();
+    return { status, estTotal, daysLeft, sprintDaysLeft, sprintDaysTotal };
+  }, [monthPlanTab, activeMonth, sprintBoardContextMonth, resolvedActiveYearSprint, initiatives, currentYear, sprintFilterTeamIds]);
   useEffect(() => {
     if (!isSprintTeamMenuOpen) return;
     const handlePointerDown = (event: PointerEvent) => {
@@ -5848,7 +5892,27 @@ export function TimelineGrid({
                       aria-label="Filter sprint views by team"
                       aria-expanded={isSprintTeamMenuOpen}
                     >
-                      <span className="truncate">{sprintFilterTeamLabel}</span>
+                      <span className="inline-flex min-w-0 flex-wrap items-center gap-2">
+                        {sprintFilterTeamIds.length === 0 ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <Users className="size-3.5 shrink-0 text-slate-500" aria-hidden />
+                            <span className="truncate">All Teams</span>
+                          </span>
+                        ) : (
+                          sprintFilterTeamIds.map((id) => {
+                            const label = sprintTeamOptions.find((o) => o.value === id)?.label ?? id;
+                            return (
+                              <span
+                                key={id}
+                                className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0 text-[13px] font-medium text-slate-700 ring-1 ring-slate-200"
+                              >
+                                <TeamAvatar slug={id} sizePx={14} fallback={<Users className="size-3 shrink-0 opacity-70" aria-hidden />} />
+                                <span className="truncate">{label}</span>
+                              </span>
+                            );
+                          })
+                        )}
+                      </span>
                       <ChevronDown className="size-3.5 shrink-0 text-slate-500" aria-hidden />
                     </button>
                     {sprintFilterTeamIds.length > 0 ? (
@@ -6014,7 +6078,27 @@ export function TimelineGrid({
                       aria-label="Filter insights by team"
                       aria-expanded={isInsightsTeamMenuOpen}
                     >
-                      <span className="truncate">{insightsTeamLabel}</span>
+                      <span className="inline-flex min-w-0 flex-wrap items-center gap-2">
+                        {insightsTeamIds.length === 0 ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <Users className="size-3.5 shrink-0 text-slate-500" aria-hidden />
+                            <span className="truncate">All Teams</span>
+                          </span>
+                        ) : (
+                          insightsTeamIds.map((id) => {
+                            const label = sprintTeamOptions.find((o) => o.value === id)?.label ?? id;
+                            return (
+                              <span
+                                key={id}
+                                className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0 text-[13px] font-medium text-slate-700 ring-1 ring-slate-200"
+                              >
+                                <TeamAvatar slug={id} sizePx={14} fallback={<Users className="size-3 shrink-0 opacity-70" aria-hidden />} />
+                                <span className="truncate">{label}</span>
+                              </span>
+                            );
+                          })
+                        )}
+                      </span>
                       <ChevronDown className="size-3.5 shrink-0 text-slate-500" aria-hidden />
                     </button>
                     {insightsTeamIds.length > 0 ? (
@@ -6123,6 +6207,29 @@ export function TimelineGrid({
               hasBreadcrumbs ? "flex-1" : "w-full",
             )}
           >
+              {monthPlanTab === "sprint-status" && resolvedActiveYearSprint != null && sprintInsightsHealth ? (
+                <span className="inline-flex flex-wrap items-center gap-3 sm:gap-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onMonthPlanTabChange?.("sprint-kanban");
+                      setActiveSprintTab("kanban");
+                    }}
+                    title={`Open Sprint ${resolvedActiveYearSprint} Kanban`}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-white px-2.5 py-1.5 text-[13px] font-semibold text-slate-700 ring-1 ring-slate-200 shadow-sm transition hover:bg-rose-50/60 hover:text-rose-700 hover:ring-rose-200"
+                  >
+                    <Flag className="size-3.5 shrink-0 text-rose-500" aria-hidden />
+                    Sprint {resolvedActiveYearSprint}
+                  </button>
+                  <span className="inline-flex items-center">
+                    <HealthBadge
+                      status={sprintInsightsHealth.status}
+                      size="md"
+                      tooltip={`Sprint health · ${sprintInsightsHealth.daysLeft}d left / ${sprintInsightsHealth.estTotal}d est · ${sprintInsightsHealth.sprintDaysLeft}/${sprintInsightsHealth.sprintDaysTotal}d remaining in sprint`}
+                    />
+                  </span>
+                </span>
+              ) : null}
               {sprintKanbanSummaryStats ? (
                 <>
                   {!summaryBarPortalElement ? summarySprintChipsJsx : null}
@@ -7113,7 +7220,27 @@ export function TimelineGrid({
                         aria-label="Filter sprint capacity by team"
                         aria-expanded={isSprintTeamMenuOpen}
                       >
-                        <span className="truncate">{sprintFilterTeamLabel}</span>
+                        <span className="inline-flex min-w-0 flex-wrap items-center gap-2">
+                          {sprintFilterTeamIds.length === 0 ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <Users className="size-3.5 shrink-0 text-slate-500" aria-hidden />
+                              <span className="truncate">All Teams</span>
+                            </span>
+                          ) : (
+                            sprintFilterTeamIds.map((id) => {
+                              const label = sprintTeamOptions.find((o) => o.value === id)?.label ?? id;
+                              return (
+                                <span
+                                  key={id}
+                                  className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0 text-[12px] font-medium text-slate-700 ring-1 ring-slate-200"
+                                >
+                                  <TeamAvatar slug={id} sizePx={14} fallback={<Users className="size-3 shrink-0 opacity-70" aria-hidden />} />
+                                  <span className="truncate">{label}</span>
+                                </span>
+                              );
+                            })
+                          )}
+                        </span>
                         <ChevronDown className="size-3.5 shrink-0 text-slate-500" aria-hidden />
                       </button>
                       {sprintFilterTeamIds.length > 0 ? (

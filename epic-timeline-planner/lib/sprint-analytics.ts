@@ -93,6 +93,10 @@ export type SprintAnalyticsData = {
   workloadCapacityByAssignee: WorkloadCapacityRow[];
   /** Calendar days remaining in the sprint from today (0 if the sprint has ended). */
   workloadSprintCalendarDaysLeft: number;
+  /** Total calendar-day length of the sprint (independent of "today"). Used for
+   *  burndown-style verdicts (Sprint Load health badge) so consumers can derive
+   *  the elapsed fraction without re-reading the calendar. */
+  workloadSprintCalendarDaysTotal: number;
 };
 
 /** All sprint stories from scheduled initiatives spanning the month — broader scope than Gantt-planned epics only.
@@ -546,8 +550,9 @@ function buildWorkloadCapacityByAssignee(
   capacityBoard?: { capacities: Record<string, number>; assignments: Record<string, string[]> } | null,
   filterEpicTeamIds?: string[] | null,
   directoryUsers?: readonly SprintWorkspaceDirectoryUser[] | null,
-): { workloadCapacityByAssignee: WorkloadCapacityRow[]; workloadSprintCalendarDaysLeft: number } {
+): { workloadCapacityByAssignee: WorkloadCapacityRow[]; workloadSprintCalendarDaysLeft: number; workloadSprintCalendarDaysTotal: number } {
   const workloadSprintCalendarDaysLeft = sprintCalendarDaysRemaining(planYear, month, yearSprint);
+  const workloadSprintCalendarDaysTotal = sprintDayDates(planYear, month, yearSprint).length;
   const sprintStories = stories.filter((story) => storyMatchesYearSprint(story, month, yearSprint));
   const byAssignee = new Map<string, { estimatedTotal: number; daysLeftTotal: number }>();
   for (const story of sprintStories) {
@@ -593,7 +598,7 @@ function buildWorkloadCapacityByAssignee(
           b.daysLeftTotal - a.daysLeftTotal ||
           a.assignee.localeCompare(b.assignee),
       );
-    return { workloadCapacityByAssignee, workloadSprintCalendarDaysLeft };
+    return { workloadCapacityByAssignee, workloadSprintCalendarDaysLeft, workloadSprintCalendarDaysTotal };
   }
 
   const boardStoryRows = collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamIds ?? null);
@@ -671,7 +676,7 @@ function buildWorkloadCapacityByAssignee(
       b.daysLeftTotal - a.daysLeftTotal ||
       a.assignee.localeCompare(b.assignee),
   );
-  return { workloadCapacityByAssignee, workloadSprintCalendarDaysLeft };
+  return { workloadCapacityByAssignee, workloadSprintCalendarDaysLeft, workloadSprintCalendarDaysTotal };
 }
 
 function startOfDay(d: Date): Date {

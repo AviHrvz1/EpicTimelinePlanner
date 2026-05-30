@@ -2,7 +2,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowRight, Check, Flag, GripVertical, Info, Maximize2, Minimize2, Search, User, UserRound, Users, UserX, X } from "lucide-react";
+import { ArrowDown, ArrowRight, Check, Flag, GripVertical, Info, Maximize2, Minimize2, Pin, PinOff, Search, User, UserRound, Users, UserX, X } from "lucide-react";
 import { useDndContext, useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { capacityGaugeFluidStops } from "@/lib/capacity-thermometer";
@@ -1002,6 +1002,10 @@ export function SprintCapacityBoard({
 
   const [selectedAssigneeFilter, setSelectedAssigneeFilter] = useState<string[]>([]);
   const [assigneeFilterExpanded, setAssigneeFilterExpanded] = useState(false);
+  // When the pin is on, the chips above stay expanded even after the cursor
+  // leaves the panel. Click the pin again to return to hover-only expansion.
+  const [assigneeFilterPinned, setAssigneeFilterPinned] = useState(false);
+  const showAssigneeChipsExpanded = assigneeFilterPinned || assigneeFilterExpanded;
 
   useEffect(() => {
     setSelectedAssigneeFilter([]);
@@ -1215,7 +1219,7 @@ export function SprintCapacityBoard({
             People in this sprint
           </p>
           <div
-            className="flex min-w-0 items-center py-0.5"
+            className="flex min-w-0 flex-wrap items-center gap-y-1.5 py-0.5"
             onMouseEnter={() => setAssigneeFilterExpanded(true)}
             onMouseLeave={() => setAssigneeFilterExpanded(false)}
           >
@@ -1234,7 +1238,7 @@ export function SprintCapacityBoard({
             >
               <Users className="size-[15px]" strokeWidth={2.25} aria-hidden />
             </button>
-            {assigneeFilterOptions.map((name, idx) => {
+            {assigneeFilterOptions.map((name) => {
               const on = selectedAssigneeFilter.includes(name);
               const Icon = assigneeFilterCircleIcon(name);
               const isUnassigned = name === "Unassigned";
@@ -1248,39 +1252,82 @@ export function SprintCapacityBoard({
                   aria-pressed={on}
                   onClick={() => toggleCapacityAssigneeFilter(name)}
                   className={cn(
-                    "relative inline-flex h-9 shrink-0 items-center rounded-full text-left text-[11px] font-semibold tracking-[0.02em] ring-1 transition-[margin,transform,background-color,color,box-shadow,width,padding] duration-200",
-                    assigneeFilterExpanded ? "w-auto gap-1.5 px-2.5" : "w-9 justify-center px-0",
+                    "relative inline-flex shrink-0 items-center rounded-full text-left font-semibold tracking-[0.02em] ring-1 transition-[margin,transform,background-color,color,box-shadow,height,width,padding] duration-200",
+                    // Both states render as an ellipse (avatar at the pill's
+                    // left edge + a label on the right) so each chip reads as
+                    // ONE shape. Collapsed = smaller, 2-letter initials.
+                    showAssigneeChipsExpanded
+                      ? "h-9 w-auto gap-1.5 pl-0.5 pr-2.5 text-[11px]"
+                      : "h-7 w-auto gap-1 pl-0.5 pr-2 text-[10.5px]",
                     on
                       ? "bg-violet-600 text-white ring-violet-700"
                       : "bg-white text-slate-800 ring-slate-200 hover:bg-slate-50",
                   )}
                   title={name}
-                  style={{
-                    marginLeft: assigneeFilterExpanded ? 6 : -12,
-                    zIndex: assigneeFilterExpanded ? 10 : 10 - Math.min(idx, 9),
-                  }}
+                  style={{ marginLeft: 4, zIndex: 10 }}
                 >
-                  {/* Collapsed: show photo / initials inside the circle.
-                      Expanded: small avatar + the full name. */}
                   {isUnassigned ? (
                     <Icon className="size-[15px] shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
-                  ) : !assigneeFilterExpanded ? (
-                    resolved.image ? (
-                      <UserAvatar name={resolved.name} image={resolved.image} size={32} className="ring-0" />
-                    ) : (
-                      <span>{assigneeFilterBadgeLabel(name)}</span>
-                    )
                   ) : (
-                    <UserAvatar name={resolved.name} image={resolved.image} size={22} className="ring-0" />
+                    <UserAvatar
+                      name={resolved.name}
+                      image={resolved.image}
+                      size={showAssigneeChipsExpanded ? 28 : 22}
+                      className="ring-0"
+                    />
                   )}
-                  {assigneeFilterExpanded ? (
-                    <span className="max-w-[12rem] truncate text-[12px]">
-                      {isUnassigned ? name : formatAssigneeShortLabel(name)}
-                    </span>
-                  ) : null}
+                  <span className="max-w-[12rem] truncate">
+                    {isUnassigned
+                      ? name
+                      : showAssigneeChipsExpanded
+                        ? formatAssigneeShortLabel(name)
+                        : assigneeFilterBadgeLabel(name)}
+                  </span>
                 </button>
               );
             })}
+            {/* Clear-all selections: only when something is selected. */}
+            {selectedAssigneeFilter.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setSelectedAssigneeFilter([])}
+                onMouseEnter={(event) => event.stopPropagation()}
+                title="Clear all selected assignees"
+                aria-label="Clear all selected assignees"
+                style={{ marginLeft: 6 }}
+                className="relative z-20 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-slate-600 ring-1 ring-slate-200 transition hover:bg-rose-50 hover:text-rose-600 hover:ring-rose-200"
+              >
+                <X className="size-4 shrink-0" strokeWidth={2.25} aria-hidden />
+              </button>
+            ) : null}
+            {/* Pin toggle: lock the expanded state on. Clicking to unpin
+             *  collapses immediately even with the cursor still hovering. */}
+            <button
+              type="button"
+              aria-pressed={assigneeFilterPinned}
+              title={assigneeFilterPinned ? "Unpin — collapse now" : "Pin — keep expanded"}
+              aria-label={assigneeFilterPinned ? "Unpin assignee chips" : "Pin assignee chips open"}
+              onClick={() => {
+                setAssigneeFilterPinned((v) => {
+                  if (v) setAssigneeFilterExpanded(false);
+                  return !v;
+                });
+              }}
+              onMouseEnter={(event) => event.stopPropagation()}
+              style={{ marginLeft: 6 }}
+              className={cn(
+                "relative z-20 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold ring-1 transition",
+                assigneeFilterPinned
+                  ? "bg-amber-500 text-white ring-amber-600"
+                  : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-100",
+              )}
+            >
+              {assigneeFilterPinned ? (
+                <Pin className="size-4 shrink-0 -rotate-45" strokeWidth={2.25} aria-hidden />
+              ) : (
+                <PinOff className="size-4 shrink-0" strokeWidth={2.25} aria-hidden />
+              )}
+            </button>
           </div>
         </div>
       ) : null}

@@ -1,7 +1,12 @@
 "use client";
 
 import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, AlertTriangle, ArrowLeft, CalendarDays, ChartNoAxesCombined, CheckCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Layers, ListTodo, PieChart as PieChartIcon, PlayCircle, User, UserRound, Users } from "lucide-react";
+import { Activity, AlertOctagon, AlertTriangle, CalendarDays, ChartNoAxesCombined, CheckCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Folder, Layers, ListTodo, PieChart as PieChartIcon, PlayCircle, User, UserRound, Users } from "lucide-react";
+import { createPortal } from "react-dom";
+import { HealthBadge } from "@/components/timeline/health-badge";
+import { InsightsDrilldownModal } from "@/components/timeline/insights-drilldown-modal";
+import { DrilldownFilterDropdown, DrilldownFilterInputText } from "@/components/timeline/insights-drilldown-filters";
+import type { HealthStatus } from "@/lib/progress";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { TeamAvatar } from "@/components/ui/team-avatar";
 import { useTeamImages } from "@/lib/use-team-images";
@@ -90,6 +95,256 @@ function StoryStatusPill({ status }: { status: StoryStatusPillValue }) {
     <span className="inline-flex items-center gap-1.5 font-semibold">
       <Icon className={cn("size-3.5 shrink-0", meta.color)} aria-hidden />
       <span className="truncate text-slate-700">{meta.label}</span>
+    </span>
+  );
+}
+
+/**
+ * Burndown-based health verdict for a single Sprint Load row (user OR team).
+ * Same vocabulary + thresholds as Month Team Progress so the two surfaces
+ * read identically: Done · Overdue · At Risk (≥4d above ideal) · Watch (1–4d
+ * above ideal) · On Track (otherwise).
+ *
+ * "Ideal" interpolates linearly from `estTotal` at sprint start to `0` at
+ * sprint end, so `idealLeft = estTotal × (1 − elapsed)`. `gap = daysLeft −
+ * idealLeft`; positive means the row is behind the ideal pace line.
+ */
+function sprintBurndownVerdict({
+  daysLeft,
+  estTotal,
+  sprintDaysLeft,
+  sprintDaysTotal,
+}: {
+  daysLeft: number;
+  estTotal: number;
+  sprintDaysLeft: number;
+  sprintDaysTotal: number;
+}): { status: HealthStatus; gap: number; idealLeft: number } {
+  if (estTotal <= 0 || sprintDaysTotal <= 0) {
+    return { status: "onTrack", gap: 0, idealLeft: 0 };
+  }
+  if (daysLeft <= 0) return { status: "done", gap: 0, idealLeft: 0 };
+  if (sprintDaysLeft <= 0) return { status: "overdue", gap: daysLeft, idealLeft: 0 };
+  const elapsed = Math.min(1, Math.max(0, (sprintDaysTotal - sprintDaysLeft) / sprintDaysTotal));
+  const idealLeft = estTotal * (1 - elapsed);
+  const gap = daysLeft - idealLeft;
+  if (gap >= 4) return { status: "atRisk", gap, idealLeft };
+  if (gap >= 1) return { status: "watch", gap, idealLeft };
+  return { status: "onTrack", gap, idealLeft };
+}
+
+/** Lean shape consumed by `sprintStoryVerdict` / `SprintLoadHealthBadge` —
+ *  matches what the local `sprintStories` projection carries. */
+type SprintLoadStoryProjection = {
+  id: string;
+  title: string;
+  estimatedDays: number | null;
+  daysLeft: number | null;
+  statusKey: UserStoryItem["status"] | null;
+};
+
+/** Per-story version of `sprintBurndownVerdict` — buckets a single story's
+ *  remaining work against an ideal sprint burndown so we can list flagged
+ *  stories in the Sprint Load badge popover. Stories that are done or have
+ *  no estimate are reported as `onTrack` so the popover skips them. */
+function sprintStoryVerdict(
+  story: SprintLoadStoryProjection,
+  sprintDaysLeft: number,
+  sprintDaysTotal: number,
+): { status: HealthStatus; gap: number } {
+  const est = Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
+  const left = Math.max(0, story.daysLeft ?? est);
+  if (left <= 0 || story.statusKey === "done" || story.statusKey === "approved") {
+    return { status: "done", gap: 0 };
+  }
+  if (est <= 0 || sprintDaysTotal <= 0) return { status: "onTrack", gap: 0 };
+  if (sprintDaysLeft <= 0) return { status: "overdue", gap: left };
+  const elapsed = Math.min(1, Math.max(0, (sprintDaysTotal - sprintDaysLeft) / sprintDaysTotal));
+  const ideal = est * (1 - elapsed);
+  const gap = left - ideal;
+  if (gap >= 4) return { status: "atRisk", gap };
+  if (gap >= 1) return { status: "watch", gap };
+  return { status: "onTrack", gap };
+}
+
+type FlaggedStoryEntry = {
+  story: SprintLoadStoryProjection;
+  gap: number;
+};
+
+/**
+ * Sprint Load health badge — sibling of `TeamHealthBadgeWithList` (used by
+ * Month Team Progress), but the popover lists *stories* (sprint-scoped)
+ * instead of epics. Clicking a flagged story title opens the story dialog.
+ * Click-outside / Escape closes. Portaled to escape overflow:hidden ancestors
+ * exactly like the month variant.
+ */
+function SprintLoadHealthBadge({
+  status,
+  rowLabel,
+  atRiskStories,
+  watchStories,
+  overdueStories,
+  sprintLabel,
+  onOpenStory,
+}: {
+  status: HealthStatus;
+  rowLabel: string;
+  atRiskStories: FlaggedStoryEntry[];
+  watchStories: FlaggedStoryEntry[];
+  overdueStories: FlaggedStoryEntry[];
+  sprintLabel?: string;
+  onOpenStory?: (storyId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLSpanElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ left: number; bottom: number } | null>(null);
+  useEffect(() => {
+    if (!open) {
+      setPos(null);
+      return;
+    }
+    const place = () => {
+      const el = wrapRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const popW = 384;
+      const right = Math.min(window.innerWidth - 8, r.right);
+      const left = Math.max(8, right - popW);
+      const bottom = Math.max(8, window.innerHeight - r.top + 6);
+      setPos({ left, bottom });
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      const t = e.target as Node | null;
+      if (wrapRef.current?.contains(t)) return;
+      if (popoverRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const verdict =
+    status === "overdue" ? "Overdue"
+    : status === "atRisk" ? "At Risk"
+    : status === "watch" ? "Watch"
+    : status === "done" ? "Done"
+    : "On Track";
+  const tipLines: string[] = [`${rowLabel} — ${verdict}`, "Click for details."];
+  const flagged = overdueStories.length + atRiskStories.length + watchStories.length;
+
+  return (
+    <span
+      ref={wrapRef}
+      className="relative inline-flex cursor-pointer"
+      onClick={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        setOpen((v) => !v);
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }
+      }}
+      aria-haspopup="dialog"
+      aria-expanded={open}
+    >
+      <HealthBadge status={status} tooltip={tipLines.join("\n")} />
+      {open && pos && typeof document !== "undefined" ? createPortal(
+        <div
+          ref={popoverRef}
+          role="dialog"
+          aria-label={`${rowLabel} — ${verdict} details`}
+          style={{ position: "fixed", left: pos.left, bottom: pos.bottom, zIndex: 1000 }}
+          className="w-96 max-w-[calc(100vw-2rem)] rounded-lg border border-slate-200 bg-white p-3.5 text-left text-slate-800 shadow-xl"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <p className="mb-2 inline-flex w-full items-center justify-between text-[12.5px] font-bold uppercase tracking-wide text-slate-500">
+            <span>{rowLabel} · {verdict}{sprintLabel ? ` · ${sprintLabel}` : ""}</span>
+            {flagged > 0 ? <span className="text-[12px] font-semibold normal-case tracking-normal text-slate-400">{flagged} flagged</span> : null}
+          </p>
+          {(() => {
+            const fmtGap = (g: number) => `${g >= 0 ? "+" : "−"}${(Math.round(Math.abs(g) * 10) / 10).toFixed(1)}d`;
+            const reasonFor = (entry: FlaggedStoryEntry, kind: "overdue" | "atRisk" | "watch") => {
+              const left = Math.max(0, entry.story.daysLeft ?? entry.story.estimatedDays ?? 0);
+              if (kind === "overdue") return `${left}d still open · sprint ended`;
+              return `${left}d left · ${fmtGap(entry.gap)} vs ideal`;
+            };
+            const renderList = (
+              kind: "overdue" | "atRisk" | "watch",
+              entries: FlaggedStoryEntry[],
+              titleClass: string,
+              heading: string,
+            ) => {
+              const warnIcon = kind === "overdue"
+                ? { Icon: AlertOctagon, className: "text-rose-700" }
+                : kind === "atRisk"
+                  ? { Icon: AlertTriangle, className: "text-rose-600" }
+                  : { Icon: AlertTriangle, className: "text-amber-600" };
+              const WarnIcon = warnIcon.Icon;
+              return entries.length === 0 ? null : (
+                <div className="mb-2.5">
+                  <p className={cn("text-[13px] font-semibold", titleClass)}>{heading} ({entries.length})</p>
+                  <ul className="mt-1.5 space-y-1.5">
+                    {entries.map((e) => (
+                      <li key={e.story.id} className="leading-snug">
+                        <button
+                          type="button"
+                          onClick={() => { onOpenStory?.(e.story.id); setOpen(false); }}
+                          className="inline-flex w-full items-center gap-1.5 text-left text-[13.5px] font-medium text-blue-700 underline-offset-2 hover:underline"
+                        >
+                          <UserStoryIcon className="size-3.5 shrink-0 text-sky-500" aria-hidden />
+                          <span className="min-w-0 truncate">{e.story.title}</span>
+                          <WarnIcon className={cn("size-3.5 shrink-0", warnIcon.className)} aria-hidden />
+                        </button>
+                        <p className="truncate text-[12px] tabular-nums text-slate-500">{reasonFor(e, kind)}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            };
+            return (
+              <>
+                {renderList("overdue", overdueStories, "text-rose-900", "Overdue — sprint ended")}
+                {renderList("atRisk", atRiskStories, "text-rose-800", "At Risk — ≥4d above ideal")}
+                {renderList("watch", watchStories, "text-amber-800", "Watch — 1–4d above ideal")}
+              </>
+            );
+          })()}
+          {flagged === 0 ? (
+            <p className="text-[13px] text-slate-500">No flagged stories — everything is on or ahead of pace.</p>
+          ) : null}
+          <div className="mt-2 border-t border-slate-100 pt-2.5 text-[12.5px] leading-snug text-slate-500">
+            <p className="mb-1"><span className="font-semibold text-slate-600">How we score:</span> at each point in the sprint we compare each story&apos;s remaining work to its ideal linear burndown — Δ = remaining − ideal.</p>
+            <p>≤ 1d → On Track · 1–4d → Watch · ≥ 4d → At Risk · sprint ended with work left → Overdue.</p>
+          </div>
+        </div>,
+        document.body,
+      ) : null}
     </span>
   );
 }
@@ -339,6 +594,18 @@ export function SprintAnalytics({
   const [workloadDrilldownIsTeam, setWorkloadDrilldownIsTeam] = useState(false);
   const [sprintLoadDrilldownAssignee, setSprintLoadDrilldownAssignee] = useState<string | null>(null);
   const [sprintLoadDrilldownIsTeam, setSprintLoadDrilldownIsTeam] = useState(false);
+  // Per-column filter state for the three drilldown modal tables. The text
+  // input filters by substring (title); the dropdowns filter by exact match
+  // on the visible label of the column. Cleared when the underlying drilldown
+  // changes so re-opening starts fresh.
+  type SprintDrilldownColFilter = { title: string; team: string | null; sprint: string | null; assignee: string | null; status: string | null };
+  const EMPTY_SPRINT_DRILLDOWN_FILTER: SprintDrilldownColFilter = { title: "", team: null, sprint: null, assignee: null, status: null };
+  const [statusDrilldownColFilter, setStatusDrilldownColFilter] = useState<SprintDrilldownColFilter>(EMPTY_SPRINT_DRILLDOWN_FILTER);
+  const [workloadDrilldownColFilter, setWorkloadDrilldownColFilter] = useState<SprintDrilldownColFilter>(EMPTY_SPRINT_DRILLDOWN_FILTER);
+  const [sprintLoadDrilldownColFilter, setSprintLoadDrilldownColFilter] = useState<SprintDrilldownColFilter>(EMPTY_SPRINT_DRILLDOWN_FILTER);
+  useEffect(() => { setStatusDrilldownColFilter(EMPTY_SPRINT_DRILLDOWN_FILTER); }, [statusDrilldownFilter]);
+  useEffect(() => { setWorkloadDrilldownColFilter(EMPTY_SPRINT_DRILLDOWN_FILTER); }, [workloadDrilldownAssignee, workloadDrilldownIsTeam]);
+  useEffect(() => { setSprintLoadDrilldownColFilter(EMPTY_SPRINT_DRILLDOWN_FILTER); }, [sprintLoadDrilldownAssignee, sprintLoadDrilldownIsTeam]);
   const [sprintTimelinePopupOpen, setSprintTimelinePopupOpen] = useState(false);
   const analytics = useMemo(
     () =>
@@ -471,6 +738,11 @@ export function SprintAnalytics({
       team: string;
       sprint: number | null;
       status: "Unscheduled" | "To do" | "In progress" | "Done" | "Approved";
+      /** Raw enum (`todo|inProgress|done|approved`) preserved alongside the display label so
+       *  burndown-style verdict helpers don't have to reverse-map the friendly string. */
+      statusKey: UserStoryItem["status"] | null;
+      estimatedDays: number | null;
+      daysLeft: number | null;
     }> = [];
     for (const { epic } of scopeEpics) {
       const epicTeamInFilter =
@@ -500,23 +772,62 @@ export function SprintAnalytics({
                   : story.status === "done"
                     ? "Done"
                     : "Approved",
+          statusKey: story.sprint == null ? null : story.status,
+          estimatedDays: story.estimatedDays ?? null,
+          daysLeft: story.daysLeft ?? null,
         });
       }
     }
     return rows;
   }, [initiatives, month, yearSprint, filterEpicTeamIds, workspaceDirectoryUsers]);
 
-  const statusDrilldownStories = useMemo(() => {
+  // Pre-column-filter pools. The "Raw" rows drive the unique-value pickers in
+  // each column header so removing a filter restores all options; the final
+  // `*Stories` memos below apply `*ColFilter` on top of these.
+  const statusDrilldownStoriesRaw = useMemo(() => {
     if (!statusDrilldownFilter) return [];
     if (statusDrilldownFilter === "All") return sprintStories;
     return sprintStories.filter((story) => story.status === statusDrilldownFilter);
   }, [statusDrilldownFilter, sprintStories]);
 
-  const workloadDrilldownStories = useMemo(() => {
+  const workloadDrilldownStoriesRaw = useMemo(() => {
     if (!workloadDrilldownAssignee) return [];
     if (workloadDrilldownIsTeam) return sprintStories.filter((story) => story.team === workloadDrilldownAssignee);
     return sprintStories.filter((story) => story.assignee === workloadDrilldownAssignee);
   }, [workloadDrilldownAssignee, workloadDrilldownIsTeam, sprintStories]);
+
+  function applyDrilldownColFilter(
+    rows: typeof sprintStories,
+    f: SprintDrilldownColFilter,
+    yearSprintCtx: number,
+  ): typeof sprintStories {
+    return rows.filter((s) => {
+      if (f.title && !s.title.toLowerCase().includes(f.title.toLowerCase())) return false;
+      if (f.team != null) {
+        const label = monthTeamLabelForId(s.team) ?? (s.team || "—");
+        if (label !== f.team) return false;
+      }
+      if (f.sprint != null) {
+        const label = s.sprint == null ? "Unscheduled" : `Sprint ${yearSprintCtx}`;
+        if (label !== f.sprint) return false;
+      }
+      if (f.assignee != null) {
+        const label = s.assignee?.trim() || "Unassigned";
+        if (label !== f.assignee) return false;
+      }
+      if (f.status != null && s.status !== f.status) return false;
+      return true;
+    });
+  }
+
+  const statusDrilldownStories = useMemo(
+    () => applyDrilldownColFilter(statusDrilldownStoriesRaw, statusDrilldownColFilter, yearSprint),
+    [statusDrilldownStoriesRaw, statusDrilldownColFilter, yearSprint],
+  );
+  const workloadDrilldownStories = useMemo(
+    () => applyDrilldownColFilter(workloadDrilldownStoriesRaw, workloadDrilldownColFilter, yearSprint),
+    [workloadDrilldownStoriesRaw, workloadDrilldownColFilter, yearSprint],
+  );
   const sprintStoryDisplayIds = useMemo(() => {
     const allStories = initiatives
       .flatMap((initiative) => initiative.epics ?? [])
@@ -568,11 +879,15 @@ export function SprintAnalytics({
     updateArrowState(workloadDrilldownScrollRef, setCanScrollWorkloadUp, setCanScrollWorkloadDown);
   }, [workloadDrilldownStories.length, workloadDrilldownAssignee]);
 
-  const sprintLoadDrilldownStories = useMemo(() => {
+  const sprintLoadDrilldownStoriesRaw = useMemo(() => {
     if (!sprintLoadDrilldownAssignee) return [];
     if (sprintLoadDrilldownIsTeam) return sprintStories.filter((story) => story.team === sprintLoadDrilldownAssignee);
     return sprintStories.filter((story) => story.assignee === sprintLoadDrilldownAssignee);
   }, [sprintLoadDrilldownAssignee, sprintLoadDrilldownIsTeam, sprintStories]);
+  const sprintLoadDrilldownStories = useMemo(
+    () => applyDrilldownColFilter(sprintLoadDrilldownStoriesRaw, sprintLoadDrilldownColFilter, yearSprint),
+    [sprintLoadDrilldownStoriesRaw, sprintLoadDrilldownColFilter, yearSprint],
+  );
 
   useEffect(() => {
     updateArrowState(sprintLoadScrollRef, setCanScrollSprintLoadUp, setCanScrollSprintLoadDown);
@@ -601,20 +916,14 @@ export function SprintAnalytics({
             <PieChartIcon className="size-4 text-slate-600" />
             User Stories Status
           </h3>
-          {statusDrilldownFilter ? (
-            <button
-              type="button"
-              onClick={() => setStatusDrilldownFilter(null)}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              aria-label="Back to chart"
-              title="Back to chart"
-            >
-              <ArrowLeft className="size-3.5" aria-hidden />
-            </button>
-          ) : null}
         </div>
         {statusDrilldownFilter ? (
-          <div className="relative mt-1 flex-1 min-h-0 rounded-none bg-white/80 p-2">
+          <InsightsDrilldownModal
+            title={`User Stories Status · ${statusDrilldownFilter}`}
+            icon={<PieChartIcon className="size-4 text-slate-600" aria-hidden />}
+            onClose={() => setStatusDrilldownFilter(null)}
+          >
+          <div className="relative h-full min-h-0 bg-white/80">
             <div className="relative h-full min-h-0">
               <div
                 ref={statusDrilldownScrollRef}
@@ -630,6 +939,43 @@ export function SprintAnalytics({
                       <th className="px-2 py-1.5 text-[14px] font-bold">Sprint</th>
                       <th className="px-2 py-1.5 text-[14px] font-bold">Assignee</th>
                       <th className="px-2 py-1.5 text-[14px] font-bold">Status</th>
+                    </tr>
+                    <tr className="bg-white/95">
+                      <th className="px-1 py-0.5" />
+                      <th className="px-1 py-0.5">
+                        <DrilldownFilterInputText
+                          value={statusDrilldownColFilter.title}
+                          onChange={(v) => setStatusDrilldownColFilter((p) => ({ ...p, title: v }))}
+                          ariaLabel="Filter status drilldown by story name"
+                        />
+                      </th>
+                      <th className="px-1 py-0.5">
+                        <DrilldownFilterDropdown
+                          value={statusDrilldownColFilter.sprint}
+                          options={Array.from(new Set(statusDrilldownStoriesRaw.map((s) => s.sprint == null ? "Unscheduled" : `Sprint ${yearSprint}`))).sort()}
+                          renderOption={(v) => <span className="truncate">{v}</span>}
+                          onChange={(v) => setStatusDrilldownColFilter((p) => ({ ...p, sprint: v }))}
+                          ariaLabel="Filter status drilldown by sprint"
+                        />
+                      </th>
+                      <th className="px-1 py-0.5">
+                        <DrilldownFilterDropdown
+                          value={statusDrilldownColFilter.assignee}
+                          options={Array.from(new Set(statusDrilldownStoriesRaw.map((s) => s.assignee?.trim() || "Unassigned"))).filter(Boolean).sort()}
+                          renderOption={(v) => <span className="truncate">{v}</span>}
+                          onChange={(v) => setStatusDrilldownColFilter((p) => ({ ...p, assignee: v }))}
+                          ariaLabel="Filter status drilldown by assignee"
+                        />
+                      </th>
+                      <th className="px-1 py-0.5">
+                        <DrilldownFilterDropdown
+                          value={statusDrilldownColFilter.status}
+                          options={Array.from(new Set(statusDrilldownStoriesRaw.map((s) => s.status))).sort()}
+                          renderOption={(v) => <span className="truncate">{v}</span>}
+                          onChange={(v) => setStatusDrilldownColFilter((p) => ({ ...p, status: v }))}
+                          ariaLabel="Filter status drilldown by status"
+                        />
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -691,7 +1037,8 @@ export function SprintAnalytics({
               </button>
             </div>
           </div>
-        ) : (
+          </InsightsDrilldownModal>
+        ) : null}
         <div className="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
           <div className={`relative ${SPRINT_STATUS_PIE_BOX}`}>
             <div className="absolute inset-0">
@@ -767,7 +1114,6 @@ export function SprintAnalytics({
             })}
           </div>
         </div>
-        )}
       </article>
 
       <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:h-full lg:pl-4">
@@ -901,20 +1247,14 @@ export function SprintAnalytics({
             <ChartNoAxesCombined className="size-4 text-slate-600" />
             Workload Balance
           </h3>
-          {workloadDrilldownAssignee ? (
-            <button
-              type="button"
-              onClick={() => { setWorkloadDrilldownAssignee(null); setWorkloadDrilldownIsTeam(false); }}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              aria-label="Back to workload chart"
-              title="Back to workload chart"
-            >
-              <ArrowLeft className="size-3.5" aria-hidden />
-            </button>
-          ) : null}
         </div>
         {workloadDrilldownAssignee ? (
-          <div className="mt-0 flex-1 min-h-0 rounded-none border border-slate-200/80 bg-white/80 p-2">
+          <InsightsDrilldownModal
+            title={`Workload Balance · ${workloadDrilldownAssignee}`}
+            icon={<ChartNoAxesCombined className="size-4 text-slate-600" aria-hidden />}
+            onClose={() => { setWorkloadDrilldownAssignee(null); setWorkloadDrilldownIsTeam(false); }}
+          >
+          <div className="h-full bg-white/80">
             <div className="relative h-full min-h-0">
               <div
                 ref={workloadDrilldownScrollRef}
@@ -931,6 +1271,52 @@ export function SprintAnalytics({
                       <th className="px-2 py-1 text-[14px] font-semibold">Sprint</th>
                       <th className="px-2 py-1 text-[14px] font-semibold">Assignee</th>
                       <th className="px-2 py-1 text-[14px] font-semibold">Status</th>
+                    </tr>
+                    <tr className="bg-white/95">
+                      <th className="px-1 py-0.5" />
+                      <th className="px-1 py-0.5">
+                        <DrilldownFilterInputText
+                          value={workloadDrilldownColFilter.title}
+                          onChange={(v) => setWorkloadDrilldownColFilter((p) => ({ ...p, title: v }))}
+                          ariaLabel="Filter workload by story name"
+                        />
+                      </th>
+                      <th className="px-1 py-0.5">
+                        <DrilldownFilterDropdown
+                          value={workloadDrilldownColFilter.team}
+                          options={Array.from(new Set(workloadDrilldownStoriesRaw.map((s) => monthTeamLabelForId(s.team) ?? (s.team || "—")))).sort()}
+                          renderOption={(v) => <span className="truncate">{v}</span>}
+                          onChange={(v) => setWorkloadDrilldownColFilter((p) => ({ ...p, team: v }))}
+                          ariaLabel="Filter workload by team"
+                        />
+                      </th>
+                      <th className="px-1 py-0.5">
+                        <DrilldownFilterDropdown
+                          value={workloadDrilldownColFilter.sprint}
+                          options={Array.from(new Set(workloadDrilldownStoriesRaw.map((s) => s.sprint == null ? "Unscheduled" : `Sprint ${yearSprint}`))).sort()}
+                          renderOption={(v) => <span className="truncate">{v}</span>}
+                          onChange={(v) => setWorkloadDrilldownColFilter((p) => ({ ...p, sprint: v }))}
+                          ariaLabel="Filter workload by sprint"
+                        />
+                      </th>
+                      <th className="px-1 py-0.5">
+                        <DrilldownFilterDropdown
+                          value={workloadDrilldownColFilter.assignee}
+                          options={Array.from(new Set(workloadDrilldownStoriesRaw.map((s) => s.assignee?.trim() || "Unassigned"))).filter(Boolean).sort()}
+                          renderOption={(v) => <span className="truncate">{v}</span>}
+                          onChange={(v) => setWorkloadDrilldownColFilter((p) => ({ ...p, assignee: v }))}
+                          ariaLabel="Filter workload by assignee"
+                        />
+                      </th>
+                      <th className="px-1 py-0.5">
+                        <DrilldownFilterDropdown
+                          value={workloadDrilldownColFilter.status}
+                          options={Array.from(new Set(workloadDrilldownStoriesRaw.map((s) => s.status))).sort()}
+                          renderOption={(v) => <span className="truncate">{v}</span>}
+                          onChange={(v) => setWorkloadDrilldownColFilter((p) => ({ ...p, status: v }))}
+                          ariaLabel="Filter workload by status"
+                        />
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -986,9 +1372,9 @@ export function SprintAnalytics({
               </button>
             </div>
           </div>
+          </InsightsDrilldownModal>
         ) : null}
-        {!workloadDrilldownAssignee ? (
-          <div className="min-h-0 flex-1 overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-hidden">
             {(() => {
               const teamMode = !filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1;
               const barData = teamMode
@@ -1094,8 +1480,7 @@ export function SprintAnalytics({
                 </div>
               );
             })()}
-          </div>
-        ) : null}
+        </div>
       </article>
 
       <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:h-full lg:pl-4">
@@ -1270,6 +1655,8 @@ export function SprintAnalytics({
                     image: null as string | null,
                     daysLeft: metric === "storyCount" ? t.openCount : t.daysLeftTotal,
                     estTotal: metric === "storyCount" ? totalStories : t.estimatedTotal,
+                    isTeam: true,
+                    matchKey: (t.teamId ?? "") as string,
                     onRowClick: () => { setSprintLoadDrilldownIsTeam(true); setSprintLoadDrilldownAssignee(t.teamId ?? ""); },
                   };
                 })
@@ -1286,9 +1673,12 @@ export function SprintAnalytics({
                     image: resolved.image,
                     daysLeft: metric === "storyCount" ? row.openCount : row.daysLeftTotal,
                     estTotal: metric === "storyCount" ? totalStories : row.estimatedTotal,
+                    isTeam: false,
+                    matchKey: row.assignee,
                     onRowClick: () => { setSprintLoadDrilldownIsTeam(false); setSprintLoadDrilldownAssignee(row.assignee); },
                   };
                 });
+            const sprintDaysTotal = analytics.workloadSprintCalendarDaysTotal;
             const loadUnit = metric === "storyCount" ? "" : "d";
             if (loadRows.length === 0 && !sprintLoadDrilldownAssignee) return <div className="hidden lg:block lg:col-span-1" />;
             return (
@@ -1299,63 +1689,53 @@ export function SprintAnalytics({
                     Sprint Load
                   </h3>
                   <div className="flex items-center gap-2">
-                    {!sprintLoadDrilldownAssignee && (
-                      <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
-                        <button
-                          type="button"
-                          onClick={() => setMetric("daysLeft")}
-                          className={`rounded-md px-2 py-0 text-[12px] font-medium ${metric === "daysLeft" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"}`}
-                        >
-                          Est Days Left
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setMetric("storyCount")}
-                          className={`rounded-md px-2 py-0 text-[12px] font-medium ${metric === "storyCount" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"}`}
-                        >
-                          Stories
-                        </button>
-                      </div>
-                    )}
-                    {sprintLoadDrilldownAssignee ? (
+                    <div className="inline-flex shrink-0 rounded-lg bg-slate-100 p-0.5 ring-1 ring-slate-200">
                       <button
                         type="button"
-                        onClick={() => { setSprintLoadDrilldownAssignee(null); setSprintLoadDrilldownIsTeam(false); }}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                        aria-label="Back to sprint load"
-                        title="Back to sprint load"
+                        onClick={() => setMetric("daysLeft")}
+                        className={`rounded-md px-2 py-0 text-[12px] font-medium ${metric === "daysLeft" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"}`}
                       >
-                        <ArrowLeft className="size-3.5" aria-hidden />
+                        Est Days Left
                       </button>
-                    ) : null}
+                      <button
+                        type="button"
+                        onClick={() => setMetric("storyCount")}
+                        className={`rounded-md px-2 py-0 text-[12px] font-medium ${metric === "storyCount" ? "bg-white text-slate-900 ring-1 ring-slate-300" : "text-slate-600"}`}
+                      >
+                        Stories
+                      </button>
+                    </div>
                   </div>
                 </div>
-                {!sprintLoadDrilldownAssignee && (
-                  <button
-                    type="button"
-                    onClick={() => setSprintTimelinePopupOpen(true)}
-                    title="View sprint timeline"
-                    className={cn(
-                      "group/sprint-end mb-1.5 inline-flex w-fit shrink-0 cursor-pointer items-center gap-1.5 px-1 py-1 text-left text-[12px] font-semibold transition-colors",
-                      sprintEnded
-                        ? "text-rose-700 hover:text-rose-900"
-                        : sprintDaysLeft <= 2
-                          ? "text-amber-800 hover:text-amber-900"
-                          : "text-slate-600 hover:text-indigo-700",
-                    )}
-                  >
-                    <CalendarDays className="size-3.5 shrink-0" aria-hidden />
-                    <span className="underline decoration-dotted underline-offset-[3px] decoration-current/40 group-hover/sprint-end:decoration-current">
-                      {sprintEnded ? "Sprint has ended" : `Sprint ends in ${sprintDaysLeft} ${sprintDaysLeft === 1 ? "Day" : "Days"}`}
-                    </span>
-                    <ChevronRight className="size-3 shrink-0 opacity-50 transition-all group-hover/sprint-end:translate-x-0.5 group-hover/sprint-end:opacity-100" aria-hidden />
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setSprintTimelinePopupOpen(true)}
+                  title="View sprint timeline"
+                  className={cn(
+                    "group/sprint-end mb-1.5 inline-flex w-fit shrink-0 cursor-pointer items-center gap-1.5 px-1 py-1 text-left text-[12px] font-semibold transition-colors",
+                    sprintEnded
+                      ? "text-rose-700 hover:text-rose-900"
+                      : sprintDaysLeft <= 2
+                        ? "text-amber-800 hover:text-amber-900"
+                        : "text-slate-600 hover:text-indigo-700",
+                  )}
+                >
+                  <CalendarDays className="size-3.5 shrink-0" aria-hidden />
+                  <span className="underline decoration-dotted underline-offset-[3px] decoration-current/40 group-hover/sprint-end:decoration-current">
+                    {sprintEnded ? "Sprint has ended" : `Sprint ends in ${sprintDaysLeft} ${sprintDaysLeft === 1 ? "Day" : "Days"}`}
+                  </span>
+                  <ChevronRight className="size-3 shrink-0 opacity-50 transition-all group-hover/sprint-end:translate-x-0.5 group-hover/sprint-end:opacity-100" aria-hidden />
+                </button>
                 {sprintTimelinePopupOpen && (
                   <SprintTimelinePopup planYear={planYear} yearSprint={yearSprint} onClose={() => setSprintTimelinePopupOpen(false)} />
                 )}
                 {sprintLoadDrilldownAssignee ? (
-                  <div className="mt-0 flex-1 min-h-0 rounded-none border border-slate-200/80 bg-white/80 p-2">
+                  <InsightsDrilldownModal
+                    title={`Sprint Load · ${sprintLoadDrilldownAssignee}`}
+                    icon={<Users className="size-4 text-slate-600" aria-hidden />}
+                    onClose={() => { setSprintLoadDrilldownAssignee(null); setSprintLoadDrilldownIsTeam(false); }}
+                  >
+                  <div className="h-full bg-white/80">
                     <div className="relative h-full min-h-0">
                       <div
                         ref={sprintLoadDrilldownScrollRef}
@@ -1372,6 +1752,52 @@ export function SprintAnalytics({
                               <th className="px-2 py-1 text-[14px] font-semibold">Sprint</th>
                               <th className="px-2 py-1 text-[14px] font-semibold">Assignee</th>
                               <th className="px-2 py-1 text-[14px] font-semibold">Status</th>
+                            </tr>
+                            <tr className="bg-white/95">
+                              <th className="px-1 py-0.5" />
+                              <th className="px-1 py-0.5">
+                                <DrilldownFilterInputText
+                                  value={sprintLoadDrilldownColFilter.title}
+                                  onChange={(v) => setSprintLoadDrilldownColFilter((p) => ({ ...p, title: v }))}
+                                  ariaLabel="Filter sprint load by story name"
+                                />
+                              </th>
+                              <th className="px-1 py-0.5">
+                                <DrilldownFilterDropdown
+                                  value={sprintLoadDrilldownColFilter.team}
+                                  options={Array.from(new Set(sprintLoadDrilldownStoriesRaw.map((s) => monthTeamLabelForId(s.team) ?? (s.team || "—")))).sort()}
+                                  renderOption={(v) => <span className="truncate">{v}</span>}
+                                  onChange={(v) => setSprintLoadDrilldownColFilter((p) => ({ ...p, team: v }))}
+                                  ariaLabel="Filter sprint load by team"
+                                />
+                              </th>
+                              <th className="px-1 py-0.5">
+                                <DrilldownFilterDropdown
+                                  value={sprintLoadDrilldownColFilter.sprint}
+                                  options={Array.from(new Set(sprintLoadDrilldownStoriesRaw.map((s) => s.sprint == null ? "Unscheduled" : `Sprint ${yearSprint}`))).sort()}
+                                  renderOption={(v) => <span className="truncate">{v}</span>}
+                                  onChange={(v) => setSprintLoadDrilldownColFilter((p) => ({ ...p, sprint: v }))}
+                                  ariaLabel="Filter sprint load by sprint"
+                                />
+                              </th>
+                              <th className="px-1 py-0.5">
+                                <DrilldownFilterDropdown
+                                  value={sprintLoadDrilldownColFilter.assignee}
+                                  options={Array.from(new Set(sprintLoadDrilldownStoriesRaw.map((s) => s.assignee?.trim() || "Unassigned"))).filter(Boolean).sort()}
+                                  renderOption={(v) => <span className="truncate">{v}</span>}
+                                  onChange={(v) => setSprintLoadDrilldownColFilter((p) => ({ ...p, assignee: v }))}
+                                  ariaLabel="Filter sprint load by assignee"
+                                />
+                              </th>
+                              <th className="px-1 py-0.5">
+                                <DrilldownFilterDropdown
+                                  value={sprintLoadDrilldownColFilter.status}
+                                  options={Array.from(new Set(sprintLoadDrilldownStoriesRaw.map((s) => s.status))).sort()}
+                                  renderOption={(v) => <span className="truncate">{v}</span>}
+                                  onChange={(v) => setSprintLoadDrilldownColFilter((p) => ({ ...p, status: v }))}
+                                  ariaLabel="Filter sprint load by status"
+                                />
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1403,8 +1829,9 @@ export function SprintAnalytics({
                       <button type="button" onClick={() => sprintLoadDrilldownScrollRef.current?.scrollBy({ top: 96, behavior: "smooth" })} className={cn("absolute bottom-0 -right-[2px] inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800", canScrollSprintLoadDrilldownDown && "bg-slate-200/70 text-slate-800")} aria-label="Scroll down"><ChevronDown className="size-3.5" /></button>
                     </div>
                   </div>
-                ) : (
-                  <div className="relative">
+                  </InsightsDrilldownModal>
+                ) : null}
+                <div className="relative">
                     <div
                       ref={sprintLoadScrollRef}
                       onScroll={() => updateArrowState(sprintLoadScrollRef, setCanScrollSprintLoadUp, setCanScrollSprintLoadDown)}
@@ -1413,11 +1840,44 @@ export function SprintAnalytics({
                       {loadRows.map((row) => {
                         const doneDays = Math.max(0, row.estTotal - row.daysLeft);
                         const donePct = row.estTotal > 0 ? Math.round((doneDays / row.estTotal) * 100) : 100;
-                        // Capacity warning ("Nd over sprint") only applies in days mode — comparing story counts to calendar days is nonsense.
-                        const atRisk = metric === "daysLeft" && sprintDaysLeft > 0 && row.daysLeft > sprintDaysLeft;
-                        const showEnded = metric === "daysLeft" && sprintEnded && row.daysLeft > 0;
-                        const overByDays = atRisk ? row.daysLeft - sprintDaysLeft : 0;
-                        const allDone = row.daysLeft === 0 && row.estTotal > 0;
+                        // Burndown-based verdict shared with Month Team Progress so
+                        // both surfaces speak the same vocabulary (Done · Overdue ·
+                        // At Risk · Watch · On Track). In storyCount mode the
+                        // calendar comparison doesn't apply, so the verdict falls
+                        // back to plain done/onTrack.
+                        const verdict = metric === "daysLeft"
+                          ? sprintBurndownVerdict({
+                              daysLeft: row.daysLeft,
+                              estTotal: row.estTotal,
+                              sprintDaysLeft,
+                              sprintDaysTotal,
+                            })
+                          : { status: (row.daysLeft <= 0 && row.estTotal > 0 ? "done" : "onTrack") as HealthStatus, gap: 0, idealLeft: 0 };
+                        const atRisk = verdict.status === "atRisk" || verdict.status === "overdue";
+                        const watch = verdict.status === "watch";
+                        const allDone = verdict.status === "done";
+                        // Stories owned by this row that are flagged behind
+                        // their per-story ideal pace — drives the popover lists.
+                        const rowStories = metric === "daysLeft"
+                          ? (row.isTeam
+                              ? sprintStories.filter((s) => s.team === row.matchKey)
+                              : sprintStories.filter((s) => (s.assignee?.trim() || "Unassigned") === row.matchKey))
+                          : [];
+                        const overdueStories: FlaggedStoryEntry[] = [];
+                        const atRiskStories: FlaggedStoryEntry[] = [];
+                        const watchStories: FlaggedStoryEntry[] = [];
+                        if (metric === "daysLeft") {
+                          for (const s of rowStories) {
+                            const v = sprintStoryVerdict(s, sprintDaysLeft, sprintDaysTotal);
+                            if (v.status === "overdue") overdueStories.push({ story: s, gap: v.gap });
+                            else if (v.status === "atRisk") atRiskStories.push({ story: s, gap: v.gap });
+                            else if (v.status === "watch") watchStories.push({ story: s, gap: v.gap });
+                          }
+                          const byGap = (a: FlaggedStoryEntry, b: FlaggedStoryEntry) => b.gap - a.gap;
+                          overdueStories.sort(byGap);
+                          atRiskStories.sort(byGap);
+                          watchStories.sort(byGap);
+                        }
                         return (
                           <button
                             key={row.key}
@@ -1425,8 +1885,7 @@ export function SprintAnalytics({
                             onClick={row.onRowClick}
                             className={cn(
                               "w-full rounded-lg bg-white px-2 py-1.5 text-left transition-colors hover:bg-slate-50/60",
-                              atRisk && "hover:bg-amber-50/40",
-                              showEnded && "hover:bg-rose-50/40",
+                              (atRisk || watch) && "hover:bg-amber-50/40",
                             )}
                           >
                             <div className="flex items-center gap-2">
@@ -1460,36 +1919,35 @@ export function SprintAnalytics({
                               )}
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center justify-between gap-2">
-                                  <span className="truncate text-[12.5px] font-semibold text-slate-800">{row.label}</span>
-                                  <div className="flex shrink-0 items-center gap-3">
-                                    {atRisk && (
-                                      <span
-                                        className="inline-flex items-center gap-0.5 rounded bg-amber-50 px-1.5 py-px text-[10px] font-semibold text-amber-800 ring-1 ring-amber-200/80"
-                                        title={`${row.daysLeft}d of work left but only ${sprintDaysLeft}d remain in the sprint — ${overByDays}d over capacity`}
-                                      >
-                                        <AlertTriangle className="size-2.5 shrink-0" aria-hidden />
-                                        +{overByDays}d over
-                                      </span>
-                                    )}
-                                    {showEnded && (
-                                      <span
-                                        className="inline-flex items-center gap-0.5 rounded bg-rose-50 px-1.5 py-px text-[10px] font-semibold text-rose-700 ring-1 ring-rose-200/80"
-                                        title={`Sprint has ended with ${row.daysLeft}d of work still open`}
-                                      >
-                                        <AlertTriangle className="size-2.5 shrink-0" aria-hidden />
-                                        {row.daysLeft}d unfinished
-                                      </span>
-                                    )}
-                                    <span className="text-[11.5px] tabular-nums text-slate-600">
-                                      <span className="font-semibold text-slate-800">{doneDays}{loadUnit}</span>
-                                      <span className="ml-0.5 text-slate-400">{loadUnit === "d" ? "est done" : "done"}</span>
+                                  <span className="inline-flex min-w-0 items-baseline gap-1.5">
+                                    <span className="truncate text-[12.5px] font-semibold text-slate-800">{row.label}</span>
+                                    <span className="shrink-0 text-[10.5px] font-semibold tabular-nums text-slate-500">{donePct}%</span>
+                                  </span>
+                                  <div className="flex shrink-0 items-center gap-2">
+                                    {metric === "daysLeft" ? (
+                                      <SprintLoadHealthBadge
+                                        status={verdict.status}
+                                        rowLabel={row.label}
+                                        atRiskStories={atRiskStories}
+                                        watchStories={watchStories}
+                                        overdueStories={overdueStories}
+                                        sprintLabel={sprintEnded ? "Sprint ended" : `${sprintDaysLeft}d left`}
+                                        onOpenStory={onOpenStory}
+                                      />
+                                    ) : null}
+                                    <span className="text-[11px] tabular-nums text-slate-600">
+                                      <span className="font-semibold text-slate-800">{row.estTotal}{loadUnit}</span>
+                                      <span className="ml-0.5 text-slate-400">{loadUnit === "d" ? "est" : "total"}</span>
                                       <span className="mx-1 text-slate-300">·</span>
-                                      <span className={cn("font-semibold", atRisk ? "text-amber-700" : "text-slate-800")}>{row.daysLeft}{loadUnit}</span>
-                                      <span className="ml-0.5 text-slate-400">{loadUnit === "d" ? "est left" : "left"}</span>
+                                      <span className="font-semibold text-slate-800">{doneDays}{loadUnit}</span>
+                                      <span className="ml-0.5 text-slate-400">done</span>
+                                      <span className="mx-1 text-slate-300">·</span>
+                                      <span className={cn("font-semibold", atRisk ? "text-amber-700" : watch ? "text-amber-700" : "text-slate-800")}>{row.daysLeft}{loadUnit}</span>
+                                      <span className="ml-0.5 text-slate-400">left</span>
                                     </span>
                                   </div>
                                 </div>
-                                <div className="mt-1 relative h-1.5 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/50">
+                                <div className="mt-1 relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/50">
                                   <div className={cn("absolute inset-y-0 left-0 rounded-full transition-all", atRisk ? "bg-amber-400" : allDone ? "bg-emerald-400" : "bg-indigo-400")} style={{ width: `${donePct}%` }} />
                                 </div>
                               </div>
@@ -1501,7 +1959,6 @@ export function SprintAnalytics({
                     <button type="button" onClick={() => sprintLoadScrollRef.current?.scrollBy({ top: -96, behavior: "smooth" })} className={cn("absolute -right-[2px] top-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800", canScrollSprintLoadUp && "bg-slate-200/70 text-slate-800")} aria-label="Scroll up sprint load"><ChevronUp className="size-3.5" /></button>
                     <button type="button" onClick={() => sprintLoadScrollRef.current?.scrollBy({ top: 96, behavior: "smooth" })} className={cn("absolute bottom-0 -right-[2px] inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800", canScrollSprintLoadDown && "bg-slate-200/70 text-slate-800")} aria-label="Scroll down sprint load"><ChevronDown className="size-3.5" /></button>
                   </div>
-                )}
               </article>
             );
           })()}

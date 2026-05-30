@@ -647,7 +647,7 @@ export function SprintRetrospectiveEditor({
             );
             return (
               <div
-                className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/20 backdrop-blur-[2px] p-4"
+                className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-900/20 backdrop-blur-[2px] p-4"
                 onClick={() => setStoryStatusDrilldown(null)}
               >
                 <div
