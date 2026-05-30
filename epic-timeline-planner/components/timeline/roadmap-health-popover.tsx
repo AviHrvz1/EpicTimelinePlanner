@@ -143,6 +143,17 @@ export function RoadmapHealthPopover({
     currentTop: number;
   } | null>(null);
 
+  // Reset the status filter to "All" whenever the popover transitions from
+  // open → closed (X button or toolbar toggle). A ref tracks the previous
+  // `open` value so we don't fire on initial mount when open=false.
+  const prevOpenRef = useRef(open);
+  useEffect(() => {
+    if (prevOpenRef.current && !open) {
+      onFilterChange(new Set());
+    }
+    prevOpenRef.current = open;
+  }, [open, onFilterChange]);
+
   // Anchor on open; track scroll/resize *only* until the user moves it.
   useEffect(() => {
     if (!open) {
@@ -378,12 +389,21 @@ export function RoadmapHealthPopover({
                 const count = counts[status];
                 const pct = statusTotal > 0 ? Math.round((count / statusTotal) * 100) : 0;
                 const Icon = meta.icon;
+                const isActive = filter.has(status);
                 return (
-                  <div
+                  <button
                     key={`card-${status}`}
-                    className="flex flex-col rounded-lg border border-slate-200/80 bg-white p-2 shadow-sm"
+                    type="button"
+                    onClick={() => toggle(status)}
+                    aria-pressed={isActive}
+                    className={cn(
+                      "flex flex-col rounded-lg border bg-white p-2 text-left shadow-sm transition-colors",
+                      isActive
+                        ? `${meta.activeBg} ${meta.activeBorder}`
+                        : "border-slate-200/80 hover:border-slate-300 hover:bg-slate-50",
+                    )}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center justify-center gap-1">
                       <span
                         className={cn(
                           "inline-flex size-4 shrink-0 items-center justify-center rounded-full shadow-sm",
@@ -398,7 +418,7 @@ export function RoadmapHealthPopover({
                       <span className="text-[22px] font-extrabold leading-none tabular-nums text-slate-900">{count}</span>
                       <span className={cn("text-[12px] font-semibold tabular-nums leading-none", meta.countFg)}>{pct}%</span>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>

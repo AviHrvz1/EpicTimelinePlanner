@@ -415,12 +415,17 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
         }
       }
 
-      // Sum story estimates into the epic's `originalEstimateDays` so the
-      // capacity/insights "Σ Child" stats are populated.
+      // Epic-level estimate intentionally diverges from the sum of child
+      // story estimates so the "Epic Days Est." vs "Story Days Est." health
+      // bases produce visibly different verdict counts. Mix of under- and
+      // over-estimates (0.45×–1.85×) deterministic per epic.
       const sumOriginal = storiesData.reduce((acc, s) => acc + s.estimatedDays, 0);
+      const ESTIMATE_DIVERGENCE_FACTORS = [0.45, 0.6, 0.75, 0.9, 1.0, 1.2, 1.45, 1.65, 1.85];
+      const divergenceIdx = (initIdx * 7 + teamIdx * 13) % ESTIMATE_DIVERGENCE_FACTORS.length;
+      const epicOriginalEstimate = Math.max(1, Math.round(sumOriginal * ESTIMATE_DIVERGENCE_FACTORS[divergenceIdx]!));
       await db.epic.update({
         where: { id: epic.id },
-        data: { originalEstimateDays: sumOriginal },
+        data: { originalEstimateDays: epicOriginalEstimate },
       });
     }
   }

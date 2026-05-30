@@ -7,8 +7,9 @@ import { PrismaClient } from "@/lib/generated/prisma";
  *
  * Version 13: added WorkspaceUser.image (avatar URL).
  * Version 14: added Team model + WorkspaceUser.ledTeams back-relation.
+ * Version 15: regenerated client so runtime engine picks up Epic.priority.
  */
-const PRISMA_CLIENT_CACHE_VERSION = 14;
+const PRISMA_CLIENT_CACHE_VERSION = 15;
 
 type LegacyGlobal = typeof globalThis & { prisma?: PrismaClient };
 
