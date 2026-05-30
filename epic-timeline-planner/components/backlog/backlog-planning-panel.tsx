@@ -3063,8 +3063,18 @@ function IsolatedRoadmapCreateForm({
   const currentCalYear = new Date().getFullYear();
   const [name, setName] = useState("");
   const [years, setYears] = useState<number[]>([currentCalYear]);
+  const [customYearInput, setCustomYearInput] = useState("");
   const trimmed = name.trim();
   const canSubmit = trimmed.length >= 2 && years.length > 0 && !submitting;
+  // Next-4-years quick chips. Selected years (including custom ones outside
+  // this window) render separately as filled pills above.
+  const quickYears = [0, 1, 2, 3].map((i) => currentCalYear + i);
+  const addCustomYear = () => {
+    const y = Number(customYearInput);
+    if (!Number.isInteger(y) || y < 2000 || y > 2100) return;
+    setYears((prev) => (prev.includes(y) ? prev : [...prev, y].sort()));
+    setCustomYearInput("");
+  };
   return (
     <div className="border-b border-slate-200/80 bg-slate-50 px-3 py-2">
       <form
@@ -3098,47 +3108,95 @@ function IsolatedRoadmapCreateForm({
           <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
             Years
           </span>
-          {[0, 1, 2, 3].map((i) => {
-            const y = currentCalYear + i;
-            const checked = years.includes(y);
-            return (
+          {/* Selected years render as filled pill + X (clicking the chip OR
+           *  the X removes it). Addable quick-years render as dashed outline
+           *  (click to add). The two states need to be visibly distinct so
+           *  removing a year obviously changes the chip. */}
+          {[...years].sort((a, b) => a - b).map((y) => (
+            <button
+              key={`sel-${y}`}
+              type="button"
+              onClick={() => setYears((prev) => prev.filter((x) => x !== y))}
+              title={`Remove ${y}`}
+              className="inline-flex items-center gap-1 rounded-full border border-indigo-300 bg-indigo-100 px-2 py-0.5 text-[12px] font-semibold tabular-nums text-indigo-900 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
+            >
+              {y}
+              <X className="size-2.5" strokeWidth={2.5} aria-hidden />
+            </button>
+          ))}
+          {quickYears
+            .filter((y) => !years.includes(y))
+            .map((y) => (
               <button
-                key={y}
+                key={`add-${y}`}
                 type="button"
-                onClick={() =>
-                  setYears((prev) => (checked ? prev.filter((x) => x !== y) : [...prev, y]))
-                }
-                className={cn(
-                  "rounded-md border px-2 py-0.5 text-[12px] font-medium transition",
-                  checked
-                    ? "border-indigo-400 bg-indigo-50 text-indigo-950"
-                    : "border-slate-200 text-slate-500 hover:bg-slate-50",
-                )}
+                onClick={() => setYears((prev) => prev.includes(y) ? prev : [...prev, y].sort((a, b) => a - b))}
+                title={`Add ${y}`}
+                className="inline-flex items-center gap-0.5 rounded-full border border-dashed border-slate-300 bg-white px-2 py-0.5 text-[12px] font-medium tabular-nums text-slate-500 transition hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-700"
               >
-                {y}
+                <Plus className="size-2.5" strokeWidth={2.5} />{y}
               </button>
-            );
-          })}
+            ))}
+          {/* Arbitrary-year input for years outside the next-4 quick range. */}
+          <input
+            type="number"
+            min={2000}
+            max={2100}
+            inputMode="numeric"
+            placeholder="Add…"
+            value={customYearInput}
+            onChange={(event) => setCustomYearInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                addCustomYear();
+              }
+            }}
+            className="h-7 w-[5rem] rounded-md border border-slate-200 bg-white px-2 text-[12px] tabular-nums text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/30"
+          />
+          <button
+            type="button"
+            disabled={!customYearInput.trim()}
+            onClick={addCustomYear}
+            className="inline-flex h-7 items-center gap-1 rounded-md bg-slate-800 px-2 text-[12px] font-semibold text-white hover:bg-slate-700 disabled:opacity-40"
+          >
+            <Plus className="size-3" />
+          </button>
         </div>
         <button
           type="submit"
           disabled={!canSubmit}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:opacity-45"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-emerald-600 text-white shadow-sm shadow-emerald-300/40 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
           aria-label="Save"
           title={
-            !trimmed ? "Enter a roadmap name" : years.length === 0 ? "Pick at least one year" : "Save"
+            trimmed.length < 2
+              ? "Type a roadmap name (≥ 2 characters)"
+              : years.length === 0
+                ? "Pick at least one year"
+                : "Save"
           }
         >
-          <Plus className="size-3.5" />
+          <Check className="size-3.5" strokeWidth={2.5} />
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-500 ring-1 ring-slate-200 transition hover:bg-rose-50 hover:text-rose-600 hover:ring-rose-200"
           aria-label="Cancel"
         >
           <X className="size-3.5" />
         </button>
+        {/* Inline hint: tells the user what's still missing before Save can
+         *  enable, so they don't have to hover the disabled button to find out. */}
+        {!canSubmit && !submitting ? (
+          <p className="basis-full text-[11px] text-slate-500">
+            {trimmed.length < 2
+              ? "Type a roadmap name (≥ 2 characters) to enable Save."
+              : years.length === 0
+                ? "Pick at least one year to enable Save."
+                : ""}
+          </p>
+        ) : null}
       </form>
     </div>
   );
@@ -5904,27 +5962,53 @@ export function BacklogPlanningPanel({
             workItem: (
               <div className="relative flex min-w-0 items-center gap-1.5">
                 <BacklogTreeConnector indentPx={indentPx} />
-                <button
-                  type="button"
-                  onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !(prev[folderId] ?? (defaultOpenOverride ?? defaultGroupExpanded)) }))}
-                  className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[16px] font-normal text-slate-700"
-                  style={{ paddingLeft: indentPx }}
-                >
-                  {/* Chevron always rendered so the folder is visibly
-                   *  expandable even when empty (empty quarter / Unscheduled
-                   *  work). Sits in its own fixed-size span so missing
-                   *  leadingIcon doesn't shift the layout. */}
-                  <span className="inline-flex size-4 shrink-0 items-center justify-center">
-                    {isOpen ? (
-                      <ChevronDown className="size-4 text-slate-600" strokeWidth={2.2} />
-                    ) : (
-                      <ChevronRight className="size-4 text-slate-600" strokeWidth={2.2} />
-                    )}
-                  </span>
-                  {leadingIcon}
-                  {labelOverride ?? <span className="truncate">{label}</span>}
-                  <span className="shrink-0 text-[12px] font-normal tabular-nums text-slate-500">({count})</span>
-                </button>
+                {/* When the row is in rename mode (`labelOverride` contains an
+                 *  IsolatedTextInput with its own Save/Cancel buttons), render
+                 *  the outer row as a <div> with the chevron as a separate
+                 *  small button — wrapping the inline editor in another
+                 *  <button> would nest <button>s and trigger React's hydration
+                 *  error. Default mode (no override) keeps the whole row as a
+                 *  click-to-toggle button so existing click targets stay big. */}
+                {labelOverride ? (
+                  <div
+                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[16px] font-normal text-slate-700"
+                    style={{ paddingLeft: indentPx }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !(prev[folderId] ?? (defaultOpenOverride ?? defaultGroupExpanded)) }))}
+                      className="inline-flex size-4 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                      aria-label={isOpen ? "Collapse" : "Expand"}
+                    >
+                      {isOpen ? (
+                        <ChevronDown className="size-4 text-slate-600" strokeWidth={2.2} />
+                      ) : (
+                        <ChevronRight className="size-4 text-slate-600" strokeWidth={2.2} />
+                      )}
+                    </button>
+                    {leadingIcon}
+                    {labelOverride}
+                    <span className="shrink-0 text-[12px] font-normal tabular-nums text-slate-500">({count})</span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !(prev[folderId] ?? (defaultOpenOverride ?? defaultGroupExpanded)) }))}
+                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[16px] font-normal text-slate-700"
+                    style={{ paddingLeft: indentPx }}
+                  >
+                    <span className="inline-flex size-4 shrink-0 items-center justify-center">
+                      {isOpen ? (
+                        <ChevronDown className="size-4 text-slate-600" strokeWidth={2.2} />
+                      ) : (
+                        <ChevronRight className="size-4 text-slate-600" strokeWidth={2.2} />
+                      )}
+                    </span>
+                    {leadingIcon}
+                    <span className="truncate">{label}</span>
+                    <span className="shrink-0 text-[12px] font-normal tabular-nums text-slate-500">({count})</span>
+                  </button>
+                )}
                 {trailingAction}
               </div>
             ),

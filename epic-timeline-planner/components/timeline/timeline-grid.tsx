@@ -1791,12 +1791,38 @@ function RoadmapSelector({
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newName, setNewName] = useState("");
   const [newYears, setNewYears] = useState<number[]>([currentCalYear]);
+  const [newCustomYearInput, setNewCustomYearInput] = useState("");
   const [creating, setCreating] = useState(false);
 
-  // Manage popover state
+  // `roadmap.years` is `number[]` per `RoadmapItem`, but a stale data path can
+  // still serve the raw JSON string from the database ([backlog-planning-panel
+  // and the roadmap row label both defend against this with their own
+  // fallback]). Normalising here means the manage popover's add/remove diff
+  // always compares number arrays — without it `new Set("[2026,2027]")` would
+  // see characters not years, and the dirty check never fires.
+  function normalizeYears(input: number[] | string | null | undefined): number[] {
+    if (Array.isArray(input)) return input.filter((y): y is number => typeof y === "number");
+    if (typeof input === "string") {
+      try {
+        const parsed = JSON.parse(input) as unknown;
+        if (Array.isArray(parsed)) return parsed.filter((y): y is number => typeof y === "number");
+      } catch {
+        // ignore — return []
+      }
+    }
+    return [];
+  }
+
+  // Manage popover state. Edits stay LOCAL until the user clicks Save: pending
+  // years are tracked as `pendingYears` and diffed against the persisted
+  // `selectedRoadmap.years` at submit time, so one Save commits rename + adds
+  // + removals in a single action.
   const [manageOpen, setManageOpen] = useState(false);
   const [renameValue, setRenameValue] = useState(selectedRoadmap?.name ?? "");
   const [yearError, setYearError] = useState<string | null>(null);
+  const [manageCustomYearInput, setManageCustomYearInput] = useState("");
+  const [pendingYears, setPendingYears] = useState<number[]>(() => normalizeYears(selectedRoadmap?.years));
+  const [savingManage, setSavingManage] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ counts: { initiativeCount: number; epicCount: number; storyCount: number; snapshotCount: number } } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const manageRef = useRef<HTMLDivElement>(null);
@@ -1830,6 +1856,16 @@ function RoadmapSelector({
     if (manageOpen) document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [manageOpen]);
+
+  // Whenever the popover opens (or the active roadmap changes), reset pending
+  // edits to the persisted values so closing without Save discards changes.
+  useEffect(() => {
+    if (!manageOpen) return;
+    setRenameValue(selectedRoadmap?.name ?? "");
+    setPendingYears(normalizeYears(selectedRoadmap?.years));
+    setManageCustomYearInput("");
+    setYearError(null);
+  }, [manageOpen, selectedRoadmap?.id, selectedRoadmap?.name, selectedRoadmap?.years]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -1876,7 +1912,7 @@ function RoadmapSelector({
   const addableYears = [0, 1, 2, 3].map((i) => currentCalYear + i).filter((y) => !years.includes(y));
 
   return (
-    <div className="inline-flex h-[28px] shrink-0 cursor-pointer items-stretch box-border whitespace-nowrap rounded-full bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 text-[12px] font-semibold text-indigo-900 ring-1 ring-indigo-200/80 outline-none transition hover:from-sky-200/80 hover:via-indigo-200/80 hover:to-violet-200/80 select-none [&_svg]:opacity-60">
+    <div className="relative inline-flex h-[28px] shrink-0 cursor-pointer items-stretch box-border whitespace-nowrap rounded-full bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 text-[12px] font-semibold text-indigo-900 ring-1 ring-indigo-200/80 outline-none transition hover:from-sky-200/80 hover:via-indigo-200/80 hover:to-violet-200/80 select-none [&_svg]:opacity-60">
       {/* Roadmap label + autocomplete */}
       <div ref={containerRef} className="relative flex items-stretch">
         <span className="flex shrink-0 items-center gap-1 border-r border-indigo-300/60 pl-3 pr-2 text-[12px] font-semibold text-indigo-900">
@@ -1948,9 +1984,11 @@ function RoadmapSelector({
                     placeholder="Roadmap name…"
                     className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-[13px] outline-none focus:ring-2 focus:ring-blue-400/40"
                   />
-                  <div className="flex flex-wrap gap-1">
-                    {[0, 1, 2, 3].map((i) => {
-                      const y = currentCalYear + i;
+                  <div className="flex flex-wrap items-center gap-1">
+                    {/* Newly-added years that fall outside the next-4-years quick range
+                     *  still need a chip — render the union of `newYears ∪ quickYears`
+                     *  so a manually-typed 2023 stays visible after the user adds it. */}
+                    {Array.from(new Set([...newYears, currentCalYear, currentCalYear + 1, currentCalYear + 2, currentCalYear + 3])).sort((a, b) => a - b).map((y) => {
                       const checked = newYears.includes(y);
                       return (
                         <button
@@ -1961,6 +1999,41 @@ function RoadmapSelector({
                         >{y}</button>
                       );
                     })}
+                  </div>
+                  {/* Arbitrary-year input — covers older / further-future years
+                   *  the quick-chip row above doesn't surface. */}
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={2000}
+                      max={2100}
+                      inputMode="numeric"
+                      placeholder="Add year…"
+                      value={newCustomYearInput}
+                      onChange={(e) => setNewCustomYearInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key !== "Enter") return;
+                        e.preventDefault();
+                        const y = Number(newCustomYearInput);
+                        if (!Number.isInteger(y) || y < 2000 || y > 2100) return;
+                        setNewYears((prev) => prev.includes(y) ? prev : [...prev, y].sort());
+                        setNewCustomYearInput("");
+                      }}
+                      className="h-7 w-[5.5rem] rounded-md border border-slate-200 px-2 text-[12px] tabular-nums text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/30"
+                    />
+                    <button
+                      type="button"
+                      disabled={!newCustomYearInput.trim()}
+                      onClick={() => {
+                        const y = Number(newCustomYearInput);
+                        if (!Number.isInteger(y) || y < 2000 || y > 2100) return;
+                        setNewYears((prev) => prev.includes(y) ? prev : [...prev, y].sort());
+                        setNewCustomYearInput("");
+                      }}
+                      className="inline-flex h-7 items-center gap-1 rounded-md bg-slate-800 px-2 text-[12px] font-semibold text-white hover:bg-slate-700 disabled:opacity-40"
+                    >
+                      <Plus className="size-3" /> Add
+                    </button>
                   </div>
                   <div className="flex gap-1.5">
                     <button type="button" onClick={() => setShowCreateForm(false)} className="flex-1 rounded-lg border border-slate-200 py-1 text-[12px] font-medium text-slate-500 hover:bg-slate-50">Cancel</button>
@@ -1975,27 +2048,52 @@ function RoadmapSelector({
               )}
             </div>
             {filtered.map((r) => (
-              <button
+              <div
                 key={r.id}
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  onSelectRoadmap?.(r.id);
-                  setDropdownOpen(false);
-                  setQuery("");
-                  setShowCreateForm(false);
-                  inputRef.current?.blur();
-                }}
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-slate-950 hover:bg-slate-100",
+                  "group/roadmap relative flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-slate-950 hover:bg-slate-100",
                   r.id === selectedRoadmap?.id && "bg-blue-50 text-blue-950",
                 )}
               >
-                <MapIcon className="size-3.5 shrink-0 text-slate-400" />
-                <span className="flex-1 truncate">{r.name}</span>
-                <span className="shrink-0 text-[11px] text-slate-400">{(Array.isArray(r.years) ? r.years : (JSON.parse(r.years as unknown as string) as number[])).join(", ")}</span>
-                {r.id === selectedRoadmap?.id && <Check className="size-3.5 shrink-0 text-blue-600" />}
-              </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    onSelectRoadmap?.(r.id);
+                    setDropdownOpen(false);
+                    setQuery("");
+                    setShowCreateForm(false);
+                    inputRef.current?.blur();
+                  }}
+                  className="flex flex-1 items-center gap-2 text-left"
+                >
+                  <MapIcon className="size-3.5 shrink-0 text-slate-400" />
+                  <span className="flex-1 truncate">{r.name}</span>
+                  <span className="shrink-0 text-[11px] text-slate-400">{normalizeYears(r.years).join(", ")}</span>
+                  {r.id === selectedRoadmap?.id && <Check className="size-3.5 shrink-0 text-blue-600" />}
+                </button>
+                {/* Hover-only edit icon: select the roadmap (so the popover
+                 *  manages the right one) AND open the manage popover in the
+                 *  same click. Replaces the standalone SquarePen that used to
+                 *  sit at the right edge of the pill. */}
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectRoadmap?.(r.id);
+                    setDropdownOpen(false);
+                    setQuery("");
+                    setShowCreateForm(false);
+                    setManageOpen(true);
+                  }}
+                  title="Manage roadmap"
+                  aria-label={`Manage ${r.name}`}
+                  className="shrink-0 rounded-md p-1 text-slate-400 opacity-0 transition hover:bg-slate-200 hover:text-indigo-700 group-hover/roadmap:opacity-100 focus-visible:opacity-100"
+                >
+                  <SquarePen className="size-3.5" strokeWidth={2} aria-hidden />
+                </button>
+              </div>
             ))}
             {filtered.length === 0 && (
               <p className="px-3 py-2 text-[12px] text-slate-400">No roadmaps found</p>
@@ -2004,101 +2102,187 @@ function RoadmapSelector({
         )}
       </div>
 
-      {/* Manage roadmap button — sits inside the same pale-indigo pill as the rest of
-          the toolbar group; dark-indigo icon, subtle hover. */}
-      {selectedRoadmap && (
-        <div ref={manageRef} className="relative flex items-center border-l border-indigo-300/60">
-          <button
-            type="button"
-            onClick={() => setManageOpen((v) => !v)}
-            className="flex h-full w-7 items-center justify-center text-indigo-950 transition hover:bg-indigo-300/40"
-            title="Manage roadmap"
-            aria-label="Manage roadmap"
-          >
-            <SquarePen className="size-3.5" strokeWidth={2} aria-hidden />
-          </button>
-
-          {/* Manage popover */}
-          {manageOpen && (
-            <div className="absolute top-full right-0 z-50 mt-1 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl space-y-3">
-              {/* Rename */}
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Rename</p>
-                <div className="flex gap-1.5">
+      {/* Manage popover — anchored to the same positioned ancestor as the
+       *  roadmap dropdown. The standalone SquarePen trigger that used to sit
+       *  at the right edge of the pill is gone; the popover is now opened
+       *  from the hover-only edit icon on each option in the dropdown. */}
+      {selectedRoadmap && manageOpen && (
+        <div ref={manageRef} className="absolute top-full right-0 z-50 mt-1">
+          {(() => {
+            const persistedYears = normalizeYears(selectedRoadmap.years);
+            const persistedSet = new Set(persistedYears);
+            const pendingSet = new Set(pendingYears);
+            const addableQuickYears = [0, 1, 2, 3]
+              .map((i) => currentCalYear + i)
+              .filter((y) => !pendingSet.has(y));
+            const yearsToAdd = pendingYears.filter((y) => !persistedSet.has(y));
+            const yearsToRemove = persistedYears.filter((y) => !pendingSet.has(y));
+            const nameDirty = renameValue.trim().length > 0 && renameValue.trim() !== selectedRoadmap.name;
+            const yearsDirty = yearsToAdd.length > 0 || yearsToRemove.length > 0;
+            const canSave = (nameDirty || yearsDirty) && pendingYears.length > 0 && !savingManage;
+            const togglePendingYear = (y: number) => {
+              setYearError(null);
+              setPendingYears((prev) =>
+                prev.includes(y) ? prev.filter((x) => x !== y) : [...prev, y].sort((a, b) => a - b),
+              );
+            };
+            const submitCustomYear = () => {
+              const y = Number(manageCustomYearInput);
+              if (!Number.isInteger(y) || y < 2000 || y > 2100) {
+                setYearError("Year must be between 2000 and 2100");
+                return;
+              }
+              if (pendingYears.includes(y)) {
+                setYearError(`${y} is already added`);
+                return;
+              }
+              setYearError(null);
+              setPendingYears((prev) => [...prev, y].sort((a, b) => a - b));
+              setManageCustomYearInput("");
+            };
+            const saveAll = async () => {
+              setSavingManage(true);
+              setYearError(null);
+              try {
+                if (nameDirty && onRenameRoadmap) {
+                  await onRenameRoadmap(selectedRoadmap.id, renameValue.trim());
+                }
+                for (const y of yearsToAdd) {
+                  await onAddYearToRoadmap?.(selectedRoadmap.id, y);
+                }
+                for (const y of yearsToRemove) {
+                  const result = await onRemoveYearFromRoadmap?.(selectedRoadmap.id, y);
+                  if (result?.error) {
+                    setYearError(result.error);
+                    return;
+                  }
+                }
+                setManageOpen(false);
+              } finally {
+                setSavingManage(false);
+              }
+            };
+            return (
+              <div className="w-72 rounded-2xl border border-indigo-100 bg-white p-3.5 shadow-2xl ring-1 ring-indigo-100/70 space-y-3">
+                {/* Rename */}
+                <div className="space-y-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-500/80">Rename</p>
                   <input
                     type="text"
                     value={renameValue}
                     onChange={(e) => setRenameValue(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") void handleRename(); }}
-                    className="flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[13px] outline-none focus:ring-2 focus:ring-blue-400/40"
+                    placeholder="Roadmap name"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[13px] text-slate-800 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/30"
                   />
+                </div>
+
+                {/* Years */}
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-500/80">Years in scope</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {pendingYears.map((y) => (
+                      <div
+                        key={y}
+                        className="inline-flex items-center gap-1 rounded-full border border-indigo-200/80 bg-indigo-50 px-2.5 py-0.5 text-[12px] font-semibold tabular-nums text-indigo-800"
+                      >
+                        {y}
+                        <button
+                          type="button"
+                          title={`Remove ${y}`}
+                          onClick={() => togglePendingYear(y)}
+                          className="-mr-0.5 ml-0.5 inline-flex size-3.5 items-center justify-center rounded-full text-indigo-400 transition hover:bg-rose-100 hover:text-rose-600"
+                        ><X className="size-2.5" strokeWidth={2.5} /></button>
+                      </div>
+                    ))}
+                    {addableQuickYears.map((y) => (
+                      <button
+                        key={y}
+                        type="button"
+                        onClick={() => togglePendingYear(y)}
+                        className="inline-flex items-center gap-0.5 rounded-full border border-dashed border-indigo-300/70 bg-white px-2.5 py-0.5 text-[12px] font-medium tabular-nums text-indigo-400 transition hover:border-indigo-500 hover:bg-indigo-50 hover:text-indigo-700"
+                      ><Plus className="size-2.5" strokeWidth={2.5} />{y}</button>
+                    ))}
+                  </div>
+                  {/* Arbitrary-year input — for years outside the 4-year quick range. */}
+                  <div className="flex items-center gap-1.5 pt-0.5">
+                    <input
+                      type="number"
+                      min={2000}
+                      max={2100}
+                      inputMode="numeric"
+                      placeholder="Add year…"
+                      value={manageCustomYearInput}
+                      onChange={(e) => { setYearError(null); setManageCustomYearInput(e.target.value); }}
+                      onKeyDown={(e) => {
+                        if (e.key !== "Enter") return;
+                        e.preventDefault();
+                        submitCustomYear();
+                      }}
+                      className="h-7 w-[6.5rem] rounded-md border border-slate-200 bg-white px-2 text-[12px] tabular-nums text-slate-800 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/30"
+                    />
+                    <button
+                      type="button"
+                      disabled={!manageCustomYearInput.trim()}
+                      onClick={submitCustomYear}
+                      className="inline-flex h-7 items-center gap-1 rounded-md border border-indigo-200 bg-white px-2 text-[12px] font-semibold text-indigo-700 transition hover:border-indigo-400 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Plus className="size-3" /> Add
+                    </button>
+                  </div>
+                  {yearError && <p className="text-[11px] text-rose-600">{yearError}</p>}
+                </div>
+
+                {/* Save / Cancel */}
+                <div className="flex gap-1.5 border-t border-indigo-100 pt-2.5">
                   <button
                     type="button"
-                    disabled={!renameValue.trim() || renameValue.trim() === selectedRoadmap.name}
-                    onClick={() => void handleRename()}
-                    className="rounded-lg bg-slate-800 px-2.5 py-1.5 text-[12px] font-semibold text-white hover:bg-slate-700 disabled:opacity-40"
-                  >Save</button>
+                    onClick={() => setManageOpen(false)}
+                    className="flex-1 rounded-lg border border-slate-200 bg-white py-1.5 text-[12.5px] font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+                  >Cancel</button>
+                  <button
+                    type="button"
+                    disabled={!canSave}
+                    onClick={() => void saveAll()}
+                    className="flex-1 rounded-lg bg-indigo-600 py-1.5 text-[12.5px] font-semibold text-white shadow-sm shadow-indigo-300/40 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
+                  >{savingManage ? "Saving…" : "Save"}</button>
+                </div>
+
+                {/* Delete */}
+                <div className="border-t border-slate-100 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteRequest()}
+                    className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium text-rose-600 transition hover:bg-rose-50"
+                  >
+                    <Trash2 className="size-3.5" /> Delete roadmap
+                  </button>
                 </div>
               </div>
-
-              {/* Years */}
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Years in scope</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {years.map((y) => (
-                    <div key={y} className="flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[12px] font-medium text-blue-950">
-                      {y}
-                      <button
-                        type="button"
-                        title={`Remove ${y}`}
-                        onClick={async () => {
-                          setYearError(null);
-                          const result = await onRemoveYearFromRoadmap?.(selectedRoadmap.id, y);
-                          if (result?.error) setYearError(result.error);
-                        }}
-                        className="ml-0.5 text-blue-400 hover:text-red-500"
-                      ><X className="size-2.5" /></button>
-                    </div>
-                  ))}
-                  {addableYears.map((y) => (
-                    <button
-                      key={y}
-                      type="button"
-                      onClick={() => { setYearError(null); void onAddYearToRoadmap?.(selectedRoadmap.id, y); }}
-                      className="flex items-center gap-0.5 rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-[12px] text-slate-400 hover:border-blue-400 hover:text-blue-600"
-                    ><Plus className="size-2.5" />{y}</button>
-                  ))}
-                </div>
-                {yearError && <p className="text-[11px] text-red-600">{yearError}</p>}
-              </div>
-
-              {/* Delete */}
-              <div className="border-t border-slate-100 pt-2">
-                <button
-                  type="button"
-                  onClick={() => void handleDeleteRequest()}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 className="size-3.5" /> Delete roadmap
-                </button>
-              </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       )}
 
-      {/* Year sub-picker */}
+      {/* Year sub-picker — styled to read as a real dropdown (border + chevron)
+       *  so users notice it's clickable. The native chevron is suppressed with
+       *  `appearance-none` and we render our own ChevronDown for visual parity
+       *  with the rest of the toolbar. */}
       {years.length > 0 && (
-        <div className="flex items-center border-l border-indigo-300/60 pl-1.5 pr-2">
-          <select
-            value={year}
-            onChange={(e) => void onYearChange(Number(e.target.value))}
-            className="appearance-none h-[22px] cursor-pointer rounded-md bg-transparent py-0 pl-1 pr-5 text-[12px] font-semibold tabular-nums text-indigo-900 outline-none hover:bg-indigo-300/40"
-          >
-            {years.map((y) => (
-              <option key={y} value={y} className="text-slate-900">{y}</option>
-            ))}
-          </select>
+        <div className="flex items-center border-l border-indigo-300/60 pl-1.5 pr-1.5">
+          <div className="relative inline-flex items-center">
+            <select
+              value={year}
+              onChange={(e) => void onYearChange(Number(e.target.value))}
+              title="Switch year"
+              aria-label="Switch year"
+              className="appearance-none h-[22px] cursor-pointer rounded-md border border-indigo-300/70 bg-white/40 py-0 pl-2 pr-6 text-[12px] font-semibold tabular-nums text-indigo-900 outline-none transition hover:bg-white/70 focus-visible:ring-2 focus-visible:ring-indigo-300/60"
+            >
+              {years.map((y) => (
+                <option key={y} value={y} className="text-slate-900">{y}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-1 top-1/2 size-3 -translate-y-1/2 text-indigo-700" aria-hidden />
+          </div>
         </div>
       )}
 
@@ -4741,7 +4925,13 @@ export function TimelineGrid({
         }
       }
     }
-    return { counts, statusByBarId, items, totalBars, unestimatedStoryCount };
+    // `totalBars` was previously "every visible bar regardless of whether
+    // we could compute health" — which made the popover footer / All chip /
+    // header stay frozen at the same number even when switching basis caused
+    // bars to drop out of (or into) the scored set. Reporting `items.length`
+    // here keeps every popover number basis-consistent: when basis changes,
+    // counts + items + totalBars all shift together.
+    return { counts, statusByBarId, items, totalBars: items.length, totalBarsAllVisible: totalBars, unestimatedStoryCount };
   }, [
     roadmapBarMode,
     focusedQuarter,

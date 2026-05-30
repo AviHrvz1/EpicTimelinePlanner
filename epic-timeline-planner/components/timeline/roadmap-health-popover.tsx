@@ -249,7 +249,23 @@ export function RoadmapHealthPopover({
   const watchPct = statusTotal > 0 ? (counts.watch / statusTotal) * 100 : 0;
   const atRiskPct = statusTotal > 0 ? (counts.atRisk / statusTotal) * 100 : 0;
   const overduePct = statusTotal > 0 ? (counts.overdue / statusTotal) * 100 : 0;
-  const healthyPct = donePct + onTrackPct + watchPct;
+
+  // Overall Status cards + Health Distribution highlights surface the top-3
+  // statuses by count. With <3 non-zero, the rest are padded by status order
+  // (On Track → At Risk → Done) so the layout always shows three slots and
+  // the user gets a useful read even on lightly-populated roadmaps.
+  const topThreeStatuses = (() => {
+    const ranked = ([...STATUS_ORDER] as HealthStatus[]).sort((a, b) => counts[b] - counts[a]);
+    const withCounts = ranked.filter((s) => counts[s] > 0);
+    if (withCounts.length >= 3) return withCounts.slice(0, 3);
+    const fillers: HealthStatus[] = ["onTrack", "atRisk", "done"];
+    const out: HealthStatus[] = [...withCounts];
+    for (const s of fillers) {
+      if (out.length >= 3) break;
+      if (!out.includes(s)) out.push(s);
+    }
+    return out.slice(0, 3);
+  })();
 
   return createPortal(
     <div
@@ -262,7 +278,7 @@ export function RoadmapHealthPopover({
       // popover's bottom edge. Drop it and clip the gradient header on its
       // own (`rounded-t-2xl`) so the rounded-corner look is preserved while
       // descendants like the picker dropdown can extend past the popover.
-      className="fixed z-[9000] w-[720px] rounded-2xl border border-slate-200/70 bg-white shadow-2xl shadow-slate-900/15 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150"
+      className="fixed z-[9000] w-[640px] max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200/70 bg-white shadow-2xl shadow-slate-900/15 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-150"
     >
       {/* Gradient header — drag handle + title + close */}
       <div
@@ -301,72 +317,165 @@ export function RoadmapHealthPopover({
         </button>
       </div>
 
-      <div className="px-5 pb-5 pt-5">
-        {/* Section 1 — Scope toggle. Self-labeling buttons so we don't
-         *  need a header above them; the words "Initiative Health" /
-         *  "Epic Health" carry their own context. */}
-        <ToggleGroup
-          label=""
-          options={[
-            { value: "initiatives", label: "Initiative Health", icon: Zap },
-            { value: "epics", label: "Epic Health", icon: Folder },
-          ]}
-          value={barMode}
-          onChange={(v) => onBarModeChange(v as "initiatives" | "epics")}
-        />
-
-        {/* Section 2 — Basis toggle. Option labels adapt to the
-         *  selected scope so the same button means the right thing
-         *  under Initiative vs Epic health. Order follows the planning
-         *  workflow: early-stage epic estimate first, child story
-         *  rollup second, % completed third. */}
-        <div className="mt-5 border-t border-slate-200/70 pt-4">
-          <ToggleGroup
-            label="Health & progress basis"
-            options={
-              barMode === "initiatives"
-                ? [
-                    { value: "epicEst", label: "Σ Epic Days Est.", icon: Folder },
-                    { value: "days", label: "Σ Story Days Est.", icon: StickyNote },
-                    { value: "stories", label: "% Stories Completed", icon: CheckCircle2 },
-                  ]
-                : [
-                    { value: "epicEst", label: "Epic Days Est.", icon: Folder },
-                    { value: "days", label: "Σ Story Days Est.", icon: StickyNote },
-                    { value: "stories", label: "% Stories Completed", icon: CheckCircle2 },
-                  ]
-            }
-            value={progressBasis}
-            onChange={(v) => onProgressBasisChange(v as ProgressBasis)}
-          />
-          {/* "How each mode works" — collapsed by default. Carries the
-           *  scope-aware explanation for users who aren't sure which
-           *  mode to pick. */}
-          <div className="mt-2.5">
-            <BasisHelp />
+      <div className="px-6 pb-5 pt-5">
+        {/* Top row — View + Health calculation. Two segmented groups side
+         *  by side with a vertical divider between, so the user can scan
+         *  scope (Epic vs Initiative) and basis at a glance. Labels next
+         *  to the controls (not above) match the mockup's compact layout. */}
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-3">
+            <span className="text-[12.5px] font-semibold text-slate-700">View</span>
+            <ToggleGroup
+              label=""
+              options={[
+                { value: "epics", label: "Epic", icon: Folder },
+                { value: "initiatives", label: "Initiative", icon: Zap },
+              ]}
+              value={barMode}
+              onChange={(v) => onBarModeChange(v as "initiatives" | "epics")}
+            />
+          </div>
+          <div className="hidden h-8 self-center border-l border-slate-200 sm:block" aria-hidden />
+          <div className="flex flex-1 items-center gap-3">
+            <span className="inline-flex items-center gap-1 text-[12.5px] font-semibold text-slate-700">
+              Health calculation
+              <BasisHelpTrigger />
+            </span>
+            <ToggleGroup
+              label=""
+              options={
+                barMode === "initiatives"
+                  ? [
+                      { value: "epicEst", label: "Σ Epic Days Est.", icon: Folder },
+                      { value: "days", label: "Σ Story Days Est.", icon: StickyNote },
+                      { value: "stories", label: "% Stories Completed", icon: CheckCircle2 },
+                    ]
+                  : [
+                      { value: "epicEst", label: "Epic Days Est.", icon: Folder },
+                      { value: "days", label: "Story Days Est.", icon: StickyNote },
+                      { value: "stories", label: "Stories Completed", icon: CheckCircle2 },
+                    ]
+              }
+              value={progressBasis}
+              onChange={(v) => onProgressBasisChange(v as ProgressBasis)}
+            />
           </div>
         </div>
 
-        {/* Section 3 — Status filter pills + healthy/risky distribution
-         *  bar. Grouped together because the filter and the bar are two
-         *  views of the same data. */}
-        <div className="mt-5 border-t border-slate-200/70 pt-4">
-          <div className="mb-2 flex items-baseline justify-between">
-            <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-700">
-              Filter by status
+        {/* Overall Status + Health Distribution — two-column split. Left:
+         *  the top-3 statuses by count rendered as big cards with a colored
+         *  status badge + count + share-of-total. Right: the same three
+         *  shares as big stats stacked over the proportional bar (5 segments
+         *  if all statuses are present). */}
+        <div className="mt-5 grid grid-cols-1 items-stretch gap-5 border-t border-slate-200/70 pt-5 md:grid-cols-[1.2fr_1fr]">
+          <div className="flex flex-col">
+            <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+              Overall Status
             </div>
-            {filter.size > 0 ? (
-              <button
-                type="button"
-                onClick={() => onFilterChange(new Set())}
-                className="text-[11.5px] font-semibold text-indigo-600 transition-colors hover:text-indigo-700"
-              >
-                Clear all
-              </button>
-            ) : null}
+            <div className="grid flex-1 grid-cols-3 gap-2">
+              {topThreeStatuses.map((status) => {
+                const meta = STATUS_META[status];
+                const count = counts[status];
+                const pct = statusTotal > 0 ? Math.round((count / statusTotal) * 100) : 0;
+                const Icon = meta.icon;
+                return (
+                  <div
+                    key={`card-${status}`}
+                    className="flex flex-col rounded-lg border border-slate-200/80 bg-white p-2 shadow-sm"
+                  >
+                    <div className="flex items-center gap-1">
+                      <span
+                        className={cn(
+                          "inline-flex size-4 shrink-0 items-center justify-center rounded-full shadow-sm",
+                          meta.dotBg,
+                        )}
+                      >
+                        <Icon className={cn("size-2.5 stroke-[2.5]", meta.dotFg)} aria-hidden />
+                      </span>
+                      <span className="truncate text-[12.5px] font-semibold text-slate-800">{meta.label}</span>
+                    </div>
+                    <div className="mt-1 flex items-baseline justify-center gap-1.5">
+                      <span className="text-[22px] font-extrabold leading-none tabular-nums text-slate-900">{count}</span>
+                      <span className={cn("text-[12px] font-semibold tabular-nums leading-none", meta.countFg)}>{pct}%</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="grid grid-cols-5 gap-1.5">
-            {STATUS_ORDER.map((status) => {
+          <div className="flex flex-col">
+            <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+              Health Distribution
+            </div>
+            {/* `flex-1` + flex column with the bar pinned to the bottom — so
+             *  this card auto-stretches to match the 3 Overall Status cards
+             *  on its left, and the % stats stay centered vertically while
+             *  the bar/total caption sit at the bottom edge. */}
+            <div className="flex flex-1 flex-col rounded-lg border border-slate-200/80 bg-white p-2 shadow-sm">
+              <div className="grid flex-1 grid-cols-3 items-center gap-2">
+                {topThreeStatuses.map((status) => {
+                  const meta = STATUS_META[status];
+                  const count = counts[status];
+                  const pct = statusTotal > 0 ? Math.round((count / statusTotal) * 100) : 0;
+                  return (
+                    <div key={`dist-${status}`} className="text-center">
+                      <div className={cn("text-[14px] font-extrabold leading-none tabular-nums", meta.countFg)}>
+                        {pct}%
+                      </div>
+                      <div className="mt-0.5 truncate text-[9.5px] font-semibold text-slate-600">{meta.label}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
+                {statusTotal > 0 ? (
+                  <div className="flex h-full w-full">
+                    <div className="h-full bg-emerald-500" style={{ width: `${onTrackPct}%` }} />
+                    <div className="h-full bg-emerald-600" style={{ width: `${donePct}%` }} />
+                    <div className="h-full bg-amber-400" style={{ width: `${watchPct}%` }} />
+                    <div className="h-full bg-rose-500" style={{ width: `${atRiskPct}%` }} />
+                    <div className="h-full bg-rose-700" style={{ width: `${overduePct}%` }} />
+                  </div>
+                ) : null}
+              </div>
+              <div className="mt-1.5 text-center text-[9.5px] text-slate-500">
+                {totalBars} {totalBars === 1 ? unitLabel : `${unitLabel}s`} total
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Filter by Status — six chips (All + 5 statuses) in a 3-col grid.
+         *  Clicking the "All" chip clears every filter; clicking a status
+         *  chip toggles it. Bigger chips than before so they're easy hit
+         *  targets and match the mockup's spacing. */}
+        <div className="mt-5 border-t border-slate-200/70 pt-5">
+          <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+            Filter by Status
+          </div>
+          <div className="grid grid-cols-3 gap-1.5">
+            <button
+              type="button"
+              onClick={() => onFilterChange(new Set())}
+              aria-pressed={filter.size === 0}
+              className={cn(
+                "inline-flex items-center justify-between gap-1.5 rounded-md border px-2 py-1.5 text-left transition-colors",
+                filter.size === 0
+                  ? "border-indigo-300 bg-indigo-50"
+                  : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
+              )}
+            >
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-md bg-indigo-100 text-indigo-700">
+                  <ListChecks className="size-3" strokeWidth={2.25} aria-hidden />
+                </span>
+                <span className={cn("text-[11.5px] font-semibold", filter.size === 0 ? "text-indigo-900" : "text-slate-800")}>All</span>
+              </span>
+              <span className={cn("text-[12px] font-extrabold tabular-nums leading-none", filter.size === 0 ? "text-indigo-700" : "text-slate-700")}>
+                {totalBars}
+              </span>
+            </button>
+            {STATUS_ORDER_DISPLAY.map((status) => {
               const meta = STATUS_META[status];
               const count = counts[status];
               const isActive = filter.has(status);
@@ -379,63 +488,30 @@ export function RoadmapHealthPopover({
                   onClick={() => toggle(status)}
                   aria-pressed={isActive}
                   className={cn(
-                    "group relative inline-flex items-center gap-1 rounded-lg border px-1.5 py-2 text-left transition-colors",
+                    "inline-flex items-center justify-between gap-1.5 rounded-md border px-2 py-1.5 text-left transition-colors",
                     isActive
                       ? `${meta.activeBg} ${meta.activeBorder}`
                       : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
-                    isZero && !isActive && "opacity-75",
+                    isZero && !isActive && "opacity-70",
                   )}
                 >
-                  <span
-                    className={cn(
-                      "inline-flex size-3.5 shrink-0 items-center justify-center rounded-full shadow-sm ring-2 ring-white",
-                      meta.dotBg,
-                    )}
-                  >
-                    <Icon className={cn("size-2 stroke-[2.5]", meta.dotFg)} aria-hidden />
+                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                    <span className={cn("inline-flex size-5 shrink-0 items-center justify-center rounded-md", meta.dotBg)}>
+                      <Icon className={cn("size-3 stroke-[2.5]", meta.dotFg)} aria-hidden />
+                    </span>
+                    <span className="truncate text-[11.5px] font-semibold text-slate-800">{meta.label}</span>
                   </span>
-                  {/* Label is allowed to wrap to two lines — long ones
-                   *  like "At Risk" / "Overdue" no longer truncate. */}
-                  <span className="min-w-0 break-words text-[11px] font-semibold leading-tight text-slate-800">{meta.label}</span>
                   <span
                     className={cn(
-                      "ml-auto text-[12px] font-extrabold tabular-nums leading-none",
+                      "text-[12px] font-extrabold tabular-nums leading-none",
                       isZero ? "text-slate-300" : meta.countFg,
                     )}
                   >
                     {count}
                   </span>
-                  {/* Active state is conveyed by the soft tint + matching
-                      border alone — no bottom underline so the row doesn't
-                      feel over-emphasized. */}
                 </button>
               );
             })}
-          </div>
-        </div>
-
-        {/* Health distribution bar — stacked segments showing % of each
-         *  status. Sits inside the same section as the filter pills above
-         *  since they show the same data. */}
-        <div className="mt-3">
-          <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/60">
-            {statusTotal > 0 ? (
-              <div className="flex h-full w-full">
-                <div className="h-full bg-emerald-600" style={{ width: `${donePct}%` }} />
-                <div className="h-full bg-emerald-500" style={{ width: `${onTrackPct}%` }} />
-                <div className="h-full bg-amber-400" style={{ width: `${watchPct}%` }} />
-                <div className="h-full bg-rose-500" style={{ width: `${atRiskPct}%` }} />
-                <div className="h-full bg-rose-700" style={{ width: `${overduePct}%` }} />
-              </div>
-            ) : null}
-            {/* Scrubber marker at the boundary between healthy and risky */}
-            {statusTotal > 0 ? (
-              <div
-                className="absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-white bg-indigo-600 shadow-md"
-                style={{ left: `${healthyPct}%` }}
-                aria-hidden
-              />
-            ) : null}
           </div>
         </div>
 
@@ -520,11 +596,28 @@ export function RoadmapHealthPopover({
         ) : null}
 
         {/* Section 5 — Footer. Meta count on the left, View Insights CTA
-         *  on the right. Top divider separates it from the scope picker. */}
+         *  on the right. Top divider separates it from the scope picker.
+         *  Count reflects the ACTIVE filter — when one or more status chips
+         *  are picked it shows just that subset; with no filter active it
+         *  falls back to the full scope count. */}
+        {(() => {
+          const filteredCount = filter.size === 0
+            ? totalBars
+            : Array.from(filter).reduce((sum, s) => sum + counts[s], 0);
+          const filterIsActive = filter.size > 0;
+          return (
         <div className="mt-5 flex items-center justify-between gap-4 border-t border-slate-200/70 pt-4">
           <div className="text-[12px] text-slate-500">
-            <span className="font-semibold text-slate-700">{totalBars}</span>{" "}
-            {totalBars === 1 ? unitLabel : `${unitLabel}s`} total
+            <span className="font-semibold text-slate-700">{filteredCount}</span>{" "}
+            {filteredCount === 1 ? unitLabel : `${unitLabel}s`}
+            {filterIsActive ? (
+              <>
+                {" "}filtered{" "}
+                <span className="text-slate-400">/ {totalBars} total</span>
+              </>
+            ) : (
+              <> total</>
+            )}
             {unestimatedStoryCount > 0 ? (
               <>
                 <span aria-hidden className="mx-1.5 text-slate-300">·</span>
@@ -557,6 +650,8 @@ export function RoadmapHealthPopover({
             </button>
           ) : null}
         </div>
+          );
+        })()}
       </div>
     </div>,
     document.body,
@@ -571,8 +666,18 @@ export function RoadmapHealthPopover({
  * toggle for the first time need a quick read on what flips when they
  * change it.
  */
-function BasisHelp() {
+function BasisHelp({ inlineMode = false }: { inlineMode?: boolean } = {}) {
   const [open, setOpen] = useState(false);
+  // Inline mode (rendered inside the `BasisHelpTrigger` popover) skips the
+  // collapsible chrome and just renders the help body, since the popover
+  // itself already provides the open/close affordance.
+  if (inlineMode) {
+    return (
+      <div className="space-y-2 text-[11.5px] leading-snug text-slate-600">
+        <BasisHelpBody />
+      </div>
+    );
+  }
   return (
     <div className="mt-2.5 rounded-lg border border-indigo-100/80 bg-indigo-50/40">
       <button
@@ -591,39 +696,143 @@ function BasisHelp() {
       </button>
       {open ? (
         <div className="space-y-2 border-t border-indigo-100/80 px-3 py-2.5 text-[11.5px] leading-snug text-slate-600">
-          <div>
-            <p className="font-semibold text-slate-800">Σ Epic Days Est. / Epic Days Est.</p>
-            <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
-              <li><strong>Epic Health</strong> — uses this epic's <em>Est. Days</em>.</li>
-              <li><strong>Initiative Health</strong> — sums <em>Est. Days</em> across the initiative's child epics.</li>
-            </ul>
-            <p className="mt-0.5 text-slate-500">Useful for early-stage epics that don't have stories yet.</p>
-          </div>
-          <div>
-            <p className="font-semibold text-slate-800">Σ Story Days Est.</p>
-            <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
-              <li><strong>Epic Health</strong> — sums <em>Est. Days</em> on every child story.</li>
-              <li><strong>Initiative Health</strong> — sums across <em>initiative → epics → stories</em>.</li>
-            </ul>
-            <p className="mt-0.5 text-slate-500">Most accurate once user stories are written.</p>
-          </div>
-          <div>
-            <p className="font-semibold text-slate-800">% Stories Completed</p>
-            <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
-              <li>Counts child stories whose status is <em>Done</em> or <em>Approved</em> against the total.</li>
-            </ul>
-            <p className="mt-0.5 text-slate-500">Ignores effort estimates entirely — pure headcount.</p>
-          </div>
-          <p className="text-[11px] italic text-slate-500">
-            Applies to this popup, the middle-panel progress bars, and the Gantt bar health badges.
-          </p>
+          <BasisHelpBody />
         </div>
       ) : null}
     </div>
   );
 }
 
+/** Shared body for the basis-help content — used both by the legacy inline
+ *  collapsible chrome and the new BasisHelpTrigger popover. */
+function BasisHelpBody() {
+  // Each mode is a self-contained card with a leading icon (matching the
+  // toggle-group icon for that option), title, a two-line Epic / Initiative
+  // breakdown rendered as a key:value pair (no bullets), and a subtle
+  // when-to-use note in italics. Cleaner than the old nested-<ul> layout.
+  type ModeRow = {
+    icon: typeof Folder;
+    title: string;
+    iconTint: string;
+    breakdown: { label: string; body: React.ReactNode }[];
+    note: string;
+  };
+  const modes: ModeRow[] = [
+    {
+      icon: Folder,
+      iconTint: "bg-sky-50 text-sky-700 ring-sky-100",
+      title: "Epic Days Est.",
+      breakdown: [
+        { label: "Epic", body: <>Uses this epic&apos;s <em>Est. Days</em>.</> },
+        { label: "Initiative", body: <>Sums <em>Est. Days</em> across the initiative&apos;s child epics.</> },
+      ],
+      note: "Useful for early-stage epics that don't have stories yet.",
+    },
+    {
+      icon: StickyNote,
+      iconTint: "bg-violet-50 text-violet-700 ring-violet-100",
+      title: "Story Days Est.",
+      breakdown: [
+        { label: "Epic", body: <>Sums <em>Est. Days</em> on every child story.</> },
+        { label: "Initiative", body: <>Sums across <em>initiative → epics → stories</em>.</> },
+      ],
+      note: "Most accurate once user stories are written.",
+    },
+    {
+      icon: CheckCircle2,
+      iconTint: "bg-emerald-50 text-emerald-700 ring-emerald-100",
+      title: "Stories Completed",
+      breakdown: [
+        { label: "All views", body: <>% of child stories whose status is <em>Done</em> or <em>Approved</em>.</> },
+      ],
+      note: "Ignores effort estimates entirely — pure headcount.",
+    },
+  ];
+  return (
+    <div className="space-y-2">
+      {modes.map((m) => {
+        const ModeIcon = m.icon;
+        return (
+          <div
+            key={m.title}
+            className="rounded-md border border-slate-200/80 bg-white p-2"
+          >
+            <div className="flex items-center gap-1.5">
+              <span className={cn("inline-flex size-5 shrink-0 items-center justify-center rounded-md ring-1", m.iconTint)}>
+                <ModeIcon className="size-3" strokeWidth={2.25} aria-hidden />
+              </span>
+              <p className="text-[12px] font-semibold text-slate-900">{m.title}</p>
+            </div>
+            <div className="mt-1 space-y-0.5 pl-[26px] text-[11px] leading-snug text-slate-600">
+              {m.breakdown.map((b) => (
+                <div key={b.label} className="flex gap-1.5">
+                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-slate-400">{b.label}</span>
+                  <span className="min-w-0">{b.body}</span>
+                </div>
+              ))}
+              <p className="pt-0.5 text-[10.5px] italic text-slate-500">{m.note}</p>
+            </div>
+          </div>
+        );
+      })}
+      <p className="border-t border-slate-100 pt-2 text-[10.5px] leading-snug text-slate-500">
+        Applies to this popup, middle-panel progress bars, and Gantt health badges.
+      </p>
+    </div>
+  );
+}
+
 const STATUS_ORDER: HealthStatus[] = ["done", "onTrack", "watch", "atRisk", "overdue"];
+
+/** Order shown in the redesigned Filter by Status grid, mirroring the
+ *  mockup: row 1 [All, On Track, At Risk], row 2 [Done, Overdue, Watch].
+ *  "All" is rendered separately, this array is the 5 status chips that
+ *  follow it. */
+const STATUS_ORDER_DISPLAY: HealthStatus[] = ["onTrack", "atRisk", "done", "overdue", "watch"];
+
+/**
+ * Compact info-trigger that opens BasisHelp in a popover, used in the
+ * "Health calculation" label. Replaces the inline collapsible card so the
+ * top row stays tight. Click outside or Escape closes.
+ */
+function BasisHelpTrigger() {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLSpanElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: PointerEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("pointerdown", handler);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", handler);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  return (
+    <span ref={wrapRef} className="relative inline-flex">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title="How each calculation works"
+        aria-label="How each calculation works"
+        className="inline-flex size-4 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+      >
+        <Info className="size-3.5" aria-hidden />
+      </button>
+      {open ? (
+        <div
+          role="dialog"
+          className="absolute left-0 top-[calc(100%+6px)] z-[9100] w-[360px] max-w-[calc(100vw-2rem)] rounded-xl border border-indigo-100 bg-white p-2.5 shadow-xl ring-1 ring-indigo-100/70"
+        >
+          <BasisHelp inlineMode />
+        </div>
+      ) : null}
+    </span>
+  );
+}
 
 const STATUS_META: Record<
   HealthStatus,
