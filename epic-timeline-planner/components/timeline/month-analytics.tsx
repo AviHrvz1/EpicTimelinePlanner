@@ -16,7 +16,6 @@ import {
   Activity,
   AlertOctagon,
   AlertTriangle,
-  ArrowLeft,
   CheckCheck,
   CheckCircle2,
   ChartNoAxesCombined,
@@ -38,6 +37,7 @@ import {
   PieChart as PieChartIcon,
   PlayCircle,
   UserX,
+  X as XIcon,
 } from "lucide-react";
 import {
   Area,
@@ -1245,6 +1245,69 @@ function StoryStatusPill({ status }: { status: UserStoryItem["status"] }) {
       <Icon className={cn("size-3.5 shrink-0", meta.color)} aria-hidden />
       <span className="truncate text-slate-700">{meta.label}</span>
     </span>
+  );
+}
+
+/**
+ * Insights drilldown modal — portaled overlay matching the EpicDeleteDialog
+ * translucent-ring chrome. Used to host the per-chart drilldown tables
+ * (Status Pie, Workload Balance, Month Load) without replacing the chart
+ * card body. Content scrolls inside; close X dismisses + click backdrop
+ * dismisses.
+ */
+function InsightsDrilldownModal({
+  title,
+  icon,
+  subtitle,
+  onClose,
+  children,
+}: {
+  title: React.ReactNode;
+  icon?: React.ReactNode;
+  subtitle?: React.ReactNode;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/20 backdrop-blur-[2px] p-4"
+      onClick={onClose}
+    >
+      <div
+        className="relative flex h-[78vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-sky-200 bg-white shadow-2xl ring-4 ring-sky-100/70 animate-in fade-in zoom-in-95 duration-150"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <div className="flex min-w-0 items-center gap-2">
+            {icon ?? null}
+            <h3 className="truncate text-[15px] font-semibold text-slate-800">{title}</h3>
+            {subtitle ? <span className="shrink-0 truncate text-[12px] text-slate-500">{subtitle}</span> : null}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close drilldown"
+            className="shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+          >
+            <XIcon className="size-4" />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-hidden px-6 py-4">
+          <div className="h-full overflow-hidden rounded-lg ring-1 ring-slate-200">
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -4075,17 +4138,6 @@ export function MonthAnalytics({
             <PieChartIcon className="size-4 text-slate-600" />
             {statusPanelTitle}{scopeTitleSuffix}
           </h3>
-          {statusDrilldownFilter ? (
-            <button
-              type="button"
-              onClick={clearStatusDrilldown}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              aria-label="Back to chart"
-              title="Back to chart"
-            >
-              <ArrowLeft className="size-3.5" aria-hidden />
-            </button>
-          ) : null}
         </div>
         {statusDrilldownFilter ? (() => {
           const uniqueSprints = statusChartShowsEpics ? [] : Array.from(new Set(statusDrilldownStoriesRaw.map((s) => storySprintDisplayLabel(s.sprint, scopeStartMonth)))).filter(Boolean).sort();
@@ -4096,7 +4148,13 @@ export function MonthAnalytics({
           const uniqueEpicAssignees = !statusChartShowsEpics ? [] : Array.from(new Set(statusDrilldownEpicsRaw.map((e) => e.assignee?.trim() || "Unassigned"))).filter(Boolean).sort();
           const uniqueEpicStatuses = !statusChartShowsEpics ? [] : Array.from(new Set(statusDrilldownEpicsRaw.map((e) => epicStatusById.get(e.id) ?? "To do"))).sort();
           return (
-          <div className={cn("mt-0 flex w-full min-w-0 flex-col overflow-hidden", INSIGHTS_CHART_BAND, INSIGHTS_CHART_FRAME)}>
+          <InsightsDrilldownModal
+            title={`${statusPanelTitle} · ${statusDrilldownFilter}`}
+            icon={<PieChartIcon className="size-4 text-slate-600" aria-hidden />}
+            subtitle={scopeTitleSuffix ?? undefined}
+            onClose={clearStatusDrilldown}
+          >
+          <div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
             <div className="relative flex-1 min-h-0 min-w-0">
               <div
                 ref={statusDrilldownScrollRef}
@@ -4337,19 +4395,20 @@ export function MonthAnalytics({
               </button>
             </div>
           </div>
+          </InsightsDrilldownModal>
           );
-        })() : (
-          <div
-            className={cn(
-              "grid flex-1 lg:grid-cols-[minmax(0,1fr)_12.5rem] lg:items-stretch",
-              INSIGHTS_CHART_GRID_GAP,
-              INSIGHTS_CONTENT_HEIGHT,
-              // Pie panel needs a touch more vertical room than the shared
-              // `INSIGHTS_CONTENT_HEIGHT` provides, or the top "% / label"
-              // pair (e.g. "29% / To do") clips at the panel's upper edge.
-              "min-h-[14rem] lg:h-[clamp(14rem,30vh,22rem)]",
-            )}
-          >
+        })() : null}
+        <div
+          className={cn(
+            "grid flex-1 lg:grid-cols-[minmax(0,1fr)_12.5rem] lg:items-stretch",
+            INSIGHTS_CHART_GRID_GAP,
+            INSIGHTS_CONTENT_HEIGHT,
+            // Pie panel needs a touch more vertical room than the shared
+            // `INSIGHTS_CONTENT_HEIGHT` provides, or the top "% / label"
+            // pair (e.g. "29% / To do") clips at the panel's upper edge.
+            "min-h-[14rem] lg:h-[clamp(14rem,30vh,22rem)]",
+          )}
+        >
             <div
               className={`relative rounded-lg ${SPRINT_CHART_BOX}`}
             >
@@ -4446,7 +4505,6 @@ export function MonthAnalytics({
               })}
             </div>
           </div>
-        )}
       </article>
 
       <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:h-full">
@@ -4842,17 +4900,6 @@ export function MonthAnalytics({
             <ChartNoAxesCombined className="size-4 text-slate-600" />
             Workload Balance{scopeTitleSuffix}
           </h3>
-          {workloadDrilldownAssignee ? (
-            <button
-              type="button"
-              onClick={() => { setWorkloadDrilldownAssignee(null); setWorkloadDrilldownIsTeam(false); }}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              aria-label="Back to workload chart"
-              title="Back to workload chart"
-            >
-              <ArrowLeft className="size-3.5" aria-hidden />
-            </button>
-          ) : null}
         </div>
         {workloadDrilldownAssignee ? (() => {
           // Unique values for the per-column dropdowns. Computed from the
@@ -4861,7 +4908,13 @@ export function MonthAnalytics({
           const uniqueAssignees = Array.from(new Set(workloadDrilldownStoriesRaw.map((s) => s.assignee?.trim() || "Unassigned"))).filter(Boolean).sort();
           const uniqueStatuses = Array.from(new Set(workloadDrilldownStoriesRaw.map((s) => s.status))).sort();
           return (
-          <div className={cn("mt-0 flex w-full min-w-0 flex-col overflow-hidden", INSIGHTS_CHART_BAND, INSIGHTS_CHART_FRAME)}>
+          <InsightsDrilldownModal
+            title={`Workload Balance · ${workloadDrilldownAssignee}`}
+            icon={<ChartNoAxesCombined className="size-4 text-slate-600" aria-hidden />}
+            subtitle={scopeTitleSuffix ?? undefined}
+            onClose={() => { setWorkloadDrilldownAssignee(null); setWorkloadDrilldownIsTeam(false); }}
+          >
+          <div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
             <div className="relative flex-1 min-h-0 min-w-0">
             <div
               ref={workloadDrilldownScrollRef}
@@ -5018,9 +5071,10 @@ export function MonthAnalytics({
             </button>
             </div>
           </div>
+          </InsightsDrilldownModal>
           );
         })() : null}
-        {!workloadDrilldownAssignee ? (() => {
+        {(() => {
           const teamMode = !forceUserMode && (!filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1) && analytics.workloadByTeam.length > 0;
           // When an epic or initiative is pinned via the scope picker,
           // the underlying scopedStories pool only contains stories
@@ -5170,7 +5224,7 @@ export function MonthAnalytics({
               )}
             </div>
           );
-        })() : null}
+        })()}
         <p className="mt-2 shrink-0 text-[12px] text-slate-600">
           {analytics.openStories} open stories.
         </p>
@@ -5445,24 +5499,19 @@ export function MonthAnalytics({
                     )}
                     {scopeTitleSuffix}
                   </h3>
-                  {monthLoadDrilldownAssignee && (
-                    <button
-                      type="button"
-                      onClick={() => { setMonthLoadDrilldownAssignee(null); setMonthLoadDrilldownIsTeam(false); }}
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                      aria-label="Back to month load"
-                      title="Back to month load"
-                    >
-                      <ArrowLeft className="size-3.5" aria-hidden />
-                    </button>
-                  )}
                 </div>
                 {monthLoadDrilldownAssignee ? (() => {
                   const uniqueSprints = Array.from(new Set(monthLoadDrilldownStoriesRaw.map((s) => storySprintDisplayLabel(s.sprint, scopeStartMonth)))).filter(Boolean).sort();
                   const uniqueAssignees = Array.from(new Set(monthLoadDrilldownStoriesRaw.map((s) => s.assignee?.trim() || "Unassigned"))).filter(Boolean).sort();
                   const uniqueStatuses = Array.from(new Set(monthLoadDrilldownStoriesRaw.map((s) => s.status))).sort();
                   return (
-                  <div className={cn("mt-0 flex w-full min-w-0 flex-col overflow-hidden", INSIGHTS_CHART_BAND, INSIGHTS_CHART_FRAME)}>
+                  <InsightsDrilldownModal
+                    title={`${teamMode ? "Team Progress" : "User Progress"} · ${monthLoadDrilldownAssignee}`}
+                    icon={<Users className="size-4 text-slate-600" aria-hidden />}
+                    subtitle={scopeTitleSuffix ?? undefined}
+                    onClose={() => { setMonthLoadDrilldownAssignee(null); setMonthLoadDrilldownIsTeam(false); }}
+                  >
+                  <div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
                     <div className="relative flex-1 min-h-0 min-w-0">
                       <div
                         ref={monthLoadDrilldownScrollRef}
@@ -5560,8 +5609,9 @@ export function MonthAnalytics({
                       <button type="button" onClick={() => scrollMonthLoadDrilldownBy(96)} className={cn(sharedDrilldownArrowClass, "bottom-0", canScrollMonthLoadDrilldownDown && "bg-slate-200/70 text-slate-800")} aria-label="Scroll down"><ChevronDown className="size-3.5" /></button>
                     </div>
                   </div>
+                  </InsightsDrilldownModal>
                   );
-                })() : (
+                })() : null}
                 <div className={cn("relative", INSIGHTS_CHART_BAND)}>
                   <div
                     ref={monthLoadScrollRef}
@@ -5718,7 +5768,6 @@ export function MonthAnalytics({
                     <ChevronDown className="size-3.5" />
                   </button>
                 </div>
-                )}
                 <p className="mt-2 shrink-0 text-[12px] text-slate-600">
                   {analytics.openStories} open stories.
                 </p>
