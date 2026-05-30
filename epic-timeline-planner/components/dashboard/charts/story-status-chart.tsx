@@ -17,6 +17,9 @@ type Props = {
   quarter: number;
   sprint: number;
   team?: string | null;
+  /** When provided, slices + legend rows become clickable and pass the
+   *  status label ("To do", "In progress", "Done", "Approved") up. */
+  onSliceClick?: (statusLabel: string) => void;
 };
 
 type LabelArgs = {
@@ -50,7 +53,7 @@ function PieSliceOutsideLabel(props: LabelArgs) {
   );
 }
 
-export function StoryStatusChart({ initiatives, year, quarter, sprint, team }: Props) {
+export function StoryStatusChart({ initiatives, year, quarter, sprint, team, onSliceClick }: Props) {
   const month = Math.ceil(sprint / 2);
   const analytics = buildSprintAnalytics(initiatives, month, sprint, "storyCount", year, team ? [team] : null);
   const data = analytics.statusPie.filter((x) => x.value > 0);
@@ -85,6 +88,12 @@ export function StoryStatusChart({ initiatives, year, quarter, sprint, team }: P
               label={PieSliceOutsideLabel}
               labelLine={false}
               filter="url(#storyStatusPieShadow)"
+              onClick={(entry) => {
+                if (!onSliceClick) return;
+                const name = (entry as { name?: string } | null)?.name;
+                if (name) onSliceClick(name);
+              }}
+              style={onSliceClick ? { cursor: "pointer" } : undefined}
             >
               {data.map((entry) => (
                 <Cell key={entry.name} fill={STATUS_COLORS[entry.name] ?? "#94a3b8"} />
@@ -119,11 +128,8 @@ export function StoryStatusChart({ initiatives, year, quarter, sprint, team }: P
       <div className="flex flex-1 min-w-0 flex-col gap-1.5">
         {data.map((slice) => {
           const pct = total > 0 ? Math.round((slice.value / total) * 100) : 0;
-          return (
-            <div
-              key={slice.name}
-              className="flex items-center justify-between gap-2 rounded-md bg-slate-50/80 px-2 py-1.5"
-            >
+          const content = (
+            <>
               <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-slate-700">
                 <span
                   className="inline-block size-2.5 rounded-full"
@@ -134,6 +140,23 @@ export function StoryStatusChart({ initiatives, year, quarter, sprint, team }: P
               <span className="text-[13px] font-semibold tabular-nums text-slate-900">
                 {slice.value} <span className="font-normal text-slate-500">({pct}%)</span>
               </span>
+            </>
+          );
+          return onSliceClick ? (
+            <button
+              key={slice.name}
+              type="button"
+              onClick={() => onSliceClick(slice.name)}
+              className="flex items-center justify-between gap-2 rounded-md bg-slate-50/80 px-2 py-1.5 text-left transition hover:bg-slate-100"
+            >
+              {content}
+            </button>
+          ) : (
+            <div
+              key={slice.name}
+              className="flex items-center justify-between gap-2 rounded-md bg-slate-50/80 px-2 py-1.5"
+            >
+              {content}
             </div>
           );
         })}

@@ -315,9 +315,11 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
           team: teamSlug,
           originalEstimateDays: null,
           labels: pickDemoLabels(initIdx * 5 + teamIdx, 2) ?? null,
+          priority: pickDemoEpicPriority(initIdx * 7 + teamIdx * 13),
         },
       });
       totalEpics += 1;
+      const epicPriorityForStories = epic.priority ?? null;
 
       // 6. Stories — 10 per epic, distributed across the epic's sprints.
       //    Pull the global sprint numbers from `globalSprintFromMonthLane`
@@ -377,6 +379,7 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
             planYear,
             planQuarter: Math.ceil(epicStartMonth / 3),
             labels: pickDemoLabels(storySeed, 1) ?? null,
+            priority: pickDemoStoryPriority(epicPriorityForStories, storySeed),
           },
         });
         totalStories += 1;
@@ -631,6 +634,7 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
             planYear,
             planQuarter: Math.ceil(targetMonth / 3),
             labels: null,
+            priority: pickDemoStoryPriority(teamEpic.priority ?? null, targetSprint * 7 + i * 31),
           },
         });
         backfillStoriesAdded += 1;
@@ -741,12 +745,25 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
   // Picks are deterministic via a per-id hash so the same seed keeps the
   // same stories in each bucket across reseeds.
   const forceEpicHealth = async (epicIds: string[], openFraction: number) => {
+    // Snapshot bookkeeping: the CFD reconstructs each day's status from
+    // the snapshot stream. If we only update `story.status` here without
+    // also writing a matching snapshot, the snapshot stream still ends at
+    // its last natural-ramp value (e.g. inProgress / 1 day left) — and
+    // the chart shows that stale state right up to today, causing a
+    // misleading cliff between "yesterday's snapshot says inProgress"
+    // and "today's story.status says done". For each forced story we:
+    //   1. Delete any snapshot dated >= today's local midnight so a
+    //      late natural-ramp snap can't override the forced state.
+    //   2. Insert a fresh snapshot at today's timestamp with the
+    //      forced status + daysLeft.
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     for (const epicId of epicIds) {
       const stories = await db.userStory.findMany({
         where: { epicId, sprint: { not: null } },
-        select: { id: true, estimatedDays: true },
+        select: { id: true, estimatedDays: true, sprint: true, assignee: true },
       });
       if (stories.length === 0) continue;
+      const storyById = new Map(stories.map((s) => [s.id, s]));
       // Deterministic sort by id-hash, then mark the first `openFraction`
       // share as todo (full daysLeft) and the rest as done (daysLeft 0).
       const hashed = stories.map((s) => {
@@ -758,17 +775,39 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
       const openCount = Math.max(1, Math.round(stories.length * openFraction));
       const todoIds = hashed.slice(0, openCount).map((s) => s.id);
       const doneIds = hashed.slice(openCount).map((s) => s.id);
+      const writeForcedSnapshot = async (storyId: string, status: StoryStatus, daysLeft: number, est: number) => {
+        const story = storyById.get(storyId);
+        if (!story) return;
+        await db.storyDailySnapshot.deleteMany({
+          where: { storyId, snapshotDate: { gte: todayStart } },
+        });
+        await db.storyDailySnapshot.create({
+          data: {
+            storyId,
+            snapshotDate: today,
+            status,
+            sprint: story.sprint,
+            estimatedDays: est,
+            daysLeft,
+            assignee: story.assignee,
+          },
+        });
+      };
       for (const t of hashed.slice(0, openCount)) {
         await db.userStory.update({
           where: { id: t.id },
           data: { status: StoryStatus.todo, daysLeft: t.est },
         });
+        await writeForcedSnapshot(t.id, StoryStatus.todo, t.est, t.est);
       }
       if (doneIds.length > 0) {
         await db.userStory.updateMany({
           where: { id: { in: doneIds } },
           data: { status: StoryStatus.done, daysLeft: 0 },
         });
+        for (const d of hashed.slice(openCount)) {
+          await writeForcedSnapshot(d.id, StoryStatus.done, 0, d.est);
+        }
       }
       console.log("[demo-builder] force epic health", { epicId, todoCount: todoIds.length, doneCount: doneIds.length });
     }
@@ -891,4 +930,46 @@ function pickDemoLabels(seed: number, maxLabels: number): string | null {
     if (!chosen.includes(label)) chosen.push(label);
   }
   return chosen.join(", ");
+}
+
+/**
+ * Deterministic 0..1 sampler so the demo dataset stays stable across reseed
+ * runs. Cheap LCG keyed on the caller's integer seed.
+ */
+function demoUnitSample(seed: number): number {
+  const x = Math.abs(seed * 2654435761) % 233280;
+  return x / 233280;
+}
+
+/**
+ * Epic priority distribution skewed toward the middle so the backlog isn't
+ * a wall of P1s. Keyed on a stable per-epic seed.
+ *   ~5% P0 · ~22% P1 · ~45% P2 · ~18% P3 · ~10% unset
+ */
+function pickDemoEpicPriority(seed: number): string | null {
+  const r = demoUnitSample(seed);
+  if (r < 0.05) return "P0";
+  if (r < 0.27) return "P1";
+  if (r < 0.72) return "P2";
+  if (r < 0.90) return "P3";
+  return null;
+}
+
+/**
+ * Story priority is mostly inherited from its epic (clusters feel coherent),
+ * with a small chance of drifting one step in either direction and a few
+ * stories left unset. P0 epics never have P3 stories, etc. — drift caps at
+ * ±1 step from the parent's rung.
+ */
+function pickDemoStoryPriority(epicPriority: string | null, seed: number): string | null {
+  const r = demoUnitSample(seed * 17 + 3);
+  if (r < 0.10) return null; // ~10% unset
+  if (r < 0.65) return epicPriority; // 55% inherit (including null)
+  // Drift ±1 rung toward middle to keep things sensible.
+  const order = ["P0", "P1", "P2", "P3"] as const;
+  const idx = epicPriority ? order.indexOf(epicPriority as (typeof order)[number]) : 2;
+  if (idx < 0) return "P2";
+  const drift = demoUnitSample(seed * 31 + 11) < 0.5 ? -1 : 1;
+  const next = Math.max(0, Math.min(order.length - 1, idx + drift));
+  return order[next]!;
 }

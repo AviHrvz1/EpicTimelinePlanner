@@ -66,6 +66,7 @@ import { ROW_ESTIMATED_HEIGHTS, type RowDescriptor } from "@/components/backlog/
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
+import { PriorityPill, PriorityPopover, type Priority } from "@/components/ui/priority-picker";
 import { TableColumnDragGrip } from "@/components/ui/table-column-drag-grip";
 import { resolveAssigneeAvatar } from "@/components/ui/user-avatar";
 import { TeamAvatar } from "@/components/ui/team-avatar";
@@ -139,6 +140,7 @@ type BacklogPlanningPanelProps = {
       estimatedDays: number | null;
       daysLeft: number | null;
       labels: string | null;
+      priority: string | null;
       /** Re-parent the story to a different epic. */
       epicId: string;
     }>,
@@ -165,6 +167,7 @@ type BacklogPlanningPanelProps = {
       planEndDay?: number | null;
       team?: string | null;
       labels?: string | null;
+      priority?: string | null;
       originalEstimateDays?: number | null;
       /** Re-parent the epic to a different initiative. */
       initiativeId?: string;
@@ -195,6 +198,7 @@ type BacklogColumnKey =
   | "assignee"
   | "parent"
   | "labels"
+  | "priority"
   | "estDays"
   | "epicOriginalEst"
   | "daysLeft"
@@ -239,6 +243,16 @@ function compareByColumn(a: InitiativeItem, b: InitiativeItem, sort: BacklogColu
     return dir * at.localeCompare(bt);
   }
   if (key === "labels") return dir * ((a.labels ?? "").localeCompare(b.labels ?? ""));
+  if (key === "priority") {
+    const firstPri = (arr: NonNullable<InitiativeItem["epics"]>): string => {
+      for (const e of arr) {
+        const p = (e.priority ?? "").trim().toUpperCase();
+        if (p) return p;
+      }
+      return "ZZZ";
+    };
+    return dir * firstPri(a.epics ?? []).localeCompare(firstPri(b.epics ?? []));
+  }
   // Numeric/sprint/progress/est columns roll up across epics → use sums for initiatives.
   const aEpics = a.epics ?? [];
   const bEpics = b.epics ?? [];
@@ -493,6 +507,7 @@ const BACKLOG_COLUMN_ORDER: BacklogColumnKey[] = [
   "team",
   "assignee",
   "parent",
+  "priority",
   "epicOriginalEst",
   "estDays",
   "daysLeft",
@@ -529,6 +544,7 @@ const BACKLOG_COLUMN_LABELS: Record<BacklogColumnKey, string> = {
   assignee: "Assignee",
   parent: "Parent",
   labels: "Labels",
+  priority: "Priority",
   estDays: "Est Days",
   epicOriginalEst: "Epic Est",
   daysLeft: "Est. Days Left",
@@ -549,6 +565,7 @@ const BACKLOG_COLUMN_MIN_WIDTHS: Record<BacklogColumnKey, number> = {
   assignee: 120,
   parent: 200,
   labels: 140,
+  priority: 100,
   estDays: 90,
   epicOriginalEst: 110,
   daysLeft: 150,
@@ -571,6 +588,7 @@ const BACKLOG_COLUMN_DEFAULT_WIDTHS: Record<BacklogColumnKey, number> = {
   assignee: 190,
   parent: 260,
   labels: 200,
+  priority: 120,
   estDays: 128,
   epicOriginalEst: 150,
   daysLeft: 160,
@@ -581,7 +599,7 @@ const BACKLOG_COLUMN_WIDTHS_STORAGE_KEY = "epic-planner.backlog.column-widths.v1
 const BACKLOG_VIEW_STATE_STORAGE_KEY = "epic-planner.backlog.view-state.v1";
 const BACKLOG_TABLE_LAYOUT_STORAGE_KEY = "epic-planner.backlog.table-layout.v1";
 /** Bump when default visibility for columns changes so stored layout can migrate once. */
-const BACKLOG_TABLE_LAYOUT_DEFAULTS_VERSION = 12;
+const BACKLOG_TABLE_LAYOUT_DEFAULTS_VERSION = 13;
 const BACKLOG_SAVED_FILTERS_STORAGE_KEY = "epic-planner.backlog.saved-filters.v1";
 const BACKLOG_SAVED_VIEWS_STORAGE_KEY = "epic-planner.backlog.saved-views.v1";
 
@@ -600,6 +618,7 @@ const DEFAULT_BACKLOG_COLUMN_VISIBILITY: Record<BacklogColumnKey, boolean> = {
   assignee: true,
   parent: true,
   labels: true,
+  priority: true,
   /** Core planning columns -- on by default. */
   estDays: true,
   epicOriginalEst: true,
@@ -3161,6 +3180,7 @@ type BacklogStoryRowData = {
   storyEstimatedDays: number;
   storyDaysLeft: number;
   storyLabels: string | null;
+  storyPriority: string | null;
   storyAssignee: string;
   storyQuarterLabelValue: string | null;
   storyStartDateLabel: string;
@@ -3250,6 +3270,8 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
     estimatedDays: row.storyEstimatedDays,
     daysLeft: row.storyDaysLeft,
   });
+  const [priorityOpen, setPriorityOpen] = useState(false);
+  const priorityTriggerRef = useRef<HTMLButtonElement | null>(null);
   return (
     <div
       className={cn(
@@ -3462,6 +3484,29 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
             )}
           </div>
         ),
+        priority: (
+          <div className="relative w-full text-center">
+            <button
+              ref={priorityTriggerRef}
+              type="button"
+              onClick={() => setPriorityOpen((o) => !o)}
+              className="rounded px-1 py-0.5 hover:bg-slate-100"
+            >
+              <PriorityPill priority={row.storyPriority ?? ""} />
+            </button>
+            {priorityOpen ? (
+              <PriorityPopover
+                value={((row.storyPriority ?? "").toUpperCase() as Priority)}
+                triggerRef={priorityTriggerRef}
+                onCancel={() => setPriorityOpen(false)}
+                onSelect={(next) => {
+                  setPriorityOpen(false);
+                  void ctx.patchStoryInline(row.storyId, { priority: next ? next : null });
+                }}
+              />
+            ) : null}
+          </div>
+        ),
         estDays: (
           <span className="text-center text-[16px] text-slate-700">
             {isEditingCell && editingCellField === "estimatedDays" ? (
@@ -3535,6 +3580,7 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
         sprint: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "sprint", row.storySprintNum == null ? "unscheduled" : String(row.storySprintNum)) },
         assignee: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "assignee", row.storyAssignee === "Unassigned" ? "" : row.storyAssignee) },
         labels: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "labels", ctx.formatStoryLabelsForEditInput(row.storyLabels)) },
+        priority: { kind: "edit", onEdit: () => setPriorityOpen(true) },
         estDays: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "estimatedDays", String(row.storyEstimatedDays)) },
         daysLeft: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "daysLeft", String(row.storyDaysLeft)) },
         year: { kind: "lock" },
@@ -3906,6 +3952,8 @@ export function BacklogPlanningPanel({
     id: string;
     value: string;
   } | null>(null);
+  const [epicPriorityPopoverId, setEpicPriorityPopoverId] = useState<string | null>(null);
+  const epicPriorityTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   // Inline editor for an epic's `originalEstimateDays` (the per-epic budget
   // shown in the "Est" column). String value to preserve user input mid-typing.
   const [editingEpicEstimate, setEditingEpicEstimate] = useState<{ id: string; value: string } | null>(null);
@@ -3960,6 +4008,7 @@ export function BacklogPlanningPanel({
       estimatedDays: number | null;
       daysLeft: number | null;
       labels: string | null;
+      priority: string | null;
       title: string;
     }>,
   ) {
@@ -5202,6 +5251,7 @@ export function BacklogPlanningPanel({
             storyEstimatedDays: story.estimatedDays ?? 0,
             storyDaysLeft: story.daysLeft ?? 0,
             storyLabels: story.labels ?? null,
+            storyPriority: story.priority ?? null,
             // Quarter the story actually lives in — derived from its sprint
             // number (sprint → month → quarter). Stories without a sprint
             // land in an "Unscheduled" bucket. Used by quarter grouping so a
@@ -6180,6 +6230,29 @@ export function BacklogPlanningPanel({
                 }}
               />
             ),
+            priority: (
+              <div className="relative w-full text-center">
+                <button
+                  ref={(el) => { epicPriorityTriggerRefs.current[epicId] = el; }}
+                  type="button"
+                  onClick={() => setEpicPriorityPopoverId((cur) => (cur === epicId ? null : epicId))}
+                  className="rounded px-1 py-0.5 hover:bg-slate-100"
+                >
+                  <PriorityPill priority={epicModelForRow?.priority ?? ""} />
+                </button>
+                {epicPriorityPopoverId === epicId ? (
+                  <PriorityPopover
+                    value={((epicModelForRow?.priority ?? "").toUpperCase() as Priority)}
+                    triggerRef={{ current: epicPriorityTriggerRefs.current[epicId] }}
+                    onCancel={() => setEpicPriorityPopoverId(null)}
+                    onSelect={(next) => {
+                      setEpicPriorityPopoverId(null);
+                      void onPatchEpicQuick(epicId, { priority: next ? next : null });
+                    }}
+                  />
+                ) : null}
+              </div>
+            ),
             estDays: (
               <button
                 type="button"
@@ -6245,6 +6318,7 @@ export function BacklogPlanningPanel({
             status: { kind: "lock" },
             sprint: { kind: "lock" },
             labels: { kind: "edit", onEdit: () => beginEpicLabelsEdit({ id: epicId, labels: epicModelForRow?.labels ?? null }) },
+            priority: { kind: "edit", onEdit: () => setEpicPriorityPopoverId(epicId) },
             estDays: { kind: "lock" },
             epicOriginalEst: { kind: "edit", onEdit: () => beginEpicEstimateEdit({ id: epicId, originalEstimateDays: originalEstimate }) },
             daysLeft: { kind: "lock" },

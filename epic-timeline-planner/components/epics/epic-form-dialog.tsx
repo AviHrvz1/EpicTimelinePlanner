@@ -14,6 +14,7 @@ import {
   Circle,
   ClipboardList,
   FileText,
+  Flag,
   Heading2,
   Heading3,
   History,
@@ -46,7 +47,9 @@ import { TimelineDatePopover } from "@/components/epics/timeline-date-popover";
 
 import { ActivityCommentComposer } from "@/components/ui/activity-comment-composer";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
-import { AssigneeFieldDecoration } from "@/components/ui/user-avatar";
+import { PriorityPill, PriorityPopover, type Priority } from "@/components/ui/priority-picker";
+import { TeamAvatar } from "@/components/ui/team-avatar";
+import { AssigneeFieldDecoration, UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
 import { InitiativeCombobox } from "@/components/ui/initiative-combobox";
 import { TeamIdCombobox, blurActiveField } from "@/components/ui/team-id-combobox";
 import { Button } from "@/components/ui/button";
@@ -127,7 +130,7 @@ function parseSprintDraftValue(value: string): number | null {
   return Math.max(1, Math.min(24, Math.round(parsed)));
 }
 
-const EPIC_CHILD_TABLE_DEFAULT_WIDTHS = [72, 200, 80, 104, 116, 88, 80, 80] as const;
+const EPIC_CHILD_TABLE_DEFAULT_WIDTHS = [72, 200, 80, 104, 116, 100, 88, 80, 80] as const;
 
 type EpicChildStorySortKey = "id" | "title" | "sprint" | "status" | "assignee" | "priority" | "estimatedDays" | "daysLeft";
 
@@ -165,6 +168,7 @@ type EpicFormDialogProps = {
     color: string;
     initiativeId: string;
     team: string | null;
+    priority: string | null;
     originalEstimateDays: number | null;
     planStartMonth: number | null;
     planEndMonth: number | null;
@@ -249,6 +253,9 @@ export function EpicFormDialog({
   const [activityOpen, setActivityOpen] = useState(true);
   const [descriptionAccordionOpen, setDescriptionAccordionOpen] = useState(true);
   const [labelsDraft, setLabelsDraft] = useState<string[]>([]);
+  const [epicPriorityDraft, setEpicPriorityDraft] = useState("");
+  const [epicPriorityOpen, setEpicPriorityOpen] = useState(false);
+  const epicPriorityTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [newLabel, setNewLabel] = useState("");
   const [labelsAutocompleteOpen, setLabelsAutocompleteOpen] = useState(false);
   const [labelsAutocompleteIndex, setLabelsAutocompleteIndex] = useState(-1);
@@ -267,6 +274,8 @@ export function EpicFormDialog({
     field: "title" | "sprint" | "status" | "assignee" | "priority" | "estimatedDays" | "daysLeft";
   } | null>(null);
   const [childEditingValue, setChildEditingValue] = useState("");
+  const [priorityPopoverRowId, setPriorityPopoverRowId] = useState<string | null>(null);
+  const priorityTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [newChildTitle, setNewChildTitle] = useState("");
   const [childStorySortKey, setChildStorySortKey] = useState<EpicChildStorySortKey>("title");
   const [childStorySortDir, setChildStorySortDir] = useState<"asc" | "desc">("asc");
@@ -346,6 +355,7 @@ export function EpicFormDialog({
     }
     setForceTeamFieldEdit(false);
     setTeamDraft(epic?.team ? normalizeWorkspaceUserTeam(epic.team) : "");
+    setEpicPriorityDraft(epic?.priority ?? "");
     setActivityTab("comments");
     setActivityOpen(true);
     if (epic?.id) {
@@ -724,6 +734,12 @@ export function EpicFormDialog({
     done: "bg-emerald-100 text-emerald-700",
     approved: "bg-violet-100 text-violet-700",
   };
+  const renderStatusIcon = (status: string) => {
+    if (status === "approved") return <CheckCircle2 className="size-3.5 shrink-0 text-violet-600" aria-hidden />;
+    if (status === "done") return <CheckCheck className="size-3.5 shrink-0 text-emerald-600" aria-hidden />;
+    if (status === "inProgress") return <PlayCircle className="size-3.5 shrink-0 text-blue-600" aria-hidden />;
+    return <ListTodo className="size-3.5 shrink-0 text-amber-600" aria-hidden />;
+  };
 
   useEffect(() => {
     if (!epic) {
@@ -797,6 +813,7 @@ export function EpicFormDialog({
         color,
         initiativeId,
         team: teamDraft === "" ? null : teamDraft,
+        priority: epicPriorityDraft.trim() === "" ? null : epicPriorityDraft.trim(),
         originalEstimateDays:
           originalEstimateDaysDraft.trim() === "" ? null : Math.max(0, Math.round(Number(originalEstimateDaysDraft) || 0)),
         planStartMonth,
@@ -1515,6 +1532,30 @@ export function EpicFormDialog({
                     ) : null}
                   </div>
                 </label>
+                <div className="grid grid-cols-[9rem_minmax(0,1fr)] items-center gap-3">
+                  <p className="text-[15px] font-normal text-slate-700">Priority</p>
+                  <div className="relative">
+                    <button
+                      ref={epicPriorityTriggerRef}
+                      type="button"
+                      onClick={() => setEpicPriorityOpen((o) => !o)}
+                      className="flex h-7 w-full items-center rounded-md border border-slate-300 bg-white px-1.5 text-left text-[14px] text-slate-800 shadow-sm transition-colors hover:border-slate-400"
+                    >
+                      <PriorityPill priority={epicPriorityDraft} />
+                    </button>
+                    {epicPriorityOpen ? (
+                      <PriorityPopover
+                        value={(epicPriorityDraft.toUpperCase() as Priority)}
+                        triggerRef={epicPriorityTriggerRef}
+                        onCancel={() => setEpicPriorityOpen(false)}
+                        onSelect={(next) => {
+                          setEpicPriorityDraft(next);
+                          setEpicPriorityOpen(false);
+                        }}
+                      />
+                    ) : null}
+                  </div>
+                </div>
                 <label className="grid grid-cols-[9rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Labels</p>
                   <div className="relative z-30">
@@ -1769,7 +1810,15 @@ export function EpicFormDialog({
                                   aria-hidden
                                 />
                               </th>
-                              <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: childTableWidths[5] }}>
+                              <th className="relative px-3 py-2 text-left text-[14px] font-semibold" style={{ width: childTableWidths[5] }}>
+                                <span className="flex w-full min-w-0 items-center gap-0.5 pr-2 text-left">Team</span>
+                                <span
+                                  className={CHILD_TABLE_RESIZE_HANDLE}
+                                  onPointerDown={(e) => onChildTableColResize(5, e)}
+                                  aria-hidden
+                                />
+                              </th>
+                              <th className="relative px-2 py-1.5 text-left text-[14px] font-semibold" style={{ width: childTableWidths[6] }}>
                                 <button
                                   type="button"
                                   className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
@@ -1777,29 +1826,6 @@ export function EpicFormDialog({
                                 >
                                   Priority
                                   {childStorySortKey === "priority" ? (
-                                    childStorySortDir === "asc" ? (
-                                      <ChevronUp className="size-3.5 shrink-0" />
-                                    ) : (
-                                      <ChevronDown className="size-3.5 shrink-0" />
-                                    )
-                                  ) : (
-                                    <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
-                                  )}
-                                </button>
-                                <span
-                                  className={CHILD_TABLE_RESIZE_HANDLE}
-                                  onPointerDown={(e) => onChildTableColResize(5, e)}
-                                  aria-hidden
-                                />
-                              </th>
-                              <th className="relative px-3 py-2 text-left text-[14px] font-semibold" style={{ width: childTableWidths[6] }}>
-                                <button
-                                  type="button"
-                                  className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
-                                  onClick={() => toggleChildStorySort("estimatedDays")}
-                                >
-                                  Est. days
-                                  {childStorySortKey === "estimatedDays" ? (
                                     childStorySortDir === "asc" ? (
                                       <ChevronUp className="size-3.5 shrink-0" />
                                     ) : (
@@ -1819,6 +1845,29 @@ export function EpicFormDialog({
                                 <button
                                   type="button"
                                   className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
+                                  onClick={() => toggleChildStorySort("estimatedDays")}
+                                >
+                                  Est. days
+                                  {childStorySortKey === "estimatedDays" ? (
+                                    childStorySortDir === "asc" ? (
+                                      <ChevronUp className="size-3.5 shrink-0" />
+                                    ) : (
+                                      <ChevronDown className="size-3.5 shrink-0" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown className="size-3 shrink-0 opacity-0 transition-opacity group-hover/col-sort:opacity-40" />
+                                  )}
+                                </button>
+                                <span
+                                  className={CHILD_TABLE_RESIZE_HANDLE}
+                                  onPointerDown={(e) => onChildTableColResize(7, e)}
+                                  aria-hidden
+                                />
+                              </th>
+                              <th className="relative px-3 py-2 text-left text-[14px] font-semibold" style={{ width: childTableWidths[8] }}>
+                                <button
+                                  type="button"
+                                  className="group/col-sort flex w-full min-w-0 items-center gap-0.5 pr-2 text-left transition-colors hover:text-amber-200"
                                   onClick={() => toggleChildStorySort("daysLeft")}
                                 >
                                   Days left
@@ -1834,7 +1883,7 @@ export function EpicFormDialog({
                                 </button>
                                 <span
                                   className={CHILD_TABLE_RESIZE_HANDLE}
-                                  onPointerDown={(e) => onChildTableColResize(7, e)}
+                                  onPointerDown={(e) => onChildTableColResize(8, e)}
                                   aria-hidden
                                 />
                               </th>
@@ -1880,6 +1929,7 @@ export function EpicFormDialog({
                               <td className="px-2 py-1.5 text-slate-400">To Do</td>
                               <td className="px-2 py-1.5 text-slate-400">Unassigned</td>
                               <td className="px-2 py-1.5 text-slate-400">Not set</td>
+                              <td className="px-2 py-1.5 text-slate-400">Not set</td>
                               <td className="px-2 py-1.5 text-slate-400">-</td>
                               <td className="px-2 py-1.5 text-slate-400">-</td>
                             </tr>
@@ -1909,8 +1959,9 @@ export function EpicFormDialog({
                                       <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
                                     </div>
                                   ) : (
-                                    <button type="button" onClick={() => beginChildCellEdit(story.id, "title")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                      {childStoryDrafts[story.id]?.title ?? story.title}
+                                    <button type="button" onClick={() => beginChildCellEdit(story.id, "title")} className="inline-flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-slate-100">
+                                      <UserStoryIcon className="size-3.5 shrink-0 text-sky-500" aria-hidden />
+                                      <span className="min-w-0 truncate">{childStoryDrafts[story.id]?.title ?? story.title}</span>
                                     </button>
                                   )}
                                 </td>
@@ -1949,10 +2000,17 @@ export function EpicFormDialog({
                                       </button>
                                     </div>
                                   ) : (
-                                    <button type="button" onClick={() => beginChildCellEdit(story.id, "sprint")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
+                                    <button type="button" onClick={() => beginChildCellEdit(story.id, "sprint")} className="inline-flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-slate-100">
                                       {(() => {
                                         const sprint = parseSprintDraftValue(childStoryDrafts[story.id]?.sprint ?? "");
-                                        return sprint != null ? `Sprint ${sprint}` : "Not set";
+                                        return sprint != null ? (
+                                          <>
+                                            <Flag className="size-3.5 shrink-0 text-rose-500" aria-hidden />
+                                            <span className="min-w-0 truncate">Sprint {sprint}</span>
+                                          </>
+                                        ) : (
+                                          <span className="min-w-0 truncate text-slate-400">Not set</span>
+                                        );
                                       })()}
                                     </button>
                                   )}
@@ -1975,14 +2033,20 @@ export function EpicFormDialog({
                                     </div>
                                   ) : (
                                     <button type="button" onClick={() => beginChildCellEdit(story.id, "status")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                      <span
-                                        className={cn(
-                                          "inline-flex items-center whitespace-nowrap rounded-full px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.04em]",
-                                          statusTone[childStoryDrafts[story.id]?.status ?? story.status] ?? "bg-muted text-muted-foreground",
-                                        )}
-                                      >
-                                        {storyStatusLabel[childStoryDrafts[story.id]?.status ?? story.status] ?? (childStoryDrafts[story.id]?.status ?? story.status)}
-                                      </span>
+                                      {(() => {
+                                        const status = childStoryDrafts[story.id]?.status ?? story.status;
+                                        return (
+                                          <span
+                                            className={cn(
+                                              "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.04em]",
+                                              statusTone[status] ?? "bg-muted text-muted-foreground",
+                                            )}
+                                          >
+                                            {renderStatusIcon(status)}
+                                            {storyStatusLabel[status] ?? status}
+                                          </span>
+                                        );
+                                      })()}
                                     </button>
                                   )}
                                 </td>
@@ -2001,33 +2065,58 @@ export function EpicFormDialog({
                                       <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
                                     </div>
                                   ) : (
-                                    <button type="button" onClick={() => beginChildCellEdit(story.id, "assignee")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                      {(childStoryDrafts[story.id]?.assignee ?? story.assignee)?.trim() || "Unassigned"}
+                                    <button type="button" onClick={() => beginChildCellEdit(story.id, "assignee")} className="inline-flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-slate-100">
+                                      {(() => {
+                                        const raw = (childStoryDrafts[story.id]?.assignee ?? story.assignee ?? "").trim();
+                                        const resolved = resolveAssigneeAvatar(raw, workspaceDirectoryUsers);
+                                        return (
+                                          <>
+                                            <UserAvatar name={resolved.name} image={resolved.image} size={18} className="ring-0" />
+                                            <span className="min-w-0 truncate">{raw || "Unassigned"}</span>
+                                          </>
+                                        );
+                                      })()}
                                     </button>
                                   )}
                                 </td>
+                                <td className="px-3 py-2 text-slate-600">
+                                  {(() => {
+                                    const teamSlug = teamDraft.trim() || persistedTeam;
+                                    const teamLabel = MONTH_TEAM_COLUMNS.find((t) => t.id === teamSlug)?.label ?? teamSlug ?? "Not set";
+                                    return (
+                                      <span className="inline-flex w-full items-center gap-1.5 px-1 py-0.5">
+                                        <TeamAvatar slug={teamSlug || null} sizePx={16} />
+                                        <span className="min-w-0 truncate">{teamLabel}</span>
+                                      </span>
+                                    );
+                                  })()}
+                                </td>
                                 <td className="px-2 py-1.5 text-slate-600">
-                                  {childEditingCell?.rowId === story.id && childEditingCell.field === "priority" ? (
-                                    <div className="relative z-20 flex items-center gap-1">
-                                      <select
-                                        value={childEditingValue}
-                                        onChange={(event) => setChildEditingValue(event.target.value)}
-                                        className="w-[6rem] min-w-[6rem] rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
-                                      >
-                                        <option value="">Not set</option>
-                                        <option value="P0">P0</option>
-                                        <option value="P1">P1</option>
-                                        <option value="P2">P2</option>
-                                        <option value="P3">P3</option>
-                                      </select>
-                                      <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                      <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
-                                    </div>
-                                  ) : (
-                                    <button type="button" onClick={() => beginChildCellEdit(story.id, "priority")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                      {childStoryDrafts[story.id]?.priority?.trim() || "Not set"}
-                                    </button>
-                                  )}
+                                  <button
+                                    ref={(el) => { priorityTriggerRefs.current[story.id] = el; }}
+                                    type="button"
+                                    onClick={() => setPriorityPopoverRowId((cur) => (cur === story.id ? null : story.id))}
+                                    className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100"
+                                  >
+                                    <PriorityPill priority={childStoryDrafts[story.id]?.priority ?? story.priority ?? ""} />
+                                  </button>
+                                  {priorityPopoverRowId === story.id ? (
+                                    <PriorityPopover
+                                      value={((childStoryDrafts[story.id]?.priority ?? story.priority ?? "").toUpperCase() as Priority)}
+                                      triggerRef={{ current: priorityTriggerRefs.current[story.id] }}
+                                      onCancel={() => setPriorityPopoverRowId(null)}
+                                      onSelect={(next) => {
+                                        setPriorityPopoverRowId(null);
+                                        const existing = childStoryDrafts[story.id];
+                                        if (!existing) return;
+                                        const merged: ChildStoryDraft = { ...existing, priority: next };
+                                        setChildStoryDrafts((prev) => ({ ...prev, [story.id]: merged }));
+                                        if (onPatchStory) {
+                                          void onPatchStory(story.id, { priority: next ? next : null });
+                                        }
+                                      }}
+                                    />
+                                  ) : null}
                                 </td>
                                 <td className="px-3 py-2 text-slate-700">
                                   {childEditingCell?.rowId === story.id && childEditingCell.field === "estimatedDays" ? (
@@ -2038,7 +2127,7 @@ export function EpicFormDialog({
                                     </div>
                                   ) : (
                                     <button type="button" onClick={() => beginChildCellEdit(story.id, "estimatedDays")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                      {childStoryDrafts[story.id]?.estimatedDays || "-"}
+                                      {(() => { const v = childStoryDrafts[story.id]?.estimatedDays?.trim(); return v ? `${v}d` : "-"; })()}
                                     </button>
                                   )}
                                 </td>
@@ -2051,7 +2140,7 @@ export function EpicFormDialog({
                                     </div>
                                   ) : (
                                     <button type="button" onClick={() => beginChildCellEdit(story.id, "daysLeft")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                      {childStoryDrafts[story.id]?.daysLeft || "-"}
+                                      {(() => { const v = childStoryDrafts[story.id]?.daysLeft?.trim(); return v ? `${v}d` : "-"; })()}
                                     </button>
                                   )}
                                 </td>

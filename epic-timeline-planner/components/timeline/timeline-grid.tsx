@@ -7206,6 +7206,7 @@ export function TimelineGrid({
                         initiatives={initiatives}
                         planYear={currentYear}
                         yearSprint={yearSprint}
+                        onOpenStory={onOpenStory}
                       />
                     </div>
                   );
@@ -7251,6 +7252,7 @@ export function TimelineGrid({
                               initiatives={initiatives}
                               planYear={currentYear}
                               yearSprint={yearSprint}
+                              onOpenStory={onOpenStory}
                             />
                           ) : null}
                         </div>

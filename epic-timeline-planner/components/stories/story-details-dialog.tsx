@@ -40,6 +40,7 @@ import { StoryStatus } from "@/lib/generated/prisma";
 
 import { ActivityCommentComposer } from "@/components/ui/activity-comment-composer";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
+import { PriorityPill, PriorityPopover, type Priority } from "@/components/ui/priority-picker";
 import { AssigneeFieldDecoration } from "@/components/ui/user-avatar";
 import { TeamIdCombobox, blurActiveField } from "@/components/ui/team-id-combobox";
 import { Button } from "@/components/ui/button";
@@ -176,6 +177,8 @@ export function StoryDetailsDialog({
     [sprintPlanningYear],
   );
   const [priority, setPriority] = useState("");
+  const [priorityOpen, setPriorityOpen] = useState(false);
+  const priorityTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [sprint, setSprint] = useState("");
   const [status, setStatus] = useState<StoryStatus>(StoryStatus.todo);
   const [estimatedDays, setEstimatedDays] = useState("");
@@ -1105,34 +1108,108 @@ export function StoryDetailsDialog({
             </label>
             <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3 pt-0.5">
               <p className="text-[15px] font-normal text-slate-700">Est. Days</p>
-              <input
-                type="number"
-                min={0}
-                value={estimatedDays}
-                onChange={(event) => setEstimatedDays(event.target.value)}
-                className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 text-[14px] text-slate-800 shadow-sm"
-              />
+              {(() => {
+                const original = story?.estimatedDays == null ? "" : String(story.estimatedDays);
+                const dirty = estimatedDays !== original;
+                return (
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min={0}
+                      value={estimatedDays}
+                      onChange={(event) => setEstimatedDays(event.target.value)}
+                      className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 text-[14px] text-slate-800 shadow-sm"
+                    />
+                    {dirty ? (
+                      <>
+                        <button
+                          type="button"
+                          aria-label="Confirm estimated days"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => blurActiveField()}
+                          className="shrink-0 rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"
+                        >
+                          <Check className="size-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Revert estimated days"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => setEstimatedDays(original)}
+                          className="shrink-0 rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                );
+              })()}
             </div>
             <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
               <p className="whitespace-nowrap text-[15px] font-normal text-slate-700">Est. Days left</p>
-              <input
-                type="number"
-                min={0}
-                value={daysLeft}
-                onChange={(event) => setDaysLeft(event.target.value)}
-                className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 text-[14px] text-slate-800 shadow-sm"
-              />
+              {(() => {
+                const original = story?.daysLeft == null ? "" : String(story.daysLeft);
+                const dirty = daysLeft !== original;
+                return (
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min={0}
+                      value={daysLeft}
+                      onChange={(event) => setDaysLeft(event.target.value)}
+                      className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 text-[14px] text-slate-800 shadow-sm"
+                    />
+                    {dirty ? (
+                      <>
+                        <button
+                          type="button"
+                          aria-label="Confirm days left"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => blurActiveField()}
+                          className="shrink-0 rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"
+                        >
+                          <Check className="size-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Revert days left"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => setDaysLeft(original)}
+                          className="shrink-0 rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                );
+              })()}
             </div>
-            <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
+            <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-[15px] font-normal text-slate-700">Priority</p>
-              <select value={priority} onChange={(event) => setPriority(event.target.value)} className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 text-[14px] text-slate-800 shadow-sm">
-                <option value="">Not set</option>
-                <option value="P0">P0</option>
-                <option value="P1">P1</option>
-                <option value="P2">P2</option>
-                <option value="P3">P3</option>
-              </select>
-            </label>
+              <div className="relative">
+                <button
+                  ref={priorityTriggerRef}
+                  type="button"
+                  onClick={() => setPriorityOpen((o) => !o)}
+                  className="flex h-7 w-full items-center rounded-md border border-slate-300 bg-white px-1.5 text-left text-[14px] text-slate-800 shadow-sm transition-colors hover:border-slate-400"
+                >
+                  <PriorityPill priority={priority} />
+                </button>
+                {priorityOpen ? (
+                  <PriorityPopover
+                    value={(priority.toUpperCase() as Priority)}
+                    triggerRef={priorityTriggerRef}
+                    onCancel={() => setPriorityOpen(false)}
+                    onSelect={(next) => {
+                      setPriority(next);
+                      setPriorityOpen(false);
+                    }}
+                  />
+                ) : null}
+              </div>
+            </div>
             <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-[15px] font-normal text-slate-700">Parent</p>
               <span ref={parentSelectWrapRef} className="group relative min-w-0">

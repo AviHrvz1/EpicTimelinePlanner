@@ -41,7 +41,8 @@ import StarterKit from "@tiptap/starter-kit";
 
 import { ActivityCommentComposer } from "@/components/ui/activity-comment-composer";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
-import { AssigneeFieldDecoration } from "@/components/ui/user-avatar";
+import { TeamAvatar } from "@/components/ui/team-avatar";
+import { AssigneeFieldDecoration, UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
 import { Button } from "@/components/ui/button";
 import { RichCommentBody } from "@/components/ui/rich-comment-body";
 import { InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
@@ -1590,7 +1591,7 @@ export function InitiativeFormDialog({
                                 )}
                               >
                                 <td className="px-2 py-1.5 text-slate-600"><button type="button" onClick={() => onOpenEpic?.(row.id)} className="rounded px-1 py-0.5 text-blue-700 hover:bg-blue-50 hover:underline">{displayIds.byEpicId.get(row.id) ?? row.id}</button></td>
-                                <td className="px-2 py-1.5 text-slate-800">{childEditingCell?.rowId === row.id && childEditingCell.field === "title" ? <div className="relative z-20 flex items-center gap-1"><input value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-800" /><button type="button" onClick={() => void confirmChildCellEdit(row.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button><button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button></div> : <button type="button" onClick={() => beginChildCellEdit(row.id, "title")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">{childEpicDrafts[row.id]?.title ?? row.title}</button>}</td>
+                                <td className="px-2 py-1.5 text-slate-800">{childEditingCell?.rowId === row.id && childEditingCell.field === "title" ? <div className="relative z-20 flex items-center gap-1"><input value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-800" /><button type="button" onClick={() => void confirmChildCellEdit(row.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button><button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button></div> : <button type="button" onClick={() => beginChildCellEdit(row.id, "title")} className="inline-flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-slate-100"><Folder className="size-3.5 shrink-0 text-slate-500" aria-hidden /><span className="min-w-0 truncate">{childEpicDrafts[row.id]?.title ?? row.title}</span></button>}</td>
                                 <td className="px-2 py-1.5 text-slate-600">
                                   {childEditingCell?.rowId === row.id && childEditingCell.field === "team" ? (
                                     <div className="relative z-20 flex items-center gap-1">
@@ -1622,8 +1623,17 @@ export function InitiativeFormDialog({
                                       </button>
                                     </div>
                                   ) : (
-                                    <button type="button" onClick={() => beginChildCellEdit(row.id, "team")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
-                                      {MONTH_TEAM_COLUMNS.find((t) => t.id === (childEpicDrafts[row.id]?.team ?? row.team))?.label ?? (childEpicDrafts[row.id]?.team ?? row.team) ?? "Not set"}
+                                    <button type="button" onClick={() => beginChildCellEdit(row.id, "team")} className="inline-flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-slate-100">
+                                      {(() => {
+                                        const teamSlug = childEpicDrafts[row.id]?.team ?? row.team ?? null;
+                                        const teamLabel = MONTH_TEAM_COLUMNS.find((t) => t.id === teamSlug)?.label ?? teamSlug ?? "Not set";
+                                        return (
+                                          <>
+                                            <TeamAvatar slug={teamSlug} sizePx={16} />
+                                            <span className="min-w-0 truncate">{teamLabel}</span>
+                                          </>
+                                        );
+                                      })()}
                                     </button>
                                   )}
                                 </td>
@@ -1657,15 +1667,24 @@ export function InitiativeFormDialog({
                                     <button
                                       type="button"
                                       onClick={() => beginChildCellEdit(row.id, "assignee")}
-                                      className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100"
+                                      className="inline-flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-slate-100"
                                     >
-                                      {(childEpicDrafts[row.id]?.assignee ?? row.assignee)?.trim() || "Unassigned"}
+                                      {(() => {
+                                        const raw = (childEpicDrafts[row.id]?.assignee ?? row.assignee ?? "").trim();
+                                        const resolved = resolveAssigneeAvatar(raw, workspaceDirectoryUsers);
+                                        return (
+                                          <>
+                                            <UserAvatar name={resolved.name} image={resolved.image} size={18} className="ring-0" />
+                                            <span className="min-w-0 truncate">{raw || "Unassigned"}</span>
+                                          </>
+                                        );
+                                      })()}
                                     </button>
                                   )}
                                 </td>
-                                <td className="px-2 py-1.5 text-slate-600">{childEditingCell?.rowId === row.id && childEditingCell.field === "originalEstimateDays" ? <div className="relative z-20 flex items-center gap-1"><input type="number" min={0} value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-[4.5rem] rounded-md border bg-white px-2 py-1 text-xs text-slate-700" /><button type="button" onClick={() => void confirmChildCellEdit(row.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button><button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button></div> : <button type="button" onClick={() => beginChildCellEdit(row.id, "originalEstimateDays")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">{childEpicDrafts[row.id]?.originalEstimateDays || (row.originalEstimateDays == null ? "-" : String(row.originalEstimateDays))}</button>}</td>
+                                <td className="px-2 py-1.5 text-slate-600">{childEditingCell?.rowId === row.id && childEditingCell.field === "originalEstimateDays" ? <div className="relative z-20 flex items-center gap-1"><input type="number" min={0} value={childEditingValue} onChange={(event) => setChildEditingValue(event.target.value)} className="w-[4.5rem] rounded-md border bg-white px-2 py-1 text-xs text-slate-700" /><button type="button" onClick={() => void confirmChildCellEdit(row.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button><button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button></div> : <button type="button" onClick={() => beginChildCellEdit(row.id, "originalEstimateDays")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">{(() => { const draft = childEpicDrafts[row.id]?.originalEstimateDays; if (draft) return `${draft}d`; if (row.originalEstimateDays == null) return "-"; return `${row.originalEstimateDays}d`; })()}</button>}</td>
                                 <td className="px-2 py-1.5 text-slate-600 tabular-nums" title="Sum of estimated days from child user stories">
-                                  {sumUserStoryEstDaysForEpic(row)}
+                                  {(() => { const sum = sumUserStoryEstDaysForEpic(row); return sum === 0 || sum == null ? "-" : `${sum}d`; })()}
                                 </td>
                               </tr>
                             ))}

@@ -2092,13 +2092,23 @@ export function MonthAnalytics({
     let workloadByTeam: TeamRow[] = [];
     if (showTeamMode) {
       const byTeam = new Map<string, TeamRow>();
+      // Mirror `collectPeriodStories` / `scopedStories` — only count
+      // stories from EPICS that themselves overlap the scope months,
+      // not just from initiatives that do. Otherwise the chart shows
+      // a team bar (its parent initiative spans the period) while
+      // the drilldown returns 0 (the team's epics don't), producing
+      // dead-end clicks.
+      const minMonth = Math.min(...scopeMonths);
+      const maxMonth = Math.max(...scopeMonths);
       for (const initiative of initiatives) {
         if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
-        const overlaps = scopeMonths.some((m) => initiative.startMonth! <= m && initiative.endMonth! >= m);
-        if (!overlaps) continue;
         for (const epic of initiative.epics ?? []) {
           const teamId = epic.team ?? null;
           if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(teamId ?? "")) continue;
+          const epicStart = epic.planStartMonth ?? initiative.startMonth;
+          const epicEnd = epic.planEndMonth ?? initiative.endMonth;
+          if (epicStart == null || epicEnd == null) continue;
+          if (epicEnd < minMonth || epicStart > maxMonth) continue;
           const teamKey = teamId ?? "__unassigned__";
           const teamLabel = MONTH_TEAM_COLUMNS.find((t) => t.id === teamId)?.label ?? "Unassigned";
           for (const story of epic.userStories ?? []) {
@@ -2951,12 +2961,15 @@ export function MonthAnalytics({
       day.setDate(periodStartDate.getDate() + idx);
       return day;
     });
-    const monthStartDay = dayDates[0];
-    const storiesOpenAtStart = sourceStories.filter((story) => {
-      const snapshot = latestSnapshotAtDayCached(story, monthStartDay);
-      const status = snapshot?.status ?? story.status;
-      return isStoryOpen(status);
-    });
+    // Track ALL scheduled stories, not just those that were open at
+    // period start. The previous `isStoryOpen` filter dropped any
+    // story that was already done at Jan 1 (or that fell back to its
+    // current "done" status because no early snapshot exists) — so
+    // CFD's Done stack was always 0 even when Workload Balance was
+    // counting 7 Done stories. By tracking every story, the per-day
+    // loop now plots stories that were always done as a flat Done
+    // band, matching the Workload Balance current-state view.
+    const storiesToTrack = sourceStories.filter((story) => story.sprint != null);
     const now = new Date();
     const periodStartMs3 = new Date(planYear, scopeStartMonth - 1, 1).getTime();
     const nowDayMs3 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -2976,13 +2989,32 @@ export function MonthAnalytics({
           approved: null,
         };
       }
+      // Cutoff for the snapshot bisection = start of NEXT day local.
+      // Snapshots are sometimes stored at UTC midnight or UTC 21:00,
+      // which in a UTC+3 timezone are 03:00 / 00:00 of the NEXT local
+      // day — they would land just past a local end-of-day cutoff and
+      // get excluded by 1 ms. Pushing the cutoff to start-of-next-day
+      // captures both timestamp patterns.
+      const cutoff = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate() + 1, 0, 0, 0, 0);
+      // Detect whether this iteration is the chart's "today" day —
+      // when true, trust story.status as the authoritative current
+      // state. Snapshot reconstruction can lag if the most recent
+      // status change isn't (yet) reflected in the snapshot stream
+      // (e.g. demo's force pass updates story.status without writing
+      // a matching snapshot). For past days, snapshots remain
+      // authoritative since story.status reflects only NOW.
+      const dayStartMs = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate()).getTime();
+      const todayStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const isTodayCell = dayStartMs === todayStartMs;
       let todo = 0;
       let inProgress = 0;
       let done = 0;
       let approved = 0;
-      for (const story of storiesOpenAtStart) {
-        const snapshot = latestSnapshotAtDayCached(story, dayDate);
-        const status = snapshot?.status ?? story.status;
+      for (const story of storiesToTrack) {
+        const snapshot = latestSnapshotAtDayCached(story, cutoff);
+        const status = isTodayCell
+          ? story.status
+          : (snapshot?.status ?? story.status);
         if (status === "todo") todo += 1;
         else if (status === "inProgress") inProgress += 1;
         else if (status === "done") done += 1;
@@ -3796,7 +3828,7 @@ export function MonthAnalytics({
         backgroundSize: "24px 24px",
       }}
     >
-      <div className="-mt-1 rounded-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-4 py-4 shadow-[inset_0_2px_5px_rgba(15,23,42,0.16),inset_0_-1px_0_rgba(255,255,255,0.55)]">
+      <div className="-mt-1 rounded-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-4 py-2 shadow-[inset_0_2px_5px_rgba(15,23,42,0.16),inset_0_-1px_0_rgba(255,255,255,0.55)]">
         <div className="flex flex-wrap items-center gap-2">
           <label className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-slate-700" htmlFor="month-insights-epic-filter">
             <ChartNoAxesCombined className="size-4 text-slate-500" aria-hidden />
@@ -4990,11 +5022,25 @@ export function MonthAnalytics({
         })() : null}
         {!workloadDrilldownAssignee ? (() => {
           const teamMode = !forceUserMode && (!filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1) && analytics.workloadByTeam.length > 0;
+          // When an epic or initiative is pinned via the scope picker,
+          // the underlying scopedStories pool only contains stories
+          // from that pinned scope — so clicking on a team that the
+          // pinned scope doesn't touch would yield an empty drilldown.
+          // Filter the team bars to only the teams that actually own
+          // work in the current scope so users can't dead-end click.
+          const pinnedTeamSlugs = selectedEpicOption
+            ? new Set([selectedEpicOption.epic.team ?? "__unassigned__"])
+            : selectedInitiativeId !== "all"
+              ? new Set(monthEpics.filter((row) => row.initiative.id === selectedInitiativeId).map((row) => row.epic.team ?? "__unassigned__"))
+              : null;
+          const teamsInScope = pinnedTeamSlugs
+            ? analytics.workloadByTeam.filter((t) => pinnedTeamSlugs.has(t.teamId ?? "__unassigned__"))
+            : analytics.workloadByTeam;
           // Statuses hidden via the legend show 0 in the chart bars.
           const statusVal = (s: typeof WORKLOAD_BAR_SEGMENTS[number], n: number) =>
             workloadHiddenStatuses.has(s.key) ? 0 : n;
           const barData = teamMode
-            ? analytics.workloadByTeam.map((t) => ({
+            ? teamsInScope.map((t) => ({
                 name: t.teamLabel,
                 fullName: t.teamLabel,
                 "To do": statusVal(WORKLOAD_BAR_SEGMENTS[0], t.storiesByStatus.todo),
@@ -5141,6 +5187,85 @@ export function MonthAnalytics({
             <Activity className="size-4 text-slate-600" />
             Cumulative Flow{scopeTitleSuffix}
           </h3>
+          {/* Diagnostic Copy button — captures the CFD's source story
+           *  state + a representative day-sample so the empty/mismatched
+           *  chart can be reproduced. Click → JSON to clipboard. */}
+          <button
+            type="button"
+            onClick={async () => {
+              const sourceStories = selectedEpicOption != null
+                ? (selectedEpicOption.epic.userStories ?? [])
+                : monthEpics.flatMap((row) => row.epic.userStories ?? []);
+              const scheduled = sourceStories.filter((s) => s.sprint != null);
+              const lastResolved = cfdDataResolved.findIndex((r) => (r as Record<string, unknown>).todo === null);
+              const lastIdx = lastResolved === -1 ? cfdDataResolved.length - 1 : lastResolved - 1;
+              const dump = {
+                capturedAt: new Date().toISOString(),
+                surface: "Cumulative Flow",
+                scope: {
+                  selectedEpicId,
+                  selectedInitiativeId,
+                  epicTitle: selectedEpicOption?.epic.title ?? null,
+                },
+                stories: {
+                  sourceCount: sourceStories.length,
+                  scheduledCount: scheduled.length,
+                  withSnapshotsCount: sourceStories.filter((s) => (s.snapshots?.length ?? 0) > 0).length,
+                  currentStatusBreakdown: scheduled.reduce<Record<string, number>>((acc, s) => {
+                    acc[s.status] = (acc[s.status] ?? 0) + 1;
+                    return acc;
+                  }, {}),
+                  sample: scheduled.slice(0, 5).map((s) => {
+                    // Reproduce the CFD's actual lookup for "today" so we
+                    // can see what status the bisection IS returning vs
+                    // what story.status currently is.
+                    const now = new Date();
+                    const todayCutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
+                    const snapToday = latestSnapshotAtDayCached(s, todayCutoff);
+                    return {
+                      id: s.id,
+                      title: s.title,
+                      sprint: s.sprint,
+                      status: s.status,
+                      snapshotCount: s.snapshots?.length ?? 0,
+                      firstSnap: s.snapshots?.[0]?.snapshotDate ?? null,
+                      lastSnap: s.snapshots?.[s.snapshots.length - 1]?.snapshotDate ?? null,
+                      todayCutoffISO: todayCutoff.toISOString(),
+                      snapResolvedAtToday: snapToday
+                        ? { snapshotDate: snapToday.snapshotDate, status: snapToday.status, daysLeft: snapToday.daysLeft }
+                        : null,
+                    };
+                  }),
+                },
+                chart: {
+                  cfdMetric,
+                  flowFromSnapshotsUsed: flowFromSnapshots != null,
+                  dataPointCount: cfdDataResolved.length,
+                  firstRow: cfdDataResolved[0] ?? null,
+                  lastResolvedRow: lastIdx >= 0 ? cfdDataResolved[lastIdx] : null,
+                  visibleKeys: cfdVisibleKeys,
+                },
+                context: {
+                  planYear, scopeStartMonth, scopeEndMonth, progressBasis,
+                  filterEpicTeamIds: filterEpicTeamIds ?? null,
+                  forceUserMode: forceUserMode ?? false,
+                  monthEpicsCount: monthEpics.length,
+                },
+                url: typeof window !== "undefined" ? window.location.href : null,
+              };
+              try {
+                await navigator.clipboard.writeText(JSON.stringify(dump, null, 2));
+                alert("CFD diagnostics copied to clipboard.");
+              } catch {
+                alert("Copy failed — open devtools to see the dump.");
+                console.log(dump);
+              }
+            }}
+            className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-300 bg-white px-2 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+            title="Copy CFD diagnostic state"
+          >
+            Copy ⚙
+          </button>
         </div>
         <div
           className={cn(
@@ -5266,9 +5391,21 @@ export function MonthAnalytics({
           {/* Month Load — left column, below Workload Balance */}
           {(() => {
             const teamMode = !forceUserMode && (!filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1) && analytics.workloadByTeam.length > 0;
+            // Match Workload Balance — when an epic / initiative is
+            // pinned, hide team rows whose work isn't in the pinned
+            // scope (otherwise clicking them produces an empty
+            // drilldown because scopedStories is narrowed to the pin).
+            const pinnedTeamSlugs = selectedEpicOption
+              ? new Set([selectedEpicOption.epic.team ?? "__unassigned__"])
+              : selectedInitiativeId !== "all"
+                ? new Set(monthEpics.filter((row) => row.initiative.id === selectedInitiativeId).map((row) => row.epic.team ?? "__unassigned__"))
+                : null;
+            const teamsInScope = pinnedTeamSlugs
+              ? analytics.workloadByTeam.filter((t) => pinnedTeamSlugs.has(t.teamId ?? "__unassigned__"))
+              : analytics.workloadByTeam;
             const monthDaysLeft = analytics.monthDaysLeft;
             const loadRows = teamMode
-              ? analytics.workloadByTeam.map((t) => ({
+              ? teamsInScope.map((t) => ({
                   key: t.teamLabel,
                   label: t.teamLabel,
                   initials: t.teamLabel.slice(0, 2).toUpperCase(),
@@ -5532,11 +5669,14 @@ export function MonthAnalytics({
                                   />
                                 ) : null}
                                 <span className="text-[11px] tabular-nums text-slate-600">
+                                  <span className="font-semibold text-slate-800">{row.estTotal}d</span>
+                                  <span className="ml-0.5 text-slate-400">est</span>
+                                  <span className="mx-1 text-slate-300">·</span>
                                   <span className="font-semibold text-slate-800">{doneDays}d</span>
-                                  <span className="ml-0.5 text-slate-400">est done</span>
+                                  <span className="ml-0.5 text-slate-400">done</span>
                                   <span className="mx-1 text-slate-300">·</span>
                                   <span className={cn("font-semibold", atRisk ? "text-amber-700" : watch ? "text-amber-700" : "text-slate-800")}>{row.daysLeft}d</span>
-                                  <span className="ml-0.5 text-slate-400">est left</span>
+                                  <span className="ml-0.5 text-slate-400">left</span>
                                 </span>
                               </div>
                             </div>

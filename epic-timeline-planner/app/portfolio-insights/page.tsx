@@ -101,6 +101,7 @@ export default async function PortfolioInsightsPage({ searchParams }: PageProps)
       color: e.color,
       team: e.team,
       labels: e.labels ?? null,
+      priority: e.priority ?? null,
       originalEstimateDays: e.originalEstimateDays,
       planStartMonth: e.planStartMonth,
       planEndMonth: e.planEndMonth,

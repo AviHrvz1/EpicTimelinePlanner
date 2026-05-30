@@ -105,6 +105,8 @@ model Epic {
   team           String?
   /** Free-form labels (comma-separated). */
   labels         String?
+  /** Optional priority (P0..P3). */
+  priority       String?
   userStories    UserStory[]
   comments       EpicComment[]
   history        EpicHistory[]

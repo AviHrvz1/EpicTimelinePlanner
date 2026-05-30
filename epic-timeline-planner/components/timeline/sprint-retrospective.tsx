@@ -34,6 +34,10 @@ import { BurndownChart } from "@/components/dashboard/charts/burndown-chart";
 import { TeamAvatar } from "@/components/ui/team-avatar";
 import { CfdChart } from "@/components/dashboard/charts/cfd-chart";
 import { StoryStatusChart } from "@/components/dashboard/charts/story-status-chart";
+import { StoryStatusDrilldownTable } from "@/components/dashboard/charts/story-status-drilldown-table";
+import { collectMonthStories } from "@/lib/sprint-analytics";
+import { storyMatchesYearSprint } from "@/lib/sprint-plan";
+import { X as XIcon } from "lucide-react";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { Button } from "@/components/ui/button";
 import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
@@ -68,6 +72,8 @@ type SprintRetrospectiveEditorProps = {
   initiatives?: InitiativeItem[];
   planYear?: number;
   yearSprint?: number | null;
+  /** Opens the story details dialog when the user drills into a row. */
+  onOpenStory?: (storyId: string) => void;
 };
 
 // ─── HTML <-> card helpers ───────────────────────────────────────────────────
@@ -384,8 +390,10 @@ export function SprintRetrospectiveEditor({
   initiatives,
   planYear,
   yearSprint,
+  onOpenStory,
 }: SprintRetrospectiveEditorProps) {
   const [savedAtText, setSavedAtText] = useState<string | null>(null);
+  const [storyStatusDrilldown, setStoryStatusDrilldown] = useState<string | null>(null);
   // Composer refs + per-composer "has pending edits" flags. Each column's
   // notebook is now the single source of truth for its content — no more
   // sticky-card list below. On Save we pull each notebook's HTML and persist
@@ -581,6 +589,7 @@ export function SprintRetrospectiveEditor({
                   quarter={Math.ceil(yearSprint / 6)}
                   sprint={yearSprint}
                   team={teamId ?? null}
+                  onSliceClick={(statusLabel) => setStoryStatusDrilldown(statusLabel)}
                 />
               </div>
             </article>
@@ -630,6 +639,59 @@ export function SprintRetrospectiveEditor({
           )}
         </p>
       </footer>
+      {storyStatusDrilldown && initiatives && planYear != null && yearSprint != null
+        ? (() => {
+            const month = Math.ceil(yearSprint / 2);
+            const scoped = collectMonthStories(initiatives, month, teamId ? [teamId] : null).filter((story) =>
+              storyMatchesYearSprint(story, month, yearSprint),
+            );
+            return (
+              <div
+                className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/20 backdrop-blur-[2px] p-4"
+                onClick={() => setStoryStatusDrilldown(null)}
+              >
+                <div
+                  className="relative flex h-[70vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-sky-200 bg-white shadow-2xl ring-4 ring-sky-100/70 animate-in fade-in zoom-in-95 duration-150"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <PieChartIcon className="size-4 shrink-0 text-slate-600" aria-hidden />
+                      <h3 className="truncate text-[15px] font-semibold text-slate-800">
+                        User Stories · {storyStatusDrilldown}
+                      </h3>
+                      <span className="shrink-0 text-[12px] text-slate-500">
+                        {sprintLabel}
+                        {teamName ? ` · ${teamName}` : ""}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setStoryStatusDrilldown(null)}
+                      aria-label="Close drilldown"
+                      className="shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                    >
+                      <XIcon className="size-4" />
+                    </button>
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-hidden px-6 py-4">
+                    <div className="h-full overflow-hidden rounded-lg ring-1 ring-slate-200">
+                      <StoryStatusDrilldownTable
+                        stories={scoped}
+                        initialStatus={storyStatusDrilldown}
+                        workspaceDirectoryUsers={workspaceDirectoryUsers}
+                        onOpenStory={(id) => {
+                          setStoryStatusDrilldown(null);
+                          onOpenStory?.(id);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()
+        : null}
     </section>
   );
 }

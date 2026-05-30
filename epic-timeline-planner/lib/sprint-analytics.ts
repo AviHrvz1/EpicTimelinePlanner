@@ -155,7 +155,7 @@ function buildTeamMemberNameSet(
   return set;
 }
 
-function collectMonthStories(
+export function collectMonthStories(
   initiatives: InitiativeItem[],
   month: number,
   filterEpicTeamIds?: string[] | null,

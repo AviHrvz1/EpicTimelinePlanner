@@ -3095,6 +3095,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     color: string;
     initiativeId: string;
     team: string | null;
+    priority: string | null;
     originalEstimateDays: number | null;
     planStartMonth: number | null;
     planEndMonth: number | null;

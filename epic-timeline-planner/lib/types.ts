@@ -117,6 +117,8 @@ export type EpicItem = {
   team: string | null;
   /** Free-form labels (comma-separated). */
   labels: string | null;
+  /** Optional priority (P0..P3). */
+  priority: string | null;
   userStories: UserStoryItem[];
   comments: EpicCommentItem[];
   history: EpicHistoryItem[];
