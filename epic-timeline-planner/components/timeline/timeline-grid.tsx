@@ -7212,15 +7212,18 @@ export function TimelineGrid({
                   }
                   onOpenStory={onOpenStory ?? (() => {})}
                   teamSelectorSlot={
-                    <div className="group/trigger relative inline-flex min-w-[12rem] max-w-[20rem] align-middle" ref={sprintTeamMenuRef}>
+                    <div className="group/trigger relative inline-flex w-full min-w-[12rem] align-middle" ref={sprintTeamMenuRef}>
                       <button
                         type="button"
                         onClick={() => setIsSprintTeamMenuOpen((prev) => !prev)}
-                        className="inline-flex h-7 min-w-[9.25rem] items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2 text-[12px] font-medium text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
+                        className="inline-flex h-7 w-full min-w-[9.25rem] items-center justify-between gap-2 overflow-hidden rounded-md border border-slate-200 bg-white px-2 text-[12px] font-medium text-slate-800 outline-none transition hover:border-slate-300 focus-visible:border-slate-400 focus-visible:ring-2 focus-visible:ring-slate-300/70"
                         aria-label="Filter sprint capacity by team"
                         aria-expanded={isSprintTeamMenuOpen}
                       >
-                        <span className="inline-flex min-w-0 flex-wrap items-center gap-2">
+                        <span
+                          className="inline-flex min-w-0 flex-1 items-center gap-2 overflow-x-auto [&::-webkit-scrollbar]:h-0"
+                          style={{ scrollbarWidth: "none" }}
+                        >
                           {sprintFilterTeamIds.length === 0 ? (
                             <span className="inline-flex items-center gap-1.5">
                               <Users className="size-3.5 shrink-0 text-slate-500" aria-hidden />
@@ -7232,7 +7235,7 @@ export function TimelineGrid({
                               return (
                                 <span
                                   key={id}
-                                  className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0 text-[12px] font-medium text-slate-700 ring-1 ring-slate-200"
+                                  className="inline-flex shrink-0 items-center gap-1 rounded bg-slate-100 px-1.5 py-0 text-[12px] font-medium text-slate-700 ring-1 ring-slate-200"
                                 >
                                   <TeamAvatar slug={id} sizePx={14} fallback={<Users className="size-3 shrink-0 opacity-70" aria-hidden />} />
                                   <span className="truncate">{label}</span>

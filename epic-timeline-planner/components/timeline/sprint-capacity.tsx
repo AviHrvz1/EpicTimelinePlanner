@@ -1171,7 +1171,7 @@ export function SprintCapacityBoard({
           </div>
         </>
       ) : null}
-    <div className="space-y-6 pb-6">
+    <div className="space-y-2 pb-6">
       <TeamLoadSummary
         teamLabel={teamLabel}
         teamLabelSlot={teamSelectorSlot}

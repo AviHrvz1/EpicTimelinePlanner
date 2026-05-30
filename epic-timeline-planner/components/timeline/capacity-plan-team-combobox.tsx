@@ -57,16 +57,20 @@ export function CapacityPlanTeamCombobox({
   const labelForId = (id: string) => catalogById.get(id) ?? teamLabelForWorkspaceUser(id);
 
   return (
-    <div ref={comboboxRef} className="relative inline-flex min-w-[13rem] max-w-[22rem] align-middle">
+    // No max-w cap so the trigger can grow horizontally to fit every selected
+    // team chip on a single row; flex-1 of the parent TeamLoadSummary row
+    // already bounds it by the container width.
+    <div ref={comboboxRef} className="relative inline-flex min-w-[13rem] w-full align-middle">
       <div
-        className="flex min-h-7 w-full flex-wrap items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[12px] font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.03]"
+        className="flex h-7 w-full items-center gap-1 overflow-x-auto rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[12px] font-semibold text-slate-800 shadow-sm shadow-slate-900/[0.03] [&::-webkit-scrollbar]:h-0"
+        style={{ scrollbarWidth: "none" }}
         onClick={() => onMenuOpenChange(true)}
       >
         {selectedIds.map((id) => (
           <button
             key={id}
             type="button"
-            className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700"
+            className="inline-flex shrink-0 items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700"
             onClick={(event) => {
               event.stopPropagation();
               onSelectedIdsChange((prev) => prev.filter((teamId) => teamId !== id));
