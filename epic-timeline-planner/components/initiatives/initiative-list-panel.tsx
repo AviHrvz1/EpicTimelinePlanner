@@ -939,6 +939,10 @@ type InitiativeListPanelProps = {
    *  by the parent to force-enable the Gantt's team-chip overlay so the
    *  bars surface which delivery team owns them. */
   onPanelTeamFilterActiveChange?: (active: boolean) => void;
+  /** Fires with the derived Set of selected team IDs (empty when "all") so
+   *  the parent can apply the same cut to the Gantt rows — picking
+   *  `Mobile` in the panel filter hides non-Mobile bars too. */
+  onPanelTeamFilterDerivedChange?: (next: Set<string>) => void;
 };
 
 function DraggableInitiativeCard({
@@ -2166,6 +2170,7 @@ export function InitiativeListPanel({
   onPanelStatusFilterDerivedChange,
   onPanelQuarterFilterDerivedChange,
   onPanelTeamFilterActiveChange,
+  onPanelTeamFilterDerivedChange,
 }: InitiativeListPanelProps) {
   const { active } = useDndContext();
   const isTimelineEpicDragActive = active != null && String(active.id).startsWith("timeline-epic:");
@@ -2573,6 +2578,18 @@ export function InitiativeListPanel({
     const active = !panelTeamFilterIds.includes("all") && panelTeamFilterIds.length > 0;
     onPanelTeamFilterActiveChange(active);
   }, [panelTeamFilterIds, onPanelTeamFilterActiveChange]);
+  /** Emit selected team IDs so the parent can cut the Gantt to those
+   *  teams. Empty Set (or "all" sentinel present) means no filter. */
+  useEffect(() => {
+    if (!onPanelTeamFilterDerivedChange) return;
+    const set = new Set<string>();
+    if (!panelTeamFilterIds.includes("all")) {
+      for (const id of panelTeamFilterIds) {
+        if (id !== "all" && id) set.add(id);
+      }
+    }
+    onPanelTeamFilterDerivedChange(set);
+  }, [panelTeamFilterIds, onPanelTeamFilterDerivedChange]);
   const toggleMultiFilter = <T extends string>(prev: T[], value: T, allToken: T): T[] => {
     if (value === allToken) return [allToken];
     const withoutAll = prev.filter((x) => x !== allToken);

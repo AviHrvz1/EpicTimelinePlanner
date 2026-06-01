@@ -1376,6 +1376,9 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
    *  passed to TimelineGrid so the Gantt only renders epics whose
    *  plan-start quarter is in the set. Empty Set = no filter. */
   const [ganttQuarterFilter, setGanttQuarterFilter] = useState<Set<"Q1" | "Q2" | "Q3" | "Q4">>(() => new Set());
+  /** Same lift pattern — the panel emits selected team IDs and the Gantt
+   *  drops bars whose team isn't in the Set. Empty = no team filter. */
+  const [ganttTeamFilter, setGanttTeamFilter] = useState<Set<string>>(() => new Set());
   /**
    * Controlled mirror of the Gantt's team-chip overlay toggle. When the
    * planner pins teams in the middle panel, flip the overlay on so the
@@ -5758,6 +5761,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                       onPanelStatusFilterDerivedChange={setGanttStatusFilter}
                       onPanelQuarterFilterDerivedChange={setGanttQuarterFilter}
                       onPanelTeamFilterActiveChange={handlePanelTeamFilterActiveChange}
+                      onPanelTeamFilterDerivedChange={setGanttTeamFilter}
                       storyProgressDetailsVisible={showRoadmapProgress}
                       useEpicPlanLeftPanel={initiativeListActiveMonth != null}
                       activeYearSprint={activeYearSprint}
@@ -5967,6 +5971,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 onHealthFilterChange={handleHealthFilterChange}
                 ganttStatusFilterExternal={ganttStatusFilter}
                 ganttQuarterFilterExternal={ganttQuarterFilter}
+                ganttTeamFilterExternal={ganttTeamFilter}
                 showGanttTeamChipsExternal={showGanttTeamChipsCtrl}
                 onShowGanttTeamChipsChange={setShowGanttTeamChipsCtrl}
                 initialInsightsScopeEpicId={insightsScopeEpicId}

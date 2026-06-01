@@ -1695,6 +1695,12 @@ type TimelineGridProps = {
    * Q2-starting work.
    */
   ganttQuarterFilterExternal?: Set<"Q1" | "Q2" | "Q3" | "Q4">;
+  /**
+   * Team filter mirrored from the panel. When non-empty, the Gantt drops
+   * bars whose epic.team isn't in the Set. Picking `Mobile` in the panel
+   * causes only Mobile-owned epics to render on the Gantt.
+   */
+  ganttTeamFilterExternal?: Set<string>;
   /** Controlled mirror of the Gantt's team-chip overlay. When provided,
    *  the parent decides; when omitted, TimelineGrid keeps the state
    *  internal (so the toolbar toggle still works in standalone uses). */
@@ -2607,6 +2613,7 @@ export function TimelineGrid({
   onHealthFilterChange,
   ganttStatusFilterExternal,
   ganttQuarterFilterExternal,
+  ganttTeamFilterExternal,
   showGanttTeamChipsExternal,
   onShowGanttTeamChipsChange,
   initialInsightsScopeEpicId,
@@ -5355,6 +5362,23 @@ export function TimelineGrid({
     },
     [ganttQuarterFilter, epicMatchesGanttQuarterFilter],
   );
+  /** Team filter — show an epic only when its `epic.team` is in the
+   *  selected Set. An initiative passes if any of its epics passes. */
+  const ganttTeamFilter = ganttTeamFilterExternal ?? null;
+  const epicMatchesGanttTeamFilter = useCallback(
+    (epic: EpicItem): boolean => {
+      if (!ganttTeamFilter || ganttTeamFilter.size === 0) return true;
+      return epic.team != null && ganttTeamFilter.has(epic.team);
+    },
+    [ganttTeamFilter],
+  );
+  const initiativeMatchesGanttTeamFilter = useCallback(
+    (initiative: InitiativeItem): boolean => {
+      if (!ganttTeamFilter || ganttTeamFilter.size === 0) return true;
+      return (initiative.epics ?? []).some((epic) => epicMatchesGanttTeamFilter(epic));
+    },
+    [ganttTeamFilter, epicMatchesGanttTeamFilter],
+  );
 
   // Year-roadmap rows after the active health filter is applied. Mirrors the
   // search-filter pattern: items whose status isn't in the filter set get
@@ -5392,8 +5416,16 @@ export function TimelineGrid({
         }))
         .filter((g) => g.items.length > 0);
     }
+    if (ganttTeamFilter && ganttTeamFilter.size > 0) {
+      rows = rows
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((i) => initiativeMatchesGanttTeamFilter(i.initiative)),
+        }))
+        .filter((g) => g.items.length > 0);
+    }
     return rows;
-  }, [ganttSearchAppliedYearInitiativeRows, ganttHealthData.statusByBarId, healthFilter, ganttStatusFilter, initiativeMatchesGanttStatusFilter, ganttQuarterFilter, initiativeMatchesGanttQuarterFilter]);
+  }, [ganttSearchAppliedYearInitiativeRows, ganttHealthData.statusByBarId, healthFilter, ganttStatusFilter, initiativeMatchesGanttStatusFilter, ganttQuarterFilter, initiativeMatchesGanttQuarterFilter, ganttTeamFilter, initiativeMatchesGanttTeamFilter]);
 
   const ganttHealthFilteredYearEpicRows = useMemo(() => {
     let rows = ganttSearchAppliedYearEpicRows;
@@ -5424,8 +5456,16 @@ export function TimelineGrid({
         }))
         .filter((g) => g.items.length > 0);
     }
+    if (ganttTeamFilter && ganttTeamFilter.size > 0) {
+      rows = rows
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((i) => epicMatchesGanttTeamFilter(i.epic)),
+        }))
+        .filter((g) => g.items.length > 0);
+    }
     return rows;
-  }, [ganttSearchAppliedYearEpicRows, ganttHealthData.statusByBarId, healthFilter, ganttStatusFilter, epicMatchesGanttStatusFilter, ganttQuarterFilter, epicMatchesGanttQuarterFilter]);
+  }, [ganttSearchAppliedYearEpicRows, ganttHealthData.statusByBarId, healthFilter, ganttStatusFilter, epicMatchesGanttStatusFilter, ganttQuarterFilter, epicMatchesGanttQuarterFilter, ganttTeamFilter, epicMatchesGanttTeamFilter]);
 
   // Mirror of the above for the focused-quarter view so the popover's
   // filter chips also hide non-matching bars when a single quarter is
@@ -5459,8 +5499,16 @@ export function TimelineGrid({
         }))
         .filter((g) => g.items.length > 0);
     }
+    if (ganttTeamFilter && ganttTeamFilter.size > 0) {
+      rows = rows
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((i) => initiativeMatchesGanttTeamFilter(i.initiative)),
+        }))
+        .filter((g) => g.items.length > 0);
+    }
     return rows;
-  }, [ganttSearchAppliedQuarterInitiativeRows, ganttHealthData.statusByBarId, healthFilter, ganttStatusFilter, initiativeMatchesGanttStatusFilter, ganttQuarterFilter, initiativeMatchesGanttQuarterFilter]);
+  }, [ganttSearchAppliedQuarterInitiativeRows, ganttHealthData.statusByBarId, healthFilter, ganttStatusFilter, initiativeMatchesGanttStatusFilter, ganttQuarterFilter, initiativeMatchesGanttQuarterFilter, ganttTeamFilter, initiativeMatchesGanttTeamFilter]);
 
   const ganttHealthFilteredQuarterEpicRows = useMemo(() => {
     let rows = ganttSearchAppliedQuarterEpicRows;
@@ -5491,8 +5539,16 @@ export function TimelineGrid({
         }))
         .filter((g) => g.items.length > 0);
     }
+    if (ganttTeamFilter && ganttTeamFilter.size > 0) {
+      rows = rows
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((i) => epicMatchesGanttTeamFilter(i.epic)),
+        }))
+        .filter((g) => g.items.length > 0);
+    }
     return rows;
-  }, [ganttSearchAppliedQuarterEpicRows, ganttHealthData.statusByBarId, healthFilter, ganttStatusFilter, epicMatchesGanttStatusFilter, ganttQuarterFilter, epicMatchesGanttQuarterFilter]);
+  }, [ganttSearchAppliedQuarterEpicRows, ganttHealthData.statusByBarId, healthFilter, ganttStatusFilter, epicMatchesGanttStatusFilter, ganttQuarterFilter, epicMatchesGanttQuarterFilter, ganttTeamFilter, epicMatchesGanttTeamFilter]);
 
   // Month view is flat (not grouped by timeline row), so the filter just
   // drops items whose status isn't in the active set.
@@ -5510,8 +5566,11 @@ export function TimelineGrid({
     if (ganttQuarterFilter && ganttQuarterFilter.size > 0) {
       rows = rows.filter(({ epic }) => epicMatchesGanttQuarterFilter(epic));
     }
+    if (ganttTeamFilter && ganttTeamFilter.size > 0) {
+      rows = rows.filter(({ epic }) => epicMatchesGanttTeamFilter(epic));
+    }
     return rows;
-  }, [ganttSearchAppliedMonthEpicRows, ganttHealthData.statusByBarId, healthFilter, ganttStatusFilter, epicMatchesGanttStatusFilter, ganttQuarterFilter, epicMatchesGanttQuarterFilter]);
+  }, [ganttSearchAppliedMonthEpicRows, ganttHealthData.statusByBarId, healthFilter, ganttStatusFilter, epicMatchesGanttStatusFilter, ganttQuarterFilter, epicMatchesGanttQuarterFilter, ganttTeamFilter, epicMatchesGanttTeamFilter]);
 
   const ganttHealthFilteredMonthInitiativeRows = useMemo(() => {
     let rows = ganttSearchAppliedMonthInitiativeRows;
@@ -5527,8 +5586,11 @@ export function TimelineGrid({
     if (ganttQuarterFilter && ganttQuarterFilter.size > 0) {
       rows = rows.filter((initiative) => initiativeMatchesGanttQuarterFilter(initiative));
     }
+    if (ganttTeamFilter && ganttTeamFilter.size > 0) {
+      rows = rows.filter((initiative) => initiativeMatchesGanttTeamFilter(initiative));
+    }
     return rows;
-  }, [ganttSearchAppliedMonthInitiativeRows, ganttHealthData.statusByBarId, healthFilter, ganttStatusFilter, initiativeMatchesGanttStatusFilter, ganttQuarterFilter, initiativeMatchesGanttQuarterFilter]);
+  }, [ganttSearchAppliedMonthInitiativeRows, ganttHealthData.statusByBarId, healthFilter, ganttStatusFilter, initiativeMatchesGanttStatusFilter, ganttQuarterFilter, initiativeMatchesGanttQuarterFilter, ganttTeamFilter, initiativeMatchesGanttTeamFilter]);
 
   // Clear the active health filter whenever the view mode swaps so a filter
   // pinned in "epics" view doesn't silently survive into "initiatives" view
