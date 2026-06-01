@@ -90,7 +90,13 @@ function useStoryTitleTruncationFlag(text: string) {
   const measure = useCallback(() => {
     const el = ref.current;
     if (!el) return;
-    setIsTruncated(el.scrollWidth > el.clientWidth + 1);
+    const next = el.scrollWidth > el.clientWidth + 1;
+    // Functional bail-out: skip the setState (and the cascading re-render
+    // + ResizeObserver callback + layout effect) when the truncation flag
+    // is already correct. Without this, the flag can ping-pong on a Jump
+    // navigation when the new column width causes the title to toggle
+    // between truncated / not, contributing to the max-update-depth loop.
+    setIsTruncated((prev) => (prev === next ? prev : next));
   }, []);
   useLayoutEffect(() => {
     measure();
@@ -119,7 +125,11 @@ function LeftPanelStoryTitleTooltipPortal({
     const el = anchorRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    setCoords({ top: r.bottom + 6, left: r.left });
+    const nextTop = r.bottom + 6;
+    const nextLeft = r.left;
+    // Bail-out when both coords are unchanged so we don't burn a render
+    // cycle on every scroll / resize tick.
+    setCoords((prev) => (prev.top === nextTop && prev.left === nextLeft ? prev : { top: nextTop, left: nextLeft }));
   }, [anchorRef]);
   useLayoutEffect(() => {
     if (!show) return;
