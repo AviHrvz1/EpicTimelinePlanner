@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, X as XIcon } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
@@ -8,7 +8,9 @@ import { cn } from "@/lib/utils";
 /** Compact per-column filter cells rendered as a second row in the drilldown
  *  table's <thead>. Title is a substring text input; sprint/assignee/status
  *  are <select> dropdowns of the unique values present in the raw rows.
- *  Shared by month-analytics + sprint-analytics so the chrome stays in sync. */
+ *  Shared by month-analytics + sprint-analytics so the chrome stays in sync.
+ *  Both controls render a clear-on-hover X when a value is set so the planner
+ *  can drop a single column filter without opening the dropdown. */
 export function DrilldownFilterInputText({
   value,
   onChange,
@@ -20,17 +22,35 @@ export function DrilldownFilterInputText({
   placeholder?: string;
   ariaLabel: string;
 }) {
+  const hasValue = value.length > 0;
   return (
-    <input
-      type="text"
-      name={ariaLabel.toLowerCase().replace(/[^a-z0-9]+/g, "-")}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      aria-label={ariaLabel}
-      autoComplete="off"
-      className="block h-6 w-full rounded-sm border border-slate-300 bg-white px-1.5 text-[11px] !text-slate-800 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300/40"
-    />
+    <div className="group relative">
+      <input
+        type="text"
+        name={ariaLabel.toLowerCase().replace(/[^a-z0-9]+/g, "-")}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
+        autoComplete="off"
+        className={cn(
+          "block h-6 w-full rounded-sm border border-slate-300 bg-white px-1.5 text-[11px] !text-slate-800 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300/40",
+          hasValue && "pr-5",
+        )}
+      />
+      {hasValue ? (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          tabIndex={-1}
+          aria-label={`Clear ${ariaLabel}`}
+          title="Clear filter"
+          className="absolute right-0.5 top-1/2 inline-flex size-4 -translate-y-1/2 items-center justify-center rounded-sm text-slate-400 opacity-0 transition hover:bg-slate-100 hover:text-slate-700 group-hover:opacity-100 focus:opacity-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-sky-300"
+        >
+          <XIcon className="size-3" aria-hidden />
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -66,7 +86,7 @@ export function DrilldownFilterDropdown({
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="group relative">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -76,6 +96,18 @@ export function DrilldownFilterDropdown({
         <span className="min-w-0 flex-1 truncate text-left">
           {value == null ? <span className="text-slate-500">{emptyLabel}</span> : renderOption(value)}
         </span>
+        {value != null ? (
+          <span
+            role="button"
+            tabIndex={-1}
+            aria-label={`Clear ${ariaLabel}`}
+            title="Clear filter"
+            onClick={(e) => { e.stopPropagation(); onChange(null); }}
+            className="inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-slate-400 opacity-0 transition hover:bg-slate-100 hover:text-slate-700 group-hover:opacity-100 focus:opacity-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-sky-300"
+          >
+            <XIcon className="size-3" aria-hidden />
+          </span>
+        ) : null}
         <ChevronDown className="size-3 shrink-0 opacity-60" aria-hidden />
       </button>
       {open ? (

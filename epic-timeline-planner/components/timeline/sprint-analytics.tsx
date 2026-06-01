@@ -606,9 +606,13 @@ export function SprintAnalytics({
   const [statusDrilldownColFilter, setStatusDrilldownColFilter] = useState<SprintDrilldownColFilter>(EMPTY_SPRINT_DRILLDOWN_FILTER);
   const [workloadDrilldownColFilter, setWorkloadDrilldownColFilter] = useState<SprintDrilldownColFilter>(EMPTY_SPRINT_DRILLDOWN_FILTER);
   const [sprintLoadDrilldownColFilter, setSprintLoadDrilldownColFilter] = useState<SprintDrilldownColFilter>(EMPTY_SPRINT_DRILLDOWN_FILTER);
-  useEffect(() => { setStatusDrilldownColFilter(EMPTY_SPRINT_DRILLDOWN_FILTER); }, [statusDrilldownFilter]);
-  useEffect(() => { setWorkloadDrilldownColFilter(EMPTY_SPRINT_DRILLDOWN_FILTER); }, [workloadDrilldownAssignee, workloadDrilldownIsTeam]);
-  useEffect(() => { setSprintLoadDrilldownColFilter(EMPTY_SPRINT_DRILLDOWN_FILTER); }, [sprintLoadDrilldownAssignee, sprintLoadDrilldownIsTeam]);
+  /**
+   * Per-drilldown column filters are set explicitly by each click handler
+   * (slice → status pre-fill, bar → assignee/team pre-fill). The earlier
+   * auto-reset to EMPTY on every drilldown change would wipe the pre-fills
+   * before the table rendered. Closing the modal preserves the user's
+   * column filter state for the next open; the next click overwrites it.
+   */
   const [sprintTimelinePopupOpen, setSprintTimelinePopupOpen] = useState(false);
   const analytics = useMemo(
     () =>
@@ -717,16 +721,20 @@ export function SprintAnalytics({
   };
 
   const sprintStories = useMemo(() => {
-    // Drilldown sources for the Workload Balance / Sprint Load row tables —
-    // must mirror the chart's own scoping rules:
-    //  - Epic plan range scoping (kanban helper), not coarse initiative bounds.
-    //  - OR-style team filter (epic in filter OR assignee's directory team in
-    //    filter), matching `collectWorkloadStories` in lib/sprint-analytics.
-    //  - For CLOSED sprints, project to the sprint close instant so the
-    //    drilldown sees the same frozen state as the pie/burndown. Without
-    //    this projection, clicking a slice on the closed-sprint pie returns
-    //    empty whenever the underlying stories have since moved sprints or
-    //    flipped status.
+    /**
+     * Drilldown sources for the Workload Balance / Sprint Load / Status pie
+     * row tables — read LIVE initiatives so they MATCH what the charts and
+     * the kanban show. The earlier projection-on-close path showed moved
+     * stories as if they were still in this sprint, which made the
+     * Workload drilldown contradict the LIVE pie (e.g. pie says 100% Done
+     * but drilldown shows To Do / Review rows that were actually moved to
+     * the next sprint).
+     *
+     * Scope: iterate every team-filtered epic across all initiatives (no
+     * epic-month-plan filter) so we don't drop sprint-10 stories whose
+     * parent epic is planned outside May — same fix as `collectMonthStories`
+     * in lib/sprint-analytics.ts.
+     */
     const teamMemberNames = new Set<string>();
     if (filterEpicTeamIds?.length && workspaceDirectoryUsers) {
       const filterLower = new Set(filterEpicTeamIds.map((t) => t.toLowerCase()));
@@ -736,12 +744,6 @@ export function SprintAnalytics({
         if (team && name && filterLower.has(team)) teamMemberNames.add(name);
       }
     }
-    const closeMs = sprintEndDate(planYear, yearSprint).getTime();
-    const sprintClosed = closeMs <= clockNowMs();
-    const dataInitiatives = sprintClosed
-      ? projectInitiativesToCloseDate(initiatives, closeMs)
-      : initiatives;
-    const scopeEpics = collectMonthScopeEpicsForSprintPanel(dataInitiatives, month, null);
     const rows: Array<{
       id: string;
       title: string;
@@ -755,7 +757,8 @@ export function SprintAnalytics({
       estimatedDays: number | null;
       daysLeft: number | null;
     }> = [];
-    for (const { epic } of scopeEpics) {
+    for (const initiative of initiatives) {
+      for (const epic of initiative.epics ?? []) {
       const epicTeamInFilter =
         !filterEpicTeamIds?.length || filterEpicTeamIds.includes(epic.team ?? "");
       for (const story of epic.userStories ?? []) {
@@ -788,6 +791,7 @@ export function SprintAnalytics({
           daysLeft: story.daysLeft ?? null,
         });
       }
+      }
     }
     return rows;
   }, [initiatives, month, yearSprint, planYear, filterEpicTeamIds, workspaceDirectoryUsers]);
@@ -802,27 +806,22 @@ export function SprintAnalytics({
   // tooltips and chart labels were drifting between the two name spaces
   // after the enum rename, so go through `statusKey` explicitly to make
   // the filter robust to either label set.
-  const statusDrilldownStoriesRaw = useMemo(() => {
-    if (!statusDrilldownFilter) return [];
-    if (statusDrilldownFilter === "All") return sprintStories;
-    if (statusDrilldownFilter === "Unscheduled") {
-      return sprintStories.filter((story) => story.sprint == null);
-    }
-    const enumValue: UserStoryItem["status"] | null =
-      statusDrilldownFilter === "To do" ? "todo"
-      : statusDrilldownFilter === "In progress" ? "inProgress"
-      : statusDrilldownFilter === "Review / Testing" ? "review"
-      : statusDrilldownFilter === "Done" ? "done"
-      : null;
-    if (enumValue == null) return [];
-    return sprintStories.filter((story) => story.statusKey === enumValue);
-  }, [statusDrilldownFilter, sprintStories]);
+  /**
+   * Drilldown raw pools now hold the FULL sprint scope; the slice / bar
+   * that was clicked pre-populates the column filter instead of pre-cutting
+   * the data. Lets the planner clear the pre-set filter to see everything,
+   * and keeps the per-column option dropdowns honest (otherwise the dropdowns
+   * would only ever show the one pre-cut value).
+   */
+  const statusDrilldownStoriesRaw = useMemo(
+    () => (statusDrilldownFilter ? sprintStories : []),
+    [statusDrilldownFilter, sprintStories],
+  );
 
-  const workloadDrilldownStoriesRaw = useMemo(() => {
-    if (!workloadDrilldownAssignee) return [];
-    if (workloadDrilldownIsTeam) return sprintStories.filter((story) => story.team === workloadDrilldownAssignee);
-    return sprintStories.filter((story) => story.assignee === workloadDrilldownAssignee);
-  }, [workloadDrilldownAssignee, workloadDrilldownIsTeam, sprintStories]);
+  const workloadDrilldownStoriesRaw = useMemo(
+    () => (workloadDrilldownAssignee ? sprintStories : []),
+    [workloadDrilldownAssignee, sprintStories],
+  );
 
   function applyDrilldownColFilter(
     rows: typeof sprintStories,
@@ -907,11 +906,10 @@ export function SprintAnalytics({
     updateArrowState(workloadDrilldownScrollRef, setCanScrollWorkloadUp, setCanScrollWorkloadDown);
   }, [workloadDrilldownStories.length, workloadDrilldownAssignee]);
 
-  const sprintLoadDrilldownStoriesRaw = useMemo(() => {
-    if (!sprintLoadDrilldownAssignee) return [];
-    if (sprintLoadDrilldownIsTeam) return sprintStories.filter((story) => story.team === sprintLoadDrilldownAssignee);
-    return sprintStories.filter((story) => story.assignee === sprintLoadDrilldownAssignee);
-  }, [sprintLoadDrilldownAssignee, sprintLoadDrilldownIsTeam, sprintStories]);
+  const sprintLoadDrilldownStoriesRaw = useMemo(
+    () => (sprintLoadDrilldownAssignee ? sprintStories : []),
+    [sprintLoadDrilldownAssignee, sprintStories],
+  );
   const sprintLoadDrilldownStories = useMemo(
     () => applyDrilldownColFilter(sprintLoadDrilldownStoriesRaw, sprintLoadDrilldownColFilter, yearSprint),
     [sprintLoadDrilldownStoriesRaw, sprintLoadDrilldownColFilter, yearSprint],
@@ -948,6 +946,7 @@ export function SprintAnalytics({
         {statusDrilldownFilter ? (
           <InsightsDrilldownModal
             title={`User Stories Status · ${statusDrilldownFilter}`}
+            subtitle={`${statusDrilldownStories.length} user stor${statusDrilldownStories.length === 1 ? "y" : "ies"} presented`}
             icon={<PieChartIcon className="size-4 text-slate-600" aria-hidden />}
             onClose={() => setStatusDrilldownFilter(null)}
           >
@@ -962,6 +961,7 @@ export function SprintAnalytics({
                 <table className="w-full border-separate border-spacing-0 text-left text-[13px]">
                   <thead className="sticky top-0 z-10 bg-[#0897d5] text-white backdrop-blur">
                     <tr>
+                      <th className="w-10 px-2 py-1.5 text-right text-[14px] font-bold">#</th>
                       <th className="px-2 py-1.5 text-[14px] font-bold">Story ID</th>
                       <th className="px-2 py-1.5 text-[14px] font-bold">Story name</th>
                       <th className="px-2 py-1.5 text-[14px] font-bold">Sprint</th>
@@ -971,6 +971,7 @@ export function SprintAnalytics({
                       <th className="px-2 py-1.5 text-right text-[14px] font-bold">Est days left</th>
                     </tr>
                     <tr className="bg-white/95">
+                      <th className="px-1 py-0.5" />
                       <th className="px-1 py-0.5" />
                       <th className="px-1 py-0.5">
                         <DrilldownFilterInputText
@@ -1019,8 +1020,9 @@ export function SprintAnalytics({
                     </tr>
                   </thead>
                   <tbody>
-                    {statusDrilldownStories.map((story) => (
+                    {statusDrilldownStories.map((story, idx) => (
                       <tr key={story.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
+                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{idx + 1}</td>
                         <td className="px-2 py-1.5">
                           <span className="inline-flex min-w-0 items-center gap-1.5">
                             <UserStoryIcon className="size-3.5" />
@@ -1047,7 +1049,7 @@ export function SprintAnalytics({
                     ))}
                     {statusDrilldownStories.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-3 py-8 text-center text-[13px] text-slate-500">
+                        <td colSpan={8} className="px-3 py-8 text-center text-[13px] text-slate-500">
                           No stories in this status.
                         </td>
                       </tr>
@@ -1106,7 +1108,14 @@ export function SprintAnalytics({
                   label={piePercentLabel}
                   labelLine={false}
                   filter="url(#sprintPieShadow)"
-                  onClick={(entry) => setStatusDrilldownFilter(String((entry as { name?: string }).name ?? ""))}
+                  onClick={(entry) => {
+                    const name = String((entry as { name?: string }).name ?? "");
+                    setStatusDrilldownFilter(name);
+                    // Pre-populate the Status column filter to the clicked
+                    // slice so the table opens narrowed but the user can
+                    // clear it to see every status.
+                    setStatusDrilldownColFilter({ ...EMPTY_SPRINT_DRILLDOWN_FILTER, status: name });
+                  }}
                 >
                   {pieData.map((entry) => (
                     <Cell key={entry.name} fill={STATUS_COLORS[entry.name] ?? "#94a3b8"} />
@@ -1132,6 +1141,26 @@ export function SprintAnalytics({
               </PieChart>
               </ResponsiveContainer>
             </div>
+            {pieTotal > 0 ? (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Center click opens the drilldown with NO pre-filter —
+                    // shows every sprint story regardless of status.
+                    setStatusDrilldownFilter("All");
+                    setStatusDrilldownColFilter(EMPTY_SPRINT_DRILLDOWN_FILTER);
+                  }}
+                  title="See all stories in this sprint"
+                  className="pointer-events-auto flex flex-col items-center rounded-full px-3 py-1 leading-none transition hover:bg-slate-50/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+                >
+                  <span className="text-[28px] font-bold tabular-nums text-slate-900">{pieTotal}</span>
+                  <span className="mt-1 text-[11px] font-medium uppercase tracking-[0.06em] text-slate-500">
+                    {pieTotal === 1 ? "story" : "stories"}
+                  </span>
+                </button>
+              </div>
+            ) : null}
           </div>
           <div className={`space-y-1.5 ${PIE_LEGEND_CAP}`}>
             {pieData.map((slice) => {
@@ -1320,6 +1349,7 @@ export function SprintAnalytics({
         {workloadDrilldownAssignee ? (
           <InsightsDrilldownModal
             title={`Workload Balance · ${workloadDrilldownAssignee}`}
+            subtitle={`${workloadDrilldownStories.length} user stor${workloadDrilldownStories.length === 1 ? "y" : "ies"} presented`}
             icon={<ChartNoAxesCombined className="size-4 text-slate-600" aria-hidden />}
             onClose={() => { setWorkloadDrilldownAssignee(null); setWorkloadDrilldownIsTeam(false); }}
           >
@@ -1334,6 +1364,7 @@ export function SprintAnalytics({
                 <table className="w-full border-collapse text-left text-[13px]">
                   <thead className="sticky top-0 bg-[#0897d5] text-white">
                     <tr>
+                      <th className="w-10 px-2 py-1 text-right text-[14px] font-semibold">#</th>
                       <th className="px-2 py-1 text-[14px] font-semibold">Story ID</th>
                       <th className="px-2 py-1 text-[14px] font-semibold">Story name</th>
                       <th className="px-2 py-1 text-[14px] font-semibold">Team</th>
@@ -1344,6 +1375,7 @@ export function SprintAnalytics({
                       <th className="px-2 py-1 text-right text-[14px] font-semibold">Est days left</th>
                     </tr>
                     <tr className="bg-white/95">
+                      <th className="px-1 py-0.5" />
                       <th className="px-1 py-0.5" />
                       <th className="px-1 py-0.5">
                         <DrilldownFilterInputText
@@ -1398,8 +1430,9 @@ export function SprintAnalytics({
                     </tr>
                   </thead>
                   <tbody>
-                    {workloadDrilldownStories.map((story) => (
+                    {workloadDrilldownStories.map((story, idx) => (
                       <tr key={story.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
+                        <td className="px-2 py-1 text-right tabular-nums text-slate-500">{idx + 1}</td>
                         <td className="px-2 py-1">
                           <span className="inline-flex min-w-0 items-center gap-1.5">
                             <UserStoryIcon className="size-3.5" />
@@ -1509,10 +1542,24 @@ export function SprintAnalytics({
                           if (!label) return;
                           if (teamMode) {
                             const match = analytics.workloadByTeam.find((t) => t.teamLabel === label);
-                            if (match) { setWorkloadDrilldownIsTeam(true); setWorkloadDrilldownAssignee(match.teamId ?? ""); }
+                            if (match) {
+                              setWorkloadDrilldownIsTeam(true);
+                              setWorkloadDrilldownAssignee(match.teamId ?? "");
+                              setWorkloadDrilldownColFilter({
+                                ...EMPTY_SPRINT_DRILLDOWN_FILTER,
+                                team: match.teamLabel ?? null,
+                              });
+                            }
                           } else {
                             const match = analytics.workloadByAssignee.find((r) => r.assignee.split(/\s+/)[0] === label);
-                            if (match) { setWorkloadDrilldownIsTeam(false); setWorkloadDrilldownAssignee(match.assignee); }
+                            if (match) {
+                              setWorkloadDrilldownIsTeam(false);
+                              setWorkloadDrilldownAssignee(match.assignee);
+                              setWorkloadDrilldownColFilter({
+                                ...EMPTY_SPRINT_DRILLDOWN_FILTER,
+                                assignee: match.assignee,
+                              });
+                            }
                           }
                         }}
                       >
@@ -1548,8 +1595,8 @@ export function SprintAnalytics({
                             label={{ position: "top", fontSize: 10, fill: "#64748b", formatter: ((v: number) => String(v ?? 0)) as any }}
                             style={{ cursor: "pointer" }}
                             onClick={teamMode
-                              ? ((data: { fullName?: string; name?: string }) => { const lbl = data?.fullName ?? data?.name; if (!lbl) return; const match = analytics.workloadByTeam.find((t) => t.teamLabel === lbl); if (match) { setWorkloadDrilldownIsTeam(true); setWorkloadDrilldownAssignee(match.teamId ?? ""); } }) as any  // eslint-disable-line @typescript-eslint/no-explicit-any
-                              : ((data: { fullName?: string }) => { if (data?.fullName) { setWorkloadDrilldownIsTeam(false); setWorkloadDrilldownAssignee(data.fullName); } }) as any}  // eslint-disable-line @typescript-eslint/no-explicit-any
+                              ? ((data: { fullName?: string; name?: string }) => { const lbl = data?.fullName ?? data?.name; if (!lbl) return; const match = analytics.workloadByTeam.find((t) => t.teamLabel === lbl); if (match) { setWorkloadDrilldownIsTeam(true); setWorkloadDrilldownAssignee(match.teamId ?? ""); setWorkloadDrilldownColFilter({ ...EMPTY_SPRINT_DRILLDOWN_FILTER, team: match.teamLabel ?? null }); } }) as any  // eslint-disable-line @typescript-eslint/no-explicit-any
+                              : ((data: { fullName?: string }) => { if (data?.fullName) { setWorkloadDrilldownIsTeam(false); setWorkloadDrilldownAssignee(data.fullName); setWorkloadDrilldownColFilter({ ...EMPTY_SPRINT_DRILLDOWN_FILTER, assignee: data.fullName }); } }) as any}  // eslint-disable-line @typescript-eslint/no-explicit-any
                           />
                         ))}
                       </BarChart>
@@ -1718,8 +1765,8 @@ export function SprintAnalytics({
       </div>
 
       {burnUpData.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
-          {/* Sprint Load — left col */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-5 lg:items-stretch">
+          {/* Sprint Load — left col (2/5 of the row, gives the per-assignee bars room to breathe) */}
           {(() => {
             const teamMode = !filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1;
             const sprintDaysLeft = analytics.workloadSprintCalendarDaysLeft;
@@ -1737,7 +1784,11 @@ export function SprintAnalytics({
                     estTotal: metric === "storyCount" ? totalStories : t.estimatedTotal,
                     isTeam: true,
                     matchKey: (t.teamId ?? "") as string,
-                    onRowClick: () => { setSprintLoadDrilldownIsTeam(true); setSprintLoadDrilldownAssignee(t.teamId ?? ""); },
+                    onRowClick: () => {
+                      setSprintLoadDrilldownIsTeam(true);
+                      setSprintLoadDrilldownAssignee(t.teamId ?? "");
+                      setSprintLoadDrilldownColFilter({ ...EMPTY_SPRINT_DRILLDOWN_FILTER, team: t.teamLabel });
+                    },
                   };
                 })
               : analytics.workloadByAssignee.map((row) => {
@@ -1755,14 +1806,18 @@ export function SprintAnalytics({
                     estTotal: metric === "storyCount" ? totalStories : row.estimatedTotal,
                     isTeam: false,
                     matchKey: row.assignee,
-                    onRowClick: () => { setSprintLoadDrilldownIsTeam(false); setSprintLoadDrilldownAssignee(row.assignee); },
+                    onRowClick: () => {
+                      setSprintLoadDrilldownIsTeam(false);
+                      setSprintLoadDrilldownAssignee(row.assignee);
+                      setSprintLoadDrilldownColFilter({ ...EMPTY_SPRINT_DRILLDOWN_FILTER, assignee: row.assignee });
+                    },
                   };
                 });
             const sprintDaysTotal = analytics.workloadSprintCalendarDaysTotal;
             const loadUnit = metric === "storyCount" ? "" : "d";
-            if (loadRows.length === 0 && !sprintLoadDrilldownAssignee) return <div className="hidden lg:block lg:col-span-1" />;
+            if (loadRows.length === 0 && !sprintLoadDrilldownAssignee) return <div className="hidden lg:block lg:col-span-2" />;
             return (
-              <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1 lg:h-full">
+              <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:h-full">
                 <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
                   <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
                     <Users className="size-4 text-slate-600" />
@@ -1812,6 +1867,7 @@ export function SprintAnalytics({
                 {sprintLoadDrilldownAssignee ? (
                   <InsightsDrilldownModal
                     title={`Sprint Load · ${sprintLoadDrilldownAssignee}`}
+                    subtitle={`${sprintLoadDrilldownStories.length} user stor${sprintLoadDrilldownStories.length === 1 ? "y" : "ies"} presented`}
                     icon={<Users className="size-4 text-slate-600" aria-hidden />}
                     onClose={() => { setSprintLoadDrilldownAssignee(null); setSprintLoadDrilldownIsTeam(false); }}
                   >
@@ -1826,6 +1882,7 @@ export function SprintAnalytics({
                         <table className="w-full border-collapse text-left text-[13px]">
                           <thead className="sticky top-0 bg-[#0897d5] text-white">
                             <tr>
+                              <th className="w-10 px-2 py-1 text-right text-[14px] font-semibold">#</th>
                               <th className="px-2 py-1 text-[14px] font-semibold">Story ID</th>
                               {/* Story name gets the bulk of the breathing room
                                *  so long titles don't get truncated at the
@@ -1839,6 +1896,7 @@ export function SprintAnalytics({
                               <th className="px-2 py-1 text-right text-[14px] font-semibold">Est days left</th>
                             </tr>
                             <tr className="bg-white/95">
+                              <th className="px-1 py-0.5" />
                               <th className="px-1 py-0.5" />
                               <th className="px-1 py-0.5">
                                 <DrilldownFilterInputText
@@ -1893,8 +1951,9 @@ export function SprintAnalytics({
                             </tr>
                           </thead>
                           <tbody>
-                            {sprintLoadDrilldownStories.map((story) => (
+                            {sprintLoadDrilldownStories.map((story, idx) => (
                               <tr key={story.id} className="border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#d8f2ff] even:bg-white transition hover:bg-[#c5ebff]">
+                                <td className="px-2 py-1 text-right tabular-nums text-slate-500">{idx + 1}</td>
                                 <td className="px-2 py-1">
                                   <span className="inline-flex min-w-0 items-center gap-1.5">
                                     <UserStoryIcon className="size-3.5" />
@@ -2057,8 +2116,8 @@ export function SprintAnalytics({
             );
           })()}
 
-          {/* Burn Up — right col */}
-          <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:h-full lg:pl-4">
+          {/* Burn Up — right col (3/5 of the row) */}
+          <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-3 lg:h-full lg:pl-4">
             <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
               <h3 className="ml-[48px] inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
                 <Activity className="size-4 text-slate-600" />

@@ -66,6 +66,14 @@ export function StoryStatusChart({ initiatives, year, quarter, sprint, team, onS
   return (
     <div className="flex h-full min-h-0 items-center gap-4">
       <div className="relative h-full min-h-[180px] w-[55%] min-w-0">
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+          <div className="flex flex-col items-center leading-none">
+            <span className="text-[24px] font-bold tabular-nums text-slate-900">{total}</span>
+            <span className="mt-1 text-[10px] font-medium uppercase tracking-[0.06em] text-slate-500">
+              {total === 1 ? "story" : "stories"}
+            </span>
+          </div>
+        </div>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <defs>

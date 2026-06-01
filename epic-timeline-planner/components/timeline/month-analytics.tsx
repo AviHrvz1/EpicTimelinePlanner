@@ -64,7 +64,7 @@ import { epicForBurndown, type EstimateSource } from "@/lib/epic-estimates";
 import { buildQuarterBurndownSeries } from "@/lib/quarter-analytics";
 import { EpicItem, InitiativeItem, StoryDailySnapshotItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
+import { MONTH_TEAM_COLUMNS, monthTeamLabelForId } from "@/lib/month-team-board";
 import { clampYearSprint, globalSprintFromMonthLane, monthLaneFromGlobalSprint, sprintStartDate, sprintEndDate } from "@/lib/year-sprint";
 import { computeProgress, computeInitiativeProgress, type HealthStatus, type ProgressBasis, type ProgressResult } from "@/lib/progress";
 import { nowMs as clockNowMs } from "@/lib/clock";
@@ -266,6 +266,7 @@ function applyEpicDrilldownFilterSort<T extends { id: string; title: string; ass
 interface DrilldownFilter {
   title: string;
   sprint: string | null;
+  team: string | null;
   assignee: string | null;
   status: string | null;
 }
@@ -273,6 +274,7 @@ interface DrilldownFilter {
 const EMPTY_DRILLDOWN_FILTER: DrilldownFilter = {
   title: "",
   sprint: null,
+  team: null,
   assignee: null,
   status: null,
 };
@@ -297,11 +299,13 @@ function applyDrilldownFilterSort<T extends { id: string; title: string; sprint:
   sort: { key: DrilldownSortKey; dir: "asc" | "desc" } | null,
   storyDisplayId: (storyId: string) => string,
   sprintLabel: (sprint: number | null) => string,
+  teamLabel?: (storyId: string) => string,
 ): T[] {
   const titleQ = filter.title.trim().toLowerCase();
   let filtered = rows;
   if (titleQ) filtered = filtered.filter((r) => r.title.toLowerCase().includes(titleQ));
   if (filter.sprint != null) filtered = filtered.filter((r) => sprintLabel(r.sprint) === filter.sprint);
+  if (filter.team != null && teamLabel) filtered = filtered.filter((r) => teamLabel(r.id) === filter.team);
   if (filter.assignee != null) filtered = filtered.filter((r) => (r.assignee?.trim() || "Unassigned") === filter.assignee);
   if (filter.status != null) filtered = filtered.filter((r) => r.status === filter.status);
   if (!sort) return filtered;
@@ -2157,18 +2161,15 @@ export function MonthAnalytics({
     }
     return map;
   }, [initiatives]);
-  const statusDrilldownStoriesRaw = useMemo(() => {
-    if (statusDrilldownFilter == null) return [];
-    if (statusDrilldownFilter === "All") return scopedStories;
-    return scopedStories.filter((story) => {
-      if (statusDrilldownFilter === "Unscheduled") return story.sprint == null;
-      if (statusDrilldownFilter === "To do") return story.sprint != null && story.status === "todo";
-      if (statusDrilldownFilter === "In progress") return story.sprint != null && story.status === "inProgress";
-      if (statusDrilldownFilter === "Review / Testing") return story.sprint != null && story.status === "review";
-      if (statusDrilldownFilter === "Done") return story.sprint != null && story.status === "done";
-      return false;
-    });
-  }, [statusDrilldownFilter, scopedStories]);
+  /**
+   * Raw pool holds the FULL story scope; the clicked slice / center pre-fills
+   * the column filter instead of pre-cutting the data, so the user can clear
+   * the Status filter to see every story without closing the modal.
+   */
+  const statusDrilldownStoriesRaw = useMemo(
+    () => (statusDrilldownFilter == null ? [] : scopedStories),
+    [statusDrilldownFilter, scopedStories],
+  );
   const statusDrilldownStories = useMemo(
     () => applyDrilldownFilterSort(
       statusDrilldownStoriesRaw,
@@ -2179,11 +2180,10 @@ export function MonthAnalytics({
     ),
     [statusDrilldownStoriesRaw, statusDrilldownColFilter, statusDrilldownSort, scopedStoryDisplayIds, scopeStartMonth],
   );
-  const statusDrilldownEpicsRaw = useMemo(() => {
-    if (!statusChartShowsEpics || statusDrilldownFilter == null) return [];
-    if (statusDrilldownFilter === "All") return scopedEpics;
-    return scopedEpics.filter((epic) => epicStatusById.get(epic.id) === statusDrilldownFilter);
-  }, [statusChartShowsEpics, statusDrilldownFilter, scopedEpics, epicStatusById]);
+  const statusDrilldownEpicsRaw = useMemo(
+    () => (!statusChartShowsEpics || statusDrilldownFilter == null ? [] : scopedEpics),
+    [statusChartShowsEpics, statusDrilldownFilter, scopedEpics],
+  );
   const statusDrilldownEpics = useMemo(
     () => applyEpicDrilldownFilterSort(
       statusDrilldownEpicsRaw,
@@ -2257,13 +2257,8 @@ export function MonthAnalytics({
     if (workloadDrilldownAssignee == null) return [];
     return scopedStories
       .filter((story) => story.sprint != null)
-      .filter((story) =>
-        workloadDrilldownIsTeam
-          ? (epicTeamByStoryId.get(story.id) ?? "") === workloadDrilldownAssignee
-          : (story.assignee?.trim() || "Unassigned") === workloadDrilldownAssignee,
-      )
       .sort((a, b) => a.title.localeCompare(b.title));
-  }, [workloadDrilldownAssignee, workloadDrilldownIsTeam, scopedStories, epicTeamByStoryId]);
+  }, [workloadDrilldownAssignee, scopedStories]);
   const workloadDrilldownStories = useMemo(
     () => applyDrilldownFilterSort(
       workloadDrilldownStoriesRaw,
@@ -2271,21 +2266,20 @@ export function MonthAnalytics({
       workloadDrilldownSort,
       (id) => scopedStoryDisplayIds.get(id) ?? id.slice(0, 8),
       (sprint) => storySprintDisplayLabel(sprint, scopeStartMonth),
+      (id) => {
+        const teamId = epicTeamByStoryId.get(id) ?? "";
+        return monthTeamLabelForId(teamId) ?? (teamId || "—");
+      },
     ),
-    [workloadDrilldownStoriesRaw, workloadDrilldownFilter, workloadDrilldownSort, scopedStoryDisplayIds, scopeStartMonth],
+    [workloadDrilldownStoriesRaw, workloadDrilldownFilter, workloadDrilldownSort, scopedStoryDisplayIds, scopeStartMonth, epicTeamByStoryId],
   );
   const workloadDrilldownEmptyRows = Math.max(0, tableTargetRows - workloadDrilldownStories.length);
   const monthLoadDrilldownStoriesRaw = useMemo(() => {
     if (monthLoadDrilldownAssignee == null) return [];
     return scopedStories
       .filter((story) => story.sprint != null)
-      .filter((story) =>
-        monthLoadDrilldownIsTeam
-          ? (epicTeamByStoryId.get(story.id) ?? "") === monthLoadDrilldownAssignee
-          : (story.assignee?.trim() || "Unassigned") === monthLoadDrilldownAssignee,
-      )
       .sort((a, b) => a.title.localeCompare(b.title));
-  }, [monthLoadDrilldownAssignee, monthLoadDrilldownIsTeam, scopedStories, epicTeamByStoryId]);
+  }, [monthLoadDrilldownAssignee, scopedStories]);
   const monthLoadDrilldownStories = useMemo(
     () => applyDrilldownFilterSort(
       monthLoadDrilldownStoriesRaw,
@@ -2293,8 +2287,12 @@ export function MonthAnalytics({
       monthLoadDrilldownSort,
       (id) => scopedStoryDisplayIds.get(id) ?? id.slice(0, 8),
       (sprint) => storySprintDisplayLabel(sprint, scopeStartMonth),
+      (id) => {
+        const teamId = epicTeamByStoryId.get(id) ?? "";
+        return monthTeamLabelForId(teamId) ?? (teamId || "—");
+      },
     ),
-    [monthLoadDrilldownStoriesRaw, monthLoadDrilldownFilter, monthLoadDrilldownSort, scopedStoryDisplayIds, scopeStartMonth],
+    [monthLoadDrilldownStoriesRaw, monthLoadDrilldownFilter, monthLoadDrilldownSort, scopedStoryDisplayIds, scopeStartMonth, epicTeamByStoryId],
   );
   const monthLoadDrilldownEmptyRows = Math.max(0, tableTargetRows - monthLoadDrilldownStories.length);
 
@@ -2392,6 +2390,11 @@ export function MonthAnalytics({
   const openStatusDrilldown = (statusName: string) => {
     if (!statusName) return;
     setStatusDrilldownFilter(statusName);
+    // Pre-fill the Status column filter for the clicked slice. "All" opens
+    // the table with no pre-cut so the planner sees every story.
+    const colPrefill = statusName === "All" ? null : statusName;
+    setStatusDrilldownColFilter({ ...EMPTY_DRILLDOWN_FILTER, status: colPrefill });
+    setStatusDrilldownEpicFilter({ ...EMPTY_EPIC_DRILLDOWN_FILTER, status: colPrefill });
   };
   const clearStatusDrilldown = () => setStatusDrilldownFilter(null);
   const monthBurndownEpics = useMemo(() => {
@@ -3727,23 +3730,38 @@ export function MonthAnalytics({
   const drilldownTableClass = "w-full table-fixed border-collapse text-left text-[13px]";
   const drilldownColgroup = (
     <colgroup>
+      <col className="w-[4%]" />
       <col className="w-[11%]" />
-      <col className="w-[28%]" />
+      <col className="w-[26%]" />
       <col className="w-[14%]" />
       <col className="w-[16%]" />
       <col className="w-[12%]" />
-      <col className="w-[9.5%]" />
-      <col className="w-[9.5%]" />
+      <col className="w-[8.5%]" />
+      <col className="w-[8.5%]" />
+    </colgroup>
+  );
+  const drilldownColgroupWithTeam = (
+    <colgroup>
+      <col className="w-[4%]" />
+      <col className="w-[10%]" />
+      <col className="w-[21%]" />
+      <col className="w-[11%]" />
+      <col className="w-[11%]" />
+      <col className="w-[10%]" />
+      <col className="w-[16%]" />
+      <col className="w-[8.5%]" />
+      <col className="w-[8.5%]" />
     </colgroup>
   );
   const drilldownColgroupEpic = (
     <colgroup>
+      <col className="w-[4%]" />
       <col className="w-[11%]" />
-      <col className="w-[38%]" />
-      <col className="w-[18%]" />
-      <col className="w-[13%]" />
-      <col className="w-[10%]" />
-      <col className="w-[10%]" />
+      <col className="w-[36%]" />
+      <col className="w-[14%]" />
+      <col className="w-[16%]" />
+      <col className="w-[9.5%]" />
+      <col className="w-[9.5%]" />
     </colgroup>
   );
   const sharedDrilldownArrowClass =
@@ -4042,7 +4060,14 @@ export function MonthAnalytics({
           <InsightsDrilldownModal
             title={`${statusPanelTitle} · ${statusDrilldownFilter}`}
             icon={<PieChartIcon className="size-4 text-slate-600" aria-hidden />}
-            subtitle={scopeTitleSuffix ?? undefined}
+            subtitle={(() => {
+              const count = statusChartShowsEpics ? statusDrilldownEpics.length : statusDrilldownStories.length;
+              const noun = statusChartShowsEpics ? "epic" : "user stor";
+              const plural = statusChartShowsEpics ? "epics" : "user stories";
+              const itemLabel = count === 1 ? (statusChartShowsEpics ? "epic" : "user story") : plural;
+              const countLabel = `${count} ${itemLabel} presented`;
+              return scopeTitleSuffix ? `${scopeTitleSuffix} · ${countLabel}` : countLabel;
+            })()}
             onClose={clearStatusDrilldown}
           >
           <div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
@@ -4059,6 +4084,7 @@ export function MonthAnalytics({
                   {statusChartShowsEpics ? (
                     <>
                     <tr>
+                      <th className="min-w-0 px-2 py-1 text-right text-[14px]">#</th>
                       <th className="min-w-0 px-2 py-1 text-[14px] text-left">
                         <DrilldownSortHeader label="Epic ID" column={"id" as DrilldownSortKey} sort={statusDrilldownEpicSort as { key: DrilldownSortKey; dir: "asc" | "desc" } | null} onSortChange={(next) => setStatusDrilldownEpicSort(next as { key: EpicDrilldownSortKey; dir: "asc" | "desc" } | null)} />
                       </th>
@@ -4075,6 +4101,7 @@ export function MonthAnalytics({
                       <th className="min-w-0 px-2 py-1 text-right text-[14px]">Est days left</th>
                     </tr>
                     <tr className="bg-white/95">
+                      <th className="min-w-0 px-1 py-0.5" />
                       <th className="min-w-0 px-1 py-0.5" />
                       <th className="min-w-0 px-1 py-0.5">
                         <DrilldownFilterInputText value={statusDrilldownEpicFilter.title} onChange={(v) => setStatusDrilldownEpicFilter((p) => ({ ...p, title: v }))} ariaLabel="Filter epic progress by epic name" />
@@ -4121,6 +4148,7 @@ export function MonthAnalytics({
                   ) : (
                     <>
                     <tr>
+                      <th className="min-w-0 px-2 py-1 text-right text-[14px]">#</th>
                       <th className="min-w-0 px-2 py-1 text-[14px] text-left">
                         <DrilldownSortHeader label="Story ID" column="id" sort={statusDrilldownSort} onSortChange={setStatusDrilldownSort} />
                       </th>
@@ -4140,6 +4168,7 @@ export function MonthAnalytics({
                       <th className="min-w-0 px-2 py-1 text-right text-[14px]">Est days left</th>
                     </tr>
                     <tr className="bg-white/95">
+                      <th className="min-w-0 px-1 py-0.5" />
                       <th className="min-w-0 px-1 py-0.5" />
                       <th className="min-w-0 px-1 py-0.5">
                         <DrilldownFilterInputText value={statusDrilldownColFilter.title} onChange={(v) => setStatusDrilldownColFilter((p) => ({ ...p, title: v }))} ariaLabel="Filter status drilldown by story name" />
@@ -4180,7 +4209,7 @@ export function MonthAnalytics({
                 </thead>
                 <tbody>
                   {statusChartShowsEpics
-                    ? statusDrilldownEpics.map((epic) => {
+                    ? statusDrilldownEpics.map((epic, idx) => {
                         const epicStatusLabel = epicStatusById.get(epic.id) ?? "To do";
                         // Map the epic-status label back to a story-status
                         // key so we can reuse StoryStatusPill's colored icon
@@ -4195,6 +4224,7 @@ export function MonthAnalytics({
                           : null;
                         return (
                         <tr key={epic.id} className={drilldownTableRowZebra}>
+                          <td className="min-w-0 px-2 py-0.5 text-right tabular-nums text-slate-500">{idx + 1}</td>
                           <td className="min-w-0 px-2 py-0.5">
                             <span className="inline-flex min-w-0 items-center gap-1.5">
                               <Folder className="size-3.5 shrink-0 text-slate-500" aria-hidden />
@@ -4233,8 +4263,9 @@ export function MonthAnalytics({
                         </tr>
                         );
                       })
-                    : statusDrilldownStories.map((story) => (
+                    : statusDrilldownStories.map((story, idx) => (
                         <tr key={story.id} className={drilldownTableRowZebra}>
+                          <td className="min-w-0 px-2 py-0.5 text-right tabular-nums text-slate-500">{idx + 1}</td>
                           <td className="min-w-0 px-2 py-0.5">
                             <InsightsTruncatedHoverButton
                               label={scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
@@ -4279,7 +4310,7 @@ export function MonthAnalytics({
                   {statusDrilldownEmptyRows > 0
                     ? Array.from({ length: statusDrilldownEmptyRows }).map((_, index) => (
                         <tr key={`status-empty-${index}`} className={drilldownTableEmptyRowZebra}>
-                          <td colSpan={statusChartShowsEpics ? 6 : 7} className="px-3 py-0.5 text-[13px]">
+                          <td colSpan={statusChartShowsEpics ? 7 : 8} className="px-3 py-0.5 text-[13px]">
                             {"\u00A0"}
                           </td>
                         </tr>
@@ -4374,13 +4405,18 @@ export function MonthAnalytics({
                 </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="pointer-events-none absolute inset-0 z-[1]">
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
+              <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center">
+                <button
+                  type="button"
+                  onClick={() => openStatusDrilldown("All")}
+                  title={statusChartShowsEpics ? "See all epics in this scope" : "See all user stories in this scope"}
+                  className="pointer-events-auto flex flex-col items-center rounded-full px-3 py-1 leading-none transition hover:bg-slate-50/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+                >
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                     {statusChartShowsEpics ? "Σ Epics" : "Σ Stories"}
                   </p>
                   <p className="text-[18px] leading-none font-bold text-slate-900">{pieTotal}</p>
-                </div>
+                </button>
               </div>
             </div>
             <div className={INSIGHTS_SCROLL_SIDE}>
@@ -4830,7 +4866,11 @@ export function MonthAnalytics({
           <InsightsDrilldownModal
             title={`Workload Balance · ${workloadDrilldownAssignee}`}
             icon={<ChartNoAxesCombined className="size-4 text-slate-600" aria-hidden />}
-            subtitle={scopeTitleSuffix ?? undefined}
+            subtitle={(() => {
+              const count = workloadDrilldownStories.length;
+              const countLabel = `${count} user stor${count === 1 ? "y" : "ies"} presented`;
+              return scopeTitleSuffix ? `${scopeTitleSuffix} · ${countLabel}` : countLabel;
+            })()}
             onClose={() => { setWorkloadDrilldownAssignee(null); setWorkloadDrilldownIsTeam(false); }}
           >
           <div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
@@ -4842,9 +4882,10 @@ export function MonthAnalytics({
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
               <table className={drilldownTableClass}>
-                {drilldownColgroup}
+                {drilldownColgroupWithTeam}
                 <thead className="sticky top-0 z-10 overflow-hidden rounded-t-md border-b border-[#19abeb]/70 bg-[#0897d5] text-white shadow-[0_1px_0_rgba(15,23,42,0.04)]">
                   <tr>
+                    <th className="min-w-0 px-2 py-1 text-right text-[14px]">#</th>
                     <th className="min-w-0 px-2 py-1 text-[14px] text-left">
                       <DrilldownSortHeader label="Story ID" column="id" sort={workloadDrilldownSort} onSortChange={setWorkloadDrilldownSort} />
                     </th>
@@ -4854,6 +4895,7 @@ export function MonthAnalytics({
                     <th className="min-w-0 px-2 py-1 text-[14px] text-left">
                       <DrilldownSortHeader label="Sprint" column="sprint" sort={workloadDrilldownSort} onSortChange={setWorkloadDrilldownSort} />
                     </th>
+                    <th className="min-w-0 px-2 py-1 text-[14px] text-left">Team</th>
                     <th className="min-w-0 px-2 py-1 text-[14px] text-left">
                       <DrilldownSortHeader label="Assignee" column="assignee" sort={workloadDrilldownSort} onSortChange={setWorkloadDrilldownSort} />
                     </th>
@@ -4867,6 +4909,7 @@ export function MonthAnalytics({
                    *  Sprint / Assignee / Status are dropdowns of unique
                    *  values from the raw (pre-filter) rows. */}
                   <tr className="bg-white/95">
+                    <th className="min-w-0 px-1 py-0.5" />
                     <th className="min-w-0 px-1 py-0.5" />
                     <th className="min-w-0 px-1 py-0.5">
                       <DrilldownFilterInputText
@@ -4882,6 +4925,18 @@ export function MonthAnalytics({
                         renderOption={renderSprintOption}
                         onChange={(v) => setWorkloadDrilldownFilter((p) => ({ ...p, sprint: v }))}
                         ariaLabel="Filter workload by sprint"
+                      />
+                    </th>
+                    <th className="min-w-0 px-1 py-0.5">
+                      <DrilldownFilterDropdown
+                        value={workloadDrilldownFilter.team}
+                        options={Array.from(new Set(workloadDrilldownStoriesRaw.map((s) => {
+                          const teamId = epicTeamByStoryId.get(s.id) ?? "";
+                          return monthTeamLabelForId(teamId) ?? (teamId || "—");
+                        }))).filter(Boolean).sort()}
+                        renderOption={(v) => <span className="truncate">{v}</span>}
+                        onChange={(v) => setWorkloadDrilldownFilter((p) => ({ ...p, team: v }))}
+                        ariaLabel="Filter workload by team"
                       />
                     </th>
                     <th className="min-w-0 px-1 py-0.5">
@@ -4920,8 +4975,12 @@ export function MonthAnalytics({
                   </tr>
                 </thead>
                 <tbody>
-                  {workloadDrilldownStories.map((story) => (
+                  {workloadDrilldownStories.map((story, idx) => {
+                    const storyTeamId = epicTeamByStoryId.get(story.id) ?? "";
+                    const storyTeamLabel = monthTeamLabelForId(storyTeamId) ?? (storyTeamId || "—");
+                    return (
                     <tr key={story.id} className={drilldownTableRowZebra}>
+                      <td className="min-w-0 px-2 py-0.5 text-right tabular-nums text-slate-500">{idx + 1}</td>
                       <td className="min-w-0 px-2 py-0.5">
                         <span className="inline-flex min-w-0 items-center gap-1.5">
                           <UserStoryIcon className="size-3.5" />
@@ -4954,6 +5013,9 @@ export function MonthAnalytics({
                         </span>
                       </td>
                       <td className="min-w-0 px-2 py-0.5">
+                        <InsightsTruncatedHoverLabel text={storyTeamLabel} />
+                      </td>
+                      <td className="min-w-0 px-2 py-0.5">
                         <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
                       </td>
                       <td className="min-w-0 px-2 py-0.5">
@@ -4962,11 +5024,12 @@ export function MonthAnalytics({
                       <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.estimatedDays ?? "\u2014"}</td>
                       <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.daysLeft ?? "\u2014"}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                   {workloadDrilldownEmptyRows > 0
                     ? Array.from({ length: workloadDrilldownEmptyRows }).map((_, index) => (
                         <tr key={`workload-empty-${index}`} className={drilldownTableEmptyRowZebra}>
-                          <td colSpan={7} className="px-3 py-0.5 text-[13px]">
+                          <td colSpan={9} className="px-3 py-0.5 text-[13px]">
                             {"\u00A0"}
                           </td>
                         </tr>
@@ -5076,10 +5139,18 @@ export function MonthAnalytics({
                       if (!label) return;
                       if (teamMode) {
                         const match = analytics.workloadByTeam.find((t) => t.teamLabel === label);
-                        if (match) { setWorkloadDrilldownIsTeam(true); setWorkloadDrilldownAssignee(match.teamId ?? ""); }
+                        if (match) {
+                          setWorkloadDrilldownIsTeam(true);
+                          setWorkloadDrilldownAssignee(match.teamId ?? "");
+                          setWorkloadDrilldownFilter({ ...EMPTY_DRILLDOWN_FILTER, team: match.teamLabel ?? null });
+                        }
                       } else {
                         const match = analytics.workloadByAssignee.find((r) => compactAssigneeName(r.assignee) === label);
-                        if (match) { setWorkloadDrilldownIsTeam(false); setWorkloadDrilldownAssignee(match.assignee); }
+                        if (match) {
+                          setWorkloadDrilldownIsTeam(false);
+                          setWorkloadDrilldownAssignee(match.assignee);
+                          setWorkloadDrilldownFilter({ ...EMPTY_DRILLDOWN_FILTER, assignee: match.assignee });
+                        }
                       }
                     }}
                   >
@@ -5143,8 +5214,8 @@ export function MonthAnalytics({
                         label={{ position: "top", fontSize: 10, fill: "#64748b", formatter: ((v: number) => String(v ?? 0)) as any }}
                         style={{ cursor: "pointer" }}
                         onClick={teamMode
-                          ? ((data: { fullName?: string; name?: string }) => { const lbl = data?.fullName ?? data?.name; if (!lbl) return; const match = analytics.workloadByTeam.find((t) => t.teamLabel === lbl); if (match) { setWorkloadDrilldownIsTeam(true); setWorkloadDrilldownAssignee(match.teamId ?? ""); } }) as any  // eslint-disable-line @typescript-eslint/no-explicit-any
-                          : ((data: { fullName?: string }) => { if (data?.fullName) { setWorkloadDrilldownIsTeam(false); setWorkloadDrilldownAssignee(data.fullName); } }) as any}  // eslint-disable-line @typescript-eslint/no-explicit-any
+                          ? ((data: { fullName?: string; name?: string }) => { const lbl = data?.fullName ?? data?.name; if (!lbl) return; const match = analytics.workloadByTeam.find((t) => t.teamLabel === lbl); if (match) { setWorkloadDrilldownIsTeam(true); setWorkloadDrilldownAssignee(match.teamId ?? ""); setWorkloadDrilldownFilter({ ...EMPTY_DRILLDOWN_FILTER, team: match.teamLabel ?? null }); } }) as any  // eslint-disable-line @typescript-eslint/no-explicit-any
+                          : ((data: { fullName?: string }) => { if (data?.fullName) { setWorkloadDrilldownIsTeam(false); setWorkloadDrilldownAssignee(data.fullName); setWorkloadDrilldownFilter({ ...EMPTY_DRILLDOWN_FILTER, assignee: data.fullName }); } }) as any}  // eslint-disable-line @typescript-eslint/no-explicit-any
                       />
                     ))}
                   </BarChart>
@@ -5397,7 +5468,11 @@ export function MonthAnalytics({
                   teamSlug: t.teamId ?? null,
                   daysLeft: t.daysLeftTotal,
                   estTotal: t.estimatedTotal,
-                  onRowClick: () => { setMonthLoadDrilldownIsTeam(true); setMonthLoadDrilldownAssignee(t.teamId ?? ""); },
+                  onRowClick: () => {
+                    setMonthLoadDrilldownIsTeam(true);
+                    setMonthLoadDrilldownAssignee(t.teamId ?? "");
+                    setMonthLoadDrilldownFilter({ ...EMPTY_DRILLDOWN_FILTER, team: t.teamLabel });
+                  },
                 }))
               : analytics.workloadByAssignee.map((row) => ({
                   key: row.assignee,
@@ -5409,7 +5484,11 @@ export function MonthAnalytics({
                   teamSlug: null as string | null,
                   daysLeft: row.daysLeftTotal,
                   estTotal: row.estimatedTotal,
-                  onRowClick: () => { setMonthLoadDrilldownIsTeam(false); setMonthLoadDrilldownAssignee(row.assignee); },
+                  onRowClick: () => {
+                    setMonthLoadDrilldownIsTeam(false);
+                    setMonthLoadDrilldownAssignee(row.assignee);
+                    setMonthLoadDrilldownFilter({ ...EMPTY_DRILLDOWN_FILTER, assignee: row.assignee });
+                  },
                 }));
             if (loadRows.length === 0 && !monthLoadDrilldownAssignee) return <div className="hidden lg:block lg:col-span-1" />;
             return (
@@ -5438,7 +5517,11 @@ export function MonthAnalytics({
                   <InsightsDrilldownModal
                     title={`${teamMode ? "Team Progress" : "User Progress"} · ${monthLoadDrilldownAssignee}`}
                     icon={<Users className="size-4 text-slate-600" aria-hidden />}
-                    subtitle={scopeTitleSuffix ?? undefined}
+                    subtitle={(() => {
+                      const count = monthLoadDrilldownStories.length;
+                      const countLabel = `${count} user stor${count === 1 ? "y" : "ies"} presented`;
+                      return scopeTitleSuffix ? `${scopeTitleSuffix} · ${countLabel}` : countLabel;
+                    })()}
                     onClose={() => { setMonthLoadDrilldownAssignee(null); setMonthLoadDrilldownIsTeam(false); }}
                   >
                   <div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
@@ -5450,9 +5533,10 @@ export function MonthAnalytics({
                         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
                       >
                         <table className={drilldownTableClass}>
-                          {drilldownColgroup}
+                          {drilldownColgroupWithTeam}
                           <thead className="sticky top-0 z-10 overflow-hidden rounded-t-md border-b border-[#19abeb]/70 bg-[#0897d5] text-white shadow-[0_1px_0_rgba(15,23,42,0.04)]">
                             <tr>
+                              <th className="min-w-0 px-2 py-1 text-right text-[14px]">#</th>
                               <th className="min-w-0 px-2 py-1 text-[14px] text-left">
                                 <DrilldownSortHeader label="Story ID" column="id" sort={monthLoadDrilldownSort} onSortChange={setMonthLoadDrilldownSort} />
                               </th>
@@ -5462,6 +5546,7 @@ export function MonthAnalytics({
                               <th className="min-w-0 px-2 py-1 text-[14px] text-left">
                                 <DrilldownSortHeader label="Sprint" column="sprint" sort={monthLoadDrilldownSort} onSortChange={setMonthLoadDrilldownSort} />
                               </th>
+                              <th className="min-w-0 px-2 py-1 text-[14px] text-left">Team</th>
                               <th className="min-w-0 px-2 py-1 text-[14px] text-left">
                                 <DrilldownSortHeader label="Assignee" column="assignee" sort={monthLoadDrilldownSort} onSortChange={setMonthLoadDrilldownSort} />
                               </th>
@@ -5473,11 +5558,24 @@ export function MonthAnalytics({
                             </tr>
                             <tr className="bg-white/95">
                               <th className="min-w-0 px-1 py-0.5" />
+                              <th className="min-w-0 px-1 py-0.5" />
                               <th className="min-w-0 px-1 py-0.5">
                                 <DrilldownFilterInputText value={monthLoadDrilldownFilter.title} onChange={(v) => setMonthLoadDrilldownFilter((p) => ({ ...p, title: v }))} ariaLabel="Filter month load by story name" />
                               </th>
                               <th className="min-w-0 px-1 py-0.5">
                                 <DrilldownFilterDropdown value={monthLoadDrilldownFilter.sprint} options={uniqueSprints} renderOption={renderSprintOption} onChange={(v) => setMonthLoadDrilldownFilter((p) => ({ ...p, sprint: v }))} ariaLabel="Filter month load by sprint" />
+                              </th>
+                              <th className="min-w-0 px-1 py-0.5">
+                                <DrilldownFilterDropdown
+                                  value={monthLoadDrilldownFilter.team}
+                                  options={Array.from(new Set(monthLoadDrilldownStoriesRaw.map((s) => {
+                                    const teamId = epicTeamByStoryId.get(s.id) ?? "";
+                                    return monthTeamLabelForId(teamId) ?? (teamId || "—");
+                                  }))).filter(Boolean).sort()}
+                                  renderOption={(v) => <span className="truncate">{v}</span>}
+                                  onChange={(v) => setMonthLoadDrilldownFilter((p) => ({ ...p, team: v }))}
+                                  ariaLabel="Filter month load by team"
+                                />
                               </th>
                               <th className="min-w-0 px-1 py-0.5">
                                 <DrilldownFilterDropdown
@@ -5509,8 +5607,12 @@ export function MonthAnalytics({
                             </tr>
                           </thead>
                           <tbody>
-                            {monthLoadDrilldownStories.map((story) => (
+                            {monthLoadDrilldownStories.map((story, idx) => {
+                              const storyTeamId = epicTeamByStoryId.get(story.id) ?? "";
+                              const storyTeamLabel = monthTeamLabelForId(storyTeamId) ?? (storyTeamId || "—");
+                              return (
                               <tr key={story.id} className={drilldownTableRowZebra}>
+                                <td className="min-w-0 px-2 py-0.5 text-right tabular-nums text-slate-500">{idx + 1}</td>
                                 <td className="min-w-0 px-2 py-0.5">
                                   <span className="inline-flex min-w-0 items-center gap-1.5">
                                     <UserStoryIcon className="size-3.5" />
@@ -5529,6 +5631,9 @@ export function MonthAnalytics({
                                   </span>
                                 </td>
                                 <td className="min-w-0 px-2 py-0.5">
+                                  <InsightsTruncatedHoverLabel text={storyTeamLabel} />
+                                </td>
+                                <td className="min-w-0 px-2 py-0.5">
                                   <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
                                 </td>
                                 <td className="min-w-0 px-2 py-0.5">
@@ -5537,10 +5642,11 @@ export function MonthAnalytics({
                                 <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.estimatedDays ?? "—"}</td>
                                 <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.daysLeft ?? "—"}</td>
                               </tr>
-                            ))}
+                              );
+                            })}
                             {monthLoadDrilldownEmptyRows > 0 && Array.from({ length: monthLoadDrilldownEmptyRows }).map((_, i) => (
                               <tr key={`ml-empty-${i}`} className={drilldownTableEmptyRowZebra}>
-                                <td colSpan={7} className="px-3 py-0.5 text-[13px]">{" "}</td>
+                                <td colSpan={9} className="px-3 py-0.5 text-[13px]">{" "}</td>
                               </tr>
                             ))}
                           </tbody>

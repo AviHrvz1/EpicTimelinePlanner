@@ -12,9 +12,8 @@ import {
 import { collectMonthScopeEpicsForSprintPanel, collectStoriesForSprintBoard, storyMatchesYearSprint } from "@/lib/sprint-plan";
 import { storyRolledOutOfSprint } from "@/lib/story-rollover-history";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
-import { now as clockNow, nowMs as clockNowMs } from "@/lib/clock";
+import { now as clockNow } from "@/lib/clock";
 import { sprintEndDate } from "@/lib/year-sprint";
-import { projectInitiativesToCloseDate } from "@/lib/story-snapshot-projection";
 
 export type BurndownMetric = "daysLeft" | "storyCount";
 
@@ -136,22 +135,30 @@ function collectWorkloadStories(
   // containers whose dates can lag their child epics' plans, and the
   // previous initiative-bounds check silently dropped epics that planned
   // beyond the initiative's end.
+  /**
+   * Mirror the kanban board's epic scope: iterate every initiative's epics
+   * (no month-plan filter). Without this, sprint-N stories whose parent
+   * epic is planned outside the calendar month silently drop out of the
+   * Workload Balance / Workload by Team charts, even though the board and
+   * the drilldown show them.
+   */
   const teamMemberNames = buildTeamMemberNameSet(directoryUsers, filterEpicTeamIds ?? null);
-  const scopeEpics = collectMonthScopeEpicsForSprintPanel(initiatives, month, null);
   const rows: UserStoryItem[] = [];
-  for (const { epic } of scopeEpics) {
-    const epicTeamInFilter =
-      !filterEpicTeamIds?.length || filterEpicTeamIds.includes(epic.team ?? "");
-    if (epicTeamInFilter) {
-      rows.push(...(epic.userStories ?? []));
-      continue;
-    }
-    // Cross-team fallback: include stories whose assignee belongs to the
-    // filtered team. Skip when there's no directory or no matches at all.
-    if (teamMemberNames.size === 0) continue;
-    for (const story of epic.userStories ?? []) {
-      const a = (story.assignee ?? "").trim().toLowerCase();
-      if (a && teamMemberNames.has(a)) rows.push(story);
+  for (const initiative of initiatives) {
+    for (const epic of initiative.epics ?? []) {
+      const epicTeamInFilter =
+        !filterEpicTeamIds?.length || filterEpicTeamIds.includes(epic.team ?? "");
+      if (epicTeamInFilter) {
+        rows.push(...(epic.userStories ?? []));
+        continue;
+      }
+      // Cross-team fallback: include stories whose assignee belongs to the
+      // filtered team. Skip when there's no directory or no matches at all.
+      if (teamMemberNames.size === 0) continue;
+      for (const story of epic.userStories ?? []) {
+        const a = (story.assignee ?? "").trim().toLowerCase();
+        if (a && teamMemberNames.has(a)) rows.push(story);
+      }
     }
   }
   return rows;
@@ -182,25 +189,36 @@ export function collectMonthStories(
   filterEpicTeamIds?: string[] | null,
   estimateSource: EstimateSource = "auto",
 ): UserStoryItem[] {
+  /**
+   * Mirror the board's scope (`collectStoriesForSprintBoard`): iterate ALL
+   * team-filtered epics across all initiatives, NOT just epics whose plan
+   * window overlaps `month`. The earlier `collectMonthScopeEpicsForSprintPanel`
+   * filter dropped any sprint-10 story whose parent epic was planned outside
+   * May — so the pie / workload / drilldown undercounted vs the kanban board.
+   * Each consumer still filters by `storyMatchesYearSprint` for the actual
+   * sprint cut.
+   */
   const rows: UserStoryItem[] = [];
-  const epicScope = collectMonthScopeEpicsForSprintPanel(initiatives, month, filterEpicTeamIds);
-  for (const { epic } of epicScope) {
-    const stories = epic.userStories ?? [];
-    const storySum = epicStoryEstimateDaysSum(epic);
-    const useOriginal = estimateSource === "original" || (estimateSource === "auto" && storySum <= 0);
-    const perStoryOriginal = stories.length > 0 ? epicOriginalEstimateDays(epic) / stories.length : 0;
-    rows.push(
-      ...stories.map((story) => {
-        if (estimateSource === "stories") return story;
-        if (!useOriginal) return story;
-        const nextEst = Math.max(0, Math.round(perStoryOriginal));
-        return {
-          ...story,
-          estimatedDays: nextEst,
-          daysLeft: nextEst,
-        };
-      }),
-    );
+  for (const initiative of initiatives) {
+    for (const epic of initiative.epics ?? []) {
+      if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(epic.team ?? "")) continue;
+      const stories = epic.userStories ?? [];
+      const storySum = epicStoryEstimateDaysSum(epic);
+      const useOriginal = estimateSource === "original" || (estimateSource === "auto" && storySum <= 0);
+      const perStoryOriginal = stories.length > 0 ? epicOriginalEstimateDays(epic) / stories.length : 0;
+      rows.push(
+        ...stories.map((story) => {
+          if (estimateSource === "stories") return story;
+          if (!useOriginal) return story;
+          const nextEst = Math.max(0, Math.round(perStoryOriginal));
+          return {
+            ...story,
+            estimatedDays: nextEst,
+            daysLeft: nextEst,
+          };
+        }),
+      );
+    }
   }
   return rows;
 }
@@ -536,16 +554,16 @@ function buildWorkloadByTeam(
       memberToTeam.set(name, team);
     }
   }
-  // Same epic-plan scoping as `collectWorkloadStories` — using the kanban's
-  // scope helper rather than initiative.startMonth/endMonth so epics that
-  // extend beyond their initiative's window still contribute.
-  const scopeEpics = collectMonthScopeEpicsForSprintPanel(initiatives, month, null);
-  for (const { epic } of scopeEpics) {
-    const epicTeamId = epic.team ?? null;
-    const epicTeamInFilter =
-      !filterTeamIds?.length || filterTeamIds.includes(epicTeamId ?? "");
-    for (const story of epic.userStories ?? []) {
-      if (!storyMatchesYearSprint(story, month, yearSprint)) continue;
+  // Same epic scope as `collectWorkloadStories` — iterate every initiative's
+  // epics (no month-plan filter) so sprint-N stories whose parent epic is
+  // planned outside the calendar month still land in the right team bucket.
+  for (const initiative of initiatives) {
+    for (const epic of initiative.epics ?? []) {
+      const epicTeamId = epic.team ?? null;
+      const epicTeamInFilter =
+        !filterTeamIds?.length || filterTeamIds.includes(epicTeamId ?? "");
+      for (const story of epic.userStories ?? []) {
+        if (!storyMatchesYearSprint(story, month, yearSprint)) continue;
       // Resolve which team's bar this story should land on.
       //  - Epic team in filter (or no filter at all) → bucket by epic team.
       //  - Otherwise, if the assignee is on a filter team → bucket there.
@@ -576,6 +594,7 @@ function buildWorkloadByTeam(
         row.daysLeftTotal += Math.max(0, story.daysLeft ?? 0);
       }
       byTeam.set(teamKey, row);
+      }
     }
   }
   return [...byTeam.values()].sort((a, b) => a.teamLabel.localeCompare(b.teamLabel));
@@ -1054,31 +1073,28 @@ export function buildSprintAnalytics(
   sprintCapacityBoard?: { capacities: Record<string, number>; assignments: Record<string, string[]> } | null,
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[] | null,
 ): SprintAnalyticsData {
-  // When the sprint is closed, project every story onto its close-day snapshot
-  // BEFORE collecting the analytics buckets. The pie / workload / capacity all
-  // read `story.status` + `story.daysLeft` — by switching the underlying data
-  // they all become honest retros without any per-function plumbing. Burndown
-  // continues to read raw snapshots directly so its day-by-day curve is
-  // unaffected.
-  const closeMs = sprintEndDate(planYear, yearSprint).getTime();
-  const sprintClosed = closeMs <= clockNowMs();
-  const sourceInitiatives = sprintClosed
-    ? projectInitiativesToCloseDate(initiatives, closeMs)
-    : initiatives;
-
-  const stories = collectMonthStories(sourceInitiatives, month, filterEpicTeamIds, estimateSource);
-  const workloadStories = collectWorkloadStories(sourceInitiatives, month, filterEpicTeamIds, workspaceDirectoryUsers);
+  /**
+   * Analytics read LIVE initiatives so the pie / workload / capacity match
+   * what the kanban board shows (the board itself reads LIVE — see
+   * `sprint-kanban.tsx` `allRows`). The earlier close-day projection gave
+   * "honest retro" semantics but produced confusing pie/board mismatches
+   * for stories whose status changed after sprint close. Burndown still
+   * reads raw snapshots through `buildBurndown`'s own snapshot map for its
+   * day-by-day curve; that's independent of this `stories` array.
+   */
+  const stories = collectMonthStories(initiatives, month, filterEpicTeamIds, estimateSource);
+  const workloadStories = collectWorkloadStories(initiatives, month, filterEpicTeamIds, workspaceDirectoryUsers);
   const workload = buildWorkloadByAssignee(workloadStories, month, yearSprint);
   const isTeamMode = !filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1;
   const workloadByTeam = isTeamMode
-    ? buildWorkloadByTeam(sourceInitiatives, month, yearSprint, filterEpicTeamIds?.length ? filterEpicTeamIds : null, workspaceDirectoryUsers)
+    ? buildWorkloadByTeam(initiatives, month, yearSprint, filterEpicTeamIds?.length ? filterEpicTeamIds : null, workspaceDirectoryUsers)
     : [];
   const capacity = buildWorkloadCapacityByAssignee(
     stories,
     month,
     yearSprint,
     planYear,
-    sourceInitiatives,
+    initiatives,
     sprintCapacityBoard,
     filterEpicTeamIds,
     workspaceDirectoryUsers,
@@ -1086,9 +1102,7 @@ export function buildSprintAnalytics(
   const flow = buildFlowTrend(stories, month, yearSprint, planYear);
   return {
     statusPie: buildStatusPie(stories, month, yearSprint),
-    // Burndown stays on the LIVE initiatives so it reads raw snapshots
-    // unprojected — projection would double-count the close-day value.
-    burndown: buildBurndown(collectMonthStories(initiatives, month, filterEpicTeamIds, estimateSource), month, yearSprint, metric, planYear),
+    burndown: buildBurndown(stories, month, yearSprint, metric, planYear),
     ...workload,
     workloadByTeam,
     ...capacity,
