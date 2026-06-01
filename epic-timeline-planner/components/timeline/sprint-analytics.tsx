@@ -925,7 +925,7 @@ export function SprintAnalytics({
   }, [sprintLoadDrilldownStories.length, sprintLoadDrilldownAssignee]);
 
   const chartLegendColumnClass =
-    "max-h-[clamp(14.75rem,30vh,19rem)] space-y-1.5 overflow-y-auto pr-0 md:justify-self-end md:w-[10.5rem]";
+    "max-h-[clamp(14.75rem,30vh,19rem)] space-y-1.5 overflow-y-auto pr-0 md:justify-self-end md:w-[12.5rem]";
   const legendRowClass =
     "flex items-center justify-between rounded-md px-1 py-1 text-left text-[13px] font-medium text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-700";
 
@@ -1081,7 +1081,7 @@ export function SprintAnalytics({
           </div>
           </InsightsDrilldownModal>
         ) : null}
-        <div className="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
+        <div className="grid flex-1 gap-3 md:grid-cols-[minmax(0,1fr)_12.5rem] md:items-stretch">
           <div className={`relative ${SPRINT_STATUS_PIE_BOX}`}>
             <div className="absolute inset-0">
               <ResponsiveContainer width="100%" height="100%">
@@ -1187,7 +1187,7 @@ export function SprintAnalytics({
             </div>
           </div>
         </div>
-        <div className="grid min-h-0 flex-1 gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
+        <div className="grid min-h-0 flex-1 gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_12.5rem] md:items-stretch">
           <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
             <div className="absolute inset-0">
               <ResponsiveContainer width="100%" height="100%">
@@ -1568,7 +1568,7 @@ export function SprintAnalytics({
           <Activity className="size-4 text-slate-600" />
           Cumulative Flow
         </h3>
-        <div className="grid gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
+        <div className="grid gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_12.5rem] md:items-stretch">
           <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
             {analytics.flowSprintTrendData.length > 0 ? (
               <div className="absolute inset-0">
@@ -2081,7 +2081,7 @@ export function SprintAnalytics({
                 </button>
               </div>
             </div>
-            <div className="grid gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_10.5rem] md:items-stretch">
+            <div className="grid gap-3 pl-5 md:grid-cols-[minmax(0,1fr)_12.5rem] md:items-stretch">
               <div className={`relative min-w-0 ${SPRINT_CHART_BOX}`}>
                 <div className="absolute inset-0">
                   <ResponsiveContainer width="100%" height="100%">

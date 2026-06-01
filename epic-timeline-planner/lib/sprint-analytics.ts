@@ -10,6 +10,7 @@ import {
   type SprintWorkspaceDirectoryUser,
 } from "@/lib/sprint-capacity";
 import { collectMonthScopeEpicsForSprintPanel, collectStoriesForSprintBoard, storyMatchesYearSprint } from "@/lib/sprint-plan";
+import { storyRolledOutOfSprint } from "@/lib/story-rollover-history";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { now as clockNow, nowMs as clockNowMs } from "@/lib/clock";
 import { sprintEndDate } from "@/lib/year-sprint";
@@ -261,11 +262,35 @@ function buildBurndown(
   metric: BurndownMetric,
   planYear: number,
 ) {
-  const sprintStories = stories.filter((story) => storyMatchesYearSprint(story, month, yearSprint));
+  /**
+   * Include stories that ROLLED OUT of this sprint (Move-leftovers shifts
+   * `story.sprint` to the next sprint). Without this, a closed sprint's
+   * burndown collapses to its `done` stories only — flatlining at 0 — once
+   * the planner moves leftovers forward.
+   */
+  const sprintStories = stories.filter(
+    (story) =>
+      storyMatchesYearSprint(story, month, yearSprint) ||
+      storyRolledOutOfSprint(story, yearSprint),
+  );
   const dayDates = sprintDayDates(planYear, month, yearSprint);
   const horizon = Math.max(1, dayDates.length);
   const roundBurndown = (n: number) => (metric === "storyCount" ? Math.round(n) : Number(n.toFixed(1)));
   const todayMs = startOfDay(clockNow()).getTime();
+  /**
+   * Close-day snapshot of rolled-out stories is the FREEZE row captured by
+   * `/api/sprints/freeze-snapshots` right before Move-leftovers patched the
+   * story's sprint forward. That row reflects the LIVE leftover daysLeft at
+   * sprint close (correct for the closed kanban projection) — but if we let
+   * it land on the burndown's last day it spikes ABOVE the daily snapshot
+   * trend. Skip the close-day row for rolled-out stories so the last point
+   * keeps reading from the prior daily snapshot, matching the smooth curve
+   * the chart had before Move-leftovers ran.
+   */
+  const sprintCloseDayMs = startOfDay(sprintEndDate(planYear, yearSprint)).getTime();
+  const rolledOutStoryIds = new Set(
+    sprintStories.filter((s) => storyRolledOutOfSprint(s, yearSprint)).map((s) => s.id),
+  );
 
   // Build per-story snapshot lookup: storyId → sorted [{dateMs, daysLeft, status}]
   type SnapRow = { dateMs: number; daysLeft: number | null; status: StoryStatus };
@@ -294,11 +319,13 @@ function buildBurndown(
   // and Done.
   function storyValuesAtDay(story: UserStoryItem, dayMs: number): { daysLeft: number; stories: number } {
     const snaps = snapMap.get(story.id);
+    const skipCloseDay = rolledOutStoryIds.has(story.id);
     if (snaps?.length) {
       let best: SnapRow | null = null;
       for (const s of snaps) {
-        if (s.dateMs <= dayMs) best = s;
-        else break;
+        if (s.dateMs > dayMs) break;
+        if (skipCloseDay && s.dateMs === sprintCloseDayMs) continue;
+        best = s;
       }
       if (best) {
         return {
@@ -925,13 +952,25 @@ function buildFlowTrend(
   yearSprint: number,
   planYear: number,
 ) {
-  const sprintStories = stories.filter((story) => storyMatchesYearSprint(story, month, yearSprint));
+  /** Same rolled-out inclusion as buildBurndown — keeps the CFD / burnup
+   *  scope honest after Move-leftovers. */
+  const sprintStories = stories.filter(
+    (story) =>
+      storyMatchesYearSprint(story, month, yearSprint) ||
+      storyRolledOutOfSprint(story, yearSprint),
+  );
   const dayDates = sprintDayDates(planYear, month, yearSprint);
 
   const sprintFirstDay = dayDates[0];
   const sprintLastDay = dayDates[dayDates.length - 1];
   const todayMs = startOfDay(clockNow()).getTime();
   const pastDates = dayDates.filter((d) => startOfDay(d).getTime() <= todayMs);
+  /** See buildBurndown — skip the close-day FREEZE snapshot for rolled-out
+   *  stories so the CFD doesn't jump on the last day. */
+  const sprintCloseDayMs = startOfDay(sprintEndDate(planYear, yearSprint)).getTime();
+  const rolledOutStoryIds = new Set(
+    sprintStories.filter((s) => storyRolledOutOfSprint(s, yearSprint)).map((s) => s.id),
+  );
 
   // Build snapshot map same as burndown: storyId → sorted [{dateMs, status}]
   type CfdSnapRow = { dateMs: number; status: StoryStatus };
@@ -953,11 +992,13 @@ function buildFlowTrend(
 
   function storyStatusAtDay(story: UserStoryItem, dayMs: number): StoryStatus | null {
     const snaps = snapMap.get(story.id);
+    const skipCloseDay = rolledOutStoryIds.has(story.id);
     if (snaps?.length) {
       let best: CfdSnapRow | null = null;
       for (const s of snaps) {
-        if (s.dateMs <= dayMs) best = s;
-        else break;
+        if (s.dateMs > dayMs) break;
+        if (skipCloseDay && s.dateMs === sprintCloseDayMs) continue;
+        best = s;
       }
       if (best) return best.status;
     }

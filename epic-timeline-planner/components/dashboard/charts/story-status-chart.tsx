@@ -65,7 +65,7 @@ export function StoryStatusChart({ initiatives, year, quarter, sprint, team, onS
 
   return (
     <div className="flex h-full min-h-0 items-center gap-4">
-      <div className="relative h-full min-h-[180px] w-[60%] min-w-0">
+      <div className="relative h-full min-h-[180px] w-[55%] min-w-0">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <defs>
@@ -130,9 +130,9 @@ export function StoryStatusChart({ initiatives, year, quarter, sprint, team, onS
           const pct = total > 0 ? Math.round((slice.value / total) * 100) : 0;
           const content = (
             <>
-              <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-slate-700">
+              <span className="inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap text-[13px] font-medium text-slate-700">
                 <span
-                  className="inline-block size-2.5 rounded-full"
+                  className="inline-block size-2.5 shrink-0 rounded-full"
                   style={{ backgroundColor: STATUS_COLORS[slice.name] ?? "#94a3b8" }}
                 />
                 {slice.name}
