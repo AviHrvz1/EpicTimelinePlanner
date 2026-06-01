@@ -729,6 +729,44 @@ function dayFractionWithinSprint(planYear: number, globalSprint: number, now: Da
 }
 
 /**
+ * Roll the epic's child story statuses up into the same enum
+ * (`todo|inProgress|review|done`) the epic dialog displays. Matches
+ * `derivedEpicStatus` in epic-form-dialog so the Gantt bar pill, the
+ * dialog header, and the left-panel epic card all read the same status.
+ * Returns null when the epic has zero stories.
+ */
+function deriveEpicStatusKey(epic: EpicItem): UserStoryItem["status"] | null {
+  const stories = epic.userStories ?? [];
+  if (stories.length === 0) return null;
+  const counts = { todo: 0, inProgress: 0, review: 0, done: 0 };
+  for (const s of stories) {
+    if (s.status === "todo" || s.status === "inProgress" || s.status === "review" || s.status === "done") {
+      counts[s.status] += 1;
+    }
+  }
+  if (counts.done === stories.length) return "done";
+  if (counts.inProgress > 0) return "inProgress";
+  if (counts.review + counts.done === stories.length) return "review";
+  if (counts.review > 0 || counts.done > 0) return "inProgress";
+  return "todo";
+}
+
+/**
+ * True when an epic's plan window has passed AND the rolled-up status
+ * isn't `done`. Drives the inline `Overdue` indicator on the Gantt epic
+ * bars so a roadmap row reads as late even when child stories' days have
+ * all burned down but the epic is still sitting in Review awaiting close.
+ */
+function epicIsOverdueByPlan(epic: EpicItem, planYear: number): boolean {
+  const status = deriveEpicStatusKey(epic);
+  if (status === "done" || status == null) return false;
+  if (epic.planEndMonth == null) return false;
+  const planEndGlobalSprint = globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2);
+  const planEndMs = sprintEndDate(planYear, planEndGlobalSprint).getTime();
+  return clockNowMs() > planEndMs;
+}
+
+/**
  * CSS `left` for a marker inside a `flex` (or `grid`) row of `columnCount` equal columns separated by `gapPx` gaps
  * (matches the Gantt layout's `gap-2` = 8px). `columnIndex` is 0-based; `withinColumnFraction` is in [0, 1].
  *
@@ -1347,6 +1385,8 @@ function EpicGanttLaneRow({
             showProgress={showProgress}
             healthStatus={healthStatus}
             healthTooltip={healthTooltip}
+            epicStatus={deriveEpicStatusKey(epic)}
+            isOverdue={planYear != null && epicIsOverdueByPlan(epic, planYear)}
             onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
             onClick={() => onOpenEpic(epic.id)}
             onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", epic.id)}
@@ -1395,6 +1435,8 @@ function EpicGanttLaneRow({
             showProgress={showProgress}
             healthStatus={healthStatus}
             healthTooltip={healthTooltip}
+            epicStatus={deriveEpicStatusKey(epic)}
+            isOverdue={planYear != null && epicIsOverdueByPlan(epic, planYear)}
             onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
             onClick={() => onOpenEpic(epic.id)}
             onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", epic.id)}
@@ -5810,6 +5852,8 @@ export function TimelineGrid({
                               showProgress={showRoadmapProgress}
                               healthStatus={showRoadmapProgress && epicHasData ? epicHealth.status : null}
                               healthTooltip={epicHealthTooltip}
+                              epicStatus={showRoadmapProgress ? deriveEpicStatusKey(row.epic) : null}
+                              isOverdue={showRoadmapProgress && epicIsOverdueByPlan(row.epic, currentYear)}
                               onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                               onClick={() => onOpenEpic(row.epic.id)}
                               onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", row.epic.id)}
@@ -8274,6 +8318,8 @@ export function TimelineGrid({
                                       showProgress={showRoadmapProgress}
                                       healthStatus={showRoadmapProgress && epicHasDataQ ? epicHealthQ.status : null}
                                       healthTooltip={epicHealthTooltipQ}
+                                      epicStatus={showRoadmapProgress ? deriveEpicStatusKey(row.epic) : null}
+                                      isOverdue={showRoadmapProgress && epicIsOverdueByPlan(row.epic, currentYear)}
                                       onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                                       onClick={() => onOpenEpic(row.epic.id)}
                                       onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", row.epic.id)}

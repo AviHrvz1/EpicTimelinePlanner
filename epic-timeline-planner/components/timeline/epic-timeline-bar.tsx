@@ -10,9 +10,10 @@ import {
   epicTimelineDraggableId,
 } from "@/lib/epic-dnd-ids";
 import type { HealthStatus } from "@/lib/progress";
+import type { UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { EpicPlanBarIcon, InitiativePlanBarIcon } from "@/components/timeline/epic-plan-bar";
-import { HealthBadge } from "@/components/timeline/health-badge";
+import { EpicStatusBadge, HealthBadge } from "@/components/timeline/health-badge";
 import { TeamAvatar } from "@/components/ui/team-avatar";
 
 function isLightColor(hex: string): boolean {
@@ -286,6 +287,17 @@ type EpicPlanTimelineBarProps = {
   healthStatus?: HealthStatus | null;
   /** Tooltip shown on hover of the health badge; falls back to the status label. */
   healthTooltip?: string;
+  /**
+   * Epic's MANUAL status (whatever the planner set on the epic). When
+   * provided, the bar swaps the synthetic health verdict for this status
+   * pill — so a "Review / Testing" epic reads as Review, not Done, even
+   * if every child story already shipped. Pair with `isOverdue` for past-
+   * due epics that haven't been formally closed.
+   */
+  epicStatus?: UserStoryItem["status"] | null;
+  /** True when today is past the epic's plan-end date AND `epicStatus` is
+   *  not `done`. Renders an `Overdue` indicator next to the status pill. */
+  isOverdue?: boolean;
 };
 
 /** Draggable epic plan bar (month / quarter timeline); uses `epicTimelineDraggableId`. */
@@ -309,6 +321,8 @@ export function EpicPlanTimelineBar({
   onInsightsClick,
   healthStatus = null,
   healthTooltip,
+  epicStatus = null,
+  isOverdue = false,
 }: EpicPlanTimelineBarProps) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
   const lightBg = isLightColor(color);
@@ -414,9 +428,26 @@ export function EpicPlanTimelineBar({
           ) : null}
         </span>
       </div>
-      {(showProgress && healthStatus) || teamAssignmentChip ? (
+      {(showProgress && (isOverdue || healthStatus)) || teamAssignmentChip ? (
         <div className="-mb-1.5 mt-0.5 flex items-center justify-between gap-2 px-1">
-          {showProgress && healthStatus ? (
+          {showProgress && isOverdue ? (
+            // Status pill removed from the Gantt to free horizontal room on
+            // narrow bars — the percentage inside the bar already signals
+            // how far the work is along, and detail status lives in the
+            // dialog. Only the Overdue indicator stays here because it's
+            // the one signal that actually needs to break the bar's rhythm.
+            // When the planner extends the bar past today, isOverdue flips
+            // off and the HealthBadge below kicks in with On Track / Watch
+            // / At Risk / Done — so real-time feedback is preserved while
+            // dragging an overdue epic to a recoverable schedule.
+            <EpicStatusBadge
+              status={epicStatus ?? "todo"}
+              isOverdue
+              tooltip={healthTooltip}
+              onClick={onInsightsClick}
+              overdueOnly
+            />
+          ) : showProgress && healthStatus ? (
             <HealthBadge
               status={healthStatus}
               tooltip={healthTooltip}

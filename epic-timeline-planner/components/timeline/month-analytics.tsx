@@ -1195,6 +1195,33 @@ function deriveEpicStatus(epic: EpicItem): "Unscheduled" | "To do" | "In progres
   return "To do";
 }
 
+/**
+ * Period scope is the UNION of:
+ *  (a) Plan-window overlap — epic's planned start/end intersects the period.
+ *  (b) Delivery overlap — at least one of the epic's stories has a sprint
+ *      that lands in one of the period months (regardless of plan window).
+ *
+ * (b) catches reality drift: a story rolled from sprint 10 (May) to sprint 11
+ * (June) keeps belonging to its original May-planned epic, but the work is
+ * now happening in June. Without (b), June Insights would silently skip
+ * both the story (in workload / pie totals) AND the parent epic (from the
+ * epic dropdown / Epic Progress drilldown). Mirrors the same fix in
+ * `lib/sprint-analytics.ts` `collectMonthStories`.
+ */
+function epicHasStoryInPeriodMonths(
+  epic: EpicItem,
+  monthsSet: Set<number>,
+  contextMonth: number,
+): boolean {
+  for (const story of epic.userStories ?? []) {
+    if (story.sprint == null) continue;
+    const normalized = normalizeStoryYearSprint(story.sprint, contextMonth);
+    if (normalized == null) continue;
+    if (monthsSet.has(monthLaneFromGlobalSprint(normalized).month)) return true;
+  }
+  return false;
+}
+
 function collectPeriodStories(
   initiatives: InitiativeItem[],
   months: number[],
@@ -1204,6 +1231,7 @@ function collectPeriodStories(
   const rows: UserStoryItem[] = [];
   const minMonth = Math.min(...months);
   const maxMonth = Math.max(...months);
+  const monthsSet = new Set(months);
   for (const initiative of initiatives) {
     if (initiative.status !== "scheduled") continue;
     if (filterInitiativeId && initiative.id !== filterInitiativeId) continue;
@@ -1211,8 +1239,13 @@ function collectPeriodStories(
       if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(epic.team ?? "")) continue;
       const startMonth = epic.planStartMonth ?? initiative.startMonth;
       const endMonth = epic.planEndMonth ?? initiative.endMonth;
-      if (startMonth == null || endMonth == null) continue;
-      if (endMonth < minMonth || startMonth > maxMonth) continue;
+      const planInScope =
+        startMonth != null &&
+        endMonth != null &&
+        !(endMonth < minMonth || startMonth > maxMonth);
+      const contextMonth = startMonth ?? initiative.startMonth ?? minMonth;
+      const deliveryInScope = planInScope ? true : epicHasStoryInPeriodMonths(epic, monthsSet, contextMonth);
+      if (!planInScope && !deliveryInScope) continue;
       rows.push(...(epic.userStories ?? []));
     }
   }
@@ -1228,6 +1261,7 @@ function collectPeriodEpics(
   const rows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
   const minMonth = Math.min(...months);
   const maxMonth = Math.max(...months);
+  const monthsSet = new Set(months);
   for (const initiative of initiatives) {
     if (initiative.status !== "scheduled") continue;
     if (filterInitiativeId && initiative.id !== filterInitiativeId) continue;
@@ -1235,8 +1269,13 @@ function collectPeriodEpics(
       if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(epic.team ?? "")) continue;
       const startMonth = epic.planStartMonth ?? initiative.startMonth;
       const endMonth = epic.planEndMonth ?? initiative.endMonth;
-      if (startMonth == null || endMonth == null) continue;
-      if (endMonth < minMonth || startMonth > maxMonth) continue;
+      const planInScope =
+        startMonth != null &&
+        endMonth != null &&
+        !(endMonth < minMonth || startMonth > maxMonth);
+      const contextMonth = startMonth ?? initiative.startMonth ?? minMonth;
+      const deliveryInScope = planInScope ? true : epicHasStoryInPeriodMonths(epic, monthsSet, contextMonth);
+      if (!planInScope && !deliveryInScope) continue;
       rows.push({ epic, initiative });
     }
   }

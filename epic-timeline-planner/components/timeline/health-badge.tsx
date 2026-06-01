@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertOctagon, AlertTriangle, Check, CheckCheck, GripHorizontal, X } from "lucide-react";
+import { AlertOctagon, AlertTriangle, Check, CheckCheck, CheckCircle2, GripHorizontal, ListTodo, PlayCircle, X } from "lucide-react";
 
 import type { HealthStatus, ProgressBasis, ProgressResult } from "@/lib/progress";
+import type { UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /**
@@ -74,6 +75,125 @@ export function HealthBadge({
     </span>
   );
 }
+
+/**
+ * Status pill rendered on Gantt epic bars in place of the synthetic health
+ * verdict. Shows the EPIC'S MANUAL STATUS (whatever the planner set —
+ * To do / In progress / Review / Done) plus an `Overdue` indicator when the
+ * epic has slipped past its plan-end date and isn't formally done.
+ *
+ * The reason this exists instead of HealthBadge: the health verdict was
+ * computed entirely from child-story completion math, so an epic with all
+ * stories done but still sitting in Review (awaiting sign-off) would render
+ * a celebratory green "Done" badge even though the planner hasn't closed it.
+ * This badge mirrors the manual status the planner is actually responsible
+ * for so the roadmap reads as ground truth.
+ */
+export function EpicStatusBadge({
+  status,
+  isOverdue = false,
+  overdueOnly = false,
+  tooltip,
+  onClick,
+  className,
+  size = "sm",
+}: {
+  status: UserStoryItem["status"];
+  isOverdue?: boolean;
+  /** When true, renders ONLY the `Overdue` pill (no status label). Used on the
+   *  Gantt where horizontal room is tight and the % inside the bar already
+   *  signals progress. Detail status lives in the epic dialog. */
+  overdueOnly?: boolean;
+  tooltip?: string;
+  onClick?: () => void;
+  className?: string;
+  size?: "xs" | "sm" | "md";
+}) {
+  const meta = EPIC_STATUS_META[status];
+  const Icon = meta.icon;
+  const pillBase = "inline-flex shrink-0 items-center font-semibold leading-none ring-1";
+  const sizeClass =
+    size === "md"
+      ? "gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] shadow-sm font-medium"
+      : size === "xs"
+        ? "gap-0.5 rounded px-1.5 py-px text-[10px] font-medium"
+        : "gap-1 rounded px-2 py-0.5 text-[12px] font-medium";
+  const overdueContent = (
+    <>
+      <AlertOctagon className={cn("shrink-0", size === "md" ? "size-4" : size === "xs" ? "size-2.5" : "size-3")} aria-hidden />
+      <span>Overdue</span>
+    </>
+  );
+  const overduePill = isOverdue ? (
+    <span
+      title={tooltip ?? "Past planned end date — sign-off pending"}
+      aria-label="Overdue"
+      className={cn(pillBase, sizeClass, "bg-rose-200 text-rose-900 ring-rose-400/70")}
+    >
+      {overdueContent}
+    </span>
+  ) : null;
+  if (overdueOnly) {
+    return overduePill ? <span className={cn("inline-flex items-center gap-1", className)}>{overduePill}</span> : null;
+  }
+  const statusContent = (
+    <>
+      <Icon className={cn("shrink-0", size === "md" ? "size-4" : size === "xs" ? "size-2.5" : "size-3")} aria-hidden />
+      <span>{meta.label}</span>
+    </>
+  );
+  const statusPill = onClick ? (
+    <button
+      type="button"
+      title={tooltip ?? meta.label}
+      aria-label={tooltip ?? meta.label}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className={cn(pillBase, sizeClass, meta.chip, "cursor-pointer transition-transform duration-150 hover:scale-105 hover:brightness-105")}
+    >
+      {statusContent}
+    </button>
+  ) : (
+    <span title={tooltip ?? meta.label} aria-label={tooltip ?? meta.label} className={cn(pillBase, sizeClass, meta.chip)}>
+      {statusContent}
+    </span>
+  );
+  return (
+    <span className={cn("inline-flex items-center gap-1", className)}>
+      {statusPill}
+      {overduePill}
+    </span>
+  );
+}
+
+const EPIC_STATUS_META: Record<
+  UserStoryItem["status"],
+  { label: string; icon: typeof Check; chip: string }
+> = {
+  todo: {
+    label: "To do",
+    icon: ListTodo,
+    chip: "bg-amber-100 text-amber-900 ring-amber-300/60",
+  },
+  inProgress: {
+    label: "In progress",
+    icon: PlayCircle,
+    chip: "bg-blue-100 text-blue-900 ring-blue-300/60",
+  },
+  review: {
+    label: "Review / Testing",
+    icon: CheckCheck,
+    chip: "bg-violet-100 text-violet-900 ring-violet-300/60",
+  },
+  done: {
+    label: "Done",
+    icon: CheckCircle2,
+    chip: "bg-emerald-500 text-white ring-emerald-600/60",
+  },
+};
 
 const STATUS_META: Record<
   HealthStatus,
