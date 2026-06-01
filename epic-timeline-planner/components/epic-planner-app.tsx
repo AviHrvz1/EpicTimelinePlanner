@@ -2380,32 +2380,81 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     [activeTimelineMonth, selectedYear],
   );
 
+  /** Refs to the latest state values — read inside `openSprintStoryBoard`
+   *  for the early-return check without putting them in its dep list (which
+   *  would rebuild the callback every render and re-fire the chip's
+   *  useMemo upstream, defeating the point). */
+  const sprintBoardLatestStateRef = useRef({
+    month: activeTimelineMonth,
+    sprintMode: isSprintModeActive,
+    yearSprint: activeYearSprint,
+    sprintTab: activeSprintTab,
+    planTab: activeMonthPlanTab,
+    teamId: sprintStoryBoardTeamId,
+    focusedQuarter: focusedQuarterLabel,
+  });
+  useEffect(() => {
+    sprintBoardLatestStateRef.current = {
+      month: activeTimelineMonth,
+      sprintMode: isSprintModeActive,
+      yearSprint: activeYearSprint,
+      sprintTab: activeSprintTab,
+      planTab: activeMonthPlanTab,
+      teamId: sprintStoryBoardTeamId,
+      focusedQuarter: focusedQuarterLabel,
+    };
+  });
+
   const openSprintStoryBoard = useCallback(
     (yearSprint: number, teamId: string | null) => {
       const clamped = clampYearSprint(yearSprint);
       const { month } = monthLaneFromGlobalSprint(clamped);
+      const normalizedTeamId = teamId?.trim() ? normalizeWorkspaceUserTeam(teamId) : null;
+      const nextTeamId = normalizedTeamId || null;
+      // Hard early-return: if the planner is already viewing the target
+      // (sprint + month + team + planTab + sprintTab + isSprintMode), do
+      // nothing. Re-asserting the same values used to ping-pong with
+      // InitiativeListPanel's team-filter sync effect and trip
+      // max-update-depth on a no-op Jump.
+      const cur = sprintBoardLatestStateRef.current;
+      const monthIsInFocusedQuarter =
+        cur.focusedQuarter == null
+          ? true
+          : (QUARTERS.find((q) => q.label === cur.focusedQuarter)?.months as readonly number[] | undefined)?.includes(month) ?? false;
+      if (
+        cur.month === month &&
+        cur.sprintMode === true &&
+        cur.yearSprint === clamped &&
+        cur.sprintTab === "kanban" &&
+        cur.planTab === "sprint-kanban" &&
+        cur.teamId === nextTeamId &&
+        monthIsInFocusedQuarter
+      ) {
+        return;
+      }
       /**
-       * With a focused quarter, timeline `activeMonth` is null unless the month is in that quarter’s strip.
+       * With a focused quarter, timeline `activeMonth` is null unless the month is in that quarter's strip.
        * Jumping to a sprint in another quarter without retargeting caused `onSprintModeChange(false, …)`
        * and a max-update-depth loop. Year-wide view (`focusedQuarterLabel == null`) already includes all months.
        */
-      if (focusedQuarterLabel != null) {
+      if (cur.focusedQuarter != null) {
         const visibleMonths =
-          QUARTERS.find((q) => q.label === focusedQuarterLabel)?.months ?? [];
+          QUARTERS.find((q) => q.label === cur.focusedQuarter)?.months ?? [];
         if (!visibleMonths.includes(month)) {
           const quarterForMonth = QUARTERS.find((q) => q.months.some((m) => m === month));
-          if (quarterForMonth) setFocusedQuarterLabel(quarterForMonth.label);
+          if (quarterForMonth) {
+            setFocusedQuarterLabel((prev) => (prev === quarterForMonth.label ? prev : quarterForMonth.label));
+          }
         }
       }
-      setActiveTimelineMonth(month);
-      setIsSprintModeActive(true);
-      setActiveYearSprint(clamped);
-      setActiveSprintTab("kanban");
-      setActiveMonthPlanTab("sprint-kanban");
-      const normalizedTeamId = teamId?.trim() ? normalizeWorkspaceUserTeam(teamId) : null;
-      setSprintStoryBoardTeamId(normalizedTeamId || null);
+      setActiveTimelineMonth((prev) => (prev === month ? prev : month));
+      setIsSprintModeActive((prev) => (prev ? prev : true));
+      setActiveYearSprint((prev) => (prev === clamped ? prev : clamped));
+      setActiveSprintTab((prev) => (prev === "kanban" ? prev : "kanban"));
+      setActiveMonthPlanTab((prev) => (prev === "sprint-kanban" ? prev : "sprint-kanban"));
+      setSprintStoryBoardTeamId((prev) => (prev === nextTeamId ? prev : nextTeamId));
     },
-    [focusedQuarterLabel],
+    [],
   );
 
   useEffect(() => {
@@ -2498,7 +2547,17 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         rows.map((r) => ({ id: r.story.id, assignee: r.story.assignee })),
         members,
       );
-      if (JSON.stringify(merged.assignments) === JSON.stringify(raw.assignments)) return prev;
+      // Compare BOTH assignments and capacities — `syncCapacity...` may
+      // top up missing member capacities with defaults each call, which
+      // produced a fresh `capacities` shape every render and (combined
+      // with widened `collectStoriesForSprintBoard` scope) tripped a
+      // max-update-depth loop on Jump-to-current-sprint.
+      if (
+        JSON.stringify(merged.assignments) === JSON.stringify(raw.assignments) &&
+        JSON.stringify(merged.capacities) === JSON.stringify(raw.capacities)
+      ) {
+        return prev;
+      }
       return { ...prev, [activeSprintCapacityKey]: merged };
     });
   }, [

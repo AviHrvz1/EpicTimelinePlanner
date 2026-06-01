@@ -1,15 +1,15 @@
 import type { EpicItem, InitiativeItem, StoryHistoryItem, UserStoryItem } from "@/lib/types";
 
 /**
- * Rollover lineage derived from `story.history`. The auto-rollover effect
- * writes a single text line per move (see `epic-planner-app.tsx` rollover
- * effect → `historyEntry`), e.g.
+ * Rollover lineage derived from `story.history`. Two wordings exist in the
+ * wild because the source of the move changed over time:
  *
- *   "System auto-move: story moved from Sprint 6 to Sprint 7 after sprint close."
+ *   - Legacy auto-rollover effect (retired):
+ *     "System auto-move: story moved from Sprint 6 to Sprint 7 after sprint close."
+ *   - Current `SprintMoveModal` flow:
+ *     "Manual move: story moved from Sprint 6 to Sprint 7 at sprint close."
  *
- * Reading those back is a regex over each entry. We deliberately keep this in
- * a single helper so any future change to the line wording is one find/replace
- * away.
+ * Both produce a story.sprint change and should surface as rollover lineage.
  */
 export type StoryRolloverInfo = {
   /** Sprint the story started in (origin of the first rollover step). `null`
@@ -24,7 +24,7 @@ export type StoryRolloverInfo = {
   chainDepth: number;
 };
 
-const ROLLOVER_PATTERN = /System auto-move:\s*story moved from Sprint (\d+) to Sprint (\d+)/i;
+const ROLLOVER_PATTERN = /(?:System auto-move|Manual move):\s*story moved from Sprint (\d+) to Sprint (\d+)/i;
 
 export function parseStoryRollover(
   story: Pick<UserStoryItem, "history">,
@@ -81,18 +81,52 @@ export function storyRolledOutOfSprint(
  */
 export type RolloverStoryRow = { story: UserStoryItem; epic: EpicItem; initiative: InitiativeItem };
 
+/** Stories whose rollover history shows they rolled INTO or OUT OF
+ *  `sprint`. The `fromSprint` field is named for the inbound case (origin
+ *  sprint); for the outbound case it carries the DESTINATION sprint so the
+ *  shared audit modal can label it generically ("From" vs "To") without
+ *  needing two separate row types. */
+export type RolledInStoryRow = RolloverStoryRow & { fromSprint: number };
+
 /** Stories whose rollover history shows they rolled OUT of `sprint`,
- *  regardless of where their current `story.sprint` now sits. */
+ *  regardless of where their current `story.sprint` now sits. The
+ *  `fromSprint` field carries the rollover DESTINATION (where the story
+ *  ended up) — see {@link RolledInStoryRow}. */
 export function collectStoriesRolledOutOfSprint(
   initiatives: InitiativeItem[],
   sprint: number,
-): RolloverStoryRow[] {
-  const out: RolloverStoryRow[] = [];
+): RolledInStoryRow[] {
+  const out: RolledInStoryRow[] = [];
   for (const initiative of initiatives) {
     for (const epic of initiative.epics ?? []) {
       for (const story of epic.userStories ?? []) {
         if (!storyRolledOutOfSprint(story, sprint)) continue;
-        out.push({ story, epic, initiative });
+        const info = parseStoryRollover(story);
+        if (info.rolledToSprint == null) continue;
+        out.push({ story, epic, initiative, fromSprint: info.rolledToSprint });
+      }
+    }
+  }
+  return out;
+}
+
+/** Stories whose rollover history shows they rolled INTO `sprint` — i.e.
+ *  the destination of the most recent move chain matches `sprint`. Used to
+ *  power the "Rolled in" audit chip on the destination sprint so the
+ *  planner can see at a glance what carried over from the prior sprint.
+ *  Each row carries the source sprint for display. */
+export function collectStoriesRolledIntoSprint(
+  initiatives: InitiativeItem[],
+  sprint: number,
+): RolledInStoryRow[] {
+  const out: RolledInStoryRow[] = [];
+  for (const initiative of initiatives) {
+    for (const epic of initiative.epics ?? []) {
+      for (const story of epic.userStories ?? []) {
+        if (!storyRolledIntoSprint(story, sprint)) continue;
+        const info = parseStoryRollover(story);
+        if (info.rolledFromSprint == null) continue;
+        out.push({ story, epic, initiative, fromSprint: info.rolledFromSprint });
       }
     }
   }

@@ -2317,26 +2317,38 @@ export function InitiativeListPanel({
     return [...withoutAll, value];
   };
   useEffect(() => {
+    // Functional-setter bail-outs: returning `prev` when the array already
+    // matches lets React skip the re-render. Without this, every parent
+    // render that re-fires this effect creates a fresh `["all"]` array and
+    // shows up as a state change, which contributes to the Jump-to-current-
+    // sprint max-update-depth cascade.
     if (epicPlanPanelMode) {
-      // Month epic list uses a dedicated locked month filter UI; keep quarter filtering neutral.
-      setPanelQuarterFilters(["all"]);
+      setPanelQuarterFilters((prev) => (prev.length === 1 && prev[0] === "all" ? prev : ["all"]));
       return;
     }
     if (panelQuarterQuickFilter == null) {
-      setPanelQuarterFilters(["all"]);
+      setPanelQuarterFilters((prev) => (prev.length === 1 && prev[0] === "all" ? prev : ["all"]));
       return;
     }
-    setPanelQuarterFilters([panelQuarterQuickFilter]);
+    setPanelQuarterFilters((prev) =>
+      prev.length === 1 && prev[0] === panelQuarterQuickFilter ? prev : [panelQuarterQuickFilter],
+    );
   }, [epicPlanPanelMode, panelQuarterQuickFilter]);
   useEffect(() => {
     if (panelStatusQuickFilter == null) {
       setPanelStatusFilters((prev) => {
         const withoutQuick = prev.filter((value) => value !== "Scheduled" && value !== "Unscheduled");
-        return withoutQuick.length > 0 ? withoutQuick : ["all"];
+        const next = withoutQuick.length > 0 ? withoutQuick : (["all"] as typeof prev);
+        // Bail out when the post-filter result is structurally identical
+        // to prev so React skips a re-render of the whole panel tree.
+        if (next.length === prev.length && next.every((v, i) => v === prev[i])) return prev;
+        return next;
       });
       return;
     }
-    setPanelStatusFilters([panelStatusQuickFilter]);
+    setPanelStatusFilters((prev) =>
+      prev.length === 1 && prev[0] === panelStatusQuickFilter ? prev : [panelStatusQuickFilter],
+    );
   }, [panelStatusQuickFilter]);
 
   /** Pre-fill the search box from a parent-supplied seed. Fires only on

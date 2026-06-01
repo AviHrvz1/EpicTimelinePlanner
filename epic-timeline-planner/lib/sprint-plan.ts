@@ -99,12 +99,14 @@ export function collectMonthScopeEpicsForSprintPanel(
 }
 
 /**
- * Stories rendered on the sprint Kanban: same epic scope as the month /
- * sprint left panel ({@link collectMonthScopeEpicsForSprintPanel}),
- * filtered to the active global sprint via `story.sprint`. Closed sprints
- * naturally only render their done cards because moved stories now
- * carry the new sprint number and the planner explicitly chose which to
- * move via the {@link SprintMoveModal}.
+ * Stories rendered on the sprint Kanban: every story whose `story.sprint`
+ * matches the active global sprint, regardless of its parent epic's plan
+ * window. The previous scope (epics planned in `month`) was correct under
+ * Phase 3 auto-rollover but loses moved cards now — when the user moves
+ * Sprint 10 work forward to Sprint 11 (June), those stories still live on
+ * May-planned epics, so a strict epic-scope filter would hide them on
+ * Sprint 11's kanban. The team filter (`filterEpicTeamIds`) stays — moves
+ * never change a story's team.
  */
 export function collectStoriesForSprintBoard(
   initiatives: InitiativeItem[],
@@ -113,12 +115,14 @@ export function collectStoriesForSprintBoard(
   /** When set, only stories under epics assigned to one of these teams. */
   filterEpicTeamIds?: string[] | null,
 ): BoardStoryRow[] {
-  const scope = collectMonthScopeEpicsForSprintPanel(initiatives, month, filterEpicTeamIds);
   const out: BoardStoryRow[] = [];
-  for (const { epic, initiative } of scope) {
-    for (const story of epic.userStories ?? []) {
-      if (!storyMatchesYearSprint(story, month, yearSprint)) continue;
-      out.push({ story, epic, initiative });
+  for (const initiative of initiatives) {
+    for (const epic of initiative.epics ?? []) {
+      if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(epic.team ?? "")) continue;
+      for (const story of epic.userStories ?? []) {
+        if (!storyMatchesYearSprint(story, month, yearSprint)) continue;
+        out.push({ story, epic, initiative });
+      }
     }
   }
   return out;
@@ -137,19 +141,30 @@ export function deriveEpicSprintStatus(epic: EpicItem, month: number, yearSprint
   return StoryStatus.inProgress;
 }
 
-/** Epics in sprint scope, each annotated with their sprint-derived status. */
+/** Epics rendered as rows on the sprint kanban — derived from the stories
+ *  actually on the active sprint (so a row appears even when the epic's
+ *  plan window doesn't cover this month, e.g. a story was moved forward
+ *  from the previous sprint into this one). */
 export function collectEpicsForSprintKanban(
   initiatives: InitiativeItem[],
   month: number,
   yearSprint: number,
   filterEpicTeamIds?: string[] | null,
 ): BoardEpicRow[] {
-  const scope = collectMonthScopeEpicsForSprintPanel(initiatives, month, filterEpicTeamIds);
-  return scope.map(({ epic, initiative }) => ({
-    epic,
-    initiative,
-    sprintStatus: deriveEpicSprintStatus(epic, month, yearSprint),
-  }));
+  const rows = new Map<string, BoardEpicRow>();
+  for (const initiative of initiatives) {
+    for (const epic of initiative.epics ?? []) {
+      if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(epic.team ?? "")) continue;
+      const hasSprintStory = (epic.userStories ?? []).some((s) => storyMatchesYearSprint(s, month, yearSprint));
+      if (!hasSprintStory) continue;
+      rows.set(epic.id, {
+        epic,
+        initiative,
+        sprintStatus: deriveEpicSprintStatus(epic, month, yearSprint),
+      });
+    }
+  }
+  return [...rows.values()];
 }
 
 export type SprintKanbanSummaryStats = {
@@ -159,26 +174,35 @@ export type SprintKanbanSummaryStats = {
   storyTotal: number;
 };
 
-/** Header chips for sprint Kanban: epics in left-panel scope, story counts for the active global sprint. */
+/** Header chips for sprint Kanban: epic count = epics with stories on the
+ *  active sprint (matches the kanban row set); story counts cover every
+ *  story under the same team-filtered epics so the unscheduled / total
+ *  framing stays honest with the left-panel scope. */
 export function computeSprintKanbanSummaryStats(
   initiatives: InitiativeItem[],
   month: number,
   yearSprint: number,
   filterEpicTeamIds?: string[] | null,
 ): SprintKanbanSummaryStats {
-  const scope = collectMonthScopeEpicsForSprintPanel(initiatives, month, filterEpicTeamIds);
+  const epicIdsOnSprint = new Set<string>();
   let storyScheduledOnKanban = 0;
   let storyTotal = 0;
-  for (const { epic } of scope) {
-    for (const story of epic.userStories ?? []) {
-      storyTotal += 1;
-      if (storyMatchesYearSprint(story, month, yearSprint)) {
-        storyScheduledOnKanban += 1;
+  for (const initiative of initiatives) {
+    for (const epic of initiative.epics ?? []) {
+      if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(epic.team ?? "")) continue;
+      let epicHasStoryOnSprint = false;
+      for (const story of epic.userStories ?? []) {
+        storyTotal += 1;
+        if (storyMatchesYearSprint(story, month, yearSprint)) {
+          storyScheduledOnKanban += 1;
+          epicHasStoryOnSprint = true;
+        }
       }
+      if (epicHasStoryOnSprint) epicIdsOnSprint.add(epic.id);
     }
   }
   return {
-    epicCount: scope.length,
+    epicCount: epicIdsOnSprint.size,
     storyUnscheduled: storyTotal - storyScheduledOnKanban,
     storyScheduledOnKanban,
     storyTotal,

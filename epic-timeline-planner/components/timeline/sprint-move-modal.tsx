@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Check, Flag, Folder, Loader2, X, Zap } from "lucide-react";
+import { ArrowRight, Check, Flag, Folder, Loader2, Users, X, Zap } from "lucide-react";
 
 import { StoryStatus } from "@/lib/generated/prisma";
 import {
@@ -12,6 +12,9 @@ import type { InitiativeItem } from "@/lib/types";
 import { YEAR_SPRINT_MAX } from "@/lib/year-sprint";
 import { cn } from "@/lib/utils";
 import { UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
+import { UserStoryIcon } from "@/components/ui/user-story-icon";
+import { TeamAvatar } from "@/components/ui/team-avatar";
+import { monthTeamLabelForId } from "@/lib/month-team-board";
 import { formatAssigneeShortLabel } from "@/lib/assignee-display";
 
 type StatusBadgeProps = { status: StoryStatus };
@@ -133,14 +136,27 @@ export function SprintMoveModal({
   const headerTitlePrefix = isYearBoundaryBlocked
     ? `${movableRows.length} ${movableRows.length === 1 ? "story" : "stories"} need continuation in `
     : "Move unfinished work to ";
-  /** Footer button label is also split for the same reason. The
-   *  no-flag variants (year-boundary, "Nothing to move") fall back to
-   *  a plain string. */
-  const primaryActionPrefix = isYearBoundaryBlocked
-    ? null
-    : checkedCount === 0
-      ? null
-      : `Move ${checkedCount} to `;
+  /** Short destination label for the footer button — uses `S{n}` rather
+   *  than the full "Sprint N" wording so the button stays compact. */
+  const shortToLabel = isYearBoundaryBlocked
+    ? `${planYear + 1}`
+    : atYearCap
+      ? `S1 (${planYear + 1})`
+      : `S${toSprint}`;
+
+  /** Team scope chips for the header — when the move is scoped to one or
+   *  more team filters, each becomes a small `{TeamAvatar} {Label}` chip
+   *  beside the destination sprint. Empty filter == all teams (single
+   *  "All teams" chip) so the user always sees the scope. */
+  const teamScopeChips = useMemo(() => {
+    if (!filterEpicTeamIds || filterEpicTeamIds.length === 0) {
+      return [{ slug: null as string | null, label: "All teams" }];
+    }
+    return filterEpicTeamIds.map((slug) => ({
+      slug,
+      label: monthTeamLabelForId(slug) ?? slug,
+    }));
+  }, [filterEpicTeamIds]);
 
   const handlePrimaryAction = async () => {
     if (busy) return;
@@ -160,7 +176,7 @@ export function SprintMoveModal({
     ? `Add ${planYear + 1} and continue`
     : checkedCount === 0
       ? "Nothing to move"
-      : `Move ${checkedCount} to ${toLabel}`;
+      : `Move ${checkedCount} ${checkedCount === 1 ? "story" : "stories"} to ${shortToLabel}`;
 
   return (
     <div
@@ -184,6 +200,30 @@ export function SprintMoveModal({
                 <Flag className="size-3.5 shrink-0 text-rose-500" strokeWidth={2.25} aria-hidden />
                 <span>{toLabel}</span>
               </span>
+              {!isYearBoundaryBlocked ? (
+                <>
+                  <span className="text-slate-400">·</span>
+                  {teamScopeChips.map((team) => (
+                    <span
+                      key={team.slug ?? "all"}
+                      className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-800 ring-1 ring-indigo-200/80"
+                      title={team.label}
+                    >
+                      {team.slug ? (
+                        <TeamAvatar
+                          slug={team.slug}
+                          sizePx={14}
+                          rounded="rounded-[3px]"
+                          fallback={<Users className="size-3 shrink-0 text-indigo-500" aria-hidden />}
+                        />
+                      ) : (
+                        <Users className="size-3 shrink-0 text-indigo-500" aria-hidden />
+                      )}
+                      <span className="truncate">{team.label}</span>
+                    </span>
+                  ))}
+                </>
+              ) : null}
             </h2>
             <p className="mt-1 text-[12.5px] leading-snug text-slate-600">
               {isYearBoundaryBlocked
@@ -242,6 +282,7 @@ export function SprintMoveModal({
                               disabled={busy || isYearBoundaryBlocked}
                               className="size-3.5 shrink-0 cursor-pointer"
                             />
+                            <UserStoryIcon className="size-3.5 shrink-0" />
                             <span className="min-w-0 flex-1 truncate">{row.story.title}</span>
                             <StatusBadge status={row.story.status} />
                             <span className="inline-flex shrink-0 items-center gap-1.5 text-[10.5px] text-slate-500">
@@ -299,13 +340,6 @@ export function SprintMoveModal({
               <>
                 <Loader2 className="size-3.5 animate-spin" aria-hidden />
                 <span>Working…</span>
-              </>
-            ) : primaryActionPrefix != null ? (
-              <>
-                <Check className="size-3.5" aria-hidden />
-                <span>{primaryActionPrefix}</span>
-                <Flag className="size-3.5 shrink-0 text-rose-200" strokeWidth={2.25} aria-hidden />
-                <span>{toLabel}</span>
               </>
             ) : (
               <>

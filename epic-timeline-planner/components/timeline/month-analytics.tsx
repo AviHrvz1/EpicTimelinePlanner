@@ -3727,19 +3727,23 @@ export function MonthAnalytics({
   const drilldownTableClass = "w-full table-fixed border-collapse text-left text-[13px]";
   const drilldownColgroup = (
     <colgroup>
-      <col className="w-[12%]" />
-      <col className="w-[32%]" />
-      <col className="w-[20%]" />
-      <col className="w-[20%]" />
+      <col className="w-[11%]" />
+      <col className="w-[28%]" />
+      <col className="w-[14%]" />
       <col className="w-[16%]" />
+      <col className="w-[12%]" />
+      <col className="w-[9.5%]" />
+      <col className="w-[9.5%]" />
     </colgroup>
   );
   const drilldownColgroupEpic = (
     <colgroup>
-      <col className="w-[12%]" />
-      <col className="w-[50%]" />
-      <col className="w-[22%]" />
-      <col className="w-[16%]" />
+      <col className="w-[11%]" />
+      <col className="w-[38%]" />
+      <col className="w-[18%]" />
+      <col className="w-[13%]" />
+      <col className="w-[10%]" />
+      <col className="w-[10%]" />
     </colgroup>
   );
   const sharedDrilldownArrowClass =
@@ -4067,6 +4071,8 @@ export function MonthAnalytics({
                       <th className="min-w-0 px-2 py-1 text-[14px] text-left">
                         <DrilldownSortHeader label="Status" column={"status" as DrilldownSortKey} sort={statusDrilldownEpicSort as { key: DrilldownSortKey; dir: "asc" | "desc" } | null} onSortChange={(next) => setStatusDrilldownEpicSort(next as { key: EpicDrilldownSortKey; dir: "asc" | "desc" } | null)} />
                       </th>
+                      <th className="min-w-0 px-2 py-1 text-right text-[14px]">Est days</th>
+                      <th className="min-w-0 px-2 py-1 text-right text-[14px]">Est days left</th>
                     </tr>
                     <tr className="bg-white/95">
                       <th className="min-w-0 px-1 py-0.5" />
@@ -4101,6 +4107,15 @@ export function MonthAnalytics({
                           ariaLabel="Filter epic progress by status"
                         />
                       </th>
+                      {/* Σ totals: sum the est days + remaining across each
+                       *  epic's child stories so the planner sees the
+                       *  drilldown's collective effort. */}
+                      <th className="min-w-0 px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
+                        Σ <span className="text-slate-300">|</span> {statusDrilldownEpics.reduce((sum, epic) => sum + (epic.userStories ?? []).reduce((a, s) => a + (s.estimatedDays ?? 0), 0), 0)}
+                      </th>
+                      <th className="min-w-0 px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
+                        Σ <span className="text-slate-300">|</span> {statusDrilldownEpics.reduce((sum, epic) => sum + (epic.userStories ?? []).reduce((a, s) => a + (s.daysLeft ?? 0), 0), 0)}
+                      </th>
                     </tr>
                     </>
                   ) : (
@@ -4121,6 +4136,8 @@ export function MonthAnalytics({
                       <th className="min-w-0 px-2 py-1 text-[14px] text-left">
                         <DrilldownSortHeader label="Status" column="status" sort={statusDrilldownSort} onSortChange={setStatusDrilldownSort} />
                       </th>
+                      <th className="min-w-0 px-2 py-1 text-right text-[14px]">Est days</th>
+                      <th className="min-w-0 px-2 py-1 text-right text-[14px]">Est days left</th>
                     </tr>
                     <tr className="bg-white/95">
                       <th className="min-w-0 px-1 py-0.5" />
@@ -4149,6 +4166,13 @@ export function MonthAnalytics({
                       </th>
                       <th className="min-w-0 px-1 py-0.5">
                         <DrilldownFilterDropdown value={statusDrilldownColFilter.status} options={uniqueStatuses} renderOption={renderStatusOption} onChange={(v) => setStatusDrilldownColFilter((p) => ({ ...p, status: v }))} ariaLabel="Filter status drilldown by status" />
+                      </th>
+                      {/* Σ totals over the currently visible (filtered) rows. */}
+                      <th className="min-w-0 px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
+                        Σ <span className="text-slate-300">|</span> {statusDrilldownStories.reduce((sum, s) => sum + (s.estimatedDays ?? 0), 0)}
+                      </th>
+                      <th className="min-w-0 px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
+                        Σ <span className="text-slate-300">|</span> {statusDrilldownStories.reduce((sum, s) => sum + (s.daysLeft ?? 0), 0)}
                       </th>
                     </tr>
                     </>
@@ -4200,6 +4224,12 @@ export function MonthAnalytics({
                               </span>
                             )}
                           </td>
+                          <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">
+                            {(epic.userStories ?? []).reduce((a, s) => a + (s.estimatedDays ?? 0), 0) || "—"}
+                          </td>
+                          <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">
+                            {(epic.userStories ?? []).reduce((a, s) => a + (s.daysLeft ?? 0), 0) || "—"}
+                          </td>
                         </tr>
                         );
                       })
@@ -4242,12 +4272,14 @@ export function MonthAnalytics({
                           <td className="min-w-0 px-2 py-0.5">
                             <StoryStatusPill status={story.status} />
                           </td>
+                          <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.estimatedDays ?? "\u2014"}</td>
+                          <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.daysLeft ?? "\u2014"}</td>
                         </tr>
                       ))}
                   {statusDrilldownEmptyRows > 0
                     ? Array.from({ length: statusDrilldownEmptyRows }).map((_, index) => (
                         <tr key={`status-empty-${index}`} className={drilldownTableEmptyRowZebra}>
-                          <td colSpan={statusChartShowsEpics ? 4 : 5} className="px-3 py-0.5 text-[13px]">
+                          <td colSpan={statusChartShowsEpics ? 6 : 7} className="px-3 py-0.5 text-[13px]">
                             {"\u00A0"}
                           </td>
                         </tr>
@@ -4828,6 +4860,8 @@ export function MonthAnalytics({
                     <th className="min-w-0 px-2 py-1 text-[14px] text-left">
                       <DrilldownSortHeader label="Status" column="status" sort={workloadDrilldownSort} onSortChange={setWorkloadDrilldownSort} />
                     </th>
+                    <th className="min-w-0 px-2 py-1 text-right text-[14px]">Est days</th>
+                    <th className="min-w-0 px-2 py-1 text-right text-[14px]">Est days left</th>
                   </tr>
                   {/* Per-column filter row — Title is a substring text input;
                    *  Sprint / Assignee / Status are dropdowns of unique
@@ -4876,6 +4910,13 @@ export function MonthAnalytics({
                         ariaLabel="Filter workload by status"
                       />
                     </th>
+                    {/* Σ totals over the currently visible (filtered) rows. */}
+                    <th className="min-w-0 px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
+                      Σ <span className="text-slate-300">|</span> {workloadDrilldownStories.reduce((sum, s) => sum + (s.estimatedDays ?? 0), 0)}
+                    </th>
+                    <th className="min-w-0 px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
+                      Σ <span className="text-slate-300">|</span> {workloadDrilldownStories.reduce((sum, s) => sum + (s.daysLeft ?? 0), 0)}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -4918,12 +4959,14 @@ export function MonthAnalytics({
                       <td className="min-w-0 px-2 py-0.5">
                         <StoryStatusPill status={story.status} />
                       </td>
+                      <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.estimatedDays ?? "\u2014"}</td>
+                      <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.daysLeft ?? "\u2014"}</td>
                     </tr>
                   ))}
                   {workloadDrilldownEmptyRows > 0
                     ? Array.from({ length: workloadDrilldownEmptyRows }).map((_, index) => (
                         <tr key={`workload-empty-${index}`} className={drilldownTableEmptyRowZebra}>
-                          <td colSpan={5} className="px-3 py-0.5 text-[13px]">
+                          <td colSpan={7} className="px-3 py-0.5 text-[13px]">
                             {"\u00A0"}
                           </td>
                         </tr>
@@ -5425,6 +5468,8 @@ export function MonthAnalytics({
                               <th className="min-w-0 px-2 py-1 text-[14px] text-left">
                                 <DrilldownSortHeader label="Status" column="status" sort={monthLoadDrilldownSort} onSortChange={setMonthLoadDrilldownSort} />
                               </th>
+                              <th className="min-w-0 px-2 py-1 text-right text-[14px]">Est days</th>
+                              <th className="min-w-0 px-2 py-1 text-right text-[14px]">Est days left</th>
                             </tr>
                             <tr className="bg-white/95">
                               <th className="min-w-0 px-1 py-0.5" />
@@ -5454,6 +5499,13 @@ export function MonthAnalytics({
                               <th className="min-w-0 px-1 py-0.5">
                                 <DrilldownFilterDropdown value={monthLoadDrilldownFilter.status} options={uniqueStatuses} renderOption={renderStatusOption} onChange={(v) => setMonthLoadDrilldownFilter((p) => ({ ...p, status: v }))} ariaLabel="Filter month load by status" />
                               </th>
+                              {/* Σ totals over the currently visible (filtered) rows. */}
+                              <th className="min-w-0 px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
+                                Σ <span className="text-slate-300">|</span> {monthLoadDrilldownStories.reduce((sum, s) => sum + (s.estimatedDays ?? 0), 0)}
+                              </th>
+                              <th className="min-w-0 px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
+                                Σ <span className="text-slate-300">|</span> {monthLoadDrilldownStories.reduce((sum, s) => sum + (s.daysLeft ?? 0), 0)}
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -5482,11 +5534,13 @@ export function MonthAnalytics({
                                 <td className="min-w-0 px-2 py-0.5">
                                   <StoryStatusPill status={story.status} />
                                 </td>
+                                <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.estimatedDays ?? "—"}</td>
+                                <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.daysLeft ?? "—"}</td>
                               </tr>
                             ))}
                             {monthLoadDrilldownEmptyRows > 0 && Array.from({ length: monthLoadDrilldownEmptyRows }).map((_, i) => (
                               <tr key={`ml-empty-${i}`} className={drilldownTableEmptyRowZebra}>
-                                <td colSpan={5} className="px-3 py-0.5 text-[13px]">{" "}</td>
+                                <td colSpan={7} className="px-3 py-0.5 text-[13px]">{" "}</td>
                               </tr>
                             ))}
                           </tbody>

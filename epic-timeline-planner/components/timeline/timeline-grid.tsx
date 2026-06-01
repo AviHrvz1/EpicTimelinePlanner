@@ -18,7 +18,9 @@ import {
   FileWarning,
   Flag,
   Folder,
+  Inbox,
   KanbanSquare,
+  Send,
   Map as MapIcon,
   MapPin,
   SquarePen,
@@ -106,6 +108,8 @@ import {
 } from "@/lib/year-sprint";
 import { nowMs as clockNowMs } from "@/lib/clock";
 import { collectMovableStoriesForSprint } from "@/lib/sprint-close-move";
+import { collectStoriesRolledIntoSprint, collectStoriesRolledOutOfSprint } from "@/lib/story-rollover-history";
+import { RolledInStoriesModal } from "@/components/timeline/rolled-in-stories-modal";
 import { cn } from "@/lib/utils";
 
 export type InitiativeScheduleRangePatch = {
@@ -2650,6 +2654,10 @@ export function TimelineGrid({
   const capacityTeamFilterRef = useRef<HTMLDivElement | null>(null);
   const [isSprintTeamMenuOpen, setIsSprintTeamMenuOpen] = useState(false);
   const [sprintTeamSearch, setSprintTeamSearch] = useState("");
+  /** Yearsprint number whose "Rolled-in" audit modal is open, or null. */
+  const [rolledInModalSprint, setRolledInModalSprint] = useState<number | null>(null);
+  /** Yearsprint number whose "Rolled-out" audit modal is open, or null. */
+  const [rolledOutModalSprint, setRolledOutModalSprint] = useState<number | null>(null);
   const sprintTeamSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [sprintFilterTeamIds, setSprintFilterTeamIds] = useState<string[]>(() => {
     const t = sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId);
@@ -3994,23 +4002,41 @@ export function TimelineGrid({
     const ys = activeYearSprintForMonthDrill;
     if (ys == null) return null;
     const sprintClosed = sprintEndDate(currentYear, ys).getTime() <= clockNowMs();
-    if (!sprintClosed) return null;
     const monthForCount = sprintBoardContextMonth ?? activeMonth ?? 1;
     const teamFilter = sprintFilterTeamIds.length ? sprintFilterTeamIds : null;
-    const movableCount = collectMovableStoriesForSprint(initiatives, monthForCount, ys, teamFilter).length;
+    const movableCount = sprintClosed
+      ? collectMovableStoriesForSprint(initiatives, monthForCount, ys, teamFilter).length
+      : 0;
     const atYearCap = ys >= YEAR_SPRINT_MAX;
     const moveLabel = isYearBoundaryBlocked
       ? `Add ${currentYear + 1} and continue`
       : atYearCap
-        ? `Move ${movableCount} to S1 next year`
-        : `Move ${movableCount} to S${ys + 1}`;
+        ? `Move leftovers S${ys} → S1 next year`
+        : `Move leftovers S${ys} → S${ys + 1}`;
     const moveDisabled = movableCount === 0 && !isYearBoundaryBlocked && !atYearCap;
     const workTargetSprint = currentWorkYearSprintForPlan(currentYear);
     const showJump =
       workTargetSprint != null && workTargetSprint !== ys && Boolean(onEnterSprintStoryBoard);
+    /** Rolled-in audit count for the CURRENT sprint view — surfaced as a
+     *  small chip that opens the audit modal so the planner can see what
+     *  carried over from the prior sprint(s). Gated to the destination
+     *  side: only the still-open / current sprint shows it. Closed source
+     *  sprints have a Move chip and shouldn't double-up with a Rolled-in
+     *  pill that would describe history from BEFORE the planner acted —
+     *  the user wants the chip to appear strictly AFTER they roll
+     *  leftovers, on the destination sprint where the carryover lands. */
+    const rolledInCount = sprintClosed
+      ? 0
+      : collectStoriesRolledIntoSprint(initiatives, ys).length;
+    /** Rolled-out count — surfaced only on CLOSED source sprints so the
+     *  planner can audit what left this sprint after the Move action.
+     *  Open sprints get the destination-side `rolledInCount` instead. */
+    const rolledOutCount = sprintClosed
+      ? collectStoriesRolledOutOfSprint(initiatives, ys).length
+      : 0;
     return (
       <>
-        {onRequestSprintMove ? (
+        {sprintClosed && onRequestSprintMove ? (
           <button
             type="button"
             disabled={moveDisabled}
@@ -4025,6 +4051,30 @@ export function TimelineGrid({
           >
             <ArrowRightCircle className="size-3 shrink-0 text-slate-700 sm:size-3.5" strokeWidth={2.25} aria-hidden />
             <span className="truncate">{moveLabel}</span>
+          </button>
+        ) : null}
+        {rolledOutCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => setRolledOutModalSprint(ys)}
+            title={`See what rolled out of Sprint ${ys}`}
+            className="inline-flex h-7 max-w-full shrink-0 cursor-pointer items-center gap-1 rounded-full bg-[aliceblue] px-2.5 text-[11px] font-semibold leading-none tracking-[0.02em] text-slate-800 ring-1 ring-sky-200 transition hover:bg-sky-100 hover:ring-sky-300 sm:gap-1.5 sm:px-3 sm:text-[12px]"
+          >
+            <Send className="size-3 shrink-0 text-indigo-500 sm:size-3.5" strokeWidth={2.25} aria-hidden />
+            <span className="text-slate-500">Rolled out</span>
+            <span className="truncate">{rolledOutCount}</span>
+          </button>
+        ) : null}
+        {rolledInCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => setRolledInModalSprint(ys)}
+            title={`See what rolled into Sprint ${ys}`}
+            className="inline-flex h-7 max-w-full shrink-0 cursor-pointer items-center gap-1 rounded-full bg-[aliceblue] px-2.5 text-[11px] font-semibold leading-none tracking-[0.02em] text-slate-800 ring-1 ring-sky-200 transition hover:bg-sky-100 hover:ring-sky-300 sm:gap-1.5 sm:px-3 sm:text-[12px]"
+          >
+            <Inbox className="size-3 shrink-0 text-indigo-500 sm:size-3.5" strokeWidth={2.25} aria-hidden />
+            <span className="text-slate-500">Rolled in</span>
+            <span className="truncate">{rolledInCount}</span>
           </button>
         ) : null}
         {showJump && workTargetSprint != null ? (
@@ -6479,7 +6529,7 @@ export function TimelineGrid({
         ) : activeMonth ? (
           <div
             className={cn(
-              "flex min-w-0 flex-wrap items-center justify-end gap-3 pr-2 sm:gap-4 md:gap-5",
+              "flex min-w-0 flex-wrap items-center justify-end gap-2 pr-2 sm:gap-2.5 md:gap-3",
               hasBreadcrumbs ? "flex-1" : "w-full",
             )}
           >
@@ -6511,9 +6561,22 @@ export function TimelineGrid({
               {sprintKanbanSummaryStats ? (
                 <>
                   {!summaryBarPortalElement ? summarySprintChipsJsx : null}
+                  {showSprintEndCountdown && activeYearSprintForMonthDrill != null ? (
+                    <>
+                      <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
+                      {sprintCloseActionChipsJsx}
+                    </>
+                  ) : periodCountdownScope ? (
+                    <PeriodEndCountdown scope={periodCountdownScope} planYear={currentYear} index={periodCountdownIndex} />
+                  ) : null}
+                  {/* Search lands at the far right of the breadcrumb row,
+                   *  after the Left / Move / Rolled in / Jump chip cluster,
+                   *  so the planner can focus their attention from
+                   *  navigation chips on the left → action chips on the
+                   *  right → the search input as the final affordance. */}
                   <div
                     ref={sprintKanbanSearchRef}
-                    className="relative -mr-2 flex items-center"
+                    className="relative flex items-center"
                     onMouseEnter={() => {
                       if (sprintKanbanSearchCloseTimer.current) clearTimeout(sprintKanbanSearchCloseTimer.current);
                     }}
@@ -6524,11 +6587,7 @@ export function TimelineGrid({
                       if (!sprintKanbanSearchRef.current?.contains(e.relatedTarget as Node)) setSprintKanbanSearchOpen(false);
                     }}
                   >
-                    {/* Inner positioning container — pinned to the input's
-                        visual box so the search icon + clear-X land inside
-                        the input rather than at the outer wrapper's edge
-                        (which is shifted by the wrapper's negative margin). */}
-                    <div className="group relative w-[calc(30%-10px)] min-w-[14rem]">
+                    <div className="group relative w-[18rem] max-w-full min-w-[14rem]">
                     <Search className="pointer-events-none absolute left-2 top-1/2 z-10 size-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
                     <input
                       type="text"
@@ -6546,10 +6605,6 @@ export function TimelineGrid({
                         type="button"
                         tabIndex={-1}
                         onMouseDown={(e) => { e.preventDefault(); setSprintKanbanSearch(""); setSprintKanbanSearchOpen(false); }}
-                        // Anchored to the input's own box (group container),
-                        // hidden by default, fades in on hover/focus of just
-                        // that inner container so it can never appear next
-                        // to the adjacent "Left" countdown button.
                         className="absolute right-1.5 top-1/2 z-10 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded text-slate-400 opacity-0 transition-opacity hover:text-slate-600 group-hover:opacity-100 group-focus-within:opacity-100"
                         aria-label="Clear search"
                       >
@@ -6558,7 +6613,7 @@ export function TimelineGrid({
                     ) : null}
                     </div>
                     {sprintKanbanSearchOpen && sprintKanbanSuggestions.length > 0 ? (
-                      <div className="absolute left-0 top-full z-50 w-72 pt-1">
+                      <div className="absolute right-0 top-full z-50 w-72 pt-1">
                         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
                           <ul role="listbox" className="max-h-64 overflow-y-auto py-1">
                             {sprintKanbanSuggestions.map((s, i) => (
@@ -6573,11 +6628,6 @@ export function TimelineGrid({
                                   }}
                                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] hover:bg-slate-50"
                                 >
-                                  {/* Replace the text "Story" / "Epic" /
-                                   *  "Initiative" pill with just the icon
-                                   *  the rest of the app uses for each
-                                   *  type — sky StickyNote, slate Folder,
-                                   *  blue Zap. */}
                                   {s.kind === "story" ? (
                                     <StickyNote className="size-3.5 shrink-0 text-sky-500" aria-hidden />
                                   ) : s.kind === "epic" ? (
@@ -6594,14 +6644,6 @@ export function TimelineGrid({
                       </div>
                     ) : null}
                   </div>
-                  {showSprintEndCountdown && activeYearSprintForMonthDrill != null ? (
-                    <>
-                      <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
-                      {sprintCloseActionChipsJsx}
-                    </>
-                  ) : periodCountdownScope ? (
-                    <PeriodEndCountdown scope={periodCountdownScope} planYear={currentYear} index={periodCountdownIndex} />
-                  ) : null}
                 </>
               ) : (
                 <>
@@ -8654,6 +8696,24 @@ export function TimelineGrid({
       {summaryBarPortalElement ? createPortal(
         sprintKanbanSummaryStats ? summarySprintChipsJsx : summaryYearChipsJsx,
         summaryBarPortalElement
+      ) : null}
+      {rolledInModalSprint != null ? (
+        <RolledInStoriesModal
+          yearSprint={rolledInModalSprint}
+          direction="in"
+          rows={collectStoriesRolledIntoSprint(initiatives, rolledInModalSprint)}
+          onClose={() => setRolledInModalSprint(null)}
+          onOpenStory={onOpenStory}
+        />
+      ) : null}
+      {rolledOutModalSprint != null ? (
+        <RolledInStoriesModal
+          yearSprint={rolledOutModalSprint}
+          direction="out"
+          rows={collectStoriesRolledOutOfSprint(initiatives, rolledOutModalSprint)}
+          onClose={() => setRolledOutModalSprint(null)}
+          onOpenStory={onOpenStory}
+        />
       ) : null}
     </div>
   );
