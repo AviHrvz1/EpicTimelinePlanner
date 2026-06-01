@@ -10,7 +10,8 @@
  * The API layer (see app/api/stories/[id]/route.ts) maintains three invariants
  * on (estimatedDays, daysLeft, status) so this module can trust the inputs
  * without fallbacks:
- *   - review/done stories always have daysLeft = 0
+ *   - done stories always have daysLeft = 0 (review stories keep their
+ *     remaining estimate since shipping/QA work is still outstanding)
  *   - daysLeft is initialized to estimatedDays when a story is sized
  *   - daysLeft <= estimatedDays always
  */
@@ -61,7 +62,7 @@ export interface ProgressInputs {
 export interface ProgressResult {
   /** Effort-weighted progress 0–100. 0 when no stories have estimatedDays. */
   progressPercent: number;
-  /** Sum of daysLeft across not-yet-review estimated stories. */
+  /** Sum of daysLeft across not-yet-terminal estimated stories. */
   remainingEffort: number;
   /** Sum of estimatedDays across all estimated stories. */
   totalEffort: number;
@@ -83,7 +84,11 @@ export const HEALTH_ON_TRACK_DELTA = 1;
 /** Above this delta the bar is "atRisk" (red). Between this and on-track is "watch" (amber). */
 export const HEALTH_AT_RISK_DELTA = 4;
 
-const DONE_STATUSES = new Set(["review", "done"]);
+/** "Terminal" = the work is fully shipped/accepted. After the
+ *  done/review/approved enum rework, only `done` qualifies — review is
+ *  engineering-complete but still in QA, so it counts as open work for
+ *  progress %, health verdict, and the API daysLeft invariant. */
+const TERMINAL_STATUSES = new Set(["done"]);
 
 /** Count of weekdays (Mon–Fri) in the closed interval [from, to]. Returns 0 if to is before from. */
 export function workingDaysBetween(from: Date, to: Date): number {
@@ -112,17 +117,18 @@ export function computeProgress(input: ProgressInputs): ProgressResult {
   let totalStoryCount = 0;
   for (const story of input.stories) {
     totalStoryCount += 1;
-    if (DONE_STATUSES.has(story.status)) doneStoryCount += 1;
+    if (TERMINAL_STATUSES.has(story.status)) doneStoryCount += 1;
     if (story.estimatedDays == null) {
       unestimatedCount += 1;
       continue;
     }
     totalEffort += story.estimatedDays;
-    // Review + done stories have daysLeft = 0 by API invariant; daysLeft is
-    // never null for estimated stories thanks to the auto-init rule. Defensive
-    // fallback only matters if the invariant is somehow violated by a manual
-    // DB edit — fall back to estimatedDays in that case (assume no progress).
-    if (!DONE_STATUSES.has(story.status)) {
+    // Done stories have daysLeft = 0 by API invariant (review stories keep
+    // their remaining estimate since shipping work is outstanding). daysLeft
+    // is never null for estimated stories thanks to the auto-init rule.
+    // Defensive fallback only matters if the invariant is somehow violated
+    // by a manual DB edit — fall back to estimatedDays in that case.
+    if (!TERMINAL_STATUSES.has(story.status)) {
       remainingEffort += story.daysLeft ?? story.estimatedDays;
     }
   }
@@ -146,7 +152,7 @@ export function computeProgress(input: ProgressInputs): ProgressResult {
       for (const story of input.stories) {
         if (story.estimatedDays == null) continue;
         totalStoryDays += story.estimatedDays;
-        if (!DONE_STATUSES.has(story.status)) {
+        if (!TERMINAL_STATUSES.has(story.status)) {
           currentOpenStoryDays += story.daysLeft ?? story.estimatedDays;
         }
       }

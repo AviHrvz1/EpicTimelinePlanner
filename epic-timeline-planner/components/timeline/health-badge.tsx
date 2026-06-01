@@ -23,24 +23,31 @@ export function HealthBadge({
   tooltip?: string;
   onClick?: () => void;
   className?: string;
-  /** "sm" (default) matches the inline Gantt chip; "md" matches the
-   *  scope-panel user/team chips (text-[13px] / px-2.5 / py-1.5). */
-  size?: "sm" | "md";
+  /** "xs" is the most compact (used inside Sprint Load rows where vertical
+   *  space is tight); "sm" (default) matches the inline Gantt chip; "md"
+   *  matches the scope-panel user/team chips (text-[13px] / px-2.5 /
+   *  py-1.5); "chip" matches the breadcrumb h-7 rounded-full pill family
+   *  used by `SprintEndCountdown` and the Move/Jump chips. */
+  size?: "xs" | "sm" | "md" | "chip";
 }) {
   const meta = STATUS_META[status];
   const Icon = meta.icon;
   const sharedClass = cn(
-    "inline-flex shrink-0 items-center gap-1 rounded font-medium leading-none ring-1",
-    size === "md"
-      ? "gap-1.5 px-2.5 py-1.5 text-[13px] rounded-md shadow-sm"
-      : "px-2 py-0.5 text-[12px]",
+    "inline-flex shrink-0 items-center font-semibold leading-none ring-1",
+    size === "chip"
+      ? "h-7 gap-1 rounded-full px-2.5 text-[11px] tracking-[0.02em] sm:gap-1.5 sm:px-3 sm:text-[12px]"
+      : size === "md"
+        ? "gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] shadow-sm font-medium"
+        : size === "xs"
+          ? "gap-0.5 rounded px-1.5 py-px text-[10px] font-medium"
+          : "gap-1 rounded px-2 py-0.5 text-[12px] font-medium",
     meta.chip,
     onClick && "cursor-pointer transition-transform duration-150 hover:scale-105 hover:brightness-105",
     className,
   );
   const content = (
     <>
-      <Icon className={cn("shrink-0", size === "md" ? "size-4" : "size-3")} aria-hidden />
+      <Icon className={cn("shrink-0", size === "md" ? "size-4" : size === "chip" ? "size-3 sm:size-3.5" : size === "xs" ? "size-2.5" : "size-3")} aria-hidden />
       <span>{meta.label}</span>
     </>
   );

@@ -18,6 +18,7 @@ import {
   FileWarning,
   Flag,
   Folder,
+  KanbanSquare,
   Map as MapIcon,
   MapPin,
   SquarePen,
@@ -6482,28 +6483,30 @@ export function TimelineGrid({
               hasBreadcrumbs ? "flex-1" : "w-full",
             )}
           >
+              {/* Sprint chip + status badge — rendered as siblings (no
+               *  wrapping span) so they pick up the parent flex's gap and
+               *  read as one continuous chip cluster with the Sprint-over /
+               *  Move / Jump pills, not as a separate pair. */}
               {monthPlanTab === "sprint-status" && resolvedActiveYearSprint != null && sprintInsightsHealth ? (
-                <span className="inline-flex flex-wrap items-center gap-3 sm:gap-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onMonthPlanTabChange?.("sprint-kanban");
-                      setActiveSprintTab("kanban");
-                    }}
-                    title={`Open Sprint ${resolvedActiveYearSprint} Kanban`}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-white px-2.5 py-1.5 text-[13px] font-semibold text-slate-700 ring-1 ring-slate-200 shadow-sm transition hover:bg-rose-50/60 hover:text-rose-700 hover:ring-rose-200"
-                  >
-                    <Flag className="size-3.5 shrink-0 text-rose-500" aria-hidden />
-                    Sprint {resolvedActiveYearSprint}
-                  </button>
-                  <span className="inline-flex items-center">
-                    <HealthBadge
-                      status={sprintInsightsHealth.status}
-                      size="md"
-                      tooltip={`Sprint health · ${sprintInsightsHealth.daysLeft}d left / ${sprintInsightsHealth.estTotal}d est · ${sprintInsightsHealth.sprintDaysLeft}/${sprintInsightsHealth.sprintDaysTotal}d remaining in sprint`}
-                    />
-                  </span>
-                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onMonthPlanTabChange?.("sprint-kanban");
+                    setActiveSprintTab("kanban");
+                  }}
+                  title={`Open Sprint ${resolvedActiveYearSprint} Kanban`}
+                  className="inline-flex h-7 max-w-full shrink-0 cursor-pointer items-center gap-1 rounded-full bg-[aliceblue] px-2.5 text-[11px] font-semibold leading-none tracking-[0.02em] text-slate-800 ring-1 ring-sky-200 transition hover:bg-sky-100 hover:ring-sky-300 sm:gap-1.5 sm:px-3 sm:text-[12px]"
+                >
+                  <KanbanSquare className="size-3 shrink-0 text-indigo-500 sm:size-3.5" strokeWidth={2.25} aria-hidden />
+                  <span className="truncate">S{resolvedActiveYearSprint} Board</span>
+                </button>
+              ) : null}
+              {monthPlanTab === "sprint-status" && resolvedActiveYearSprint != null && sprintInsightsHealth ? (
+                <HealthBadge
+                  status={sprintInsightsHealth.status}
+                  size="chip"
+                  tooltip={`Sprint health · ${sprintInsightsHealth.daysLeft}d left / ${sprintInsightsHealth.estTotal}d est · ${sprintInsightsHealth.sprintDaysLeft}/${sprintInsightsHealth.sprintDaysTotal}d remaining in sprint`}
+                />
               ) : null}
               {sprintKanbanSummaryStats ? (
                 <>

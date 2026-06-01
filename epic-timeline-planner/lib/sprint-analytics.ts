@@ -62,7 +62,20 @@ export type WorkloadTeamRow = {
 
 export type SprintAnalyticsData = {
   statusPie: Array<{ name: string; value: number }>;
-  burndown: Array<{ labelShort: string; ideal: number; actual: number | null; isToday: boolean }>;
+  burndown: Array<{
+    labelShort: string;
+    ideal: number;
+    actual: number | null;
+    isToday: boolean;
+    /** Always-present cross-metric values used by the chart tooltip so the
+     *  user sees "stories remaining" and "est days left" side-by-side
+     *  regardless of which series is plotted. Null when the day is in the
+     *  future (no actual yet). */
+    actualStories: number | null;
+    actualDaysLeft: number | null;
+    totalStories: number;
+    totalDaysLeft: number;
+  }>;
   workloadByAssignee: Array<{
     assignee: string;
     openCount: number;
@@ -273,8 +286,13 @@ function buildBurndown(
   }
   const hasSnapshots = snapMap.size > 0;
 
-  // Value for one story on a given day using its snapshots (most-recent-on-or-before)
-  function storyValueAtDay(story: UserStoryItem, dayMs: number): number {
+  // Value for one story on a given day using its snapshots (most-recent-on-or-before).
+  // Returns BOTH metrics so the tooltip can show stories + est-days simultaneously
+  // and the active series can pick whichever one it plots. Only the terminal
+  // `done` counts as burned-down for the stories metric (review work hasn't
+  // shipped) — mirrors the pie chart's distinction between Review / Testing
+  // and Done.
+  function storyValuesAtDay(story: UserStoryItem, dayMs: number): { daysLeft: number; stories: number } {
     const snaps = snapMap.get(story.id);
     if (snaps?.length) {
       let best: SnapRow | null = null;
@@ -283,13 +301,20 @@ function buildBurndown(
         else break;
       }
       if (best) {
-        if (metric === "daysLeft") return Math.max(0, best.daysLeft ?? 0);
-        return best.status === StoryStatus.review || best.status === StoryStatus.done ? 0 : 1;
+        return {
+          daysLeft: Math.max(0, best.daysLeft ?? 0),
+          stories: best.status === StoryStatus.done ? 0 : 1,
+        };
       }
     }
-    // No snapshot: fall back to current story value
-    if (metric === "daysLeft") return Math.max(0, story.daysLeft ?? 0);
-    return story.status === StoryStatus.review || story.status === StoryStatus.done ? 0 : 1;
+    return {
+      daysLeft: Math.max(0, story.daysLeft ?? 0),
+      stories: story.status === StoryStatus.done ? 0 : 1,
+    };
+  }
+  function storyValueAtDay(story: UserStoryItem, dayMs: number): number {
+    const v = storyValuesAtDay(story, dayMs);
+    return metric === "daysLeft" ? v.daysLeft : v.stories;
   }
 
   // Start value from day-1 snapshots (or estimated if no snapshots)
@@ -314,15 +339,39 @@ function buildBurndown(
   const today1Based = sprintCalendarToday1Based(dayDates);
   const currentActual = metric === "daysLeft"
     ? sprintStories.reduce((sum, s) => sum + Math.max(0, s.daysLeft ?? 0), 0)
-    : sprintStories.filter((s) => s.status !== StoryStatus.review && s.status !== StoryStatus.done).length;
+    : sprintStories.filter((s) => s.status !== StoryStatus.done).length;
+
+  // Cross-metric totals (constant across the chart) — used in tooltip for
+  // "X of Y stories left" framing.
+  const totalStories = sprintStories.length;
+  const totalDaysLeft = sprintStories.reduce(
+    (sum, s) => sum + Math.max(0, s.estimatedDays ?? s.daysLeft ?? 0),
+    0,
+  );
+  const aggregateValuesAtDay = (dayMs: number) =>
+    sprintStories.reduce(
+      (acc, s) => {
+        const v = storyValuesAtDay(s, dayMs);
+        acc.daysLeft += v.daysLeft;
+        acc.stories += v.stories;
+        return acc;
+      },
+      { daysLeft: 0, stories: 0 },
+    );
 
   if (horizon === 1) {
     const cal = dayDates[0] ?? new Date(planYear, month - 1, 1);
+    const dayMs = startOfDay(cal).getTime();
+    const agg = aggregateValuesAtDay(dayMs);
     return [{
       labelShort: flowChartDayLabel(cal),
       ideal: roundBurndown(0),
-      actual: roundBurndown(hasSnapshots ? storyValueAtDay.length > 0 ? sprintStories.reduce((sum, s) => sum + storyValueAtDay(s, startOfDay(cal).getTime()), 0) : currentActual : currentActual),
-      isToday: startOfDay(cal).getTime() === todayMs,
+      actual: roundBurndown(hasSnapshots ? (metric === "daysLeft" ? agg.daysLeft : agg.stories) : currentActual),
+      isToday: dayMs === todayMs,
+      actualStories: hasSnapshots ? Math.round(agg.stories) : Math.round(currentActual),
+      actualDaysLeft: hasSnapshots ? Number(agg.daysLeft.toFixed(1)) : Number(currentActual.toFixed(1)),
+      totalStories,
+      totalDaysLeft: Number(totalDaysLeft.toFixed(1)),
     }];
   }
 
@@ -332,14 +381,26 @@ function buildBurndown(
     const ideal = roundBurndown(startValue * (1 - idx / (horizon - 1)));
 
     let actual: number | null = null;
+    let actualStories: number | null = null;
+    let actualDaysLeft: number | null = null;
     if (dayMs <= todayMs) {
       if (hasSnapshots) {
-        actual = roundBurndown(sprintStories.reduce((sum, s) => sum + storyValueAtDay(s, dayMs), 0));
+        const agg = aggregateValuesAtDay(dayMs);
+        actual = roundBurndown(metric === "daysLeft" ? agg.daysLeft : agg.stories);
+        actualStories = Math.round(agg.stories);
+        actualDaysLeft = Number(agg.daysLeft.toFixed(1));
       } else {
         const interpolated = dayIdx <= today1Based
           ? startValue - (startValue - currentActual) * ((dayIdx - 1) / Math.max(today1Based - 1, 1))
           : null;
         actual = interpolated == null ? null : roundBurndown(interpolated);
+        // Without snapshots there's no day-by-day cross-metric data — fall
+        // back to scaling today's known values along the same linear curve.
+        if (interpolated != null) {
+          const scale = startValue > 0 ? interpolated / startValue : 0;
+          actualStories = Math.round(totalStories * scale);
+          actualDaysLeft = Number((totalDaysLeft * scale).toFixed(1));
+        }
       }
     }
 
@@ -348,6 +409,10 @@ function buildBurndown(
       ideal,
       actual,
       isToday: dayMs === todayMs,
+      actualStories,
+      actualDaysLeft,
+      totalStories,
+      totalDaysLeft: Number(totalDaysLeft.toFixed(1)),
     };
   });
 }

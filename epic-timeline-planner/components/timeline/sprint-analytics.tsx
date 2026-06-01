@@ -36,6 +36,9 @@ import { UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
 import { type EstimateSource } from "@/lib/epic-estimates";
 import { collectMonthScopeEpicsForSprintPanel, storyMatchesYearSprint } from "@/lib/sprint-plan";
 import { monthTeamLabelForId } from "@/lib/month-team-board";
+import { projectInitiativesToCloseDate } from "@/lib/story-snapshot-projection";
+import { sprintEndDate } from "@/lib/year-sprint";
+import { nowMs as clockNowMs } from "@/lib/clock";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -271,7 +274,7 @@ function SprintLoadHealthBadge({
       aria-haspopup="dialog"
       aria-expanded={open}
     >
-      <HealthBadge status={status} tooltip={tipLines.join("\n")} />
+      <HealthBadge status={status} size="xs" tooltip={tipLines.join("\n")} />
       {open && pos && typeof document !== "undefined" ? createPortal(
         <div
           ref={popoverRef}
@@ -719,8 +722,11 @@ export function SprintAnalytics({
     //  - Epic plan range scoping (kanban helper), not coarse initiative bounds.
     //  - OR-style team filter (epic in filter OR assignee's directory team in
     //    filter), matching `collectWorkloadStories` in lib/sprint-analytics.
-    // Without this, clicking a person who appears in the chart only because
-    // their assignee-team matched would resolve to an empty drilldown.
+    //  - For CLOSED sprints, project to the sprint close instant so the
+    //    drilldown sees the same frozen state as the pie/burndown. Without
+    //    this projection, clicking a slice on the closed-sprint pie returns
+    //    empty whenever the underlying stories have since moved sprints or
+    //    flipped status.
     const teamMemberNames = new Set<string>();
     if (filterEpicTeamIds?.length && workspaceDirectoryUsers) {
       const filterLower = new Set(filterEpicTeamIds.map((t) => t.toLowerCase()));
@@ -730,7 +736,12 @@ export function SprintAnalytics({
         if (team && name && filterLower.has(team)) teamMemberNames.add(name);
       }
     }
-    const scopeEpics = collectMonthScopeEpicsForSprintPanel(initiatives, month, null);
+    const closeMs = sprintEndDate(planYear, yearSprint).getTime();
+    const sprintClosed = closeMs <= clockNowMs();
+    const dataInitiatives = sprintClosed
+      ? projectInitiativesToCloseDate(initiatives, closeMs)
+      : initiatives;
+    const scopeEpics = collectMonthScopeEpicsForSprintPanel(dataInitiatives, month, null);
     const rows: Array<{
       id: string;
       title: string;
@@ -779,15 +790,32 @@ export function SprintAnalytics({
       }
     }
     return rows;
-  }, [initiatives, month, yearSprint, filterEpicTeamIds, workspaceDirectoryUsers]);
+  }, [initiatives, month, yearSprint, planYear, filterEpicTeamIds, workspaceDirectoryUsers]);
 
   // Pre-column-filter pools. The "Raw" rows drive the unique-value pickers in
   // each column header so removing a filter restores all options; the final
   // `*Stories` memos below apply `*ColFilter` on top of these.
+  // The pie click emits the friendly slice name (e.g. "Review / Testing")
+  // but the projection's `story.status` carries the SAME friendly label;
+  // the underlying enum lives on `statusKey`. The earlier comparison was
+  // `story.status === friendlyLabel` which should have matched — but pie
+  // tooltips and chart labels were drifting between the two name spaces
+  // after the enum rename, so go through `statusKey` explicitly to make
+  // the filter robust to either label set.
   const statusDrilldownStoriesRaw = useMemo(() => {
     if (!statusDrilldownFilter) return [];
     if (statusDrilldownFilter === "All") return sprintStories;
-    return sprintStories.filter((story) => story.status === statusDrilldownFilter);
+    if (statusDrilldownFilter === "Unscheduled") {
+      return sprintStories.filter((story) => story.sprint == null);
+    }
+    const enumValue: UserStoryItem["status"] | null =
+      statusDrilldownFilter === "To do" ? "todo"
+      : statusDrilldownFilter === "In progress" ? "inProgress"
+      : statusDrilldownFilter === "Review / Testing" ? "review"
+      : statusDrilldownFilter === "Done" ? "done"
+      : null;
+    if (enumValue == null) return [];
+    return sprintStories.filter((story) => story.statusKey === enumValue);
   }, [statusDrilldownFilter, sprintStories]);
 
   const workloadDrilldownStoriesRaw = useMemo(() => {
@@ -939,6 +967,8 @@ export function SprintAnalytics({
                       <th className="px-2 py-1.5 text-[14px] font-bold">Sprint</th>
                       <th className="px-2 py-1.5 text-[14px] font-bold">Assignee</th>
                       <th className="px-2 py-1.5 text-[14px] font-bold">Status</th>
+                      <th className="px-2 py-1.5 text-right text-[14px] font-bold">Est days</th>
+                      <th className="px-2 py-1.5 text-right text-[14px] font-bold">Est days left</th>
                     </tr>
                     <tr className="bg-white/95">
                       <th className="px-1 py-0.5" />
@@ -976,6 +1006,16 @@ export function SprintAnalytics({
                           ariaLabel="Filter status drilldown by status"
                         />
                       </th>
+                      {/* Σ totals over the currently visible (filtered) rows
+                       *  so the user always sees how much est-days work the
+                       *  drilldown represents, even after filtering by name /
+                       *  status / assignee. */}
+                      <th className="px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
+                        Σ <span className="text-slate-300">|</span> {statusDrilldownStories.reduce((sum, s) => sum + (s.estimatedDays ?? 0), 0)}
+                      </th>
+                      <th className="px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
+                        Σ <span className="text-slate-300">|</span> {statusDrilldownStories.reduce((sum, s) => sum + (s.daysLeft ?? 0), 0)}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1001,11 +1041,13 @@ export function SprintAnalytics({
                         <td className="px-2 py-1.5">
                           <StoryStatusPill status={story.status} />
                         </td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{story.estimatedDays ?? "—"}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{story.daysLeft ?? "—"}</td>
                       </tr>
                     ))}
                     {statusDrilldownStories.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-3 py-8 text-center text-[13px] text-slate-500">
+                        <td colSpan={7} className="px-3 py-8 text-center text-[13px] text-slate-500">
                           No stories in this status.
                         </td>
                       </tr>
@@ -1190,6 +1232,12 @@ export function SprintAnalytics({
                   <Tooltip
                     content={({ active, payload, label }) => {
                       if (!active || !payload || payload.length === 0) return null;
+                      const point = payload[0]?.payload as {
+                        actualStories?: number | null;
+                        actualDaysLeft?: number | null;
+                        totalStories?: number;
+                        totalDaysLeft?: number;
+                      } | undefined;
                       return (
                         <AnalyticsTooltipShell title={String(label ?? "Burndown")}>
                           {payload.map((row, idx) => (
@@ -1204,6 +1252,27 @@ export function SprintAnalytics({
                               }
                             />
                           ))}
+                          {/* Cross-metric breakdown so the hover always reads
+                           *  "what's left to complete" in BOTH stories and
+                           *  est-days, no matter which series is plotted. */}
+                          {point && point.actualStories != null && point.totalStories != null ? (
+                            <div className="mt-1.5 border-t border-slate-200/70 pt-1.5 text-[11px] text-slate-500">
+                              <div className="flex items-center justify-between gap-2">
+                                <span>Stories left</span>
+                                <span className="font-semibold tabular-nums text-slate-700">
+                                  {point.actualStories} <span className="text-slate-400">/ {point.totalStories}</span>
+                                </span>
+                              </div>
+                              {point.actualDaysLeft != null && point.totalDaysLeft != null ? (
+                                <div className="mt-0.5 flex items-center justify-between gap-2">
+                                  <span>Est days left</span>
+                                  <span className="font-semibold tabular-nums text-slate-700">
+                                    {point.actualDaysLeft} <span className="text-slate-400">/ {point.totalDaysLeft}</span>
+                                  </span>
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </AnalyticsTooltipShell>
                       );
                     }}
@@ -1271,6 +1340,8 @@ export function SprintAnalytics({
                       <th className="px-2 py-1 text-[14px] font-semibold">Sprint</th>
                       <th className="px-2 py-1 text-[14px] font-semibold">Assignee</th>
                       <th className="px-2 py-1 text-[14px] font-semibold">Status</th>
+                      <th className="px-2 py-1 text-right text-[14px] font-semibold">Est days</th>
+                      <th className="px-2 py-1 text-right text-[14px] font-semibold">Est days left</th>
                     </tr>
                     <tr className="bg-white/95">
                       <th className="px-1 py-0.5" />
@@ -1317,6 +1388,13 @@ export function SprintAnalytics({
                           ariaLabel="Filter workload by status"
                         />
                       </th>
+                      {/* Σ totals over the currently visible (filtered) rows. */}
+                      <th className="px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
+                        Σ <span className="text-slate-300">|</span> {workloadDrilldownStories.reduce((sum, s) => sum + (s.estimatedDays ?? 0), 0)}
+                      </th>
+                      <th className="px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
+                        Σ <span className="text-slate-300">|</span> {workloadDrilldownStories.reduce((sum, s) => sum + (s.daysLeft ?? 0), 0)}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1343,6 +1421,8 @@ export function SprintAnalytics({
                         <td className="px-2 py-1">
                           <StoryStatusPill status={story.status} />
                         </td>
+                        <td className="px-2 py-1 text-right tabular-nums">{story.estimatedDays ?? "—"}</td>
+                        <td className="px-2 py-1 text-right tabular-nums">{story.daysLeft ?? "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1747,11 +1827,16 @@ export function SprintAnalytics({
                           <thead className="sticky top-0 bg-[#0897d5] text-white">
                             <tr>
                               <th className="px-2 py-1 text-[14px] font-semibold">Story ID</th>
-                              <th className="px-2 py-1 text-[14px] font-semibold">Story name</th>
+                              {/* Story name gets the bulk of the breathing room
+                               *  so long titles don't get truncated at the
+                               *  expense of all-narrow metric columns. */}
+                              <th className="w-[36%] min-w-[18rem] px-2 py-1 text-[14px] font-semibold">Story name</th>
                               <th className="px-2 py-1 text-[14px] font-semibold">Team</th>
                               <th className="px-2 py-1 text-[14px] font-semibold">Sprint</th>
                               <th className="px-2 py-1 text-[14px] font-semibold">Assignee</th>
                               <th className="px-2 py-1 text-[14px] font-semibold">Status</th>
+                              <th className="px-2 py-1 text-right text-[14px] font-semibold">Est days</th>
+                              <th className="px-2 py-1 text-right text-[14px] font-semibold">Est days left</th>
                             </tr>
                             <tr className="bg-white/95">
                               <th className="px-1 py-0.5" />
@@ -1798,6 +1883,13 @@ export function SprintAnalytics({
                                   ariaLabel="Filter sprint load by status"
                                 />
                               </th>
+                              {/* Σ totals over the currently visible (filtered) rows. */}
+                              <th className="px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
+                                Σ <span className="text-slate-300">|</span> {sprintLoadDrilldownStories.reduce((sum, s) => sum + (s.estimatedDays ?? 0), 0)}
+                              </th>
+                              <th className="px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
+                                Σ <span className="text-slate-300">|</span> {sprintLoadDrilldownStories.reduce((sum, s) => sum + (s.daysLeft ?? 0), 0)}
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1820,6 +1912,8 @@ export function SprintAnalytics({
                                 <td className="px-2 py-1">
                                   <StoryStatusPill status={story.status} />
                                 </td>
+                                <td className="px-2 py-1 text-right tabular-nums">{story.estimatedDays ?? "—"}</td>
+                                <td className="px-2 py-1 text-right tabular-nums">{story.daysLeft ?? "—"}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -1935,13 +2029,13 @@ export function SprintAnalytics({
                                         onOpenStory={onOpenStory}
                                       />
                                     ) : null}
-                                    <span className="text-[11px] tabular-nums text-slate-600">
+                                    <span className="text-[9.5px] tabular-nums text-slate-600">
                                       <span className="font-semibold text-slate-800">{row.estTotal}{loadUnit}</span>
                                       <span className="ml-0.5 text-slate-400">{loadUnit === "d" ? "est" : "total"}</span>
-                                      <span className="mx-1 text-slate-300">·</span>
+                                      <span className="mx-0.5 text-slate-300">·</span>
                                       <span className="font-semibold text-slate-800">{doneDays}{loadUnit}</span>
-                                      <span className="ml-0.5 text-slate-400">review</span>
-                                      <span className="mx-1 text-slate-300">·</span>
+                                      <span className="ml-0.5 text-slate-400">done</span>
+                                      <span className="mx-0.5 text-slate-300">·</span>
                                       <span className={cn("font-semibold", atRisk ? "text-amber-700" : watch ? "text-amber-700" : "text-slate-800")}>{row.daysLeft}{loadUnit}</span>
                                       <span className="ml-0.5 text-slate-400">left</span>
                                     </span>

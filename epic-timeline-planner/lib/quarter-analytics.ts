@@ -148,7 +148,7 @@ export function buildQuarterBurndownSeries(
     const actualRemaining =
       metric === "daysLeft"
         ? stories.reduce((sum, s) => sum + (s.daysLeft ?? 0), 0)
-        : stories.filter((s) => s.status !== "review" && s.status !== "done").length;
+        : stories.filter((s) => s.status !== "done").length;
     return { key: epic.id, start, actualRemaining };
   });
 
