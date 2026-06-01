@@ -158,7 +158,7 @@ const CHART_META: Record<ChartType, { label: string; icon: React.ReactNode; desc
   workload: {
     label: "Team Capacity",
     icon: <Users className="size-4 text-orange-500" />,
-    description: "Per-assignee progress bars: work done vs remaining for the sprint",
+    description: "Per-assignee progress bars: work review vs remaining for the sprint",
     accent: "border-orange-200 bg-orange-50 text-orange-700",
   },
   "quarter-status": {

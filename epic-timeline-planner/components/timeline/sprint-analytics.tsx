@@ -47,15 +47,15 @@ const STATUS_COLORS: Record<string, string> = {
   Unscheduled: "#94a3b8",
   "To do": "#f59e0b",
   "In progress": "#3b82f6",
+  "Review / Testing": "#8b5cf6",
   Done: "#10b981",
-  Approved: "#8b5cf6",
 };
 
 const WORKLOAD_BAR_SEGMENTS = [
   { key: "todo" as const, label: "To do", color: STATUS_COLORS["To do"] },
   { key: "inProgress" as const, label: "In progress", color: STATUS_COLORS["In progress"] },
+  { key: "review" as const, label: "Review / Testing", color: STATUS_COLORS["Review / Testing"] },
   { key: "done" as const, label: "Done", color: STATUS_COLORS["Done"] },
-  { key: "approved" as const, label: "Approved", color: STATUS_COLORS["Approved"] },
 ] as const;
 
 /**
@@ -68,19 +68,19 @@ type StoryStatusPillValue =
   | UserStoryItem["status"]
   | "To do"
   | "In progress"
+  | "Review / Testing"
   | "Done"
-  | "Approved"
   | "Unscheduled";
 
 function StoryStatusPill({ status }: { status: StoryStatusPillValue }) {
   const meta = (() => {
     switch (status) {
-      case "approved":
-      case "Approved":
-        return { label: "Approved", Icon: CheckCircle2, color: "text-violet-600" };
       case "done":
       case "Done":
-        return { label: "Done", Icon: CheckCheck, color: "text-emerald-600" };
+        return { label: "Done", Icon: CheckCircle2, color: "text-emerald-600" };
+      case "review":
+      case "Review / Testing":
+        return { label: "Review / Testing", Icon: CheckCheck, color: "text-violet-600" };
       case "inProgress":
       case "In progress":
         return { label: "In progress", Icon: PlayCircle, color: "text-blue-600" };
@@ -145,7 +145,7 @@ type SprintLoadStoryProjection = {
 
 /** Per-story version of `sprintBurndownVerdict` — buckets a single story's
  *  remaining work against an ideal sprint burndown so we can list flagged
- *  stories in the Sprint Load badge popover. Stories that are done or have
+ *  stories in the Sprint Load badge popover. Stories that are review or have
  *  no estimate are reported as `onTrack` so the popover skips them. */
 function sprintStoryVerdict(
   story: SprintLoadStoryProjection,
@@ -154,7 +154,7 @@ function sprintStoryVerdict(
 ): { status: HealthStatus; gap: number } {
   const est = Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
   const left = Math.max(0, story.daysLeft ?? est);
-  if (left <= 0 || story.statusKey === "done" || story.statusKey === "approved") {
+  if (left <= 0 || story.statusKey === "review" || story.statusKey === "done") {
     return { status: "done", gap: 0 };
   }
   if (est <= 0 || sprintDaysTotal <= 0) return { status: "onTrack", gap: 0 };
@@ -380,10 +380,10 @@ function DrilldownAssigneeCell({
   );
 }
 
-/** Cumulative flow diagram stack: first rendered area = bottom (most “done”), last = top (not started). */
+/** Cumulative flow diagram stack: first rendered area = bottom (most "done"), last = top (not started). */
 const CFD_FLOW_SEGMENTS = [
-  { key: "approved" as const, label: "Approved", color: STATUS_COLORS["Approved"] },
   { key: "done" as const, label: "Done", color: STATUS_COLORS["Done"] },
+  { key: "review" as const, label: "Review / Testing", color: STATUS_COLORS["Review / Testing"] },
   { key: "inProgress" as const, label: "In progress", color: STATUS_COLORS["In progress"] },
   { key: "todo" as const, label: "To do", color: STATUS_COLORS["To do"] },
 ] as const;
@@ -668,7 +668,7 @@ export function SprintAnalytics({
     const pastByLabel = new Map(analytics.flowSprintTrendData.map((d) => [d.labelShort, d]));
     return analytics.burndown.map((bd) => {
       const past = pastByLabel.get(bd.labelShort);
-      return past ?? { labelShort: bd.labelShort, isToday: bd.isToday, dayInSprint: null, todo: null, inProgress: null, done: null, approved: null };
+      return past ?? { labelShort: bd.labelShort, isToday: bd.isToday, dayInSprint: null, todo: null, inProgress: null, review: null, done: null };
     });
   }, [analytics.burndown, analytics.flowSprintTrendData]);
 
@@ -692,11 +692,11 @@ export function SprintAnalytics({
     // Stories mode (default): scope/completed from the daily status flow trend.
     const pastByLabel = new Map(analytics.flowSprintTrendData.map((d) => [d.labelShort, d]));
     const lastPast = analytics.flowSprintTrendData[analytics.flowSprintTrendData.length - 1];
-    const finalScope = lastPast ? lastPast.todo + lastPast.inProgress + lastPast.done + lastPast.approved : 0;
+    const finalScope = lastPast ? lastPast.todo + lastPast.inProgress + lastPast.review + lastPast.done : 0;
     return allDays.map((bd, idx) => {
       const past = pastByLabel.get(bd.labelShort);
-      const scope = past ? past.todo + past.inProgress + past.done + past.approved : finalScope;
-      const completed = past != null ? past.done + past.approved : null;
+      const scope = past ? past.todo + past.inProgress + past.review + past.done : finalScope;
+      const completed = past != null ? past.review + past.done : null;
       const ideal = finalScope > 0 ? Math.round((finalScope * idx) / Math.max(allDays.length - 1, 1)) : 0;
       return { labelShort: bd.labelShort, scope, completed, ideal, isToday: bd.isToday };
     });
@@ -737,8 +737,8 @@ export function SprintAnalytics({
       assignee: string;
       team: string;
       sprint: number | null;
-      status: "Unscheduled" | "To do" | "In progress" | "Done" | "Approved";
-      /** Raw enum (`todo|inProgress|done|approved`) preserved alongside the display label so
+      status: "Unscheduled" | "To do" | "In progress" | "Review / Testing" | "Done";
+      /** Raw enum (`todo|inProgress|review|done`) preserved alongside the display label so
        *  burndown-style verdict helpers don't have to reverse-map the friendly string. */
       statusKey: UserStoryItem["status"] | null;
       estimatedDays: number | null;
@@ -769,9 +769,9 @@ export function SprintAnalytics({
                 ? "To do"
                 : story.status === "inProgress"
                   ? "In progress"
-                  : story.status === "done"
-                    ? "Done"
-                    : "Approved",
+                  : story.status === "review"
+                    ? "Review / Testing"
+                    : "Done",
           statusKey: story.sprint == null ? null : story.status,
           estimatedDays: story.estimatedDays ?? null,
           daysLeft: story.daysLeft ?? null,
@@ -1383,16 +1383,16 @@ export function SprintAnalytics({
                     fullName: t.teamLabel,
                     "To do": t.storiesByStatus.todo,
                     "In progress": t.storiesByStatus.inProgress,
+                    "Review / Testing": t.storiesByStatus.review,
                     "Done": t.storiesByStatus.done,
-                    "Approved": t.storiesByStatus.approved,
                   }))
                 : analytics.workloadByAssignee.map((item) => ({
                     name: item.assignee.split(/\s+/)[0],
                     fullName: item.assignee,
                     "To do": item.storiesByStatus.todo,
                     "In progress": item.storiesByStatus.inProgress,
+                    "Review / Testing": item.storiesByStatus.review,
                     "Done": item.storiesByStatus.done,
-                    "Approved": item.storiesByStatus.approved,
                   }));
               // Pre-resolve avatar URLs keyed by the X-axis label (first name)
               // so the custom tick can paint a photo per bar without each tick
@@ -1541,8 +1541,8 @@ export function SprintAnalytics({
                               labelShort?: string;
                               todo?: number;
                               inProgress?: number;
+                              review?: number;
                               done?: number;
-                              approved?: number;
                             }
                           | undefined;
                         const title =
@@ -1647,7 +1647,7 @@ export function SprintAnalytics({
             // In stories mode, swap "days left/est days" for "open / total stories" so the bar reflects story progress.
             const loadRows = teamMode
               ? analytics.workloadByTeam.map((t) => {
-                  const totalStories = t.storiesByStatus.todo + t.storiesByStatus.inProgress + t.storiesByStatus.done + t.storiesByStatus.approved;
+                  const totalStories = t.storiesByStatus.todo + t.storiesByStatus.inProgress + t.storiesByStatus.review + t.storiesByStatus.done;
                   return {
                     key: t.teamLabel,
                     label: t.teamLabel,
@@ -1661,7 +1661,7 @@ export function SprintAnalytics({
                   };
                 })
               : analytics.workloadByAssignee.map((row) => {
-                  const totalStories = row.storiesByStatus.todo + row.storiesByStatus.inProgress + row.storiesByStatus.done + row.storiesByStatus.approved;
+                  const totalStories = row.storiesByStatus.todo + row.storiesByStatus.inProgress + row.storiesByStatus.review + row.storiesByStatus.done;
                   // Resolve the photo from the workspace directory so the row
                   // circle shows the user's avatar instead of initials when
                   // available — falls back gracefully when there's no match.
@@ -1844,7 +1844,7 @@ export function SprintAnalytics({
                         // both surfaces speak the same vocabulary (Done · Overdue ·
                         // At Risk · Watch · On Track). In storyCount mode the
                         // calendar comparison doesn't apply, so the verdict falls
-                        // back to plain done/onTrack.
+                        // back to plain review/onTrack.
                         const verdict = metric === "daysLeft"
                           ? sprintBurndownVerdict({
                               daysLeft: row.daysLeft,
@@ -1940,7 +1940,7 @@ export function SprintAnalytics({
                                       <span className="ml-0.5 text-slate-400">{loadUnit === "d" ? "est" : "total"}</span>
                                       <span className="mx-1 text-slate-300">·</span>
                                       <span className="font-semibold text-slate-800">{doneDays}{loadUnit}</span>
-                                      <span className="ml-0.5 text-slate-400">done</span>
+                                      <span className="ml-0.5 text-slate-400">review</span>
                                       <span className="mx-1 text-slate-300">·</span>
                                       <span className={cn("font-semibold", atRisk ? "text-amber-700" : watch ? "text-amber-700" : "text-slate-800")}>{row.daysLeft}{loadUnit}</span>
                                       <span className="ml-0.5 text-slate-400">left</span>

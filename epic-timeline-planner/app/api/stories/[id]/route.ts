@@ -82,7 +82,7 @@ export async function PATCH(
 
   // Maintain three invariants on (estimatedDays, daysLeft, status) so the
   // year-roadmap health/at-risk math can trust the fields without fallbacks:
-  //   (a) done/approved stories always have daysLeft = 0
+  //   (a) review/done stories always have daysLeft = 0
   //   (b) when estimatedDays is set on a story with no daysLeft, daysLeft is
   //       initialized to match (i.e. "no progress made yet")
   //   (c) when estimatedDays is lowered below daysLeft, clamp daysLeft down
@@ -92,7 +92,7 @@ export async function PATCH(
     patch.estimatedDays !== undefined ? patch.estimatedDays : existing.estimatedDays;
   let effectiveDaysLeft =
     patch.daysLeft !== undefined ? patch.daysLeft : existing.daysLeft;
-  if (effectiveStatus === "done" || effectiveStatus === "approved") {
+  if (effectiveStatus === "review" || effectiveStatus === "done") {
     effectiveDaysLeft = 0;
   } else if (effectiveDaysLeft == null && effectiveEstimatedDays != null) {
     effectiveDaysLeft = effectiveEstimatedDays;

@@ -86,18 +86,18 @@ export function collectQuarterEpics(
 }
 
 export function buildQuarterStatusPie(stories: UserStoryItem[]): Array<{ name: string; value: number }> {
-  const counts = { todo: 0, inProgress: 0, done: 0, approved: 0 };
+  const counts = { todo: 0, inProgress: 0, review: 0, done: 0 };
   for (const story of stories) {
     if (story.status === "inProgress") counts.inProgress += 1;
+    else if (story.status === "review") counts.review += 1;
     else if (story.status === "done") counts.done += 1;
-    else if (story.status === "approved") counts.approved += 1;
     else counts.todo += 1;
   }
   return [
     { name: "To do", value: counts.todo },
     { name: "In progress", value: counts.inProgress },
+    { name: "Review / Testing", value: counts.review },
     { name: "Done", value: counts.done },
-    { name: "Approved", value: counts.approved },
   ];
 }
 
@@ -148,7 +148,7 @@ export function buildQuarterBurndownSeries(
     const actualRemaining =
       metric === "daysLeft"
         ? stories.reduce((sum, s) => sum + (s.daysLeft ?? 0), 0)
-        : stories.filter((s) => s.status !== "done" && s.status !== "approved").length;
+        : stories.filter((s) => s.status !== "review" && s.status !== "done").length;
     return { key: epic.id, start, actualRemaining };
   });
 

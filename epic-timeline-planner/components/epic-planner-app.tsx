@@ -1654,7 +1654,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           (epicSum, epic) =>
             epicSum +
             (epic.userStories ?? []).filter(
-              (story) => story.status === StoryStatus.done || story.status === StoryStatus.approved,
+              (story) => story.status === StoryStatus.review || story.status === StoryStatus.done,
             ).length,
           0,
         ),
@@ -2145,7 +2145,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       const tParsed = performance.now();
       setBacklogInitiatives(data);
       backlogFetchedAtRef.current = { at: Date.now(), year: selectedYear };
-      console.log("[backlog] refresh: done", {
+      console.log("[backlog] refresh: review", {
         year: selectedYear,
         initiativeCount: data.length,
         payloadBytes: text.length,
@@ -2223,7 +2223,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         if (cancelled) return;
         setBacklogInitiatives(data);
         backlogFetchedAtRef.current = { at: Date.now(), year: selectedYear };
-        console.log("[backlog] idle prefetch done", { year: selectedYear, count: data.length });
+        console.log("[backlog] idle prefetch review", { year: selectedYear, count: data.length });
       } catch {
         // Best-effort; the click-time effect will retry if it's still null.
       }
@@ -2252,7 +2252,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         if (!cancelled) {
           setBacklogInitiatives(data);
           backlogFetchedAtRef.current = { at: Date.now(), year: selectedYear };
-          console.log("[backlog] fetch done", {
+          console.log("[backlog] fetch review", {
             year: selectedYear,
             initiativeCount: data.length,
             payloadBytes: text.length,
@@ -3010,7 +3010,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       for (const epic of initiative.epics ?? []) {
         for (const story of epic.userStories ?? []) {
           if (story.sprint !== YEAR_SPRINT_MAX) continue;
-          if (story.status === StoryStatus.done || story.status === StoryStatus.approved) continue;
+          if (story.status === StoryStatus.review || story.status === StoryStatus.done) continue;
           strandedStories += 1;
           strandedEpics.add(epic.id);
         }
@@ -3223,7 +3223,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         let count = 0;
         for (const story of epic.userStories ?? []) {
           if (story.sprint !== YEAR_SPRINT_MAX) continue;
-          if (story.status === StoryStatus.done || story.status === StoryStatus.approved) continue;
+          if (story.status === StoryStatus.review || story.status === StoryStatus.done) continue;
           count += 1;
         }
         if (count === 0) continue;
@@ -4219,7 +4219,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               record("story:kanban-reorder-noop", { storyId, overStoryId });
               return;
             }
-            // Detect a done → approved transition in the patch set so the
+            // Detect a review → done transition in the patch set so the
             // confetti also fires when the user drops on a card at the
             // TOP of the Approved column (cross-column reorder path),
             // not just when they drop on the column's empty space below
@@ -4229,8 +4229,8 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               | undefined;
             const movingStoryPatch = patches.find((p) => p.storyId === storyId);
             const reorderApprovedTransition =
-              movingStoryPrevStatus === "done" &&
-              movingStoryPatch?.status === "approved";
+              movingStoryPrevStatus === "review" &&
+              movingStoryPatch?.status === "done";
             flushSync(() => {
               setInitiatives((prev) => applyKanbanOrderPatchesToInitiatives(prev, patches));
             });
@@ -4275,7 +4275,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         }
       }
 
-      const kanbanMatch = /^kanban:(\d+):(todo|inProgress|done|approved)$/.exec(overId);
+      const kanbanMatch = /^kanban:(\d+):(todo|inProgress|review|done)$/.exec(overId);
       if (!kanbanMatch) {
         console.warn("[gantt-drop] story drag: unsupported drop target", { activeId, overId });
         record("story:unsupported-target", { storyId, activeId, overId });
@@ -4288,7 +4288,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       const nextStatus = status;
 
       // Capture the story's current status BEFORE the optimistic update so
-      // we can detect a done → approved transition and fire a short
+      // we can detect a review → done transition and fire a short
       // confetti celebration after the patch lands.
       let prevStatus: StoryStatus | null = null;
       outer: for (const init of initiatives) {
@@ -4353,10 +4353,10 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           throw new Error(`Failed to update story: ${response.status}`);
         }
         toast.success("Story updated");
-        // Celebrate done → approved transitions with a short confetti
+        // Celebrate review → done transitions with a short confetti
         // burst. Other transitions stay quiet so the effect remains tied
         // to the specific approval moment.
-        if (prevStatus === "done" && nextStatus === "approved") {
+        if (prevStatus === "review" && nextStatus === "done") {
           fireApprovalConfetti();
         }
         record("story:kanban", {
@@ -6432,7 +6432,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                     // year-scoped `initiatives` used by the timeline. Refresh both so the backlog table reflects
                     // inline edits immediately.
                     await Promise.all([refresh(), refreshBacklogInitiatives()]);
-                    console.log("[BacklogPatch] onPatchStoryQuick refresh done", { storyId });
+                    console.log("[BacklogPatch] onPatchStoryQuick refresh review", { storyId });
                   } catch (err) {
                     console.error("[BacklogPatch] onPatchStoryQuick error", err);
                     toast.error("Failed to update story");
@@ -6458,7 +6458,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                       throw new Error("Failed to patch initiative");
                     }
                     await Promise.all([refresh(), refreshBacklogInitiatives()]);
-                    console.log("[BacklogPatch] onPatchInitiativeQuick refresh done", { initiativeId });
+                    console.log("[BacklogPatch] onPatchInitiativeQuick refresh review", { initiativeId });
                   } catch (err) {
                     console.error("[BacklogPatch] onPatchInitiativeQuick error", err);
                     if (!toastShown) toast.error(`Initiative update failed: ${err instanceof Error ? err.message : String(err)}`, { duration: 12000 });
@@ -6483,7 +6483,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                       throw new Error("Failed to patch epic");
                     }
                     await Promise.all([refresh(), refreshBacklogInitiatives()]);
-                    console.log("[BacklogPatch] onPatchEpicQuick refresh done", { epicId });
+                    console.log("[BacklogPatch] onPatchEpicQuick refresh review", { epicId });
                   } catch (err) {
                     console.error("[BacklogPatch] onPatchEpicQuick error", err);
                     if (!toastShown) toast.error(`Epic update failed: ${err instanceof Error ? err.message : String(err)}`, { duration: 12000 });

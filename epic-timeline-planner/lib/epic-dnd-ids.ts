@@ -174,7 +174,7 @@ export function monthEpicKanbanDropId(month: number, status: string): string {
 }
 
 export function parseMonthEpicKanbanDropId(overId: string): { month: number; status: string } | null {
-  const m = /^epic-kanban:(\d+):(todo|inProgress|done|approved)$/.exec(overId);
+  const m = /^epic-kanban:(\d+):(todo|inProgress|review|done)$/.exec(overId);
   if (!m) return null;
   const month = Number(m[1]);
   if (!Number.isFinite(month) || month < 1 || month > 12) return null;

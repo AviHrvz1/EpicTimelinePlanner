@@ -67,8 +67,8 @@ export type SprintKanbanStoryPatch = {
 const KANBAN_COLUMNS: { status: StoryStatus; label: string; tone: string; hoverTone: string; Icon: LucideIcon }[] = [
   { status: StoryStatus.todo, label: "To do", tone: "border-slate-200 bg-slate-50/80", hoverTone: "hover:border-slate-300 hover:bg-slate-100/90 hover:shadow-sm", Icon: ListTodo },
   { status: StoryStatus.inProgress, label: "In progress", tone: "border-blue-200 bg-blue-50/60", hoverTone: "hover:border-blue-300 hover:bg-blue-100/70 hover:shadow-sm hover:shadow-blue-100", Icon: PlayCircle },
-  { status: StoryStatus.done, label: "Done", tone: "border-emerald-200 bg-emerald-50/60", hoverTone: "hover:border-emerald-300 hover:bg-emerald-100/70 hover:shadow-sm hover:shadow-emerald-100", Icon: CheckCheck },
-  { status: StoryStatus.approved, label: "Approved", tone: "border-violet-200 bg-violet-50/60", hoverTone: "hover:border-violet-300 hover:bg-violet-100/70 hover:shadow-sm hover:shadow-violet-100", Icon: CheckCircle2 },
+  { status: StoryStatus.review, label: "Review / Testing", tone: "border-violet-200 bg-violet-50/60", hoverTone: "hover:border-violet-300 hover:bg-violet-100/70 hover:shadow-sm hover:shadow-violet-100", Icon: CheckCheck },
+  { status: StoryStatus.done, label: "Done", tone: "border-emerald-200 bg-emerald-50/60", hoverTone: "hover:border-emerald-300 hover:bg-emerald-100/70 hover:shadow-sm hover:shadow-emerald-100", Icon: CheckCircle2 },
 ];
 
 function KanbanColumn({
@@ -252,7 +252,7 @@ function KanbanStoryCard({
   })();
 
   // Days-burned-down progress: (estimated − left) / estimated. Stories in
-  // done/approved have daysLeft=0 by API invariant, so they read 100%.
+  // review/done have daysLeft=0 by API invariant, so they read 100%.
   // Stories with no estimate get no bar at all (nothing meaningful to show).
   const storyEstimatedDays = story.estimatedDays ?? 0;
   const storyDaysLeft = story.daysLeft ?? storyEstimatedDays;
@@ -505,9 +505,9 @@ function epicPlanningStatusMeta(epic: EpicItem): { label: string; className: str
 function epicExecutionStatusMeta(epic: EpicItem): { label: string; className: string } {
   const stories = epic.userStories ?? [];
   if (stories.length === 0) return { label: "To Do", className: "border border-amber-200/90 bg-amber-50 text-amber-800" };
-  if (stories.every((s) => s.status === "approved")) return { label: "Approved", className: "border border-violet-200/90 bg-violet-50 text-violet-800" };
-  if (stories.every((s) => s.status === "done" || s.status === "approved")) return { label: "Done", className: "border border-emerald-200/90 bg-emerald-50 text-emerald-800" };
-  if (stories.some((s) => s.status === "inProgress" || s.status === "done" || s.status === "approved")) return { label: "In Progress", className: "border border-blue-200/90 bg-blue-50 text-blue-800" };
+  if (stories.every((s) => s.status === "done")) return { label: "Done", className: "border border-emerald-200/90 bg-emerald-50 text-emerald-800" };
+  if (stories.every((s) => s.status === "review" || s.status === "done")) return { label: "Review / Testing", className: "border border-violet-200/90 bg-violet-50 text-violet-800" };
+  if (stories.some((s) => s.status === "inProgress" || s.status === "review" || s.status === "done")) return { label: "In Progress", className: "border border-blue-200/90 bg-blue-50 text-blue-800" };
   return { label: "To Do", className: "border border-amber-200/90 bg-amber-50 text-amber-800" };
 }
 
@@ -532,8 +532,8 @@ function SprintEpicCard({
   );
   const todo = sprintStories.filter((s) => s.status === StoryStatus.todo).length;
   const inProgress = sprintStories.filter((s) => s.status === StoryStatus.inProgress).length;
+  const review = sprintStories.filter((s) => s.status === StoryStatus.review).length;
   const done = sprintStories.filter((s) => s.status === StoryStatus.done).length;
-  const approved = sprintStories.filter((s) => s.status === StoryStatus.approved).length;
   const total = sprintStories.length;
 
   const planStatus = epicPlanningStatusMeta(epic);
@@ -567,11 +567,11 @@ function SprintEpicCard({
           <div className="mt-2 space-y-1.5">
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
               <div className="flex h-full">
-                {approved > 0 && (
-                  <div className="h-full bg-violet-400" style={{ width: `${(approved / total) * 100}%` }} />
-                )}
                 {done > 0 && (
                   <div className="h-full bg-emerald-400" style={{ width: `${(done / total) * 100}%` }} />
+                )}
+                {review > 0 && (
+                  <div className="h-full bg-violet-400" style={{ width: `${(review / total) * 100}%` }} />
                 )}
                 {inProgress > 0 && (
                   <div className="h-full bg-blue-400" style={{ width: `${(inProgress / total) * 100}%` }} />
@@ -581,8 +581,8 @@ function SprintEpicCard({
             <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-slate-500">
               {todo > 0 && <span className="text-slate-400">{todo} to do</span>}
               {inProgress > 0 && <span className="text-blue-500">{inProgress} in progress</span>}
+              {review > 0 && <span className="text-violet-500">{review} review</span>}
               {done > 0 && <span className="text-emerald-500">{done} done</span>}
-              {approved > 0 && <span className="text-violet-500">{approved} approved</span>}
             </div>
           </div>
         ) : null}
@@ -622,8 +622,8 @@ function SprintEpicCard({
 const EPIC_STATUS_COLUMNS: { status: StoryStatus; label: string; tone: string; hoverTone: string; Icon: LucideIcon }[] = [
   { status: StoryStatus.todo, label: "To do", tone: "border-slate-200 bg-slate-50/80", hoverTone: "hover:border-slate-300 hover:bg-slate-100/90 hover:shadow-sm", Icon: ListTodo },
   { status: StoryStatus.inProgress, label: "In progress", tone: "border-blue-200 bg-blue-50/60", hoverTone: "hover:border-blue-300 hover:bg-blue-100/70 hover:shadow-sm hover:shadow-blue-100", Icon: PlayCircle },
-  { status: StoryStatus.done, label: "Done", tone: "border-emerald-200 bg-emerald-50/60", hoverTone: "hover:border-emerald-300 hover:bg-emerald-100/70 hover:shadow-sm hover:shadow-emerald-100", Icon: CheckCheck },
-  { status: StoryStatus.approved, label: "Approved", tone: "border-violet-200 bg-violet-50/60", hoverTone: "hover:border-violet-300 hover:bg-violet-100/70 hover:shadow-sm hover:shadow-violet-100", Icon: CheckCircle2 },
+  { status: StoryStatus.review, label: "Review / Testing", tone: "border-violet-200 bg-violet-50/60", hoverTone: "hover:border-violet-300 hover:bg-violet-100/70 hover:shadow-sm hover:shadow-violet-100", Icon: CheckCheck },
+  { status: StoryStatus.done, label: "Done", tone: "border-emerald-200 bg-emerald-50/60", hoverTone: "hover:border-emerald-300 hover:bg-emerald-100/70 hover:shadow-sm hover:shadow-emerald-100", Icon: CheckCircle2 },
 ];
 
 function SprintEpicKanbanView({

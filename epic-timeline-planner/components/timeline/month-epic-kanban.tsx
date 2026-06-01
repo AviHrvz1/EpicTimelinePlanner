@@ -29,9 +29,9 @@ function epicPlanningStatusMeta(epic: EpicItem): { label: string; className: str
 function epicExecutionStatusMeta(epic: EpicItem): { label: string; className: string } {
   const stories = epic.userStories ?? [];
   if (stories.length === 0) return { label: "To Do", className: "border border-amber-200/90 bg-amber-50 text-amber-800" };
-  if (stories.every((s) => s.status === "approved")) return { label: "Approved", className: "border border-violet-200/90 bg-violet-50 text-violet-800" };
-  if (stories.every((s) => s.status === "done" || s.status === "approved")) return { label: "Done", className: "border border-emerald-200/90 bg-emerald-50 text-emerald-800" };
-  if (stories.some((s) => s.status === "inProgress" || s.status === "done" || s.status === "approved")) return { label: "In Progress", className: "border border-blue-200/90 bg-blue-50 text-blue-800" };
+  if (stories.every((s) => s.status === "done")) return { label: "Done", className: "border border-emerald-200/90 bg-emerald-50 text-emerald-800" };
+  if (stories.every((s) => s.status === "review" || s.status === "done")) return { label: "Review / Testing", className: "border border-violet-200/90 bg-violet-50 text-violet-800" };
+  if (stories.some((s) => s.status === "inProgress" || s.status === "review" || s.status === "done")) return { label: "In Progress", className: "border border-blue-200/90 bg-blue-50 text-blue-800" };
   return { label: "To Do", className: "border border-amber-200/90 bg-amber-50 text-amber-800" };
 }
 
@@ -40,8 +40,8 @@ const chipBase = "inline-flex items-center rounded px-2 py-0.5 text-[11px] font-
 const EPIC_KANBAN_COLUMNS: { status: StoryStatus; label: string; tone: string; Icon: LucideIcon }[] = [
   { status: StoryStatus.todo, label: "To do", tone: "border-slate-200 bg-slate-50/80", Icon: ListTodo },
   { status: StoryStatus.inProgress, label: "In progress", tone: "border-blue-200 bg-blue-50/60", Icon: PlayCircle },
-  { status: StoryStatus.done, label: "Done", tone: "border-emerald-200 bg-emerald-50/60", Icon: CheckCircle2 },
-  { status: StoryStatus.approved, label: "Approved", tone: "border-violet-200 bg-violet-50/60", Icon: BadgeCheck },
+  { status: StoryStatus.review, label: "Review / Testing", tone: "border-violet-200 bg-violet-50/60", Icon: CheckCircle2 },
+  { status: StoryStatus.done, label: "Done", tone: "border-emerald-200 bg-emerald-50/60", Icon: BadgeCheck },
 ];
 
 function EpicKanbanColumn({
@@ -99,7 +99,7 @@ function MonthEpicKanbanCard({
   const summary =
     n === 0
       ? "No stories"
-      : `${n} ${n === 1 ? "story" : "stories"} · ${stories.filter((s) => s.status === StoryStatus.todo).length} to do · ${stories.filter((s) => s.status === StoryStatus.inProgress).length} in progress · ${stories.filter((s) => s.status === StoryStatus.done).length} done · ${stories.filter((s) => s.status === StoryStatus.approved).length} approved`;
+      : `${n} ${n === 1 ? "story" : "stories"} · ${stories.filter((s) => s.status === StoryStatus.todo).length} to do · ${stories.filter((s) => s.status === StoryStatus.inProgress).length} in progress · ${stories.filter((s) => s.status === StoryStatus.review).length} review · ${stories.filter((s) => s.status === StoryStatus.done).length} done`;
 
   const planStatus = epicPlanningStatusMeta(epic);
   const execStatus = epicExecutionStatusMeta(epic);

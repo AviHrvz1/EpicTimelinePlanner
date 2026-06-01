@@ -137,8 +137,8 @@ type EpicChildStorySortKey = "id" | "title" | "sprint" | "status" | "assignee" |
 const STORY_STATUS_SORT_RANK: Record<string, number> = {
   todo: 0,
   inProgress: 1,
-  done: 2,
-  approved: 3,
+  review: 2,
+  done: 3,
 };
 
 const CHILD_TABLE_RESIZE_HANDLE =
@@ -637,26 +637,26 @@ export function EpicFormDialog({
    *  what the planner shows elsewhere. */
   const totalUserStoryDaysLeft = useMemo(() => {
     return (epic?.userStories ?? []).reduce((sum, row) => {
-      if (row.status === "done" || row.status === "approved") return sum;
+      if (row.status === "review" || row.status === "done") return sum;
       const left = row.daysLeft ?? row.estimatedDays ?? 0;
       return sum + Math.max(0, left);
     }, 0);
   }, [epic?.userStories]);
 
   // Roll-up status derived from the epic's user stories.
-  // Empty: "—". All approved: "Approved". All done/approved: "Done". Any in-progress (or mixed done+todo): "In progress". Else "To do".
-  const derivedEpicStatus = useMemo<{ label: string; key: "todo" | "inProgress" | "done" | "approved" | "empty" }>(() => {
+  // Empty: "—". All done: "Done". All review/done: "Review / Testing". Any in-progress (or mixed review+todo): "In progress". Else "To do".
+  const derivedEpicStatus = useMemo<{ label: string; key: "todo" | "inProgress" | "review" | "done" | "empty" }>(() => {
     const stories = epic?.userStories ?? [];
     if (stories.length === 0) return { label: "—", key: "empty" };
-    const counts = { todo: 0, inProgress: 0, done: 0, approved: 0 };
+    const counts = { todo: 0, inProgress: 0, review: 0, done: 0 };
     for (const s of stories) {
       const k = s.status as keyof typeof counts;
       if (k in counts) counts[k] += 1;
     }
-    if (counts.approved === stories.length) return { label: "Approved", key: "approved" };
+    if (counts.done === stories.length) return { label: "Done", key: "done" };
     if (counts.inProgress > 0) return { label: "In progress", key: "inProgress" };
-    if (counts.done + counts.approved === stories.length) return { label: "Done", key: "done" };
-    if (counts.done > 0 || counts.approved > 0) return { label: "In progress", key: "inProgress" };
+    if (counts.review + counts.done === stories.length) return { label: "Review / Testing", key: "review" };
+    if (counts.review > 0 || counts.done > 0) return { label: "In progress", key: "inProgress" };
     return { label: "To do", key: "todo" };
   }, [epic?.userStories]);
   const infoTooltipClass =
@@ -725,18 +725,18 @@ export function EpicFormDialog({
   const storyStatusLabel: Record<string, string> = {
     todo: "To Do",
     inProgress: "In Progress",
+    review: "Review / Testing",
     done: "Done",
-    approved: "Approved",
   };
   const statusTone: Record<string, string> = {
     todo: "bg-slate-100 text-slate-700",
     inProgress: "bg-blue-100 text-blue-700",
+    review: "bg-violet-100 text-violet-700",
     done: "bg-emerald-100 text-emerald-700",
-    approved: "bg-violet-100 text-violet-700",
   };
   const renderStatusIcon = (status: string) => {
-    if (status === "approved") return <CheckCircle2 className="size-3.5 shrink-0 text-violet-600" aria-hidden />;
-    if (status === "done") return <CheckCheck className="size-3.5 shrink-0 text-emerald-600" aria-hidden />;
+    if (status === "done") return <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600" aria-hidden />;
+    if (status === "review") return <CheckCheck className="size-3.5 shrink-0 text-violet-600" aria-hidden />;
     if (status === "inProgress") return <PlayCircle className="size-3.5 shrink-0 text-blue-600" aria-hidden />;
     return <ListTodo className="size-3.5 shrink-0 text-amber-600" aria-hidden />;
   };
@@ -1305,9 +1305,9 @@ export function EpicFormDialog({
                     // an empty Circle for the "no child stories" case).
                     const meta = (() => {
                       switch (derivedEpicStatus.key) {
-                        case "approved":
-                          return { Icon: CheckCircle2, color: "text-violet-600" };
                         case "done":
+                          return { Icon: CheckCircle2, color: "text-violet-600" };
+                        case "review":
                           return { Icon: CheckCheck, color: "text-emerald-600" };
                         case "inProgress":
                           return { Icon: PlayCircle, color: "text-blue-600" };
@@ -1405,7 +1405,7 @@ export function EpicFormDialog({
                         aria-label="About sum of child days remaining"
                       />
                       <span role="tooltip" className={infoTooltipClass}>
-                        Sum of remaining days across child user stories. Completed (done/approved) stories count as 0; open stories use `daysLeft` (or their estimate when unreported).
+                        Sum of remaining days across child user stories. Completed (review/done) stories count as 0; open stories use `daysLeft` (or their estimate when unreported).
                       </span>
                     </span>
                   </div>
@@ -2025,8 +2025,8 @@ export function EpicFormDialog({
                                       >
                                         <option value="todo">To Do</option>
                                         <option value="inProgress">In Progress</option>
-                                        <option value="done">Done</option>
-                                        <option value="approved">Approved</option>
+                                        <option value="review">Done</option>
+                                        <option value="done">Approved</option>
                                       </select>
                                       <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
                                       <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>

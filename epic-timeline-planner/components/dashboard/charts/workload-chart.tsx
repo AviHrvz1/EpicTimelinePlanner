@@ -70,7 +70,7 @@ export function WorkloadChart({ initiatives, year, quarter, sprint, team, teams,
         daysLeft: t.daysLeftTotal,
         estTotal: t.estimatedTotal,
         openCount: t.openCount,
-        totalStories: t.storiesByStatus.todo + t.storiesByStatus.inProgress + t.storiesByStatus.done + t.storiesByStatus.approved,
+        totalStories: t.storiesByStatus.todo + t.storiesByStatus.inProgress + t.storiesByStatus.review + t.storiesByStatus.done,
       }))
     : analytics.workloadByAssignee.map((r) => ({
         key: r.assignee,
@@ -80,7 +80,7 @@ export function WorkloadChart({ initiatives, year, quarter, sprint, team, teams,
         daysLeft: r.daysLeftTotal,
         estTotal: r.estimatedTotal,
         openCount: r.openCount,
-        totalStories: r.storiesByStatus.todo + r.storiesByStatus.inProgress + r.storiesByStatus.done + r.storiesByStatus.approved,
+        totalStories: r.storiesByStatus.todo + r.storiesByStatus.inProgress + r.storiesByStatus.review + r.storiesByStatus.done,
       }));
 
   if (rows.length === 0) {
@@ -95,8 +95,8 @@ export function WorkloadChart({ initiatives, year, quarter, sprint, team, teams,
         {rows.map((row) => {
           const remaining = useDays ? row.daysLeft : row.openCount;
           const total = useDays ? row.estTotal : row.totalStories;
-          const done = Math.max(0, total - remaining);
-          const rawPct = total > 0 ? (done / total) * 100 : 100;
+          const review = Math.max(0, total - remaining);
+          const rawPct = total > 0 ? (review / total) * 100 : 100;
           const donePct = Math.max(0, Math.min(100, Math.round(rawPct)));
           const atRisk = useDays && sprintDaysLeft > 0 && row.daysLeft > sprintDaysLeft;
           const showEnded = useDays && sprintEnded && row.daysLeft > 0;
@@ -155,8 +155,8 @@ export function WorkloadChart({ initiatives, year, quarter, sprint, team, teams,
                         </span>
                       )}
                       <span className="text-[11.5px] tabular-nums text-slate-600">
-                        <span className="font-semibold text-slate-800">{useDays ? `${done}d` : done}</span>
-                        <span className="ml-0.5 text-slate-400">{useDays ? "est done" : "done"}</span>
+                        <span className="font-semibold text-slate-800">{useDays ? `${review}d` : review}</span>
+                        <span className="ml-0.5 text-slate-400">{useDays ? "est review" : "review"}</span>
                         <span className="mx-1 text-slate-300">·</span>
                         <span className={cn("font-semibold", atRisk ? "text-amber-700" : "text-slate-800")}>
                           {useDays ? `${remaining}d` : remaining}

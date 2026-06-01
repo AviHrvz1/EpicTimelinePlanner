@@ -154,8 +154,8 @@ export function StoryDetailsDialog({
   const statusMeta: Record<StoryStatus, { Icon: typeof ListTodo }> = {
     [StoryStatus.todo]: { Icon: ListTodo },
     [StoryStatus.inProgress]: { Icon: PlayCircle },
-    [StoryStatus.done]: { Icon: CheckCheck },
-    [StoryStatus.approved]: { Icon: CheckCircle2 },
+    [StoryStatus.review]: { Icon: CheckCheck },
+    [StoryStatus.done]: { Icon: CheckCircle2 },
   };
   const [title, setTitle] = useState("");
   const [icon, setIcon] = useState("📄");
@@ -1020,8 +1020,8 @@ export function StoryDetailsDialog({
                 <select value={status} onChange={(event) => setStatus(event.target.value as StoryStatus)} className="h-7 w-full bg-transparent text-[14px] font-medium text-slate-800 outline-none">
                   <option value={StoryStatus.todo}>To Do</option>
                   <option value={StoryStatus.inProgress}>In Progress</option>
+                  <option value={StoryStatus.review}>Review / Testing</option>
                   <option value={StoryStatus.done}>Done</option>
-                  <option value={StoryStatus.approved}>Approved</option>
                 </select>
               </div>
             </label>

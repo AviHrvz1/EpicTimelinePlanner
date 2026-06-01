@@ -86,7 +86,7 @@ export function exportYearGanttToPrintableWindow(args: {
           epic.planEndMonth < epic.planStartMonth
         ) continue;
         const stories = epic.userStories ?? [];
-        const done = stories.filter((s) => s.status === "done" || s.status === "approved").length;
+        const review = stories.filter((s) => s.status === "review" || s.status === "done").length;
         out.push({
           title: epic.title,
           color: epic.color || init.color || "#6366f1",
@@ -94,7 +94,7 @@ export function exportYearGanttToPrintableWindow(args: {
           endMonth: clampMonth(epic.planEndMonth),
           // Epic rows intentionally don't echo the parent initiative title — keeps the print clean.
           meta: "",
-          progressPercent: stories.length > 0 ? Math.round((done / stories.length) * 100) : 0,
+          progressPercent: stories.length > 0 ? Math.round((review / stories.length) * 100) : 0,
           sortKey: typeof epic.timelineRow === "number" ? epic.timelineRow : Number.MAX_SAFE_INTEGER,
         });
       }
@@ -125,7 +125,7 @@ export function exportYearGanttToPrintableWindow(args: {
       if (endMonth < startMonth) continue;
 
       const stories = plannedEpics.flatMap((e) => e.userStories ?? []);
-      const completed = stories.filter((s) => s.status === "done" || s.status === "approved").length;
+      const completed = stories.filter((s) => s.status === "review" || s.status === "done").length;
       const progressPercent = stories.length > 0 ? Math.round((completed / stories.length) * 100) : 0;
 
       out.push({
@@ -682,7 +682,7 @@ function renderHtml(args: {
 
         <div class="legend">
           <span><span class="legend-swatch" style="background:#6366f1;opacity:${showProgress ? "0.32" : "0.95"}"></span>Planned range</span>
-          ${showProgress ? '<span><span class="legend-swatch" style="background:#6366f1"></span>Completed (done + approved stories)</span>' : ""}
+          ${showProgress ? '<span><span class="legend-swatch" style="background:#6366f1"></span>Completed (review + done stories)</span>' : ""}
         </div>
       </div>
       ${totalPages > 1

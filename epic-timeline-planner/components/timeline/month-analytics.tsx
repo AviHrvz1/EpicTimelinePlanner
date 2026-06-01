@@ -78,29 +78,29 @@ import { TeamAvatar } from "@/components/ui/team-avatar";
 import { useTeamImages } from "@/lib/use-team-images";
 
 type BurndownMetric = "daysLeft" | "storyCount";
-type WorkloadStatusKey = "todo" | "inProgress" | "done" | "approved";
+type WorkloadStatusKey = "todo" | "inProgress" | "review" | "done";
 type WorkloadFilterKey = "all" | WorkloadStatusKey | "unassigned";
 
 const STATUS_COLORS: Record<string, string> = {
   Unscheduled: "#94a3b8",
   "To do": "#f59e0b",
   "In progress": "#3b82f6",
+  "Review / Testing": "#8b5cf6",
   Done: "#10b981",
-  Approved: "#8b5cf6",
 };
 
 // Labels MUST match the bar dataKey strings used in the chart data (see workload barData below).
-// Order also defines the on-screen left-to-right bar order: To do → In progress → Done → Approved.
+// Order defines the on-screen left-to-right bar order: To do → In progress → Review/Testing → Done.
 const WORKLOAD_BAR_SEGMENTS = [
   { key: "todo" as const, label: "To do", color: STATUS_COLORS["To do"] },
   { key: "inProgress" as const, label: "In progress", color: STATUS_COLORS["In progress"] },
+  { key: "review" as const, label: "Review / Testing", color: STATUS_COLORS["Review / Testing"] },
   { key: "done" as const, label: "Done", color: STATUS_COLORS["Done"] },
-  { key: "approved" as const, label: "Approved", color: STATUS_COLORS["Approved"] },
 ] as const;
 
 const CFD_FLOW_SEGMENTS = [
-  { key: "approved" as const, label: "Approved", color: STATUS_COLORS["Approved"] },
   { key: "done" as const, label: "Done", color: STATUS_COLORS["Done"] },
+  { key: "review" as const, label: "Review / Testing", color: STATUS_COLORS["Review / Testing"] },
   { key: "inProgress" as const, label: "In progress", color: STATUS_COLORS["In progress"] },
   { key: "todo" as const, label: "To do", color: STATUS_COLORS["To do"] },
 ] as const;
@@ -277,13 +277,13 @@ const EMPTY_DRILLDOWN_FILTER: DrilldownFilter = {
   status: null,
 };
 
-/** Order used when sorting by status — todo first, approved last — so the
+/** Order used when sorting by status — todo first, done last — so the
  *  ascending direction reads as "earliest in the workflow first". */
 const STORY_STATUS_RANK: Record<string, number> = {
   todo: 0,
   inProgress: 1,
-  done: 2,
-  approved: 3,
+  review: 2,
+  done: 3,
 };
 
 /**
@@ -572,8 +572,8 @@ function renderStatusOption(key: string) {
   // option doesn't pull in the full pill chrome (no extra padding).
   const meta = (() => {
     switch (key) {
-      case "approved": return { label: "Approved", Icon: CheckCircle2, color: "text-violet-600" };
-      case "done": return { label: "Done", Icon: CheckCheck, color: "text-emerald-600" };
+      case "done": return { label: "Done", Icon: CheckCircle2, color: "text-emerald-600" };
+      case "review": return { label: "Review / Testing", Icon: CheckCheck, color: "text-violet-600" };
       case "inProgress": return { label: "In progress", Icon: PlayCircle, color: "text-blue-600" };
       case "todo": return { label: "To do", Icon: ListTodo, color: "text-amber-600" };
       default: return { label: key, Icon: Circle, color: "text-slate-500" };
@@ -1114,8 +1114,8 @@ function storySprintDisplayLabel(storySprint: number | null | undefined, month: 
 function statusDrilldownIcon(status: string | null) {
   if (status === "To do") return ListTodo;
   if (status === "In progress") return PlayCircle;
-  if (status === "Done") return CheckCheck;
-  if (status === "Approved") return CheckCircle2;
+  if (status === "Review / Testing") return CheckCheck;
+  if (status === "Done") return CheckCircle2;
   if (status === "Unscheduled") return UserX;
   return Circle;
 }
@@ -1133,10 +1133,10 @@ function statusDrilldownDisplayLabel(status: string | null): string {
 function StoryStatusPill({ status }: { status: UserStoryItem["status"] }) {
   const meta = (() => {
     switch (status) {
-      case "approved":
-        return { label: "Approved", Icon: CheckCircle2, color: "text-violet-600" };
       case "done":
-        return { label: "Done", Icon: CheckCheck, color: "text-emerald-600" };
+        return { label: "Done", Icon: CheckCircle2, color: "text-emerald-600" };
+      case "review":
+        return { label: "Review / Testing", Icon: CheckCheck, color: "text-violet-600" };
       case "inProgress":
         return { label: "In progress", Icon: PlayCircle, color: "text-blue-600" };
       default:
@@ -1177,15 +1177,15 @@ function DrilldownAssigneeCell({
   );
 }
 
-function deriveEpicStatus(epic: EpicItem): "Unscheduled" | "To do" | "In progress" | "Done" | "Approved" {
+function deriveEpicStatus(epic: EpicItem): "Unscheduled" | "To do" | "In progress" | "Review / Testing" | "Done" {
   const scheduledStories = (epic.userStories ?? []).filter((story) => story.sprint != null);
   if (scheduledStories.length === 0) return "Unscheduled";
-  const allApproved = scheduledStories.every((story) => story.status === "approved");
-  if (allApproved) return "Approved";
-  const allDoneOrApproved = scheduledStories.every(
-    (story) => story.status === "done" || story.status === "approved",
+  const allDone = scheduledStories.every((story) => story.status === "done");
+  if (allDone) return "Done";
+  const allReviewOrDone = scheduledStories.every(
+    (story) => story.status === "review" || story.status === "done",
   );
-  if (allDoneOrApproved) return "Done";
+  if (allReviewOrDone) return "Review / Testing";
   const hasInProgress = scheduledStories.some((story) => story.status === "inProgress");
   if (hasInProgress) return "In progress";
   return "To do";
@@ -1377,7 +1377,7 @@ export function MonthAnalytics({
   const [workloadDrilldownIsTeam, setWorkloadDrilldownIsTeam] = useState(false);
   /** Statuses hidden from the Workload Balance chart + drilldown table when
    *  the user clicks a status pill in the legend. Stored by WORKLOAD_BAR_SEGMENTS
-   *  key (todo / inProgress / done / approved). */
+   *  key (todo / inProgress / review / done). */
   const [workloadHiddenStatuses, setWorkloadHiddenStatuses] = useState<Set<string>>(() => new Set());
   /** Per-column filter + sort state for the workload drilldown table. */
   const [workloadDrilldownFilter, setWorkloadDrilldownFilter] = useState<DrilldownFilter>(EMPTY_DRILLDOWN_FILTER);
@@ -1799,7 +1799,7 @@ export function MonthAnalytics({
   const selectedWorkloadStatuses = useMemo<WorkloadStatusKey[]>(
     () =>
       workloadStatusFilters.includes("all")
-        ? ["todo", "inProgress", "done", "approved"]
+        ? ["todo", "inProgress", "review", "done"]
         : (workloadStatusFilters.filter((v) => v !== "unassigned") as WorkloadStatusKey[]),
     [workloadStatusFilters],
   );
@@ -1860,22 +1860,22 @@ export function MonthAnalytics({
     );
     const openStories = openAtMonthStartStories;
     const completedStories = scheduledStories.filter(
-      (story) => story.status === "done" || story.status === "approved",
+      (story) => story.status === "review" || story.status === "done",
     );
 
     const statusCounts = {
       unscheduled: scopeStories.filter((story) => story.sprint == null).length,
       todo: scheduledStories.filter((story) => story.status === "todo").length,
       inProgress: scheduledStories.filter((story) => story.status === "inProgress").length,
+      review: scheduledStories.filter((story) => story.status === "review").length,
       done: scheduledStories.filter((story) => story.status === "done").length,
-      approved: scheduledStories.filter((story) => story.status === "approved").length,
     };
     const statusPie = [
       { name: "Unscheduled", value: statusCounts.unscheduled },
       { name: "To do", value: statusCounts.todo },
       { name: "In progress", value: statusCounts.inProgress },
+      { name: "Review / Testing", value: statusCounts.review },
       { name: "Done", value: statusCounts.done },
-      { name: "Approved", value: statusCounts.approved },
     ];
 
     const periodStartDate = new Date(planYear, scopeStartMonth - 1, 1);
@@ -1927,7 +1927,7 @@ export function MonthAnalytics({
         openCount: number;
         daysLeftTotal: number;
         estimatedTotal: number;
-        storiesByStatus: { todo: number; inProgress: number; done: number; approved: number };
+        storiesByStatus: { todo: number; inProgress: number; review: number; done: number };
       }
     >();
     for (const story of scheduledStories) {
@@ -1937,12 +1937,12 @@ export function MonthAnalytics({
           openCount: 0,
           daysLeftTotal: 0,
           estimatedTotal: 0,
-          storiesByStatus: { todo: 0, inProgress: 0, done: 0, approved: 0 },
+          storiesByStatus: { todo: 0, inProgress: 0, review: 0, done: 0 },
         };
       if (story.status === "todo") row.storiesByStatus.todo += 1;
       else if (story.status === "inProgress") row.storiesByStatus.inProgress += 1;
+      else if (story.status === "review") row.storiesByStatus.review += 1;
       else if (story.status === "done") row.storiesByStatus.done += 1;
-      else if (story.status === "approved") row.storiesByStatus.approved += 1;
       row.estimatedTotal += Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
       if (story.status === "todo" || story.status === "inProgress") {
         row.openCount += 1;
@@ -1984,8 +1984,8 @@ export function MonthAnalytics({
       .sort((a, b) => b.utilizationPct - a.utilizationPct || b.daysLeftTotal - a.daysLeftTotal);
 
     const total = openAtMonthStartStories.length;
-    const doneFinal = Math.min(total, completedStories.filter((s) => s.status === "done").length);
-    const approvedFinal = Math.min(Math.max(0, total - doneFinal), completedStories.filter((s) => s.status === "approved").length);
+    const doneFinal = Math.min(total, completedStories.filter((s) => s.status === "review").length);
+    const approvedFinal = Math.min(Math.max(0, total - doneFinal), completedStories.filter((s) => s.status === "done").length);
     const inProgressBaseNow = openAtMonthStartStories.filter((s) => s.status === "inProgress").length;
     const isCurrentMonth =
       new Date().getFullYear() === planYear && new Date().getMonth() + 1 === month;
@@ -1993,11 +1993,11 @@ export function MonthAnalytics({
       const dayInMonth = dayIndex + 1;
       const elapsedDays = isCurrentMonth ? today1Based : totalDays;
       const progress = dayInMonth <= elapsedDays ? (dayInMonth - 1) / Math.max(elapsedDays - 1, 1) : null;
-      const approved = progress == null ? null : Math.round(approvedFinal * progress);
-      const done = progress == null ? null : Math.round(doneFinal * progress);
+      const done = progress == null ? null : Math.round(approvedFinal * progress);
+      const review = progress == null ? null : Math.round(doneFinal * progress);
       const inProgressBase = progress == null ? null : Math.round(inProgressBaseNow * (1 - progress * 0.55));
-      const doneSafe = done ?? 0;
-      const approvedSafe = approved ?? 0;
+      const doneSafe = review ?? 0;
+      const approvedSafe = done ?? 0;
       const inProgressSafe = inProgressBase == null ? 0 : Math.min(Math.max(0, total - approvedSafe - doneSafe), inProgressBase);
       const todoSafe = Math.max(0, total - approvedSafe - doneSafe - inProgressSafe);
       return {
@@ -2006,14 +2006,14 @@ export function MonthAnalytics({
         isToday: new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate()).getTime() === startToday,
         todo: progress == null ? null : todoSafe,
         inProgress: progress == null ? null : inProgressSafe,
-        done: progress == null ? null : doneSafe,
-        approved: progress == null ? null : approvedSafe,
+        review: progress == null ? null : doneSafe,
+        done: progress == null ? null : approvedSafe,
       };
     });
 
     // Team-level aggregation — when 0 or 2+ teams selected (not exactly 1)
     const showTeamMode = !filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1;
-    type TeamRow = { teamId: string | null; teamLabel: string; storiesByStatus: { todo: number; inProgress: number; done: number; approved: number }; daysLeftTotal: number; estimatedTotal: number };
+    type TeamRow = { teamId: string | null; teamLabel: string; storiesByStatus: { todo: number; inProgress: number; review: number; done: number }; daysLeftTotal: number; estimatedTotal: number };
     let workloadByTeam: TeamRow[] = [];
     if (showTeamMode) {
       const byTeam = new Map<string, TeamRow>();
@@ -2038,11 +2038,11 @@ export function MonthAnalytics({
           const teamLabel = MONTH_TEAM_COLUMNS.find((t) => t.id === teamId)?.label ?? "Unassigned";
           for (const story of epic.userStories ?? []) {
             if (story.sprint == null) continue;
-            const row = byTeam.get(teamKey) ?? { teamId, teamLabel, storiesByStatus: { todo: 0, inProgress: 0, done: 0, approved: 0 }, daysLeftTotal: 0, estimatedTotal: 0 };
+            const row = byTeam.get(teamKey) ?? { teamId, teamLabel, storiesByStatus: { todo: 0, inProgress: 0, review: 0, done: 0 }, daysLeftTotal: 0, estimatedTotal: 0 };
             if (story.status === "todo") row.storiesByStatus.todo += 1;
             else if (story.status === "inProgress") row.storiesByStatus.inProgress += 1;
+            else if (story.status === "review") row.storiesByStatus.review += 1;
             else if (story.status === "done") row.storiesByStatus.done += 1;
-            else if (story.status === "approved") row.storiesByStatus.approved += 1;
             row.estimatedTotal += Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
             if (story.status === "todo" || story.status === "inProgress") {
               row.daysLeftTotal += Math.max(0, story.daysLeft ?? 0);
@@ -2091,20 +2091,20 @@ export function MonthAnalytics({
     return out;
   }, [scopedEpics]);
   const epicStatusPie = useMemo(() => {
-    const counts = { unscheduled: 0, todo: 0, inProgress: 0, done: 0, approved: 0 };
+    const counts = { unscheduled: 0, todo: 0, inProgress: 0, review: 0, done: 0 };
     for (const status of epicStatusById.values()) {
       if (status === "Unscheduled") counts.unscheduled += 1;
       else if (status === "To do") counts.todo += 1;
       else if (status === "In progress") counts.inProgress += 1;
+      else if (status === "Review / Testing") counts.review += 1;
       else if (status === "Done") counts.done += 1;
-      else if (status === "Approved") counts.approved += 1;
     }
     return [
       { name: "Unscheduled", value: counts.unscheduled },
       { name: "To do", value: counts.todo },
       { name: "In progress", value: counts.inProgress },
+      { name: "Review / Testing", value: counts.review },
       { name: "Done", value: counts.done },
-      { name: "Approved", value: counts.approved },
     ];
   }, [epicStatusById]);
   const statusChartShowsEpics = isQuarterInsights && selectedEpicOption == null;
@@ -2164,8 +2164,8 @@ export function MonthAnalytics({
       if (statusDrilldownFilter === "Unscheduled") return story.sprint == null;
       if (statusDrilldownFilter === "To do") return story.sprint != null && story.status === "todo";
       if (statusDrilldownFilter === "In progress") return story.sprint != null && story.status === "inProgress";
+      if (statusDrilldownFilter === "Review / Testing") return story.sprint != null && story.status === "review";
       if (statusDrilldownFilter === "Done") return story.sprint != null && story.status === "done";
-      if (statusDrilldownFilter === "Approved") return story.sprint != null && story.status === "approved";
       return false;
     });
   }, [statusDrilldownFilter, scopedStories]);
@@ -2303,7 +2303,7 @@ export function MonthAnalytics({
    *  1. Compute per-epic health via `computeProgress` (uses each epic's own
    *     planned start/end — period-agnostic, matches the Roadmap Health
    *     popover and chart badges).
-   *  2. Pick the worst child status (overdue > atRisk > watch > onTrack/done).
+   *  2. Pick the worst child status (overdue > atRisk > watch > onTrack/review).
    *  3. Capture the at-risk + watch epic titles so the popover can list them.
    */
   const teamHealthByTeamKey = useMemo(() => {
@@ -2888,11 +2888,11 @@ export function MonthAnalytics({
     });
     // Track ALL scheduled stories, not just those that were open at
     // period start. The previous `isStoryOpen` filter dropped any
-    // story that was already done at Jan 1 (or that fell back to its
-    // current "done" status because no early snapshot exists) — so
+    // story that was already review at Jan 1 (or that fell back to its
+    // current "review" status because no early snapshot exists) — so
     // CFD's Done stack was always 0 even when Workload Balance was
     // counting 7 Done stories. By tracking every story, the per-day
-    // loop now plots stories that were always done as a flat Done
+    // loop now plots stories that were always review as a flat Done
     // band, matching the Workload Balance current-state view.
     const storiesToTrack = sourceStories.filter((story) => story.sprint != null);
     const now = new Date();
@@ -2910,8 +2910,8 @@ export function MonthAnalytics({
           isToday: false,
           todo: null,
           inProgress: null,
+          review: null,
           done: null,
-          approved: null,
         };
       }
       // Cutoff for the snapshot bisection = start of NEXT day local.
@@ -2933,8 +2933,8 @@ export function MonthAnalytics({
       const isTodayCell = dayStartMs === todayStartMs;
       let todo = 0;
       let inProgress = 0;
+      let review = 0;
       let done = 0;
-      let approved = 0;
       for (const story of storiesToTrack) {
         const snapshot = latestSnapshotAtDayCached(story, cutoff);
         const status = isTodayCell
@@ -2942,8 +2942,8 @@ export function MonthAnalytics({
           : (snapshot?.status ?? story.status);
         if (status === "todo") todo += 1;
         else if (status === "inProgress") inProgress += 1;
+        else if (status === "review") review += 1;
         else if (status === "done") done += 1;
-        else if (status === "approved") approved += 1;
       }
       const dayStart = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate()).getTime();
       const nowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -2953,8 +2953,8 @@ export function MonthAnalytics({
         isToday: dayStart === nowStart,
         todo,
         inProgress,
+        review,
         done,
-        approved,
       };
     });
   }, [selectedEpicOption, monthEpics, planYear, month, scopeStartMonth, scopeEndMonth]);
@@ -2992,9 +2992,9 @@ export function MonthAnalytics({
       const dayInMonth = index + 1;
       const dayStart = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate()).getTime();
       if (dayInMonth > elapsedDays) {
-        return { dayInMonth, labelShort: flowChartDayLabel(dayDate), isToday: false, todo: null, inProgress: null, done: null, approved: null };
+        return { dayInMonth, labelShort: flowChartDayLabel(dayDate), isToday: false, todo: null, inProgress: null, review: null, done: null };
       }
-      let todo = 0; let inProgress = 0; let done = 0; let approved = 0;
+      let todo = 0; let inProgress = 0; let review = 0; let done = 0;
       for (const story of scheduledStories) {
         const days = Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
         if (days === 0) continue;
@@ -3005,23 +3005,23 @@ export function MonthAnalytics({
         } else {
           const progress = (dayInMonth - 1) / Math.max(elapsedDays - 1, 1);
           const finalStatus = story.status;
-          if (finalStatus === "approved") status = progress > 0.75 ? "approved" : progress > 0.5 ? "done" : progress > 0.25 ? "inProgress" : "todo";
-          else if (finalStatus === "done") status = progress > 0.6 ? "done" : progress > 0.3 ? "inProgress" : "todo";
+          if (finalStatus === "done") status = progress > 0.75 ? "done" : progress > 0.5 ? "review" : progress > 0.25 ? "inProgress" : "todo";
+          else if (finalStatus === "review") status = progress > 0.6 ? "review" : progress > 0.3 ? "inProgress" : "todo";
           else if (finalStatus === "inProgress") status = progress > 0.4 ? "inProgress" : "todo";
           else status = "todo";
         }
         if (status === "todo") todo += days;
         else if (status === "inProgress") inProgress += days;
+        else if (status === "review") review += days;
         else if (status === "done") done += days;
-        else if (status === "approved") approved += days;
       }
       return { dayInMonth, labelShort: flowChartDayLabel(dayDate), isToday: dayStart === nowStart,
-        todo: Number(todo.toFixed(1)), inProgress: Number(inProgress.toFixed(1)), done: Number(done.toFixed(1)), approved: Number(approved.toFixed(1)) };
+        todo: Number(todo.toFixed(1)), inProgress: Number(inProgress.toFixed(1)), review: Number(review.toFixed(1)), done: Number(done.toFixed(1)) };
     });
   }, [selectedEpicOption, monthEpics, planYear, month, scopeStartMonth, scopeEndMonth]);
 
   const cfdDataResolvedRaw = cfdMetric === "daysLeft" ? flowDaysData : flowResolved;
-  // After the chart has fully drained — every story moved to done/approved
+  // After the chart has fully drained — every story moved to review/done
   // and stays that way — null the status counts so the area chart stops
   // drawing. Without this the CFD shows a wide flat band of green/violet
   // for the rest of the period, adding no information. labelShort + isToday
@@ -3033,12 +3033,12 @@ export function MonthAnalytics({
       const r = rows[i]!;
       const todo = typeof r.todo === "number" ? r.todo : 0;
       const inProgress = typeof r.inProgress === "number" ? r.inProgress : 0;
+      const review = typeof r.review === "number" ? r.review : 0;
       const done = typeof r.done === "number" ? r.done : 0;
-      const approved = typeof r.approved === "number" ? r.approved : 0;
       // "Done" = no open work AND at least one story has reached the right
       // side of the stack. The second check avoids treating a future-only
-      // window (all zeros across the board) as "done".
-      if (todo === 0 && inProgress === 0 && (done > 0 || approved > 0)) {
+      // window (all zeros across the board) as "review".
+      if (todo === 0 && inProgress === 0 && (review > 0 || done > 0)) {
         doneAtIdx = i;
         break;
       }
@@ -3198,7 +3198,7 @@ export function MonthAnalytics({
 
     const storyValue = (s: (typeof allStories)[number]) =>
       isDays ? Math.max(0, s.estimatedDays ?? s.daysLeft ?? 0) : 1;
-    const storyDone = (status: string) => status === "done" || status === "approved";
+    const storyDone = (status: string) => status === "review" || status === "done";
 
     // Per-epic baseline (story-day sum of open stories at start) so we can
     // scale openRemaining into epic-est units in `epicEst` basis. Without
@@ -3344,7 +3344,7 @@ export function MonthAnalytics({
               // is that it was "open with full estimate" — the burndown's
               // line wouldn't drop on that day either. Falling back to
               // story.status (which is the CURRENT state) here was the
-              // original bug: a now-done story leaked back to "done on
+              // original bug: a now-review story leaked back to "review on
               // day 1" and the completed line ran above scope.
               const status = snap?.status ?? "todo";
               if (status !== "todo" && status !== "inProgress") continue;
@@ -3474,11 +3474,11 @@ export function MonthAnalytics({
     return 0;
   }, [burnUpData]);
   /** Truncate the `completed` line after it first reaches the scope total —
-   *  same reasoning as the burndown's done-truncation: a flat line at scope
+   *  same reasoning as the burndown's review-truncation: a flat line at scope
    *  adds no information. Also surface whether the scope was reached at all
    *  so the chart can paint a "Done ✓" marker on the due date. Compares
    *  against THAT day's scope so a late scope bump doesn't make a row that
-   *  was "at scope" yesterday look like it's still done today. */
+   *  was "at scope" yesterday look like it's still review today. */
   const burnUpDoneAtIdx = useMemo(() => {
     for (let i = 0; i < burnUpData.length; i++) {
       const row = burnUpData[i];
@@ -3515,7 +3515,7 @@ export function MonthAnalytics({
     const epicsInScope = selectedEpicOption != null ? [selectedEpicOption.epic] : monthEpics.map((r) => r.epic);
     return epicsInScope.map((epic, idx) => {
       const stories = (epic.userStories ?? []).filter((s) => s.sprint != null);
-      const completed = stories.filter((s) => s.status === "done" || s.status === "approved").length;
+      const completed = stories.filter((s) => s.status === "review" || s.status === "done").length;
       const remaining = stories.length - completed;
       const daysLeft = stories
         .filter((s) => s.status === "todo" || s.status === "inProgress")
@@ -3554,7 +3554,7 @@ export function MonthAnalytics({
     burnUpEpicRows.length > 0 && burnUpEpicRows.every((r) => burnUpVisibleKeys.includes(r.id));
   // True when the chart is focused on exactly one epic (either via the
   // scope picker or via the legend filter). Drives whether shared
-  // scope/ideal/due/done markers render — they only make sense when one
+  // scope/ideal/due/review markers render — they only make sense when one
   // due date applies. When `selectedEpicOption` is set, burnUpEpicRows
   // also collapses to that one epic, so `allBurnUpKeysSelected` becomes
   // true — we use this stronger signal instead to keep the markers visible.
@@ -4164,8 +4164,8 @@ export function MonthAnalytics({
                         // bucket that has no story-side analogue — render
                         // a neutral Circle for it.
                         const epicStatusKey =
-                          epicStatusLabel === "Approved" ? "approved"
-                          : epicStatusLabel === "Done" ? "done"
+                          epicStatusLabel === "Done" ? "done"
+                          : epicStatusLabel === "Review / Testing" ? "review"
                           : epicStatusLabel === "In progress" ? "inProgress"
                           : epicStatusLabel === "To do" ? "todo"
                           : null;
@@ -4986,16 +4986,16 @@ export function MonthAnalytics({
                 fullName: t.teamLabel,
                 "To do": statusVal(WORKLOAD_BAR_SEGMENTS[0], t.storiesByStatus.todo),
                 "In progress": statusVal(WORKLOAD_BAR_SEGMENTS[1], t.storiesByStatus.inProgress),
-                "Done": statusVal(WORKLOAD_BAR_SEGMENTS[2], t.storiesByStatus.done),
-                "Approved": statusVal(WORKLOAD_BAR_SEGMENTS[3], t.storiesByStatus.approved),
+                "Review / Testing": statusVal(WORKLOAD_BAR_SEGMENTS[2], t.storiesByStatus.review),
+                "Done": statusVal(WORKLOAD_BAR_SEGMENTS[3], t.storiesByStatus.done),
               }))
             : analytics.workloadByAssignee.map((item) => ({
                 name: compactAssigneeName(item.assignee),
                 fullName: item.assignee,
                 "To do": statusVal(WORKLOAD_BAR_SEGMENTS[0], item.storiesByStatus.todo),
                 "In progress": statusVal(WORKLOAD_BAR_SEGMENTS[1], item.storiesByStatus.inProgress),
-                "Done": statusVal(WORKLOAD_BAR_SEGMENTS[2], item.storiesByStatus.done),
-                "Approved": statusVal(WORKLOAD_BAR_SEGMENTS[3], item.storiesByStatus.approved),
+                "Review / Testing": statusVal(WORKLOAD_BAR_SEGMENTS[2], item.storiesByStatus.review),
+                "Done": statusVal(WORKLOAD_BAR_SEGMENTS[3], item.storiesByStatus.done),
               }));
           // Pre-resolve avatar URLs keyed by the X-axis label ("First L.") so
           // the custom tick can paint a photo per bar without each tick re-
@@ -5516,7 +5516,7 @@ export function MonthAnalytics({
                     // computation is per-EPIC, not per-assignee.
                     const teamHealth = row.teamSlug ? teamHealthByTeamKey.get(row.teamSlug) : undefined;
                     // Visual hint for the avatar ring and bar color falls
-                    // back to the old "all done" / default tone when no
+                    // back to the old "all review" / default tone when no
                     // team health is available (user rows).
                     const atRisk = teamHealth ? (teamHealth.status === "atRisk" || teamHealth.status === "overdue") : false;
                     const watch = teamHealth?.status === "watch";
@@ -5587,7 +5587,7 @@ export function MonthAnalytics({
                           <div className="min-w-0 flex-1">
                             {/* Two-line layout, bar leads via a clear h-2
                              *  pill but doesn't dominate the row. The over-
-                             *  capacity chip + est done / est left numbers
+                             *  capacity chip + est review / est left numbers
                              *  sit inline on the same row as the name. */}
                             <div className="flex items-center justify-between gap-2">
                               <span className="inline-flex min-w-0 items-baseline gap-1.5">
@@ -5610,7 +5610,7 @@ export function MonthAnalytics({
                                   <span className="ml-0.5 text-slate-400">est</span>
                                   <span className="mx-1 text-slate-300">·</span>
                                   <span className="font-semibold text-slate-800">{doneDays}d</span>
-                                  <span className="ml-0.5 text-slate-400">done</span>
+                                  <span className="ml-0.5 text-slate-400">review</span>
                                   <span className="mx-1 text-slate-300">·</span>
                                   <span className={cn("font-semibold", atRisk ? "text-amber-700" : watch ? "text-amber-700" : "text-slate-800")}>{row.daysLeft}d</span>
                                   <span className="ml-0.5 text-slate-400">left</span>

@@ -62,7 +62,7 @@ export function ganttDateRangeForEpic(epic: EpicItem, planYear: number): { start
   };
 }
 
-const STATUS_CHANGE_RE = /^Status changed to (todo|inProgress|done|approved)$/;
+const STATUS_CHANGE_RE = /^Status changed to (todo|inProgress|review|done)$/;
 
 /**
  * User story: start = first time status became in progress (history, else snapshots, else updatedAt);

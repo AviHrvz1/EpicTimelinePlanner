@@ -22,10 +22,10 @@ function StatusBadge({ status }: StatusBadgeProps) {
         return { label: "To Do", className: "border-amber-200/80 bg-amber-50 text-amber-800" };
       case StoryStatus.inProgress:
         return { label: "In Progress", className: "border-blue-200/80 bg-blue-50 text-blue-800" };
+      case StoryStatus.review:
+        return { label: "Review / Testing", className: "border-violet-200/80 bg-violet-50 text-violet-800" };
       case StoryStatus.done:
         return { label: "Done", className: "border-emerald-200/80 bg-emerald-50 text-emerald-800" };
-      case StoryStatus.approved:
-        return { label: "Approved", className: "border-violet-200/80 bg-violet-50 text-violet-800" };
     }
   })();
   return (
@@ -63,10 +63,10 @@ export interface SprintMoveModalProps {
 
 /**
  * Confirmation dialog for the manual "Move unfinished work to next sprint"
- * action. Lists every movable story (todo / inProgress / done) grouped by
- * its parent epic, with per-row checkboxes default-checked. Approved
- * stories are NOT in the list — they stay on the closed sprint board
- * representing what shipped.
+ * action. Lists every movable story (todo / inProgress / review) grouped by
+ * its parent epic, with per-row checkboxes default-checked. `done` stories
+ * are NOT in the list — they're terminal and stay on the closed sprint
+ * board representing what shipped.
  */
 export function SprintMoveModal({
   initiatives,
@@ -188,7 +188,7 @@ export function SprintMoveModal({
             <p className="mt-1 text-[12.5px] leading-snug text-slate-600">
               {isYearBoundaryBlocked
                 ? `${planYear + 1} isn't in your roadmap yet — adding it creates continuation initiatives and epics, then carries these stories forward.`
-                : `${movableRows.length} ${movableRows.length === 1 ? "story is" : "stories are"} unfinished in ${fromLabel}. Approved cards stay on the closed sprint board.`}
+                : `${movableRows.length} ${movableRows.length === 1 ? "story is" : "stories are"} unfinished in ${fromLabel}. Done cards stay on the closed sprint board.`}
             </p>
           </div>
           <button
@@ -204,7 +204,7 @@ export function SprintMoveModal({
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {groups.length === 0 ? (
             <p className="rounded-md border border-emerald-200/80 bg-emerald-50/60 px-3 py-2 text-[12.5px] text-emerald-800">
-              Every ticket in {fromLabel} is approved. Nothing to move forward.
+              Every ticket in {fromLabel} is done. Nothing to move forward.
             </p>
           ) : (
             <ul className="space-y-3">

@@ -45,8 +45,8 @@ function flowChartDayLabel(dayDate: Date): string {
 export type WorkloadStoriesByStatus = {
   todo: number;
   inProgress: number;
+  review: number;
   done: number;
-  approved: number;
 };
 
 export type WorkloadTeamRow = {
@@ -87,8 +87,8 @@ export type SprintAnalyticsData = {
     isToday: boolean;
     todo: number;
     inProgress: number;
+    review: number;
     done: number;
-    approved: number;
   }>;
   openStories: number;
   atRiskStories: number;
@@ -196,8 +196,8 @@ function buildStatusPie(stories: UserStoryItem[], month: number, yearSprint: num
     unscheduled: 0,
     todo: 0,
     inProgress: 0,
+    review: 0,
     done: 0,
-    approved: 0,
   };
 
   for (const story of stories) {
@@ -208,16 +208,16 @@ function buildStatusPie(stories: UserStoryItem[], month: number, yearSprint: num
     if (!storyMatchesYearSprint(story, month, yearSprint)) continue;
     if (story.status === "todo") counts.todo += 1;
     else if (story.status === "inProgress") counts.inProgress += 1;
+    else if (story.status === "review") counts.review += 1;
     else if (story.status === "done") counts.done += 1;
-    else if (story.status === "approved") counts.approved += 1;
   }
 
   return [
     { name: "Unscheduled", value: counts.unscheduled },
     { name: "To do", value: counts.todo },
     { name: "In progress", value: counts.inProgress },
+    { name: "Review / Testing", value: counts.review },
     { name: "Done", value: counts.done },
-    { name: "Approved", value: counts.approved },
   ];
 }
 
@@ -284,12 +284,12 @@ function buildBurndown(
       }
       if (best) {
         if (metric === "daysLeft") return Math.max(0, best.daysLeft ?? 0);
-        return best.status === StoryStatus.done || best.status === StoryStatus.approved ? 0 : 1;
+        return best.status === StoryStatus.review || best.status === StoryStatus.done ? 0 : 1;
       }
     }
     // No snapshot: fall back to current story value
     if (metric === "daysLeft") return Math.max(0, story.daysLeft ?? 0);
-    return story.status === StoryStatus.done || story.status === StoryStatus.approved ? 0 : 1;
+    return story.status === StoryStatus.review || story.status === StoryStatus.done ? 0 : 1;
   }
 
   // Start value from day-1 snapshots (or estimated if no snapshots)
@@ -314,7 +314,7 @@ function buildBurndown(
   const today1Based = sprintCalendarToday1Based(dayDates);
   const currentActual = metric === "daysLeft"
     ? sprintStories.reduce((sum, s) => sum + Math.max(0, s.daysLeft ?? 0), 0)
-    : sprintStories.filter((s) => s.status !== StoryStatus.done && s.status !== StoryStatus.approved).length;
+    : sprintStories.filter((s) => s.status !== StoryStatus.review && s.status !== StoryStatus.done).length;
 
   if (horizon === 1) {
     const cal = dayDates[0] ?? new Date(planYear, month - 1, 1);
@@ -360,8 +360,8 @@ function buildWorkloadByAssignee(stories: UserStoryItem[], month: number, yearSp
   const emptyStatus = (): WorkloadStoriesByStatus => ({
     todo: 0,
     inProgress: 0,
+    review: 0,
     done: 0,
-    approved: 0,
   });
   const byAssignee = new Map<
     string,
@@ -380,8 +380,8 @@ function buildWorkloadByAssignee(stories: UserStoryItem[], month: number, yearSp
     const estDays = Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
     if (story.status === "todo") { row.storiesByStatus.todo += 1; row.daysByStatus.todo += estDays; }
     else if (story.status === "inProgress") { row.storiesByStatus.inProgress += 1; row.daysByStatus.inProgress += estDays; }
+    else if (story.status === "review") { row.storiesByStatus.review += 1; row.daysByStatus.review += estDays; }
     else if (story.status === "done") { row.storiesByStatus.done += 1; row.daysByStatus.done += estDays; }
-    else if (story.status === "approved") { row.storiesByStatus.approved += 1; row.daysByStatus.approved += estDays; }
     row.estimatedTotal += estDays;
     if (story.status === "todo" || story.status === "inProgress") {
       row.openCount += 1;
@@ -406,8 +406,8 @@ function buildWorkloadByAssignee(stories: UserStoryItem[], month: number, yearSp
       (item) =>
         item.storiesByStatus.todo +
         item.storiesByStatus.inProgress +
-        item.storiesByStatus.done +
-        item.storiesByStatus.approved,
+        item.storiesByStatus.review +
+        item.storiesByStatus.done,
     ),
   );
   const atRiskStories = openStories.filter(
@@ -429,7 +429,7 @@ function buildWorkloadByTeam(
   filterTeamIds?: string[] | null,
   directoryUsers?: readonly SprintWorkspaceDirectoryUser[] | null,
 ): WorkloadTeamRow[] {
-  const emptyStatus = (): WorkloadStoriesByStatus => ({ todo: 0, inProgress: 0, done: 0, approved: 0 });
+  const emptyStatus = (): WorkloadStoriesByStatus => ({ todo: 0, inProgress: 0, review: 0, done: 0 });
   const byTeam = new Map<string, WorkloadTeamRow>();
   // Map<lowercased-name, normalized team id> for assignee-team lookup. Used
   // to bucket cross-team stories under the ASSIGNEE'S team when the epic's
@@ -476,8 +476,8 @@ function buildWorkloadByTeam(
       const estDays = Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
       if (story.status === "todo") { row.storiesByStatus.todo += 1; row.daysByStatus.todo += estDays; }
       else if (story.status === "inProgress") { row.storiesByStatus.inProgress += 1; row.daysByStatus.inProgress += estDays; }
+      else if (story.status === "review") { row.storiesByStatus.review += 1; row.daysByStatus.review += estDays; }
       else if (story.status === "done") { row.storiesByStatus.done += 1; row.daysByStatus.done += estDays; }
-      else if (story.status === "approved") { row.storiesByStatus.approved += 1; row.daysByStatus.approved += estDays; }
       row.estimatedTotal += estDays;
       if (story.status === "todo" || story.status === "inProgress") {
         row.openCount += 1;
@@ -695,7 +695,7 @@ function endOfDay(d: Date): Date {
 }
 
 function parseStatusChangeEntry(entry: string): StoryStatus | null {
-  const m = /^Status changed to (todo|inProgress|done|approved)$/.exec(entry);
+  const m = /^Status changed to (todo|inProgress|review|done)$/.exec(entry);
   if (!m) return null;
   return m[1] as StoryStatus;
 }
@@ -718,9 +718,9 @@ function statusChainTo(finalStatus: StoryStatus): StoryStatus[] {
   if (finalStatus === StoryStatus.todo) return chain;
   chain.push(StoryStatus.inProgress);
   if (finalStatus === StoryStatus.inProgress) return chain;
+  chain.push(StoryStatus.review);
+  if (finalStatus === StoryStatus.review) return chain;
   chain.push(StoryStatus.done);
-  if (finalStatus === StoryStatus.done) return chain;
-  chain.push(StoryStatus.approved);
   return chain;
 }
 
@@ -907,8 +907,8 @@ function buildFlowTrend(
       : pastDates.map((dayDate, dayIndex) => {
           let todo = 0;
           let inProgress = 0;
+          let review = 0;
           let done = 0;
-          let approved = 0;
           const dayMs = startOfDay(dayDate).getTime();
 
           for (const story of sprintStories) {
@@ -918,8 +918,8 @@ function buildFlowTrend(
             if (st == null) continue;
             if (st === StoryStatus.todo) todo += 1;
             else if (st === StoryStatus.inProgress) inProgress += 1;
+            else if (st === StoryStatus.review) review += 1;
             else if (st === StoryStatus.done) done += 1;
-            else if (st === StoryStatus.approved) approved += 1;
           }
 
           return {
@@ -928,8 +928,8 @@ function buildFlowTrend(
             isToday: dayMs === todayMs,
             todo,
             inProgress,
+            review,
             done,
-            approved,
           };
         });
 

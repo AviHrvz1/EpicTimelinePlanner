@@ -134,7 +134,7 @@ type BacklogPlanningPanelProps = {
     storyId: string,
     patch: Partial<{
       title: string;
-      status: "todo" | "inProgress" | "done" | "approved";
+      status: "todo" | "inProgress" | "review" | "done";
       sprint: number | null;
       assignee: string | null;
       estimatedDays: number | null;
@@ -204,7 +204,7 @@ type BacklogColumnKey =
   | "daysLeft"
   | "progress";
 type GroupLevel = "roadmap" | "year" | "quarter" | "month" | "sprint";
-type WorkflowStatus = "todo" | "inProgress" | "done" | "approved";
+type WorkflowStatus = "todo" | "inProgress" | "review" | "done";
 type InlineEditableStoryField = "status" | "sprint" | "assignee" | "labels" | "estimatedDays" | "daysLeft";
 type WorkItemKindFilter = "initiative" | "epic" | "story";
 
@@ -234,7 +234,7 @@ function compareByColumn(a: InitiativeItem, b: InitiativeItem, sort: BacklogColu
     return dir * (qa - qb);
   }
   if (key === "status") {
-    const order: Record<string, number> = { backlog: 0, planning: 1, "in-progress": 2, blocked: 3, done: 4 };
+    const order: Record<string, number> = { backlog: 0, planning: 1, "in-progress": 2, blocked: 3, review: 4 };
     return dir * ((order[a.status as string] ?? 99) - (order[b.status as string] ?? 99));
   }
   if (key === "team") {
@@ -275,8 +275,8 @@ function compareByColumn(a: InitiativeItem, b: InitiativeItem, sort: BacklogColu
     const tot = (arr: typeof aEpics) => {
       const all = arr.flatMap((e) => e.userStories ?? []);
       if (all.length === 0) return 0;
-      const done = all.filter((s) => s.status === "done" || s.status === "approved").length;
-      return done / all.length;
+      const review = all.filter((s) => s.status === "review" || s.status === "done").length;
+      return review / all.length;
     };
     return dir * (tot(aEpics) - tot(bEpics));
   }
@@ -781,15 +781,15 @@ const GROUP_LEVEL_LABELS: Record<GroupLevel, string> = {
 };
 
 function statusChip(status: string) {
-  if (status === "approved") return "border border-violet-200/70 bg-violet-50 text-violet-700";
   if (status === "done") return "border border-emerald-200/70 bg-emerald-50 text-emerald-700";
+  if (status === "review") return "border border-violet-200/70 bg-violet-50 text-violet-700";
   if (status === "inProgress") return "border border-blue-200/70 bg-blue-50 text-blue-700";
   return "border border-amber-200/70 bg-amber-50 text-amber-700";
 }
 
 function statusDot(status: string) {
-  if (status === "approved") return "bg-violet-500";
   if (status === "done") return "bg-emerald-500";
+  if (status === "review") return "bg-violet-500";
   if (status === "inProgress") return "bg-blue-500";
   return "bg-amber-400";
 }
@@ -797,11 +797,11 @@ function statusDot(status: string) {
 /**
  * Lucide icon for a workflow status. Matches the conventions used in
  * `components/initiatives/initiative-list-panel.tsx` so the backlog status
- * chips read the same across surfaces (To do/In progress/Done/Approved).
+ * chips read the same across surfaces (To do/In progress/Review/Done).
  */
 function statusIcon(status: string, className = "size-3.5"): ReactNode {
-  if (status === "approved") return <CheckCircle2 className={cn(className, "text-violet-600")} />;
-  if (status === "done") return <CheckCheck className={cn(className, "text-emerald-600")} />;
+  if (status === "done") return <CheckCircle2 className={cn(className, "text-emerald-600")} />;
+  if (status === "review") return <CheckCheck className={cn(className, "text-violet-600")} />;
   if (status === "inProgress") return <PlayCircle className={cn(className, "text-blue-600")} />;
   return <ListTodo className={cn(className, "text-amber-600")} />;
 }
@@ -1158,14 +1158,14 @@ function ParentDateEditorOverlay({
 
 /** Option list for the inline status popover (story status edit). */
 const STORY_STATUS_POPOVER_OPTIONS: Array<{
-  value: "todo" | "inProgress" | "done" | "approved";
+  value: "todo" | "inProgress" | "review" | "done";
   label: string;
   icon: ReactNode;
 }> = [
   { value: "todo", label: "To do", icon: <ListTodo className="size-3.5 text-amber-600" /> },
   { value: "inProgress", label: "In progress", icon: <PlayCircle className="size-3.5 text-blue-600" /> },
-  { value: "done", label: "Done", icon: <CheckCheck className="size-3.5 text-emerald-600" /> },
-  { value: "approved", label: "Approved", icon: <CheckCircle2 className="size-3.5 text-violet-600" /> },
+  { value: "review", label: "Review / Testing", icon: <CheckCheck className="size-3.5 text-violet-600" /> },
+  { value: "done", label: "Done", icon: <CheckCircle2 className="size-3.5 text-emerald-600" /> },
 ];
 
 function quarterFromMonth(month: number | null | undefined): string {
@@ -1367,8 +1367,8 @@ const WORK_ITEM_KIND_SUMMARY_LABELS: Record<WorkItemKindFilter, string> = {
 const STATUS_FILTER_SUMMARY_LABELS: Record<string, string> = {
   todo: "To do",
   inProgress: "In progress",
+  review: "Review / Testing",
   done: "Done",
-  approved: "Approved",
 };
 
 function teamIdToSummaryLabel(teamId: string): string {
@@ -1500,7 +1500,7 @@ function sumStoryDays(stories: Array<{ estimatedDays?: number | null; daysLeft?:
 
 function completionFromStories(stories: Array<{ status: string }>) {
   const total = stories.length;
-  const finished = stories.filter((story) => story.status === "done" || story.status === "approved").length;
+  const finished = stories.filter((story) => story.status === "review" || story.status === "done").length;
   const percent = total === 0 ? 0 : Math.round((finished / total) * 100);
   return { finished, total, percent };
 }
@@ -1512,7 +1512,7 @@ function storyCompletion(story: { status: string; estimatedDays?: number | null;
     const percent = Math.max(0, Math.min(100, Math.round(((estimated - left) / estimated) * 100)));
     return { label: `${Math.max(0, estimated - left)}/${estimated}`, percent };
   }
-  if (story.status === "approved" || story.status === "done") return { label: "Done", percent: 100 };
+  if (story.status === "done" || story.status === "review") return { label: "Done", percent: 100 };
   if (story.status === "inProgress") return { label: "In progress", percent: 50 };
   return { label: "To do", percent: 0 };
 }
@@ -1520,9 +1520,9 @@ function storyCompletion(story: { status: string; estimatedDays?: number | null;
 function rollupWorkflowStatus(stories: Array<{ status: string }>): WorkflowStatus {
   if (stories.length === 0) return "todo";
   const statuses = stories.map((story) => story.status);
-  if (statuses.every((status) => status === "approved")) return "approved";
-  if (statuses.every((status) => status === "done" || status === "approved")) return "done";
-  if (statuses.some((status) => status === "inProgress" || status === "done" || status === "approved")) return "inProgress";
+  if (statuses.every((status) => status === "done")) return "done";
+  if (statuses.every((status) => status === "review" || status === "done")) return "review";
+  if (statuses.some((status) => status === "inProgress" || status === "review" || status === "done")) return "inProgress";
   return "todo";
 }
 
@@ -1533,8 +1533,8 @@ function rollupWorkflowStatusFromGroupedRows(rows: Array<{ storyStatus: string }
 function workflowStatusLabel(status: WorkflowStatus): string {
   if (status === "inProgress") return "In progress";
   if (status === "todo") return "To Do";
+  if (status === "review") return "Review / Testing";
   if (status === "done") return "Done";
-  if (status === "approved") return "Approved";
   return status;
 }
 
@@ -4060,7 +4060,7 @@ export function BacklogPlanningPanel({
   async function patchStoryInline(
     storyId: string,
     patch: Partial<{
-      status: "todo" | "inProgress" | "done" | "approved";
+      status: "todo" | "inProgress" | "review" | "done";
       sprint: number | null;
       assignee: string | null;
       estimatedDays: number | null;
@@ -4110,11 +4110,11 @@ export function BacklogPlanningPanel({
     }
     const nextRaw = (nextValueOverride ?? editingStoryCell?.value ?? "").trim();
     if (field === "status") {
-      const next = nextRaw as "todo" | "inProgress" | "done" | "approved";
+      const next = nextRaw as "todo" | "inProgress" | "review" | "done";
       if (next !== current.status) {
         await patchStoryInline(storyId, { status: next });
-        // Short confetti burst on done → approved transitions.
-        if (current.status === "done" && next === "approved") {
+        // Short confetti burst on review → done transitions.
+        if (current.status === "review" && next === "done") {
           fireApprovalConfetti();
         }
       }
@@ -4606,7 +4606,7 @@ export function BacklogPlanningPanel({
   }, [initiatives, q, storyRefById]);
 
   const filteredWithControls = useMemo(() => {
-    const statusRank: Record<string, number> = { todo: 0, inProgress: 1, done: 2, approved: 3 };
+    const statusRank: Record<string, number> = { todo: 0, inProgress: 1, review: 2, done: 3 };
     const storyFilterActive = statusFilter.length > 0 || sprintFilter.length > 0 || labelFilter.length > 0;
     return filtered
       .map((initiative) => {
@@ -4799,8 +4799,8 @@ export function BacklogPlanningPanel({
   const statusOptions: OptionItem[] = [
     { id: "todo", label: "To do" },
     { id: "inProgress", label: "In progress" },
+    { id: "review", label: "Review / Testing" },
     { id: "done", label: "Done" },
-    { id: "approved", label: "Approved" },
     // Scheduling state — orthogonal to workflow status. "Scheduled" = the
     // story has a sprint assigned; "Unscheduled" = no sprint yet. Combined
     // with the workflow values via OR so a filter like
@@ -5353,7 +5353,7 @@ export function BacklogPlanningPanel({
     if (!columnSort) return groupedStoryRows;
     const dir = columnSort.dir === "asc" ? 1 : -1;
     const key = columnSort.key;
-    const STATUS_RANK: Record<string, number> = { todo: 0, inProgress: 1, done: 2, approved: 3 };
+    const STATUS_RANK: Record<string, number> = { todo: 0, inProgress: 1, review: 2, done: 3 };
     const arr = [...groupedStoryRows];
     arr.sort((a, b) => {
       switch (key) {
@@ -5449,8 +5449,8 @@ export function BacklogPlanningPanel({
     const STATUS_LABEL: Record<string, string> = {
       todo: "To do",
       inProgress: "In progress",
+      review: "Review / Testing",
       done: "Done",
-      approved: "Approved",
     };
     // Sequential short IDs (INIT-001, EPIC-001, STORY-001). Computed deterministically by encounter order in
     // the filtered rows so the same backlog snapshot always gets the same IDs in the export.
@@ -5479,8 +5479,8 @@ export function BacklogPlanningPanel({
         case "progress": {
           const total = row.storyEstimatedDays || 0;
           if (total <= 0) return "";
-          const done = Math.max(0, total - (row.storyDaysLeft || 0));
-          return `${Math.round((done / total) * 100)}%`;
+          const review = Math.max(0, total - (row.storyDaysLeft || 0));
+          return `${Math.round((review / total) * 100)}%`;
         }
         case "estDays":
           return String(row.storyEstimatedDays ?? 0);
@@ -6051,7 +6051,7 @@ export function BacklogPlanningPanel({
 
   function completionForRows(storyRows: typeof groupedStoryRows) {
     const total = storyRows.length;
-    const finished = storyRows.filter((r) => r.storyStatus === "done" || r.storyStatus === "approved").length;
+    const finished = storyRows.filter((r) => r.storyStatus === "review" || r.storyStatus === "done").length;
     const percent = total > 0 ? Math.round((finished / total) * 100) : 0;
     return { total, finished, percent };
   }

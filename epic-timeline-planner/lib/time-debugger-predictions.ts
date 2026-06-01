@@ -9,7 +9,7 @@ import { YEAR_SPRINT_MAX } from "@/lib/year-sprint";
  *   - How many stories sit in the source sprint, broken down by status
  *     (so the user knows what to expect to see on the "Before" view)
  *   - How many of those will roll forward when the rollover effect fires
- *     (the todo + inProgress count — done/approved stay put by design)
+ *     (the todo + inProgress count — review/done stay put by design)
  *   - How many epics are affected (parent epics of the rolling stories)
  *   - The destination sprint label
  *
@@ -31,10 +31,10 @@ export type BoundaryPrediction = {
   todo: number;
   /** Stories with `status === inProgress` in the source sprint — these will roll. */
   inProgress: number;
+  /** Stories with `status === review` — these stay put. */
+  review: number;
   /** Stories with `status === done` — these stay put. */
   done: number;
-  /** Stories with `status === approved` — these stay put. */
-  approved: number;
   /** Sum that should roll (todo + inProgress). */
   willRoll: number;
   /** Number of distinct parent epics among the rolling stories. */
@@ -51,8 +51,8 @@ function emptyPrediction(fromSprint: number, toSprint: number | null, toLabel: s
     total: 0,
     todo: 0,
     inProgress: 0,
+    review: 0,
     done: 0,
-    approved: 0,
     willRoll: 0,
     epicCount: 0,
     initiativeCount: 0,
@@ -86,11 +86,11 @@ function predictForSourceSprint(
             rollingEpics.add(epic.id);
             rollingInits.add(initiative.id);
             break;
+          case StoryStatus.review:
+            out.review += 1;
+            break;
           case StoryStatus.done:
             out.done += 1;
-            break;
-          case StoryStatus.approved:
-            out.approved += 1;
             break;
         }
       }

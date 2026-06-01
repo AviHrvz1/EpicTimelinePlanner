@@ -125,14 +125,14 @@ function epicExecutionStatusMeta(epic: InitiativeItem["epics"][number]): { label
   if (stories.length === 0) {
     return { label: "To Do", className: "border-amber-200/90 bg-amber-50 text-amber-800" };
   }
-  if (stories.every((s) => s.status === "approved")) {
-    return { label: "Approved", className: "border-violet-200/90 bg-violet-50 text-violet-800" };
-  }
-  if (stories.every((s) => s.status === "done" || s.status === "approved")) {
+  if (stories.every((s) => s.status === "done")) {
     return { label: "Done", className: "border-emerald-200/90 bg-emerald-50 text-emerald-800" };
   }
+  if (stories.every((s) => s.status === "review" || s.status === "done")) {
+    return { label: "Review / Testing", className: "border-violet-200/90 bg-violet-50 text-violet-800" };
+  }
   const hasProgress = stories.some(
-    (s) => s.status === "inProgress" || s.status === "done" || s.status === "approved",
+    (s) => s.status === "inProgress" || s.status === "review" || s.status === "done",
   );
   if (hasProgress) {
     return { label: "In Progress", className: "border-blue-200/90 bg-blue-50 text-blue-800" };

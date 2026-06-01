@@ -57,13 +57,13 @@ export async function POST(
   }
 
   // Same invariants as the PATCH route — see app/api/stories/[id]/route.ts
-  // for the full explanation. Done/approved stories have daysLeft=0; an
+  // for the full explanation. Done/done stories have daysLeft=0; an
   // unset daysLeft initializes to estimatedDays so health math has a value
   // to read; daysLeft is clamped not to exceed estimatedDays.
   const createStatus = parsed.data.status ?? StoryStatus.todo;
   const createEstimatedDays = parsed.data.estimatedDays ?? null;
   let createDaysLeft = parsed.data.daysLeft ?? null;
-  if (createStatus === "done" || createStatus === "approved") {
+  if (createStatus === "review" || createStatus === "done") {
     createDaysLeft = 0;
   } else if (createDaysLeft == null && createEstimatedDays != null) {
     createDaysLeft = createEstimatedDays;

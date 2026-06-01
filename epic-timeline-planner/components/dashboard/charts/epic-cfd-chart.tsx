@@ -108,8 +108,8 @@ export function EpicCfdChart({ initiatives, year, sprint, team, epicId }: Props)
     label: string;
     todo: number | null;
     inProgress: number | null;
+    review: number | null;
     done: number | null;
-    approved: number | null;
     isToday: boolean;
   };
   const rows: Row[] = [];
@@ -118,22 +118,22 @@ export function EpicCfdChart({ initiatives, year, sprint, team, epicId }: Props)
     const dayMs = day.getTime();
     const isFuture = dayMs > todayMs;
     if (isFuture) {
-      rows.push({ label: shortLabel(day), todo: null, inProgress: null, done: null, approved: null, isToday: false });
+      rows.push({ label: shortLabel(day), todo: null, inProgress: null, review: null, done: null, isToday: false });
       continue;
     }
     let todo = 0;
     let inProgress = 0;
+    let review = 0;
     let done = 0;
-    let approved = 0;
     for (const story of stories) {
       const snap = latestSnapshotAtDay(story, day);
       const status = snap?.status ?? story.status;
       if (status === "todo") todo += 1;
       else if (status === "inProgress") inProgress += 1;
+      else if (status === "review") review += 1;
       else if (status === "done") done += 1;
-      else if (status === "approved") approved += 1;
     }
-    rows.push({ label: shortLabel(day), todo, inProgress, done, approved, isToday: dayMs === todayMs });
+    rows.push({ label: shortLabel(day), todo, inProgress, review, done, isToday: dayMs === todayMs });
   }
 
   const todayLabel = rows.find((r) => r.isToday)?.label;
@@ -171,8 +171,8 @@ export function EpicCfdChart({ initiatives, year, sprint, team, epicId }: Props)
         )}
         <Area type="monotone" dataKey="todo" stackId="1" stroke="#94a3b8" fill="#f1f5f9" name="To do" connectNulls={false} />
         <Area type="monotone" dataKey="inProgress" stackId="1" stroke="#f59e0b" fill="#fef3c7" name="In progress" connectNulls={false} />
+        <Area type="monotone" dataKey="review" stackId="1" stroke="#8b5cf6" fill="#ede9fe" name="Review / Testing" connectNulls={false} />
         <Area type="monotone" dataKey="done" stackId="1" stroke="#10b981" fill="#d1fae5" name="Done" connectNulls={false} />
-        <Area type="monotone" dataKey="approved" stackId="1" stroke="#6366f1" fill="#e0e7ff" name="Approved" connectNulls={false} />
       </AreaChart>
     </ResponsiveContainer>
   );

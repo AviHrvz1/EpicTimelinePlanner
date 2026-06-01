@@ -27,8 +27,8 @@ export function CfdChart({ initiatives, year, quarter, sprint, team }: Props) {
       isToday: bd.isToday,
       todo: null,
       inProgress: null,
+      review: null,
       done: null,
-      approved: null,
     };
   });
 
@@ -67,8 +67,8 @@ export function CfdChart({ initiatives, year, quarter, sprint, team }: Props) {
         )}
         <Area type="monotone" dataKey="todo" stackId="1" stroke="#94a3b8" fill="#f1f5f9" name="To do" connectNulls={false} />
         <Area type="monotone" dataKey="inProgress" stackId="1" stroke="#f59e0b" fill="#fef3c7" name="In progress" connectNulls={false} />
+        <Area type="monotone" dataKey="review" stackId="1" stroke="#8b5cf6" fill="#ede9fe" name="Review / Testing" connectNulls={false} />
         <Area type="monotone" dataKey="done" stackId="1" stroke="#10b981" fill="#d1fae5" name="Done" connectNulls={false} />
-        <Area type="monotone" dataKey="approved" stackId="1" stroke="#6366f1" fill="#e0e7ff" name="Approved" connectNulls={false} />
       </AreaChart>
     </ResponsiveContainer>
   );

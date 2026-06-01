@@ -5,8 +5,8 @@ import type { InitiativeItem } from "@/lib/types";
 export const KANBAN_COLUMN_STATUSES: StoryStatus[] = [
   StoryStatus.todo,
   StoryStatus.inProgress,
+  StoryStatus.review,
   StoryStatus.done,
-  StoryStatus.approved,
 ];
 
 export type KanbanStoryOrderPatch = {
@@ -38,8 +38,8 @@ export function kanbanOrderedIdsByStatus(rows: BoardStoryRow[]): Record<StorySta
   const out: Record<StoryStatus, string[]> = {
     [StoryStatus.todo]: [],
     [StoryStatus.inProgress]: [],
+    [StoryStatus.review]: [],
     [StoryStatus.done]: [],
-    [StoryStatus.approved]: [],
   };
   for (const st of KANBAN_COLUMN_STATUSES) {
     const inCol = rows.filter((r) => r.story.status === st);

@@ -29,7 +29,7 @@ const bodySchema = z.object({
  *      Epic under the new initiative linked via `parentEpicId`, all plan
  *      fields `null` (it lives in the unscheduled middle panel until the
  *      planner opens the date popover).
- *   3. Migrates each unfinished story (`status ∉ {done, approved}` AND
+ *   3. Migrates each unfinished story (`status ∉ {review, done}` AND
  *      `sprint === YEAR_SPRINT_MAX`) onto the continuation epic by patching
  *      `epicId` and clearing `sprint` so the story shows as unscheduled in
  *      the new year. Writes a history line describing the move.
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           userStories: {
             where: {
               sprint: YEAR_SPRINT_MAX,
-              status: { notIn: [StoryStatus.done, StoryStatus.approved] },
+              status: { notIn: [StoryStatus.review, StoryStatus.done] },
             },
             select: { id: true, title: true, estimatedDays: true, daysLeft: true, status: true },
           },

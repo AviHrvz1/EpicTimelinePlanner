@@ -587,7 +587,7 @@ export function InitiativeFormDialog({
   }, [initiative?.epics]);
 
   /** Remaining work across every child story under every child epic.
-   *  Completed (done/approved) stories contribute 0; open stories use
+   *  Completed (review/done) stories contribute 0; open stories use
    *  `daysLeft`, falling back to their estimate when the story hasn't
    *  reported progress yet. Same rule as the epic dialog so the two
    *  fields agree. */
@@ -596,7 +596,7 @@ export function InitiativeFormDialog({
       (sum, row) =>
         sum +
         (row.userStories ?? []).reduce((storySum, story) => {
-          if (story.status === "done" || story.status === "approved") return storySum;
+          if (story.status === "review" || story.status === "done") return storySum;
           const left = story.daysLeft ?? story.estimatedDays ?? 0;
           return storySum + Math.max(0, left);
         }, 0),
@@ -1075,7 +1075,7 @@ export function InitiativeFormDialog({
                     <span className="group relative inline-flex items-center">
                       <Info className="size-3.5 text-slate-400" aria-label="Roll-up of remaining child story days" />
                       <span role="tooltip" className={infoTooltipClass}>
-                        Total remaining days across every child story. Completed (done/approved) stories count as 0; open stories use `daysLeft` (or their estimate when unreported).
+                        Total remaining days across every child story. Completed (review/done) stories count as 0; open stories use `daysLeft` (or their estimate when unreported).
                       </span>
                     </span>
                   </div>

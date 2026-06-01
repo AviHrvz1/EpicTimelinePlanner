@@ -20,8 +20,8 @@ import { SnapshotHeaderStrip } from "@/components/timeline/snapshot-header-strip
 const STATUS_COLORS: Record<string, string> = {
   "To do": "#f59e0b",
   "In progress": "#3b82f6",
+  "Review / Testing": "#8b5cf6",
   Done: "#10b981",
-  Approved: "#8b5cf6",
 };
 
 const LINE_PALETTE = ["#2563eb", "#0d9488", "#7c3aed", "#ea580c", "#14b8a6", "#be185d", "#0284c7"];

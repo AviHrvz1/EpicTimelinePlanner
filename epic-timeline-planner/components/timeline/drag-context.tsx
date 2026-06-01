@@ -119,7 +119,7 @@ const initiativeCollision: CollisionDetection = (args) => {
 const epicPlanCollision: CollisionDetection = (args) => {
   /** Roadmap month cells use `month:` — same targets as initiatives so epics can land on quarter months. */
   const isKanbanTodoDrop = (id: string) => /^kanban:(\d+):todo$/.test(id);
-  const isEpicKanbanDrop = (id: string) => /^epic-kanban:\d+:(todo|inProgress|done|approved)$/.test(id);
+  const isEpicKanbanDrop = (id: string) => /^epic-kanban:\d+:(todo|inProgress|review|done)$/.test(id);
   const isMonthTeamSlotDrop = (id: string) => parseMonthTeamSlotDropId(id) != null;
   const isSprintCapacityDrop = (id: string) => id.startsWith("capacity:");
   const isMonthTeamCapacityDrop = (id: string) => id.startsWith("month-capacity:");

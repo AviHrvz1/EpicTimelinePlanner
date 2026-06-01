@@ -60,8 +60,8 @@ export function SprintLoadChart({ initiatives, year, quarter, sprint, team, work
   return (
     <div className="max-h-[180px] overflow-y-auto space-y-1.5 pr-1">
       {rows.map((row) => {
-        const done = Math.max(0, row.estTotal - row.daysLeft);
-        const pct = row.estTotal > 0 ? Math.round((done / row.estTotal) * 100) : 100;
+        const review = Math.max(0, row.estTotal - row.daysLeft);
+        const pct = row.estTotal > 0 ? Math.round((review / row.estTotal) * 100) : 100;
         const atRisk = sprintDaysLeft > 0 && row.daysLeft > sprintDaysLeft;
         return (
           <div key={row.key} className="rounded-lg bg-slate-50 px-2 py-1.5">

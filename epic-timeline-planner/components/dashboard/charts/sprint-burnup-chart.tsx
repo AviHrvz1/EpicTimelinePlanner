@@ -26,11 +26,11 @@ export function SprintBurnupChart({ initiatives, year, quarter, sprint, team, me
   // Extend to full sprint x-axis. Future days have null actuals so the line stops at today.
   const pastByLabel = new Map(pastDays.map((d) => [d.labelShort, d]));
   const lastPast = pastDays[pastDays.length - 1];
-  const finalScope = lastPast ? lastPast.todo + lastPast.inProgress + lastPast.done + lastPast.approved : 0;
+  const finalScope = lastPast ? lastPast.todo + lastPast.inProgress + lastPast.review + lastPast.done : 0;
   const data = allDays.map((bd, i) => {
     const past = pastByLabel.get(bd.labelShort);
-    const scope = past ? past.todo + past.inProgress + past.done + past.approved : finalScope;
-    const completed = past != null ? past.done + past.approved : null;
+    const scope = past ? past.todo + past.inProgress + past.review + past.done : finalScope;
+    const completed = past != null ? past.review + past.done : null;
     const ideal = finalScope > 0 ? Math.round((finalScope * i) / Math.max(allDays.length - 1, 1)) : 0;
     return { labelShort: bd.labelShort, scope, completed, ideal, isToday: bd.isToday };
   });

@@ -5,10 +5,10 @@ import { buildSprintAnalytics } from "@/lib/sprint-analytics";
 import type { InitiativeItem } from "@/lib/types";
 
 const SEGMENTS = [
-  { key: "todo" as const,       label: "To do",       color: "#f59e0b" },
-  { key: "inProgress" as const, label: "In progress", color: "#3b82f6" },
-  { key: "done" as const,       label: "Done",        color: "#10b981" },
-  { key: "approved" as const,   label: "Approved",    color: "#8b5cf6" },
+  { key: "todo" as const,       label: "To do",            color: "#f59e0b" },
+  { key: "inProgress" as const, label: "In progress",      color: "#3b82f6" },
+  { key: "review" as const,     label: "Review / Testing", color: "#8b5cf6" },
+  { key: "done" as const,       label: "Done",             color: "#10b981" },
 ];
 
 type Props = {
@@ -33,8 +33,8 @@ export function WorkloadBalanceChart({ initiatives, year, quarter, sprint, team,
           name: t.teamLabel,
           "To do": useDays ? Number(buckets.todo.toFixed(1)) : buckets.todo,
           "In progress": useDays ? Number(buckets.inProgress.toFixed(1)) : buckets.inProgress,
+          "Review / Testing": useDays ? Number(buckets.review.toFixed(1)) : buckets.review,
           "Done": useDays ? Number(buckets.done.toFixed(1)) : buckets.done,
-          "Approved": useDays ? Number(buckets.approved.toFixed(1)) : buckets.approved,
         };
       })
     : analytics.workloadByAssignee.map((r) => {
@@ -43,8 +43,8 @@ export function WorkloadBalanceChart({ initiatives, year, quarter, sprint, team,
           name: r.assignee.split(/\s+/)[0] ?? r.assignee,
           "To do": useDays ? Number(buckets.todo.toFixed(1)) : buckets.todo,
           "In progress": useDays ? Number(buckets.inProgress.toFixed(1)) : buckets.inProgress,
+          "Review / Testing": useDays ? Number(buckets.review.toFixed(1)) : buckets.review,
           "Done": useDays ? Number(buckets.done.toFixed(1)) : buckets.done,
-          "Approved": useDays ? Number(buckets.approved.toFixed(1)) : buckets.approved,
         };
       });
 

@@ -1,7 +1,7 @@
 /**
  * Effort-weighted progress + health computation for epic and initiative bars.
  *
- * Rationale: the previous "stories done / total stories" formula treated every
+ * Rationale: the previous "stories review / total stories" formula treated every
  * story as equal, which makes the year-roadmap bars lie when story sizes vary.
  * This module computes progress as "estimated effort burned down" and pairs it
  * with an at-risk verdict by comparing remaining effort against working days
@@ -10,7 +10,7 @@
  * The API layer (see app/api/stories/[id]/route.ts) maintains three invariants
  * on (estimatedDays, daysLeft, status) so this module can trust the inputs
  * without fallbacks:
- *   - done/approved stories always have daysLeft = 0
+ *   - review/done stories always have daysLeft = 0
  *   - daysLeft is initialized to estimatedDays when a story is sized
  *   - daysLeft <= estimatedDays always
  */
@@ -23,7 +23,7 @@ export type HealthStatus = "done" | "onTrack" | "watch" | "atRisk" | "overdue";
  *  - `days` (default) — sum of Est. Days across child stories ("Σ Child
  *    Stories" in the UI). Burn-down comes from each story's daysLeft.
  *    Most accurate once user stories are defined.
- *  - `stories` — headcount of done stories / total stories. Treats every
+ *  - `stories` — headcount of review stories / total stories. Treats every
  *    story as equal weight, ignores days entirely.
  *  - `epicEst` — uses the epic's own `originalEstimateDays` ("Σ Epic Est."
  *    in the UI). Burn-down is time-based (working days elapsed since
@@ -61,7 +61,7 @@ export interface ProgressInputs {
 export interface ProgressResult {
   /** Effort-weighted progress 0–100. 0 when no stories have estimatedDays. */
   progressPercent: number;
-  /** Sum of daysLeft across not-yet-done estimated stories. */
+  /** Sum of daysLeft across not-yet-review estimated stories. */
   remainingEffort: number;
   /** Sum of estimatedDays across all estimated stories. */
   totalEffort: number;
@@ -83,7 +83,7 @@ export const HEALTH_ON_TRACK_DELTA = 1;
 /** Above this delta the bar is "atRisk" (red). Between this and on-track is "watch" (amber). */
 export const HEALTH_AT_RISK_DELTA = 4;
 
-const DONE_STATUSES = new Set(["done", "approved"]);
+const DONE_STATUSES = new Set(["review", "done"]);
 
 /** Count of weekdays (Mon–Fri) in the closed interval [from, to]. Returns 0 if to is before from. */
 export function workingDaysBetween(from: Date, to: Date): number {
@@ -118,7 +118,7 @@ export function computeProgress(input: ProgressInputs): ProgressResult {
       continue;
     }
     totalEffort += story.estimatedDays;
-    // Done/approved stories have daysLeft = 0 by API invariant; daysLeft is
+    // Review + done stories have daysLeft = 0 by API invariant; daysLeft is
     // never null for estimated stories thanks to the auto-init rule. Defensive
     // fallback only matters if the invariant is somehow violated by a manual
     // DB edit — fall back to estimatedDays in that case (assume no progress).
@@ -175,7 +175,7 @@ export function computeProgress(input: ProgressInputs): ProgressResult {
     }
   }
 
-  // Days/epicEst basis uses effort burn-down; stories basis uses headcount of done.
+  // Days/epicEst basis uses effort burn-down; stories basis uses headcount of review.
   // All clamp to 0..100. Stories basis treats unestimated stories the same
   // as estimated ones (it doesn't care about days at all).
   const daysProgressPercent =

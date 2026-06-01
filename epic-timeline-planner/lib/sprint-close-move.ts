@@ -11,13 +11,13 @@ import type { InitiativeItem } from "@/lib/types";
  * A story is movable when:
  *   - It belongs to the active sprint's board scope (same scope the kanban
  *     and capacity views render), and
- *   - Its status is `todo`, `inProgress`, or `done`.
+ *   - Its status is `todo`, `inProgress`, or `review`.
  *
- * `approved` is intentionally excluded — approved work is shipped and stays
- * on the closed sprint board after the move. The `done` column is included
- * because "done but unsigned-off" is still work the team needs to carry
+ * `done` is intentionally excluded — done work is shipped and stays
+ * on the closed sprint board after the move. The `review` column is included
+ * because "review but unsigned-off" is still work the team needs to carry
  * forward; the planner can untick individual rows in the modal if they want
- * a specific done card to remain.
+ * a specific review card to remain.
  */
 export function collectMovableStoriesForSprint(
   initiatives: InitiativeItem[],
@@ -26,7 +26,7 @@ export function collectMovableStoriesForSprint(
   filterEpicTeamIds?: string[] | null,
 ): BoardStoryRow[] {
   return collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamIds).filter(
-    (row) => row.story.status !== StoryStatus.approved,
+    (row) => row.story.status !== StoryStatus.done,
   );
 }
 

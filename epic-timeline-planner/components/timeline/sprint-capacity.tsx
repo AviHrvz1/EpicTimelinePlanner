@@ -166,7 +166,7 @@ type CapacityStoryCardModel = {
   estimatedDays: number;
   daysLeft: number | null;
   assigneeLabel: string;
-  status: "todo" | "inProgress" | "done" | "approved";
+  status: "todo" | "inProgress" | "review" | "done";
   /** Pill summarising rollover lineage relative to the currently-viewed
    *  sprint. `null` when the story has no rollover history for this view. */
   rolloverPill: { dir: "in" | "out"; sprint: number; chainDepth: number } | null;
@@ -370,11 +370,11 @@ function CapacityStoryCard({
                 "shrink-0 rounded border px-1 py-px text-[10px] font-medium leading-tight",
                 card.status === "todo"       && "border-amber-200/80 bg-amber-50 text-amber-800",
                 card.status === "inProgress" && "border-blue-200/80 bg-blue-50 text-blue-800",
+                card.status === "review"     && "border-violet-200/80 bg-violet-50 text-violet-800",
                 card.status === "done"       && "border-emerald-200/80 bg-emerald-50 text-emerald-800",
-                card.status === "approved"   && "border-violet-200/80 bg-violet-50 text-violet-800",
               )}
             >
-              {card.status === "todo" ? "To do" : card.status === "inProgress" ? "In progress" : card.status === "done" ? "Done" : "Approved"}
+              {card.status === "todo" ? "To do" : card.status === "inProgress" ? "In progress" : card.status === "review" ? "Review / Testing" : "Done"}
             </span>
           </div>
           <div className="grid shrink-0 grid-cols-[auto_2.5rem] items-center gap-x-2 gap-y-1">

@@ -7,8 +7,8 @@ import type { InitiativeItem } from "@/lib/types";
 const STATUS_COLORS: Record<string, string> = {
   "To do": "#f59e0b",
   "In progress": "#3b82f6",
+  "Review / Testing": "#8b5cf6",
   "Done": "#10b981",
-  "Approved": "#8b5cf6",
 };
 
 type Props = {
@@ -18,7 +18,7 @@ type Props = {
   sprint: number;
   team?: string | null;
   /** When provided, slices + legend rows become clickable and pass the
-   *  status label ("To do", "In progress", "Done", "Approved") up. */
+   *  status label ("To do", "In progress", "Review / Testing", "Done") up. */
   onSliceClick?: (statusLabel: string) => void;
 };
 

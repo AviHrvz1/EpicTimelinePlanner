@@ -65,7 +65,7 @@ function isoForDayInstant(year: number, month: number, day: number, hour: number
 }
 
 function statusBreakdown(p: BoundaryPrediction): string {
-  return `${p.total} total · ${p.todo} todo · ${p.inProgress} inProgress · ${p.done} done · ${p.approved} approved`;
+  return `${p.total} total · ${p.todo} todo · ${p.inProgress} inProgress · ${p.review} review · ${p.done} done`;
 }
 
 export function TimeDebuggerPanel({
@@ -119,7 +119,7 @@ export function TimeDebuggerPanel({
       afterLabel: "Mar 16, 00:30",
       afterIso: isoForDayInstant(planYear, 3, 16, 0, 30),
       description:
-        "Within March, within Q1. Auto-rollover is gone — Sprint 5 close surfaces a Move button. After Step 2 + Move confirm, Sprint 5 keeps only its approved cards; the rest land in Sprint 6.",
+        "Within March, within Q1. Auto-rollover is gone — Sprint 5 close surfaces a Move button. After Step 2 + Move confirm, Sprint 5 keeps only its done cards; the rest land in Sprint 6.",
       prediction: predictions.sprint,
       beforeChecks: [
         {
@@ -137,7 +137,7 @@ export function TimeDebuggerPanel({
         {
           id: "sprint-5-status-before",
           title: "Sprint 5 Status charts",
-          expected: `Pie reads ${predictions.sprint.todo} todo / ${predictions.sprint.inProgress} inProgress / ${predictions.sprint.done} done / ${predictions.sprint.approved} approved. No charts framing strip.`,
+          expected: `Pie reads ${predictions.sprint.todo} todo / ${predictions.sprint.inProgress} inProgress / ${predictions.sprint.review} review / ${predictions.sprint.done} done. No charts framing strip.`,
           openUrl: `?view=roadmap&sprint=5&sprintView=status`,
         },
         {
@@ -151,31 +151,31 @@ export function TimeDebuggerPanel({
         {
           id: "sprint-5-kanban-after",
           title: "Sprint 5 kanban (closed)",
-          expected: `Not dimmed. Snapshot strip + a "Move ${predictions.sprint.willRoll + predictions.sprint.done} unfinished to Sprint 6" button. Clicking it opens the confirmation modal with todo + inProgress + done pre-checked (${predictions.sprint.approved} approved excluded).`,
+          expected: `Not dimmed. Snapshot strip + a "Move ${predictions.sprint.willRoll + predictions.sprint.review} unfinished to Sprint 6" button. Clicking it opens the confirmation modal with todo + inProgress + review pre-checked (${predictions.sprint.done} done excluded).`,
           openUrl: `?view=roadmap&sprint=5`,
         },
         {
           id: "sprint-5-kanban-after-move",
           title: "Sprint 5 kanban after Move confirm",
-          expected: `Only the ${predictions.sprint.approved} approved card${predictions.sprint.approved === 1 ? "" : "s"} remain. To Do / In Progress / Done columns are empty.`,
+          expected: `Only the ${predictions.sprint.done} done card${predictions.sprint.done === 1 ? "" : "s"} remain in the Done column. To Do / In Progress / Review / Testing columns are empty.`,
           openUrl: `?view=roadmap&sprint=5`,
         },
         {
           id: "sprint-5-capacity-after",
           title: "Sprint 5 capacity (closed)",
-          expected: `Not dimmed. Move button visible. After Move confirm: only approved cards remain in their assignee buckets.`,
+          expected: `Not dimmed. Move button visible. After Move confirm: only done cards remain in their assignee buckets.`,
           openUrl: `?view=roadmap&sprint=5&sprintView=capacity`,
         },
         {
           id: "sprint-5-status-after",
           title: "Sprint 5 Status charts (closed)",
-          expected: `Charts framing strip. Pie still reads ${predictions.sprint.todo} todo / ${predictions.sprint.inProgress} inProgress / ${predictions.sprint.done} done / ${predictions.sprint.approved} approved (frozen at Mar 15 close, not current state — even after Move confirm).`,
+          expected: `Charts framing strip. Pie still reads ${predictions.sprint.todo} todo / ${predictions.sprint.inProgress} inProgress / ${predictions.sprint.review} review / ${predictions.sprint.done} done (frozen at Mar 15 close, not current state — even after Move confirm).`,
           openUrl: `?view=roadmap&sprint=5&sprintView=status`,
         },
         {
           id: "sprint-6-kanban-after",
           title: "Sprint 6 kanban (active)",
-          expected: `After Move confirm: ${predictions.sprint.willRoll + predictions.sprint.done} carried-over cards across ${predictions.sprint.epicCount} epic${predictions.sprint.epicCount === 1 ? "" : "s"}, each with ↩ S5 pill.`,
+          expected: `After Move confirm: ${predictions.sprint.willRoll + predictions.sprint.review} carried-over cards across ${predictions.sprint.epicCount} epic${predictions.sprint.epicCount === 1 ? "" : "s"}, each with ↩ S5 pill.`,
           openUrl: `?view=roadmap&sprint=6`,
         },
       ],
@@ -395,7 +395,7 @@ export function TimeDebuggerPanel({
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-[13px] font-bold uppercase tracking-wider text-slate-500">
-            When you&rsquo;re done debugging
+            When you&rsquo;re review debugging
           </h2>
           <div className="mt-3">
             <button

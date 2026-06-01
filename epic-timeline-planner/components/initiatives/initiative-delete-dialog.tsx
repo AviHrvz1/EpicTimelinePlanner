@@ -11,14 +11,14 @@ import { createPortal } from "react-dom";
 const STATUS_BADGE: Record<string, string> = {
   todo:       "bg-slate-100 text-slate-600",
   inProgress: "bg-blue-100 text-blue-700",
-  done:       "bg-emerald-100 text-emerald-700",
-  approved:   "bg-violet-100 text-violet-700",
+  review:       "bg-emerald-100 text-emerald-700",
+  done:   "bg-violet-100 text-violet-700",
 };
 const STATUS_LABEL: Record<string, string> = {
   todo:       "To Do",
   inProgress: "In Progress",
-  done:       "Done",
-  approved:   "Approved",
+  review:       "Done",
+  done:   "Approved",
 };
 
 function epicScheduleLabel(epic: EpicItem): string {

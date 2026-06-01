@@ -149,7 +149,7 @@ function openInsightsTab(kind: "epic" | "initiative", id: string) {
  *  2. `settling`    — children mount underneath (opacity 0) so React commits
  *     the heavy tree off-screen while the skeleton is still painted on top.
  *  3. `ready`       — fade out the skeleton + fade in the children together.
- *  4. `done`        — skeleton unmounts after the fade completes.
+ *  4. `review`        — skeleton unmounts after the fade completes.
  *
  * The two stacked rAFs in step 2 → 3 give charts a paint to measure with
  * `ResponsiveContainer` before the fade-in starts. Without that buffer, the
@@ -206,7 +206,7 @@ function DeferredMount({
       >
         {children}
       </div>
-      {/* Skeleton — overlayed on top, fades to 0 in `ready`, then unmounts in `done`. */}
+      {/* Skeleton — overlayed on top, fades to 0 in `ready`, then unmounts in `review`. */}
       <div
         aria-hidden
         className={cn(
@@ -547,7 +547,7 @@ function GanttLaneRow({
     "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
   const stories = (initiative.epics ?? []).flatMap((epic) => epic.userStories ?? []);
   const totalStories = stories.length;
-  const finishedStories = stories.filter((story) => story.status === "done" || story.status === "approved").length;
+  const finishedStories = stories.filter((story) => story.status === "review" || story.status === "done").length;
   const completionPercent = totalStories > 0 ? Math.round((finishedStories / totalStories) * 100) : 0;
 
   return (
@@ -577,7 +577,7 @@ function GanttLaneRow({
               color={initiative.color}
               progressPercent={completionPercent}
               progressLabel={
-                totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories"
+                totalStories > 0 ? `${finishedStories}/${totalStories} review or done` : "No user stories"
               }
               isResizing={Boolean(rz)}
               emphasizeFlash={emphasize}
@@ -1225,7 +1225,7 @@ function EpicGanttLaneRow({
 }: EpicGanttLaneRowProps) {
   const stories = epic.userStories ?? [];
   const totalStories = stories.length;
-  const finishedStories = stories.filter((story) => story.status === "done" || story.status === "approved").length;
+  const finishedStories = stories.filter((story) => story.status === "review" || story.status === "done").length;
   const storyCountPercent = totalStories > 0 ? Math.round((finishedStories / totalStories) * 100) : 0;
   const completionPercent = effortProgressPercent ?? storyCountPercent;
   const barColor = epic.color?.trim() ? epic.color : initiative.color;
@@ -1334,7 +1334,7 @@ function EpicGanttLaneRow({
             color={barColor}
             progressPercent={completionPercent}
             progressLabel={
-              healthTooltip ?? (totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories")
+              healthTooltip ?? (totalStories > 0 ? `${finishedStories}/${totalStories} review or done` : "No user stories")
             }
             emphasizeFlash={emphasize}
             emphasizeTick={emphasizeTick}
@@ -1382,7 +1382,7 @@ function EpicGanttLaneRow({
             color={barColor}
             progressPercent={completionPercent}
             progressLabel={
-              healthTooltip ?? (totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories")
+              healthTooltip ?? (totalStories > 0 ? `${finishedStories}/${totalStories} review or done` : "No user stories")
             }
             emphasizeFlash={emphasize}
             emphasizeTick={emphasizeTick}
@@ -1454,7 +1454,7 @@ function MonthInitiativeGanttLaneRow({
 }) {
   const stories = (initiative.epics ?? []).flatMap((epic) => epic.userStories ?? []);
   const totalStories = stories.length;
-  const finishedStories = stories.filter((story) => story.status === "done" || story.status === "approved").length;
+  const finishedStories = stories.filter((story) => story.status === "review" || story.status === "done").length;
   const storyCountPercent = totalStories > 0 ? Math.round((finishedStories / totalStories) * 100) : 0;
   const completionPercent = effortProgressPercent ?? storyCountPercent;
 
@@ -1480,7 +1480,7 @@ function MonthInitiativeGanttLaneRow({
             icon={initiative.icon}
             color={initiative.color}
             progressPercent={completionPercent}
-            progressLabel={healthTooltip ?? (totalStories > 0 ? `${finishedStories}/${totalStories} done or approved` : "No user stories")}
+            progressLabel={healthTooltip ?? (totalStories > 0 ? `${finishedStories}/${totalStories} review or done` : "No user stories")}
             showProgress={showProgress}
             healthStatus={healthStatus}
             healthTooltip={healthTooltip}

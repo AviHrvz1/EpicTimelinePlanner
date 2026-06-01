@@ -80,11 +80,11 @@ export function MiniGanttCard({ initiatives, year, quarter, team, teams }: Props
       if (endClamped <= startClamped) continue;
       const leftPct = ((startClamped - qStart.getTime()) / totalMs) * 100;
       const widthPct = ((endClamped - startClamped) / totalMs) * 100;
-      // Progress = done+approved / total stories under the epic (matches the all-quarters Gantt).
+      // Progress = review+done / total stories under the epic (matches the all-quarters Gantt).
       const stories = epic.userStories ?? [];
       const total = stories.length;
-      const done = stories.filter((s) => s.status === "done" || s.status === "approved").length;
-      const progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
+      const review = stories.filter((s) => s.status === "review" || s.status === "done").length;
+      const progressPct = total > 0 ? Math.round((review / total) * 100) : 0;
       rows.push({
         id: epic.id,
         title: epic.title,

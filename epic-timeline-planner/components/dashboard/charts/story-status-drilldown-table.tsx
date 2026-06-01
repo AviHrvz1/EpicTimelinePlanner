@@ -25,32 +25,32 @@ const EMPTY_FILTER: ColFilter = { title: "", sprint: "", assignee: "", status: "
 const STATUS_LABEL: Record<string, string> = {
   todo: "To do",
   inProgress: "In progress",
+  review: "Review / Testing",
   done: "Done",
-  approved: "Approved",
 };
 
 const STATUS_SORT_RANK: Record<string, number> = {
   todo: 0,
   inProgress: 1,
-  done: 2,
-  approved: 3,
+  review: 2,
+  done: 3,
 };
 
 function statusFromLabel(label: string): UserStoryItem["status"] | null {
   if (label === "To do") return "todo";
   if (label === "In progress") return "inProgress";
+  if (label === "Review / Testing") return "review";
   if (label === "Done") return "done";
-  if (label === "Approved") return "approved";
   return null;
 }
 
 function StatusPill({ status }: { status: UserStoryItem["status"] }) {
   const meta = (() => {
     switch (status) {
-      case "approved":
-        return { label: "Approved", Icon: CheckCircle2, color: "text-violet-600" };
       case "done":
-        return { label: "Done", Icon: CheckCheck, color: "text-emerald-600" };
+        return { label: "Done", Icon: CheckCircle2, color: "text-emerald-600" };
+      case "review":
+        return { label: "Review / Testing", Icon: CheckCheck, color: "text-violet-600" };
       case "inProgress":
         return { label: "In progress", Icon: PlayCircle, color: "text-blue-600" };
       default:

@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
  *      filter state slot. The effect fires after React commits the
  *      transition (which is the slow backlog re-render), and one rAF
  *      later the elapsed time is recorded — that's the time from the
- *      click to "the new filtered table is on screen and paint is done".
+ *      click to "the new filtered table is on screen and paint is review".
  *
  * Without this split, the previous implementation reported just the
  * synchronous local-state paint (~300ms) and missed the transition

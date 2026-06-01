@@ -207,7 +207,7 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
   let previousInitiativeBottomRow = 0;
   // Epics whose health curve was overridden to "watch" or "atRisk" — kept
   // here so a post-cleanup pass can re-mark their stories with the right
-  // open/done mix to land the verdict. Without this final pass the
+  // open/review mix to land the verdict. Without this final pass the
   // closed-sprint cleanup + current-sprint diversify steps would wipe
   // the slow-burn snapshots and push the epic back to On Track / Done.
   const overrideEpicsByCurve: Record<"watch" | "atRisk", string[]> = { watch: [], atRisk: [] };
@@ -442,28 +442,28 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
     }
   }
 
-  // Closed-sprint cleanup: leave a realistic 70/30 mix of `approved`/`done`
-  // instead of 100% approved.
+  // Closed-sprint cleanup: leave a realistic 70/30 mix of `done`/`review`
+  // instead of 100% done.
   //
   // Why this matters for the demo: epic-planner-app has a post-close
   // auto-rollover effect that scans all stories on mount and PATCHes any
   // `todo` / `inProgress` story from a closed sprint into the next open
-  // sprint. (The rollover deliberately leaves `done` and `approved`
+  // sprint. (The rollover deliberately leaves `review` and `done`
   // alone — see [epic-planner-app.tsx].) So:
   //
   // 1. Any `todo` / `inProgress` residuals in closed sprints (from
   //    "behind" curve stories that didn't finish in their sprint window)
-  //    get promoted to `done` here — otherwise the rollover would move
+  //    get promoted to `review` here — otherwise the rollover would move
   //    them forward and empty the retro view.
-  // 2. The remaining `done` stories are split deterministically: ~70%
-  //    become `approved`, ~30% stay `done` (QA hasn't signed off yet).
+  // 2. The remaining `review` stories are split deterministically: ~70%
+  //    become `done`, ~30% stay `review` (QA hasn't signed off yet).
   //
   // Current-sprint stories are unaffected (handled by the diversify
   // pass below).
   const closedStories = await db.userStory.findMany({
     where: {
       sprint: { not: null },
-      status: { not: StoryStatus.approved },
+      status: { not: StoryStatus.done },
     },
     select: { id: true, sprint: true, planYear: true, status: true },
   });
@@ -475,7 +475,7 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
     if (seEnd >= today) continue; // open / future sprint — keep its live status
     if (s.status === StoryStatus.todo || s.status === StoryStatus.inProgress) {
       // Always rescue these from the rollover by completing them. Then
-      // their `done` state runs through the 70/30 split below.
+      // their `review` state runs through the 70/30 split below.
       promoteToDoneIds.push(s.id);
     }
     // Deterministic 70% pick — same id hash trick as the diversify pass.
@@ -486,13 +486,13 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
   if (promoteToDoneIds.length > 0) {
     await db.userStory.updateMany({
       where: { id: { in: promoteToDoneIds } },
-      data: { status: StoryStatus.done },
+      data: { status: StoryStatus.review },
     });
   }
   if (promoteToApprovedIds.length > 0) {
     await db.userStory.updateMany({
       where: { id: { in: promoteToApprovedIds } },
-      data: { status: StoryStatus.approved },
+      data: { status: StoryStatus.done },
     });
   }
   console.log("[demo-builder] closed-sprint status mix", {
@@ -501,11 +501,11 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
   });
 
   // Diversify current-sprint statuses. The snapshot-generated `final` state
-  // only produces `inProgress` / `done` for the current sprint (anything
-  // before today's progress = inProgress, anything fully burned = done) —
+  // only produces `inProgress` / `review` for the current sprint (anything
+  // before today's progress = inProgress, anything fully burned = review) —
   // which means a freshly-seeded current sprint shows only those two
   // statuses on the kanban. Spread ~25% to `todo` (planned but not yet
-  // pulled in) and ~10% of the done ones to `approved` (QA already signed
+  // pulled in) and ~10% of the review ones to `done` (QA already signed
   // off) so all four columns have entries — matching what a real mid-sprint
   // board would look like.
   const currentSprint = currentCalendarYearSprint(today);
@@ -517,7 +517,7 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
   // across the other columns so all four show entries. Deterministic per-id
   // hash bucket so the same id always lands in the same bucket across
   // re-seeds.
-  //   80% approved | 10% done | 5% inProgress | 5% todo
+  //   80% done | 10% review | 5% inProgress | 5% todo
   const toTodoIds: string[] = [];
   const toInProgressIds: string[] = [];
   const toDoneIds: string[] = [];
@@ -553,21 +553,21 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
   if (toDoneIds.length > 0) {
     await db.userStory.updateMany({
       where: { id: { in: toDoneIds } },
-      data: { status: StoryStatus.done, daysLeft: 0 },
+      data: { status: StoryStatus.review, daysLeft: 0 },
     });
   }
   if (toApprovedIds.length > 0) {
     await db.userStory.updateMany({
       where: { id: { in: toApprovedIds } },
-      data: { status: StoryStatus.approved, daysLeft: 0 },
+      data: { status: StoryStatus.done, daysLeft: 0 },
     });
   }
   console.log("[demo-builder] current-sprint mix", {
     sprint: currentSprint,
     todo: toTodoIds.length,
     inProgress: toInProgressIds.length,
-    done: toDoneIds.length,
-    approved: toApprovedIds.length,
+    review: toDoneIds.length,
+    done: toApprovedIds.length,
   });
 
   // ── Backfill: every team should have stories in the last 2 closed sprints
@@ -689,17 +689,17 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
   }
   totalStories += backfillStoriesAdded;
   totalSnapshots += backfillSnapshotsAdded;
-  console.log("[demo-builder] backfill done", { backfillStoriesAdded, backfillSnapshotsAdded });
+  console.log("[demo-builder] backfill review", { backfillStoriesAdded, backfillSnapshotsAdded });
 
   // Apply the same closed-sprint status cleanup to backfilled stories —
-  // promote any `todo` / `inProgress` residual to `done` (rescue from
-  // rollover), then split the resulting `done` set 70/30 approved/done
+  // promote any `todo` / `inProgress` residual to `review` (rescue from
+  // rollover), then split the resulting `review` set 70/30 done/review
   // so the retro pie chart shows status variety.
   const backfillClosed = await db.userStory.findMany({
     where: {
       sprint: { in: lastTwoClosedSprints },
       planYear,
-      status: { not: StoryStatus.approved },
+      status: { not: StoryStatus.done },
     },
     select: { id: true, sprint: true, planYear: true, status: true },
   });
@@ -719,13 +719,13 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
   if (backfillToDoneIds.length > 0) {
     await db.userStory.updateMany({
       where: { id: { in: backfillToDoneIds } },
-      data: { status: StoryStatus.done },
+      data: { status: StoryStatus.review },
     });
   }
   if (backfillToApprovedIds.length > 0) {
     await db.userStory.updateMany({
       where: { id: { in: backfillToApprovedIds } },
-      data: { status: StoryStatus.approved },
+      data: { status: StoryStatus.done },
     });
   }
   console.log("[demo-builder] backfill status mix", {
@@ -752,13 +752,13 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
   // pickDemoEpicHealthOverride epics — so without this pass the verdict
   // collapses back to On Track / Done.
   //
-  // For each override epic we explicitly set a story open/done mix
+  // For each override epic we explicitly set a story open/review mix
   // chosen so progress.ts lands in the desired band:
   //   - atRisk: 60 % stories `todo` with full estimatedDays remaining;
-  //             40 % `done` with daysLeft=0. With ~33 d total scope and
+  //             40 % `review` with daysLeft=0. With ~33 d total scope and
   //             ~3-4 idealRemaining at end of May, deltaDays ~16 → At Risk.
   //   - watch:  30 % stories `todo` with full estimatedDays remaining;
-  //             70 % `done` with daysLeft=0. deltaDays ~6 → Watch.
+  //             70 % `review` with daysLeft=0. deltaDays ~6 → Watch.
   // Picks are deterministic via a per-id hash so the same seed keeps the
   // same stories in each bucket across reseeds.
   const forceEpicHealth = async (epicIds: string[], openFraction: number) => {
@@ -768,7 +768,7 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
     // its last natural-ramp value (e.g. inProgress / 1 day left) — and
     // the chart shows that stale state right up to today, causing a
     // misleading cliff between "yesterday's snapshot says inProgress"
-    // and "today's story.status says done". For each forced story we:
+    // and "today's story.status says review". For each forced story we:
     //   1. Delete any snapshot dated >= today's local midnight so a
     //      late natural-ramp snap can't override the forced state.
     //   2. Insert a fresh snapshot at today's timestamp with the
@@ -782,7 +782,7 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
       if (stories.length === 0) continue;
       const storyById = new Map(stories.map((s) => [s.id, s]));
       // Deterministic sort by id-hash, then mark the first `openFraction`
-      // share as todo (full daysLeft) and the rest as done (daysLeft 0).
+      // share as todo (full daysLeft) and the rest as review (daysLeft 0).
       const hashed = stories.map((s) => {
         let h = 0;
         for (let i = 0; i < s.id.length; i++) h = (h * 31 + s.id.charCodeAt(i)) | 0;
@@ -820,10 +820,10 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
       if (doneIds.length > 0) {
         await db.userStory.updateMany({
           where: { id: { in: doneIds } },
-          data: { status: StoryStatus.done, daysLeft: 0 },
+          data: { status: StoryStatus.review, daysLeft: 0 },
         });
         for (const d of hashed.slice(openCount)) {
-          await writeForcedSnapshot(d.id, StoryStatus.done, 0, d.est);
+          await writeForcedSnapshot(d.id, StoryStatus.review, 0, d.est);
         }
       }
       console.log("[demo-builder] force epic health", { epicId, todoCount: todoIds.length, doneCount: doneIds.length });
@@ -868,7 +868,7 @@ export async function seedScenario(scenario: ScenarioKey): Promise<ScenarioSeedR
   // least 3 distinct epics so continuation creation has to make multiple
   // continuation rows, not just one.
   const candidates = await db.userStory.findMany({
-    where: { sprint: targetSprint, status: { notIn: [StoryStatus.done, StoryStatus.approved] } },
+    where: { sprint: targetSprint, status: { notIn: [StoryStatus.review, StoryStatus.done] } },
     take: 30,
     select: { id: true, epicId: true, estimatedDays: true },
     orderBy: { epicId: "asc" },

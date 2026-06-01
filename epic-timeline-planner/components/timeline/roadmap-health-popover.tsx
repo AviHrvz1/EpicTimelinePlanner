@@ -763,7 +763,7 @@ function BasisHelpBody() {
       iconTint: "bg-emerald-50 text-emerald-700 ring-emerald-100",
       title: "Stories Completed",
       breakdown: [
-        { label: "All views", body: <>% of child stories whose status is <em>Done</em> or <em>Approved</em>.</> },
+        { label: "All views", body: <>% of child stories whose status is <em>Done</em>.</> },
       ],
       note: "Ignores effort estimates entirely — pure headcount.",
     },

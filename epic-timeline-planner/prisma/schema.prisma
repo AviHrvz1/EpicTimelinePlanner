@@ -17,8 +17,8 @@ enum InitiativeStatus {
 enum StoryStatus {
   todo
   inProgress
+  review
   done
-  approved
 }
 
 model Roadmap {

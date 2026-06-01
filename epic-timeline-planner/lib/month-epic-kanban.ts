@@ -25,8 +25,8 @@ export function collectEpicsForMonthStatusBoard(
 /**
  * Rolled-up epic column from child story statuses:
  * — Any story in progress → epic in In progress
- * — All approved → Approved
- * — All done → Done
+ * — All done → Approved
+ * — All review → Done
  * — All to do → To do
  * — Mixed completion otherwise → In progress
  */
@@ -34,8 +34,8 @@ export function deriveEpicAggregateStatus(epic: EpicItem): StoryStatus {
   const stories = epic.userStories ?? [];
   if (stories.length === 0) return StoryStatus.todo;
   if (stories.some((s) => s.status === StoryStatus.inProgress)) return StoryStatus.inProgress;
-  if (stories.every((s) => s.status === StoryStatus.approved)) return StoryStatus.approved;
   if (stories.every((s) => s.status === StoryStatus.done)) return StoryStatus.done;
+  if (stories.every((s) => s.status === StoryStatus.review)) return StoryStatus.review;
   if (stories.every((s) => s.status === StoryStatus.todo)) return StoryStatus.todo;
   return StoryStatus.inProgress;
 }

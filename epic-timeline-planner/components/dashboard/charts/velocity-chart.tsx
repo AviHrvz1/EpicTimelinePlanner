@@ -30,7 +30,7 @@ function startOfDay(d: Date): Date {
 }
 
 function isStoryDone(status: UserStoryItem["status"] | null | undefined): boolean {
-  return status === "done" || status === "approved";
+  return status === "review" || status === "done";
 }
 
 /** Latest snapshot whose date is ≤ cutoff. Returns null if none exist before cutoff. */

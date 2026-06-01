@@ -102,7 +102,7 @@ export function collectMonthScopeEpicsForSprintPanel(
  * Stories rendered on the sprint Kanban: same epic scope as the month /
  * sprint left panel ({@link collectMonthScopeEpicsForSprintPanel}),
  * filtered to the active global sprint via `story.sprint`. Closed sprints
- * naturally only render their approved cards because moved stories now
+ * naturally only render their done cards because moved stories now
  * carry the new sprint number and the planner explicitly chose which to
  * move via the {@link SprintMoveModal}.
  */
@@ -131,8 +131,8 @@ export function deriveEpicSprintStatus(epic: EpicItem, month: number, yearSprint
   const sprintStories = (epic.userStories ?? []).filter((s) => storyMatchesYearSprint(s, month, yearSprint));
   if (sprintStories.length === 0) return StoryStatus.todo;
   if (sprintStories.some((s) => s.status === StoryStatus.inProgress)) return StoryStatus.inProgress;
-  if (sprintStories.every((s) => s.status === StoryStatus.approved)) return StoryStatus.approved;
-  if (sprintStories.every((s) => s.status === StoryStatus.done || s.status === StoryStatus.approved)) return StoryStatus.done;
+  if (sprintStories.every((s) => s.status === StoryStatus.done)) return StoryStatus.done;
+  if (sprintStories.every((s) => s.status === StoryStatus.review || s.status === StoryStatus.done)) return StoryStatus.review;
   if (sprintStories.every((s) => s.status === StoryStatus.todo)) return StoryStatus.todo;
   return StoryStatus.inProgress;
 }

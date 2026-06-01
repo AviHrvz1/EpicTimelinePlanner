@@ -43,8 +43,8 @@ export function pickDemoStoryCurve(seed: string): DemoStoryCurve {
  *
  * IMPORTANT: the chosen (initIdx / teamIdx) pairs must point at epics
  * whose sprint windows STRADDLE today. The closed-sprint cleanup pass in
- * the seeder force-promotes any non-approved story from a closed sprint to
- * `done`, which would wipe out the slow-burn remaining work and silently
+ * the seeder force-promotes any non-done story from a closed sprint to
+ * `review`, which would wipe out the slow-burn remaining work and silently
  * push the override epic back into On Track. Today ≈ end-of-May 2026, so
  * the picks below all land on epics whose plan window contains May.
  *
@@ -116,7 +116,7 @@ export function buildDemoSnapshotSeries(
   // where we'd "actually" be today, not where we'll be at sprint end. We
   // track the latest snapshot whose date is ≤ today and return that as
   // `final` — so:
-  //   - past sprints: final = sprint-end snapshot (done / inProgress-residual)
+  //   - past sprints: final = sprint-end snapshot (review / inProgress-residual)
   //   - current sprint: final = today's snapshot (mid-sprint state)
   //   - future sprints: final stays at initial todo / full estimate
   const todayMs = today.getTime();
@@ -248,7 +248,7 @@ export function buildDemoSnapshotSeries(
       const daysLeft = Math.max(0, Number(raw.toFixed(1)));
       const status: StoryStatus =
         daysLeft === 0
-          ? StoryStatus.done
+          ? StoryStatus.review
           : wdIndex === 1
             ? StoryStatus.inProgress
             : StoryStatus.inProgress;

@@ -560,21 +560,21 @@ function storyStatusMeta(story: UserStoryItem, contextMonth: number | null): {
       showStatusBadge: true,
     };
   }
+  if (story.status === "review") {
+    return {
+      sprintLabel,
+      statusLabel: "Review / Testing",
+      statusClassName:
+        "border border-violet-200/70 bg-violet-50/80 px-1.5 py-0.5 text-[10px] font-medium text-violet-800",
+      showStatusBadge: true,
+    };
+  }
   if (story.status === "done") {
     return {
       sprintLabel,
       statusLabel: "Done",
       statusClassName:
         "border border-emerald-200/70 bg-emerald-50/80 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800",
-      showStatusBadge: true,
-    };
-  }
-  if (story.status === "approved") {
-    return {
-      sprintLabel,
-      statusLabel: "Approved",
-      statusClassName:
-        "border border-violet-200/70 bg-violet-50/80 px-1.5 py-0.5 text-[10px] font-medium text-violet-800",
       showStatusBadge: true,
     };
   }
@@ -617,23 +617,23 @@ function epicCompletionMeta(
 } {
   const stories = epic.userStories ?? [];
   const total = stories.length;
-  const finished = stories.filter((story) => story.status === "done" || story.status === "approved").length;
+  const finished = stories.filter((story) => story.status === "review" || story.status === "done").length;
   if (basis === "stories") {
     const percent = total > 0 ? Math.round((finished / total) * 100) : 0;
     return {
       total,
       finished,
       percent,
-      progressSummary: `${finished}/${total} stories done · ${percent}%`,
+      progressSummary: `${finished}/${total} stories review · ${percent}%`,
       progressAria:
         total > 0
-          ? `${finished} of ${total} stories done or approved`
+          ? `${finished} of ${total} stories review or done`
           : "No user stories",
     };
   }
   if (basis === "epicEst") {
     // Use the epic's own Est. Epic Days as the denominator; numerator is
-    // the sum of estimatedDays on done/approved child stories (so a freshly
+    // the sum of estimatedDays on review/done child stories (so a freshly
     // estimated epic with no delivered stories reads 0%). Lets the middle
     // panel show "how much of the epic budget has been delivered" rather
     // than the rolled-up child story burn-down.
@@ -641,7 +641,7 @@ function epicCompletionMeta(
     let completedEffort = 0;
     for (const story of stories) {
       if (story.estimatedDays == null) continue;
-      if (story.status === "done" || story.status === "approved") {
+      if (story.status === "review" || story.status === "done") {
         completedEffort += story.estimatedDays;
       }
     }
@@ -667,7 +667,7 @@ function epicCompletionMeta(
   for (const story of stories) {
     if (story.estimatedDays == null) continue;
     totalEffort += story.estimatedDays;
-    if (story.status !== "done" && story.status !== "approved") {
+    if (story.status !== "review" && story.status !== "done") {
       remainingEffort += story.daysLeft ?? story.estimatedDays;
     }
   }
@@ -712,20 +712,20 @@ function epicExecutionStatusMeta(epic: EpicItem): { label: string; className: st
       className: "border border-amber-200/90 bg-amber-50 text-amber-800",
     };
   }
-  if (stories.every((s) => s.status === "approved")) {
-    return {
-      label: "Approved",
-      className: "border border-violet-200/90 bg-violet-50 text-violet-800",
-    };
-  }
-  if (stories.every((s) => s.status === "done" || s.status === "approved")) {
+  if (stories.every((s) => s.status === "done")) {
     return {
       label: "Done",
       className: "border border-emerald-200/90 bg-emerald-50 text-emerald-800",
     };
   }
+  if (stories.every((s) => s.status === "review" || s.status === "done")) {
+    return {
+      label: "Review / Testing",
+      className: "border border-violet-200/90 bg-violet-50 text-violet-800",
+    };
+  }
   const hasProgress = stories.some(
-    (s) => s.status === "inProgress" || s.status === "done" || s.status === "approved",
+    (s) => s.status === "inProgress" || s.status === "review" || s.status === "done",
   );
   if (hasProgress) {
     return {
@@ -748,16 +748,16 @@ function initiativeExecutionStatusMeta(initiative: InitiativeItem): { label: str
     };
   }
   const statuses = epics.map((epic) => epicExecutionStatusMeta(epic).label);
-  if (statuses.every((label) => label === "Approved")) {
-    return {
-      label: "Approved",
-      className: "border border-violet-200/90 bg-violet-50 text-violet-800",
-    };
-  }
-  if (statuses.every((label) => label === "Done" || label === "Approved")) {
+  if (statuses.every((label) => label === "Done")) {
     return {
       label: "Done",
       className: "border border-emerald-200/90 bg-emerald-50 text-emerald-800",
+    };
+  }
+  if (statuses.every((label) => label === "Review / Testing" || label === "Done")) {
+    return {
+      label: "Review / Testing",
+      className: "border border-violet-200/90 bg-violet-50 text-violet-800",
     };
   }
   if (statuses.some((label) => label === "In Progress")) {
@@ -782,7 +782,7 @@ type InitiativeListPanelProps = {
   initiatives: InitiativeItem[];
   activeMonth: number | null;
   /**
-   * When true (Roadmap header “Progress” on), show done % and progress bars in initiative/epic cards.
+   * When true (Roadmap header “Progress” on), show review % and progress bars in initiative/epic cards.
    * Parent keeps this in sync with the timeline grid.
    */
   storyProgressDetailsVisible: boolean;
@@ -1307,9 +1307,9 @@ function InitiativeTreeCard({
   const initiativeStories = epics.flatMap((e) => e.userStories ?? []);
   const initiativeStoryTotal = initiativeStories.length;
   const initiativeStoryDone = initiativeStories.filter(
-    (s) => s.status === "done" || s.status === "approved",
+    (s) => s.status === "review" || s.status === "done",
   ).length;
-  // Basis-aware progress: stories mode counts done tickets, days mode burns
+  // Basis-aware progress: stories mode counts review tickets, days mode burns
   // down estimated effort. The summary text reflects whichever is active.
   const initiativeProgress = (() => {
     if (progressBasis === "stories") {
@@ -1319,15 +1319,15 @@ function InitiativeTreeCard({
           : 0;
       return {
         percent,
-        summary: `${initiativeStoryDone}/${initiativeStoryTotal} stories done · ${percent}%`,
+        summary: `${initiativeStoryDone}/${initiativeStoryTotal} stories review · ${percent}%`,
         aria:
           initiativeStoryTotal > 0
-            ? `${initiativeStoryDone} of ${initiativeStoryTotal} stories done or approved`
+            ? `${initiativeStoryDone} of ${initiativeStoryTotal} stories review or done`
             : "No user stories",
       };
     }
     if (progressBasis === "epicEst") {
-      // Sum Est. Epic Days across child epics; "delivered" = sum of done
+      // Sum Est. Epic Days across child epics; "delivered" = sum of review
       // child stories' estimatedDays. Same shape as the per-epic version
       // in `epicCompletionMeta` but rolled up across the initiative.
       const initiativeEpicEst = epics.reduce(
@@ -1337,7 +1337,7 @@ function InitiativeTreeCard({
       let completedEffort = 0;
       for (const story of initiativeStories) {
         if (story.estimatedDays == null) continue;
-        if (story.status === "done" || story.status === "approved") {
+        if (story.status === "review" || story.status === "done") {
           completedEffort += story.estimatedDays;
         }
       }
@@ -1362,7 +1362,7 @@ function InitiativeTreeCard({
     for (const story of initiativeStories) {
       if (story.estimatedDays == null) continue;
       totalEffort += story.estimatedDays;
-      if (story.status !== "done" && story.status !== "approved") {
+      if (story.status !== "review" && story.status !== "done") {
         remainingEffort += story.daysLeft ?? story.estimatedDays;
       }
     }
@@ -2157,7 +2157,7 @@ export function InitiativeListPanel({
   const [panelQuarterFilters, setPanelQuarterFilters] = useState<Array<"all" | "Q1" | "Q2" | "Q3" | "Q4">>(["all"]);
   const [panelTeamFilterIds, setPanelTeamFilterIds] = useState<string[]>(["all"]);
   const [panelStatusFilters, setPanelStatusFilters] = useState<Array<
-    "all" | "Scheduled" | "Unscheduled" | "To Do" | "In Progress" | "Done" | "Approved"
+    "all" | "Scheduled" | "Unscheduled" | "To Do" | "In Progress" | "Review / Testing" | "Done"
   >>(["all"]);
 
   const firstScheduledInitiativeForActiveMonth = useMemo(() => {
@@ -2259,15 +2259,15 @@ export function InitiativeListPanel({
     ];
   }, [workspaceDirectoryUsers, initiatives]);
   const statusFilterOptions: IconFilterOption<
-    "all" | "Scheduled" | "Unscheduled" | "To Do" | "In Progress" | "Done" | "Approved"
+    "all" | "Scheduled" | "Unscheduled" | "To Do" | "In Progress" | "Review / Testing" | "Done"
   >[] = [
     { value: "all", label: "All Statuses", icon: <ListFilter className="size-3.5 text-emerald-400" /> },
     { value: "Scheduled", label: "Scheduled", icon: <CalendarDays className="size-3.5 text-slate-500" /> },
     { value: "Unscheduled", label: "Unscheduled", icon: <Circle className="size-3.5 text-slate-500" /> },
     { value: "To Do", label: "To Do", icon: <ListTodo className="size-3.5 text-slate-500" /> },
     { value: "In Progress", label: "In Progress", icon: <PlayCircle className="size-3.5 text-slate-500" /> },
-    { value: "Done", label: "Done", icon: <CheckCheck className="size-3.5 text-slate-500" /> },
-    { value: "Approved", label: "Approved", icon: <CheckCircle2 className="size-3.5 text-slate-500" /> },
+    { value: "Review / Testing", label: "Review / Testing", icon: <CheckCheck className="size-3.5 text-slate-500" /> },
+    { value: "Done", label: "Done", icon: <CheckCircle2 className="size-3.5 text-slate-500" /> },
   ];
   const filtersAreDefault =
     panelQuarterFilters.length === 1 &&
@@ -2447,7 +2447,7 @@ export function InitiativeListPanel({
       if (!panelTeamFilterIds.includes("all") && !panelTeamFilterIds.includes(normalizedEpicTeamId(epic))) return false;
       if (!panelStatusFilters.includes("all")) {
         const planning = epicPlanningStatusMeta(epic).label;
-        const execution = epicExecutionStatusMeta(epic).label as "To Do" | "In Progress" | "Done" | "Approved";
+        const execution = epicExecutionStatusMeta(epic).label as "To Do" | "In Progress" | "Review / Testing" | "Done";
         const matches =
           (panelStatusFilters.includes("Scheduled") && planning !== "Unscheduled") ||
           (panelStatusFilters.includes("Unscheduled") && planning === "Unscheduled") ||
@@ -2606,8 +2606,8 @@ export function InitiativeListPanel({
         const initiativeExecution = initiativeExecutionStatusMeta(initiative).label as
           | "To Do"
           | "In Progress"
-          | "Done"
-          | "Approved";
+          | "Review / Testing"
+          | "Done";
         const matches =
           (panelStatusFilters.includes("Unscheduled") && (initiative.status === "backlog" || hasUnscheduledEpics)) ||
           (panelStatusFilters.includes("Scheduled") && (initiative.status === "scheduled" || hasScheduledEpics)) ||

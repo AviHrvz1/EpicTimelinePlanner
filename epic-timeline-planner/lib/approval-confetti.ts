@@ -1,6 +1,6 @@
 /**
- * Short confetti burst played when a user story transitions from `done`
- * to `approved`. Same visual pattern as the now-removed login confetti:
+ * Short confetti burst played when a user story transitions from `review`
+ * to `done`. Same visual pattern as the now-removed login confetti:
  * two side-cannons firing inward from the bottom corners over ~500ms,
  * shooting small clusters each animation frame. Brief enough to feel
  * like a quick celebration without getting in the way of work.
