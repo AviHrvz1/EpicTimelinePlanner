@@ -124,15 +124,34 @@ export function EpicStatusBadge({
       <span>Overdue</span>
     </>
   );
-  const overduePill = isOverdue ? (
-    <span
-      title={tooltip ?? "Past planned end date — sign-off pending"}
-      aria-label="Overdue"
-      className={cn(pillBase, sizeClass, "bg-rose-200 text-rose-900 ring-rose-400/70")}
-    >
-      {overdueContent}
-    </span>
-  ) : null;
+  const overdueChipClass = cn(pillBase, sizeClass, "bg-rose-200 text-rose-900 ring-rose-400/70");
+  const overduePill = isOverdue
+    ? onClick
+      ? (
+        <button
+          type="button"
+          title={tooltip ?? "Past planned end date — open insights"}
+          aria-label="Overdue — open insights"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick();
+          }}
+          className={cn(overdueChipClass, "cursor-pointer transition-transform duration-150 hover:scale-105 hover:brightness-105")}
+        >
+          {overdueContent}
+        </button>
+      )
+      : (
+        <span
+          title={tooltip ?? "Past planned end date — sign-off pending"}
+          aria-label="Overdue"
+          className={overdueChipClass}
+        >
+          {overdueContent}
+        </span>
+      )
+    : null;
   if (overdueOnly) {
     return overduePill ? <span className={cn("inline-flex items-center gap-1", className)}>{overduePill}</span> : null;
   }

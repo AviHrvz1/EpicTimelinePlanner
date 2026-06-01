@@ -866,7 +866,12 @@ export function InitiativeFormDialog({
   return (
     <div
       className={cn(
-        "fixed inset-0 z-[70] bg-slate-900/30 backdrop-blur-[1px]",
+        // z-[9500] sits above the Roadmap Health popover (z-[9000]) so an
+        // initiative opened from the popover or a Gantt bar appears on top
+        // of it, not behind it. The popover stays visible underneath so
+        // closing the dialog drops the planner straight back into health
+        // context.
+        "fixed inset-0 z-[9500] bg-slate-900/30 backdrop-blur-[1px]",
         !anchored && "flex items-stretch justify-end p-0",
         !leaving && "epic-dialog-backdrop",
         leaving && "epic-dialog-backdrop--exit",

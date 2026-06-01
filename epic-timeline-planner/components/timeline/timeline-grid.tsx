@@ -2633,10 +2633,11 @@ export function TimelineGrid({
 
   /**
    * Wrappers around the three "open dialog" callbacks. The dialogs live in the
-   * parent (epic-planner-app.tsx) and render as modals over this surface — if
-   * the health popover stays open behind them, it looks broken when the user
-   * dismisses the dialog. Close it on the way out so the popover doesn't
-   * resurface unexpectedly.
+   * parent (epic-planner-app.tsx) and render as modals over this surface.
+   * The health popover is intentionally LEFT OPEN behind the dialogs so the
+   * planner can switch between an epic's detail and the overall health view
+   * without losing context — closing the dialog drops the planner back onto
+   * the popover, ready for the next click.
    *
    * Uses `useCallback` so prop identity is stable (matters for `useMemo` /
    * `React.memo` consumers downstream like `GanttLaneRow`).
@@ -2647,17 +2648,15 @@ export function TimelineGrid({
   }, [onShowRoadmapProgressChange]);
   const onOpenEpic = useCallback(
     (epicId: string) => {
-      closeHealthPopover();
       _onOpenEpicProp(epicId);
     },
-    [_onOpenEpicProp, closeHealthPopover],
+    [_onOpenEpicProp],
   );
   const onOpenInitiative = useCallback(
     (initiativeId: string) => {
-      closeHealthPopover();
       _onOpenInitiativeProp(initiativeId);
     },
-    [_onOpenInitiativeProp, closeHealthPopover],
+    [_onOpenInitiativeProp],
   );
   // `onOpenStory` is optional on the prop type, and several downstream UI
   // branches check its presence to disable cursors / hover states. Preserve
@@ -5807,6 +5806,19 @@ export function TimelineGrid({
                       const epicHealthTooltip = formatHealthTooltip(epicHealth);
                       const epicHasData =
                         progressBasis === "stories" ? epicStoriesForHealth.length > 0 : epicHealth.totalEffort > 0;
+                      /**
+                       * Preview-aware overdue: during a resize drag, the
+                       * stored `planEndMonth` hasn't been patched yet; the
+                       * live state lives in `previewEnd`. Recompute against
+                       * the previewed end-of-sprint so the bar's Overdue
+                       * pill flips off in real-time as the planner extends
+                       * the epic past today.
+                       */
+                      const epicLiveStatus = deriveEpicStatusKey(row.epic);
+                      const isOverdueLive =
+                        epicLiveStatus !== "done" &&
+                        epicLiveStatus !== null &&
+                        clockNowMs() > sprintEndDate(currentYear, previewEnd).getTime();
                       const isInitiativeEmphasis =
                         ganttEmphasis != null && ganttEmphasis.initiativeId === row.initiative.id;
                       const isEpicEmphasis = ganttEpicEmphasis != null && ganttEpicEmphasis.epicId === row.epic.id;
@@ -5852,8 +5864,8 @@ export function TimelineGrid({
                               showProgress={showRoadmapProgress}
                               healthStatus={showRoadmapProgress && epicHasData ? epicHealth.status : null}
                               healthTooltip={epicHealthTooltip}
-                              epicStatus={showRoadmapProgress ? deriveEpicStatusKey(row.epic) : null}
-                              isOverdue={showRoadmapProgress && epicIsOverdueByPlan(row.epic, currentYear)}
+                              epicStatus={showRoadmapProgress ? epicLiveStatus : null}
+                              isOverdue={showRoadmapProgress && isOverdueLive}
                               onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                               onClick={() => onOpenEpic(row.epic.id)}
                               onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", row.epic.id)}
@@ -8267,6 +8279,12 @@ export function TimelineGrid({
                               const epicHealthTooltipQ = formatHealthTooltip(epicHealthQ);
                               const epicHasDataQ =
                                 progressBasis === "stories" ? epicStoriesQ.length > 0 : epicHealthQ.totalEffort > 0;
+                              const epicLiveStatusQ = deriveEpicStatusKey(row.epic);
+                              /** Preview-aware overdue — see year-roadmap branch. */
+                              const isOverdueLiveQ =
+                                epicLiveStatusQ !== "done" &&
+                                epicLiveStatusQ !== null &&
+                                clockNowMs() > sprintEndDate(currentYear, previewEnd).getTime();
                               const isInitiativeEmphasis =
                                 ganttEmphasis != null && ganttEmphasis.initiativeId === row.initiative.id;
                               const isEpicEmphasis = ganttEpicEmphasis != null && ganttEpicEmphasis.epicId === row.epic.id;
@@ -8318,8 +8336,8 @@ export function TimelineGrid({
                                       showProgress={showRoadmapProgress}
                                       healthStatus={showRoadmapProgress && epicHasDataQ ? epicHealthQ.status : null}
                                       healthTooltip={epicHealthTooltipQ}
-                                      epicStatus={showRoadmapProgress ? deriveEpicStatusKey(row.epic) : null}
-                                      isOverdue={showRoadmapProgress && epicIsOverdueByPlan(row.epic, currentYear)}
+                                      epicStatus={showRoadmapProgress ? epicLiveStatusQ : null}
+                                      isOverdue={showRoadmapProgress && isOverdueLiveQ}
                                       onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                                       onClick={() => onOpenEpic(row.epic.id)}
                                       onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", row.epic.id)}
