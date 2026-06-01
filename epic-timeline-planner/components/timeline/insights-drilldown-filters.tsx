@@ -23,6 +23,7 @@ export function DrilldownFilterInputText({
   return (
     <input
       type="text"
+      name={ariaLabel.toLowerCase().replace(/[^a-z0-9]+/g, "-")}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}

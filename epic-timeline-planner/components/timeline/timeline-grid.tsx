@@ -2632,6 +2632,10 @@ export function TimelineGrid({
   /** Measures available width under the timeline card; drives right-panel + roadmap horizontal scroll. */
   const yearRoadmapMeasureRef = useRef<HTMLDivElement | null>(null);
   const [sprintKanbanViewMode, setSprintKanbanViewMode] = useState<"stories" | "epics">("stories");
+  /** Toolbar toggle: when on, the sprint kanban filters to ONLY stories
+   *  whose rollover history says they carried over from a prior sprint.
+   *  Off by default (planner sees the full board). */
+  const [sprintKanbanCarriedOverOnly, setSprintKanbanCarriedOverOnly] = useState(false);
   /** Sprint Kanban: toggle progress bars on story / epic cards. Off by
    *  default so cards stay compact — user opts in via the "Progress" chip
    *  in the sprint-board toolbar. */
@@ -4069,11 +4073,11 @@ export function TimelineGrid({
           <button
             type="button"
             onClick={() => setRolledInModalSprint(ys)}
-            title={`See what rolled into Sprint ${ys}`}
+            title={`See what carried over into Sprint ${ys}`}
             className="inline-flex h-7 max-w-full shrink-0 cursor-pointer items-center gap-1 rounded-full bg-[aliceblue] px-2.5 text-[11px] font-semibold leading-none tracking-[0.02em] text-slate-800 ring-1 ring-sky-200 transition hover:bg-sky-100 hover:ring-sky-300 sm:gap-1.5 sm:px-3 sm:text-[12px]"
           >
             <Inbox className="size-3 shrink-0 text-indigo-500 sm:size-3.5" strokeWidth={2.25} aria-hidden />
-            <span className="text-slate-500">Rolled in</span>
+            <span className="text-slate-500">Carried over</span>
             <span className="truncate">{rolledInCount}</span>
           </button>
         ) : null}
@@ -4686,6 +4690,23 @@ export function TimelineGrid({
         lastSprintModeSyncKeyRef.current = "__off__";
         onSprintModeChange(false, null, null);
       }
+      return;
+    }
+    /**
+     * Prop→state sync window: when the parent just changed `focusedMonthExternal`
+     * (e.g. via openSprintStoryBoard's Jump to S11), the local `focusedMonth` state
+     * has not yet been re-synced by the effect at line 4592. `activeMonth` is still
+     * stale. Writing it back to the parent via onSprintModeChange would regress the
+     * parent's intent (S11 → S10) and trigger a max-update-depth ping-pong. Wait
+     * for the next render when local state has caught up.
+     */
+    if (focusedMonthExternal != null && focusedMonthExternal !== activeMonth) return;
+    if (
+      activeSprintExternal !== undefined &&
+      activeSprintExternal != null &&
+      activeSprint != null &&
+      clampYearSprint(activeSprintExternal) !== activeSprint
+    ) {
       return;
     }
     const fromParent =
@@ -5951,6 +5972,37 @@ export function TimelineGrid({
         <Activity className="size-3 shrink-0" strokeWidth={2.2} aria-hidden />
         Progress
       </button>
+      {/* Carried-over toolbar toggle — only renders when the current sprint
+       *  actually has stories that rolled over from a prior sprint. Clicking
+       *  flips a board-local filter so the kanban shows only those rows. */}
+      {resolvedActiveYearSprint != null && (() => {
+        const carriedOverCount = collectStoriesRolledIntoSprint(initiatives, resolvedActiveYearSprint).length;
+        if (carriedOverCount === 0) return null;
+        return (
+          <button
+            type="button"
+            onClick={() => setSprintKanbanCarriedOverOnly((v) => !v)}
+            aria-pressed={sprintKanbanCarriedOverOnly}
+            title={
+              sprintKanbanCarriedOverOnly
+                ? "Show all stories"
+                : `Filter to ${carriedOverCount} carried-over stor${carriedOverCount === 1 ? "y" : "ies"}`
+            }
+            className={cn(
+              summaryChipBaseClass,
+              sprintKanbanCarriedOverOnly
+                ? "bg-gradient-to-br from-indigo-100 via-indigo-200 to-indigo-200 text-indigo-950 ring-1 ring-indigo-300/75 shadow-sm"
+                : "bg-gradient-to-br from-indigo-50 via-indigo-100 to-indigo-100 text-indigo-950 ring-1 ring-indigo-200/75 hover:from-indigo-100 hover:via-indigo-200 hover:to-indigo-200",
+            )}
+          >
+            <Inbox className="size-3 shrink-0" strokeWidth={2.2} aria-hidden />
+            <span>Carried over</span>
+            <span className="rounded-sm bg-white/60 px-1 text-[10px] font-bold tabular-nums ring-1 ring-indigo-300/40">
+              {carriedOverCount}
+            </span>
+          </button>
+        );
+      })()}
       <button
         type="button"
         onClick={() => {
@@ -6591,6 +6643,7 @@ export function TimelineGrid({
                     <Search className="pointer-events-none absolute left-2 top-1/2 z-10 size-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
                     <input
                       type="text"
+                      name="sprint-kanban-search"
                       value={sprintKanbanSearch}
                       onChange={(e) => { setSprintKanbanSearch(e.target.value); setSprintKanbanSearchOpen(true); }}
                       onFocus={() => sprintKanbanSearch && setSprintKanbanSearchOpen(true)}
@@ -7498,6 +7551,7 @@ export function TimelineGrid({
                   scheduledStoriesEmphasis={sprintKanbanScheduledStoriesEmphasis}
                   viewMode={sprintKanbanViewMode}
                   showProgress={sprintKanbanShowProgress}
+                  carriedOverOnly={sprintKanbanCarriedOverOnly}
                   searchQuery={sprintKanbanSearch}
                   sprintToolbarEnd={null}
                   onUnscheduleStory={(storyId) => onSprintCapacityStoryUnschedule?.(storyId)}

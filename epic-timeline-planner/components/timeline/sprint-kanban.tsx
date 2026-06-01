@@ -25,7 +25,7 @@ import { epicDeliveryTeamAssignmentChip, monthTeamLabelForId } from "@/lib/month
 import { TeamAvatar } from "@/components/ui/team-avatar";
 import { assigneeMatchRosterForSprintTeam, type SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { collectStoriesForSprintBoard, collectEpicsForSprintKanban, type BoardStoryRow, type BoardEpicRow } from "@/lib/sprint-plan";
-import { parseStoryRollover } from "@/lib/story-rollover-history";
+import { parseStoryRollover, storyRolledIntoSprint } from "@/lib/story-rollover-history";
 import { projectInitiativesToCloseDate } from "@/lib/story-snapshot-projection";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -715,6 +715,10 @@ type SprintKanbanProps = {
    *  the "Progress" toggle in the sprint-board toolbar so cards stay
    *  compact when progress isn't the focus. */
   showProgress?: boolean;
+  /** When true, the board renders ONLY stories whose history says they
+   *  carried over from a prior sprint. Toggle lives in the sprint-board
+   *  toolbar (Carried over chip). */
+  carriedOverOnly?: boolean;
   onUnscheduleStory?: (storyId: string) => void;
   onRequestUnscheduleStory?: (storyId: string, storyTitle: string) => void;
   onOpenStory: (storyId: string) => void;
@@ -735,6 +739,7 @@ export function SprintKanbanBoard({
   searchQuery: searchQueryProp = "",
   viewMode = "stories",
   showProgress = false,
+  carriedOverOnly = false,
   onUnscheduleStory,
   onRequestUnscheduleStory,
   onOpenStory,
@@ -748,10 +753,11 @@ export function SprintKanbanBoard({
   // `story.sprint` is now `N+1`). Charts get retro-fidelity from the snapshot
   // projection in `buildSprintAnalytics`; the board itself shows what's
   // truly there now.
-  const allRows = useMemo(
-    () => collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamIds),
-    [initiatives, month, yearSprint, filterEpicTeamIds],
-  );
+  const allRows = useMemo(() => {
+    const rows = collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamIds);
+    if (!carriedOverOnly) return rows;
+    return rows.filter((row) => storyRolledIntoSprint(row.story, yearSprint));
+  }, [initiatives, month, yearSprint, filterEpicTeamIds, carriedOverOnly]);
 
   const epicRows = useMemo(
     () => viewMode === "epics" ? collectEpicsForSprintKanban(initiatives, month, yearSprint, filterEpicTeamIds) : [],

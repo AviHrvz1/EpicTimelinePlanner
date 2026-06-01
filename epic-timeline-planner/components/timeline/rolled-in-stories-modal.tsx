@@ -49,12 +49,12 @@ export function RolledInStoriesModal({
   const isOutbound = direction === "out";
   const HeaderIcon = isOutbound ? Send : Inbox;
   const headerLabel = isOutbound
-    ? `Rolled out of Sprint ${yearSprint}`
-    : `Rolled into Sprint ${yearSprint}`;
+    ? `Carried out of Sprint ${yearSprint}`
+    : `Carried into Sprint ${yearSprint}`;
   const partnerColumnLabel = isOutbound ? "To" : "From";
   const emptyLabel = isOutbound
-    ? "Nothing rolled out of this sprint."
-    : "Nothing rolled into this sprint.";
+    ? "Nothing carried out of this sprint."
+    : "Nothing carried into this sprint.";
 
   return createPortal(
     <div
