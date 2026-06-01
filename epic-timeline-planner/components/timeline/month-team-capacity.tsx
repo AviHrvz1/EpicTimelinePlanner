@@ -20,6 +20,9 @@ import {
   mergeMonthTeamBoardColumns,
   type MonthTeamBoardPersisted,
 } from "@/lib/month-team-board";
+import { nowMs as clockNowMs } from "@/lib/clock";
+import { projectInitiativesToCloseDate } from "@/lib/story-snapshot-projection";
+import { SnapshotHeaderStrip } from "@/components/timeline/snapshot-header-strip";
 import { type InitiativeItem } from "@/lib/types";
 import {
   orderedMonthTeamCapacityTeams,
@@ -29,6 +32,9 @@ import { cn } from "@/lib/utils";
 
 const MONTH_CAP_COL_GRIP_CLASS =
   "inline-flex shrink-0 items-center justify-center rounded-md border border-slate-200/90 bg-white/90 p-1.5 text-slate-600 shadow-sm outline-none transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-300";
+
+/** Short month names for overflow pill origin labels (matches Gantt month axis). */
+const MONTH_SHORT_FOR_OVERFLOW = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
 function MonthTeamCapacityColumnChrome({
   year,
@@ -166,6 +172,10 @@ export function MonthTeamCapacityBoard({
   loadBasis = "originalEstimate",
   onLoadBasisChange,
 }: MonthTeamCapacityProps) {
+  // Month team capacity reads LIVE state. Past months reflect what's
+  // actually in those months — not a projected snapshot. Without auto-
+  // rollover surface overflow, the month panel only shows epics planned for
+  // this month, period.
   const rows = collectMonthEpicsForTeamBoard(initiatives, month);
   const mergedColumns =
     monthTeamBoardPersisted != null
@@ -234,6 +244,18 @@ export function MonthTeamCapacityBoard({
     }, 0);
   }
 
+  // Snapshot strip — past month only. With Phase 3 overflow retired, no
+  // "rolled to next month" detail surfaces here; the strip is purely the
+  // "frozen snapshot of March" caption above the panel.
+  const monthEndMs = new Date(year, month, 0, 23, 59, 59, 999).getTime();
+  const isPastMonth = monthEndMs < clockNowMs();
+  const nextMonth = month + 1 <= 12 ? month + 1 : null;
+  const monthCloseDateLabel = useMemo(
+    () => new Date(year, month - 1, new Date(year, month, 0).getDate()).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+    [year, month],
+  );
+  const nextMonthLabel = nextMonth != null ? (MONTH_SHORT_FOR_OVERFLOW[nextMonth - 1] ?? `M${nextMonth}`) : "next month";
+
   return (
     <div
       className="rounded-2xl border border-slate-300/60 p-4 shadow-sm"
@@ -242,6 +264,15 @@ export function MonthTeamCapacityBoard({
       }}
     >
     <div className="space-y-6 pb-6">
+      {isPastMonth ? (
+        <SnapshotHeaderStrip
+          scope="month"
+          periodLabel={`${MONTH_SHORT_FOR_OVERFLOW[month - 1] ?? `M${month}`} ${year}`}
+          closeDateLabel={monthCloseDateLabel}
+          rolledCount={0}
+          nextPeriodLabel={nextMonthLabel}
+        />
+      ) : null}
       <TeamLoadSummary
         teamLabel={
           teamFilterIds.length > 1

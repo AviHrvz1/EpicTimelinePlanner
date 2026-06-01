@@ -20,7 +20,12 @@ import { Button } from "@/components/ui/button";
  *
  * Auth tables (User/Account/Session/etc) are deliberately preserved so the
  * person clicking these buttons doesn't sign themselves out.
+ *
+ * Clock time-travel + scenario seeding now live on a dedicated "Time
+ * Debugger" page (sidebar item · clock icon) so this surface stays focused
+ * on data setup.
  */
+
 export function DemoBuilderPanel() {
   const [busy, setBusy] = useState<"reset" | "refresh" | null>(null);
 
@@ -113,6 +118,7 @@ export function DemoBuilderPanel() {
             <li className="text-emerald-700"><strong>Kept:</strong> your login + session</li>
           </ul>
         </section>
+
 
         <section className="flex flex-wrap items-center justify-end gap-3">
           <Button
@@ -279,3 +285,4 @@ const DEMO_RETRO_OWNERS: readonly string[] = [
   "Liam Chen",
   "Sophia Reyes",
 ];
+

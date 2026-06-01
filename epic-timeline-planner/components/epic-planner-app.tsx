@@ -2,7 +2,7 @@
 
 import { DragEndEvent } from "@dnd-kit/core";
 import { InitiativeStatus, StoryStatus } from "@/lib/generated/prisma";
-import { AlertTriangle, Archive, FileText, LayoutDashboard, Map as MapIcon, PanelLeftOpen, Sparkles, Users, X as XIcon } from "lucide-react";
+import { AlertTriangle, Archive, Clock, FileText, LayoutDashboard, Map as MapIcon, PanelLeftOpen, Sparkles, Users, X as XIcon } from "lucide-react";
 import { useMemo, useEffect, useRef, useState, useCallback } from "react";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -15,6 +15,7 @@ import { EpicFormDialog } from "@/components/epics/epic-form-dialog";
 import { BacklogPlanningPanel } from "@/components/backlog/backlog-planning-panel";
 import { UsersWorkspacePanel } from "@/components/users/users-workspace-panel";
 import { DemoBuilderPanel } from "@/components/demo-builder/demo-builder-panel";
+import { TimeDebuggerPanel } from "@/components/time-debugger/time-debugger-panel";
 import { DashboardPage } from "@/components/dashboard/dashboard-page";
 import { GanttDebugOverlay } from "@/components/debug/gantt-debug-overlay";
 import { BacklogPanelSkeleton } from "@/components/deferred-mount";
@@ -74,7 +75,7 @@ import {
 import { collectQuarterEpics } from "@/lib/quarter-analytics";
 import { splitQuarterTotalAcrossMonths } from "@/lib/quarter-team-capacity";
 import { ALL_QUARTERS_TEAM_CAPACITY_LABEL, ALL_YEAR_PLAN_MONTHS, QUARTERS } from "@/lib/timeline";
-import { EpicItem, InitiativeItem, RoadmapItem } from "@/lib/types";
+import { EpicItem, InitiativeItem, RoadmapItem, UserStoryItem } from "@/lib/types";
 import { normalizeWorkspaceUserTeam } from "@/lib/workspace-users";
 import { cn } from "@/lib/utils";
 import {
@@ -116,6 +117,10 @@ import {
   YEAR_SPRINT_MAX,
   yearSprintRangeFromMonthRange,
 } from "@/lib/year-sprint";
+import { now as clockNow, nowMs as clockNowMs } from "@/lib/clock";
+import { RolloverOverflowModal, type RolloverGroup } from "@/components/timeline/rollover-overflow-modal";
+import { SprintMoveModal } from "@/components/timeline/sprint-move-modal";
+import { SnapshotHeaderStrip } from "@/components/timeline/snapshot-header-strip";
 
 const ROADMAP_STORAGE_KEY = "epicPlanner.selectedRoadmapId.v1";
 /** Cookie name for the last-picked roadmap. Read server-side in
@@ -1167,7 +1172,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   const [activeTimelineMonth, setActiveTimelineMonth] = useState<number | null>(null);
   const [activeYearSprint, setActiveYearSprint] = useState<number | null>(null);
   const isActiveSprintClosed =
-    activeYearSprint != null && sprintEndDate(selectedYear, activeYearSprint).getTime() <= Date.now();
+    activeYearSprint != null && sprintEndDate(selectedYear, activeYearSprint).getTime() <= clockNowMs();
   const [activeSprintTab, setActiveSprintTab] = useState<"kanban" | "status">("kanban");
   const [activeMonthPlanTab, setActiveMonthPlanTab] = useState<MonthPlanSurfaceTab>("epic-gantt");
   const [activeQuarterViewTab, setActiveQuarterViewTab] = useState<QuarterSurfaceTab>("gantt");
@@ -1272,7 +1277,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       return {};
     }
   });
-  const [topMode, setTopMode] = useState<"roadmap" | "backlog" | "dashboard" | "users" | "demoBuilder">("roadmap");
+  const [topMode, setTopMode] = useState<"roadmap" | "backlog" | "dashboard" | "users" | "demoBuilder" | "timeDebugger">("roadmap");
   /**
    * Once the user opens the Dashboard mode at least once, keep <DashboardPage /> mounted (just visually hidden when not active).
    * That preserves unsaved drafts and in-progress chart layouts in memory across mode switches without writing them to the DB.
@@ -1353,7 +1358,6 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   /** When true, we hid the initiative rail for insights/retro; restore on leaving those surfaces. */
   const leftInitiativePanelAutoCollapsedForInsightsRef = useRef(false);
   const planningRightSurfaceRef = useRef<HTMLDivElement | null>(null);
-  const sprintAutoRolloverInFlightRef = useRef<Set<string>>(new Set());
   const ganttEmphasisTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ganttEmphasisTickRef = useRef(0);
   const [ganttEmphasis, setGanttEmphasis] = useState<{ initiativeId: string; tick: number } | null>(null);
@@ -1737,6 +1741,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     const viewRaw = params.get("view");
     if (viewRaw === "users") setTopMode("users");
     else if (viewRaw === "demo-builder") setTopMode("demoBuilder");
+    else if (viewRaw === "time-debugger") setTopMode("timeDebugger");
     else if (viewRaw === "backlog") setTopMode("backlog");
     else if (viewRaw === "dashboard") setTopMode("dashboard");
     const q = params.get("quarter");
@@ -1920,6 +1925,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     const params = new URLSearchParams();
     if (topMode === "users") params.set("view", "users");
     else if (topMode === "demoBuilder") params.set("view", "demo-builder");
+    else if (topMode === "timeDebugger") params.set("view", "time-debugger");
     else if (topMode === "backlog") params.set("view", "backlog");
     else if (topMode === "dashboard") params.set("view", "dashboard");
     if (focusedQuarterLabel) params.set("quarter", focusedQuarterLabel);
@@ -1996,6 +2002,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       const v = params.get("view");
       if (v === "users") setTopMode("users");
       else if (v === "demo-builder") setTopMode("demoBuilder");
+      else if (v === "time-debugger") setTopMode("timeDebugger");
       else if (v === "backlog") setTopMode("backlog");
       else if (v === "dashboard") setTopMode("dashboard");
       else setTopMode("roadmap");
@@ -2773,8 +2780,13 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   }, [stripStoryFromPersistedCapacityAssignments]);
 
   async function refresh(targetYear = selectedYear, targetRoadmapId = selectedRoadmapId) {
+    // Phase D: timeline includes soft-deleted rows so closed-period scope
+    // expansion can render their snapshots on closed kanban / capacity /
+    // charts. The backlog endpoint (`?year=all&slim=1` at the other call
+    // sites) intentionally omits `includeDeleted` so the backlog list
+    // shows live data only.
     const data = await parseJson<InitiativeItem[]>(
-      await fetch(`/api/initiatives?year=${targetYear}&roadmapId=${targetRoadmapId}`, { cache: "no-store" }),
+      await fetch(`/api/initiatives?year=${targetYear}&roadmapId=${targetRoadmapId}&includeDeleted=1`, { cache: "no-store" }),
     );
     setInitiatives(data);
   }
@@ -2797,7 +2809,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   }
 
   async function createRoadmapQuick(name: string, years?: number[]): Promise<string | null> {
-    const fallbackYear = new Date().getFullYear();
+    const fallbackYear = clockNow().getFullYear();
     const yearList = years && years.length > 0 ? years : [fallbackYear];
     const res = await fetch("/api/roadmaps", {
       method: "POST",
@@ -2846,7 +2858,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     const updated = await parseJson<RoadmapItem>(res);
     setRoadmaps((prev) => prev.map((r) => (r.id === id ? updated : r)));
     if (selectedRoadmapId === id && selectedYear === yr) {
-      const newYear = updated.years[0] ?? new Date().getFullYear();
+      const newYear = updated.years[0] ?? clockNow().getFullYear();
       setSelectedYear(newYear);
       await refresh(newYear, id);
     }
@@ -2866,7 +2878,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       const remaining = prev.filter((r) => r.id !== id);
       const nextRoadmap = remaining[0] ?? null;
       if (nextRoadmap) {
-        const nextYear = nextRoadmap.years[0] ?? new Date().getFullYear();
+        const nextYear = nextRoadmap.years[0] ?? clockNow().getFullYear();
         handleSelectRoadmap(nextRoadmap.id, nextYear, remaining);
       } else {
         setInitiatives([]);
@@ -2945,85 +2957,291 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     })();
   }, [initiatives, monthTeamBoardByKey, selectedYear]);
 
+  // Auto-rollover at sprint close was removed in favour of the manual
+  // `SprintMoveModal` flow — planners now press a button on the closed
+  // sprint board to preview and confirm exactly which tickets move.
+  // The year-end continuation path below still fires on its own to surface
+  // the "add next year" prompt; the move modal hands off to it when the
+  // source sprint is `YEAR_SPRINT_MAX` and no next-year exists.
+
+  /**
+   * Year-end overflow detection. Scans `initiatives` (already scoped to
+   * `selectedYear`) for unfinished stories pinned at sprint 24 whose sprint
+   * window has ended — these are the ones the within-year rollover effect
+   * above couldn't move because there's no sprint 25 in the year. When found
+   * AND the active roadmap doesn't yet contain `selectedYear + 1`, the user
+   * is prompted to add the next year and auto-create continuation epics for
+   * the stranded stories.
+   */
+  const [yearEndOverflow, setYearEndOverflow] = useState<{
+    overflowYear: number;
+    storyCount: number;
+    epicCount: number;
+  } | null>(null);
+  const [yearEndOverflowDismissedFor, setYearEndOverflowDismissedFor] = useState<number | null>(null);
+  const [creatingContinuations, setCreatingContinuations] = useState(false);
   useEffect(() => {
-    const now = new Date();
-    if (selectedYear !== now.getFullYear()) return;
-
-    const nowMs = now.getTime();
-    const inFlight = sprintAutoRolloverInFlightRef.current;
-    const candidates: Array<{ storyId: string; fromSprint: number; toSprint: number }> = [];
-
+    if (selectedRoadmapId == null) {
+      setYearEndOverflow(null);
+      return;
+    }
+    const activeRoadmap = roadmaps.find((r) => r.id === selectedRoadmapId);
+    if (activeRoadmap == null) {
+      setYearEndOverflow(null);
+      return;
+    }
+    if (activeRoadmap.years.includes(selectedYear + 1)) {
+      setYearEndOverflow(null);
+      return;
+    }
+    if (yearEndOverflowDismissedFor === selectedYear) {
+      // User hit cancel on this exact year — don't re-prompt for it until
+      // they switch year or do something that resets the dismissal.
+      return;
+    }
+    const sprint24EndedMs = sprintEndDate(selectedYear, YEAR_SPRINT_MAX).getTime();
+    if (clockNowMs() < sprint24EndedMs) {
+      setYearEndOverflow(null);
+      return;
+    }
+    const strandedEpics = new Set<string>();
+    let strandedStories = 0;
     for (const initiative of initiatives) {
       for (const epic of initiative.epics ?? []) {
         for (const story of epic.userStories ?? []) {
-          if (story.sprint == null) continue;
-          // Skip work that's already complete — `done` (finished but
-          // pre-QA) and `approved` (signed off) should stay anchored to
-          // the sprint they completed in so retro charts / kanban
-          // history reflect what actually shipped. Only `todo` and
-          // `inProgress` count as "carried over, needs to move forward".
-          if (story.status === StoryStatus.approved || story.status === StoryStatus.done) continue;
-          if (inFlight.has(story.id)) continue;
-          const fromSprint = clampYearSprint(story.sprint);
-          if (fromSprint >= YEAR_SPRINT_MAX) continue;
-          if (sprintEndDate(selectedYear, fromSprint).getTime() > nowMs) continue;
-
-          // Move to the nearest sprint that has not ended yet (or the final sprint).
-          let toSprint = fromSprint + 1;
-          while (toSprint < YEAR_SPRINT_MAX && sprintEndDate(selectedYear, toSprint).getTime() <= nowMs) {
-            toSprint += 1;
-          }
-          if (toSprint !== fromSprint) {
-            candidates.push({ storyId: story.id, fromSprint, toSprint });
-          }
+          if (story.sprint !== YEAR_SPRINT_MAX) continue;
+          if (story.status === StoryStatus.done || story.status === StoryStatus.approved) continue;
+          strandedStories += 1;
+          strandedEpics.add(epic.id);
         }
       }
     }
+    if (strandedStories === 0) {
+      setYearEndOverflow(null);
+      return;
+    }
+    setYearEndOverflow({
+      overflowYear: selectedYear,
+      storyCount: strandedStories,
+      epicCount: strandedEpics.size,
+    });
+  }, [initiatives, selectedYear, selectedRoadmapId, roadmaps, yearEndOverflowDismissedFor]);
 
-    if (candidates.length === 0) return;
+  // When the user switches year, allow the popup to re-evaluate for the new year.
+  useEffect(() => {
+    setYearEndOverflowDismissedFor(null);
+  }, [selectedYear, selectedRoadmapId]);
 
-    candidates.forEach((entry) => inFlight.add(entry.storyId));
-    let cancelled = false;
-
-    (async () => {
-      const results = await Promise.all(
-        candidates.map(async (entry) => {
-          try {
-            const response = await fetch(`/api/stories/${entry.storyId}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                sprint: entry.toSprint,
-                historyEntry: `System auto-move: story moved from Sprint ${entry.fromSprint} to Sprint ${entry.toSprint} after sprint close.`,
-              }),
-            });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return { ok: true as const, entry };
-          } catch {
-            return { ok: false as const, entry };
-          }
-        }),
+  async function handleConfirmYearEndContinuation() {
+    if (yearEndOverflow == null || selectedRoadmapId == null) return;
+    const { overflowYear } = yearEndOverflow;
+    const continuationYear = overflowYear + 1;
+    setCreatingContinuations(true);
+    const t = toast.loading(`Adding ${continuationYear} and creating continuations…`);
+    try {
+      await handleAddYearToRoadmap(selectedRoadmapId, continuationYear);
+      const res = await fetch(`/api/roadmaps/${selectedRoadmapId}/create-continuations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ overflowYear }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error((body as { message?: string })?.message ?? `HTTP ${res.status}`);
+      }
+      const result = (await res.json()) as {
+        initiativesCreated: number;
+        initiativesAdopted: number;
+        epicsCreated: number;
+        storiesMigrated: number;
+      };
+      toast.success(
+        `${continuationYear} added — ${result.epicsCreated} continuation epic${result.epicsCreated === 1 ? "" : "s"}, ${result.storiesMigrated} stor${result.storiesMigrated === 1 ? "y" : "ies"} carried over.`,
+        { id: t },
       );
+      setYearEndOverflow(null);
+      // Refresh the year the user is currently viewing and (separately) the
+      // continuation year so the new initiatives/epics are visible if they
+      // switch over.
+      await refresh(selectedYear, selectedRoadmapId);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to create continuations", { id: t });
+    } finally {
+      setCreatingContinuations(false);
+    }
+  }
 
-      results.forEach(({ entry }) => inFlight.delete(entry.storyId));
-      if (cancelled) return;
+  function handleCancelYearEndOverflow() {
+    if (yearEndOverflow == null) return;
+    setYearEndOverflowDismissedFor(yearEndOverflow.overflowYear);
+    setYearEndOverflow(null);
+  }
 
-      const movedCount = results.filter((row) => row.ok).length;
-      const failedCount = results.length - movedCount;
+  /**
+   * Manual sprint-close move state. Opened by the breadcrumb Move chip
+   * on closed sprint kanban / capacity views. Holds the source sprint
+   * number — `null` when the modal is closed. The within-year handler
+   * freezes snapshots, PATCHes each story, optionally rewrites the sprint
+   * capacity board, and refreshes. The year-boundary handler hands off to
+   * the existing year-end continuation flow.
+   */
+  const [sprintMoveOpen, setSprintMoveOpen] = useState<number | null>(null);
+  const activeRoadmap = useMemo(
+    () => roadmaps.find((r) => r.id === selectedRoadmapId) ?? null,
+    [roadmaps, selectedRoadmapId],
+  );
+  /** True when the source sprint is the year cap AND the roadmap has no
+   *  next year — surfaces the year-end continuation popup instead of a
+   *  within-year move. */
+  const isYearBoundaryBlockedForActiveSprint =
+    activeYearSprint === YEAR_SPRINT_MAX &&
+    !(activeRoadmap?.years.includes(selectedYear + 1) ?? false);
 
-      if (movedCount > 0) {
-        await refresh(selectedYear);
-        toast.success(`Moved ${movedCount} non-approved ticket${movedCount === 1 ? "" : "s"} to the next sprint.`);
+  const handleRequestSprintMove = useCallback((fromSprint: number) => {
+    setSprintMoveOpen(fromSprint);
+  }, []);
+  const handleDismissSprintMove = useCallback(() => {
+    setSprintMoveOpen(null);
+  }, []);
+
+  /** Within-year manual move. Freezes snapshots at sprint close, PATCHes
+   *  each story's sprint, optionally moves capacity buckets, and refreshes. */
+  async function handleManualSprintMove(storyIds: string[], moveCapacity: boolean) {
+    if (sprintMoveOpen == null) return;
+    const fromSprint = sprintMoveOpen;
+    const toSprint = fromSprint + 1;
+    if (toSprint > YEAR_SPRINT_MAX) return;
+    const t = toast.loading(`Moving ${storyIds.length} ticket${storyIds.length === 1 ? "" : "s"} to Sprint ${toSprint}…`);
+    try {
+      // 1. Freeze snapshots for every story currently in fromSprint dated to
+      //    the sprint's close instant. Locks retro-chart fidelity regardless
+      //    of later edits.
+      const freezeRes = await fetch("/api/sprints/freeze-snapshots", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ year: selectedYear, sprint: fromSprint }),
+      });
+      if (!freezeRes.ok) throw new Error("Failed to freeze close-day snapshots");
+
+      // 2. PATCH each story.sprint to fromSprint + 1.
+      const moveResults = await Promise.all(
+        storyIds.map(async (storyId) =>
+          fetch(`/api/stories/${storyId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sprint: toSprint,
+              historyEntry: `Manual move: story moved from Sprint ${fromSprint} to Sprint ${toSprint} at sprint close.`,
+            }),
+          }).then((r) => r.ok),
+        ),
+      );
+      const movedCount = moveResults.filter(Boolean).length;
+      const failedCount = moveResults.length - movedCount;
+
+      // 3. Optionally rewrite sprint capacity board buckets for the moved
+      //    stories: for every team-key board that exists in fromSprint,
+      //    locate the story in its assignee bucket and re-place it in the
+      //    same bucket on toSprint's board (creating an empty board if
+      //    missing). Unchecking the modal's box means the cards land in
+      //    "Other assignees" on the new sprint's board.
+      if (moveCapacity && movedCount > 0) {
+        const movedIds = new Set(storyIds);
+        setSprintCapacityByKey((prev) => {
+          const next = { ...prev };
+          const fromKeyPrefix = `${selectedYear}:${fromSprint}:`;
+          for (const [key, board] of Object.entries(prev)) {
+            if (!key.startsWith(fromKeyPrefix)) continue;
+            const teamKey = key.slice(fromKeyPrefix.length);
+            const toKey = `${selectedYear}:${toSprint}:${teamKey}`;
+            // Capture (storyId → memberBucket) for movedIds in the source
+            // board, then strip them from source.
+            const movedByMember = new Map<string, string[]>();
+            const newSourceAssignments: Record<string, string[]> = {};
+            for (const [member, ids] of Object.entries(board.assignments)) {
+              const removed: string[] = [];
+              const kept: string[] = [];
+              for (const id of ids) {
+                if (movedIds.has(id)) removed.push(id);
+                else kept.push(id);
+              }
+              newSourceAssignments[member] = kept;
+              if (removed.length > 0) movedByMember.set(member, removed);
+            }
+            next[key] = { ...board, assignments: newSourceAssignments };
+
+            if (movedByMember.size === 0) continue;
+            // Build / update destination board.
+            const dest = next[toKey] ?? { capacities: { ...board.capacities }, assignments: {}, columnOrder: board.columnOrder };
+            const destAssignments: Record<string, string[]> = { ...dest.assignments };
+            for (const [member, ids] of movedByMember) {
+              destAssignments[member] = [...(destAssignments[member] ?? []), ...ids];
+            }
+            next[toKey] = { ...dest, assignments: destAssignments };
+          }
+          return next;
+        });
       }
+
+      await refresh(selectedYear, selectedRoadmapId);
+      setSprintMoveOpen(null);
       if (failedCount > 0) {
-        toast.error(`Failed to move ${failedCount} ticket${failedCount === 1 ? "" : "s"} to the next sprint.`);
+        toast.error(`Moved ${movedCount} ticket${movedCount === 1 ? "" : "s"}; ${failedCount} failed.`, { id: t });
+      } else {
+        toast.success(`Moved ${movedCount} ticket${movedCount === 1 ? "" : "s"} to Sprint ${toSprint}.`, { id: t });
       }
-    })();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Manual move failed", { id: t });
+    }
+  }
 
-    return () => {
-      cancelled = true;
-    };
-  }, [initiatives, selectedYear]);
+  /** Year-boundary variant of the move. Surfaces the existing year-end
+   *  continuation popup via {@link setYearEndOverflow} so the user can hit
+   *  `Add YYYY+1` from there. */
+  async function handleManualSprintMoveYearEnd() {
+    setSprintMoveOpen(null);
+    setYearEndOverflowDismissedFor(null);
+    // The yearEndOverflow detection effect re-evaluates whenever
+    // `yearEndOverflowDismissedFor` changes, and surfaces the popup
+    // automatically. Calling the handler directly here would race with
+    // that effect.
+  }
+
+  /**
+   * Groups initiatives → epics → story counts for the year-end overflow
+   * dialog. Same source of truth as the count-only effect above, formatted
+   * for `RolloverOverflowModal`. Clicking an epic in the list opens the
+   * epic edit dialog so the planner can adjust scope before agreeing to
+   * create continuations.
+   */
+  const yearEndOverflowGroups: RolloverGroup[] = useMemo(() => {
+    if (yearEndOverflow == null) return [];
+    const out: RolloverGroup[] = [];
+    for (const initiative of initiatives) {
+      const items: Array<{ id: string; title: string; detail?: string; onClick?: () => void }> = [];
+      for (const epic of initiative.epics ?? []) {
+        let count = 0;
+        for (const story of epic.userStories ?? []) {
+          if (story.sprint !== YEAR_SPRINT_MAX) continue;
+          if (story.status === StoryStatus.done || story.status === StoryStatus.approved) continue;
+          count += 1;
+        }
+        if (count === 0) continue;
+        items.push({
+          id: epic.id,
+          title: epic.title,
+          detail: `${count} stor${count === 1 ? "y" : "ies"}`,
+        });
+      }
+      if (items.length === 0) continue;
+      out.push({
+        parentTitle: initiative.title,
+        parentKind: "initiative",
+        items,
+      });
+    }
+    return out;
+  }, [yearEndOverflow, initiatives]);
 
   const [deleteInitiativeTarget, setDeleteInitiativeTarget] = useState<InitiativeItem | null>(null);
   const [deletingInitiative, setDeletingInitiative] = useState(false);
@@ -5184,6 +5402,42 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             </span>
           </button>
         </div>
+        <div className="group relative w-full overflow-visible">
+          <button
+            type="button"
+            onClick={() => { setTopMode("timeDebugger"); setIsModeRailExpanded(false); }}
+            aria-label="Time Debugger"
+            title="Internal — walk through each rollover boundary"
+            className={cn(
+              "inline-flex h-11 w-full items-center rounded-lg transition-all duration-200",
+              isModeRailExpanded ? "justify-start gap-0.5 px-2.5" : "justify-center px-0",
+              topMode === "timeDebugger"
+                ? modeRailActiveClass
+                : "bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+            )}
+          >
+            <span
+              className={cn(
+                "inline-flex size-7 shrink-0 items-center justify-center rounded-md transition-colors",
+                topMode === "timeDebugger" ? "text-indigo-700" : "text-slate-500 group-hover:text-indigo-700",
+              )}
+              aria-hidden
+              onMouseEnter={() => setIsModeRailExpanded(true)}
+            >
+              <Clock className="size-4" aria-hidden />
+            </span>
+            <span
+              className={cn(
+                modeRailLabelClass,
+                "overflow-hidden transition-[max-width,opacity,margin] duration-200",
+                isModeRailExpanded ? "ml-0 max-w-[12rem] opacity-100" : "ml-0 max-w-0 opacity-0",
+              )}
+              aria-hidden={!isModeRailExpanded}
+            >
+              Time Debugger
+            </span>
+          </button>
+        </div>
       </nav>
     </aside>
   );
@@ -5227,6 +5481,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           "flex h-screen min-h-0 flex-col pb-8 pl-0 pr-5",
           topMode === "users" && "overflow-x-hidden overflow-y-auto bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
           topMode === "demoBuilder" && "overflow-x-hidden overflow-y-auto bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
+          topMode === "timeDebugger" && "overflow-x-hidden overflow-y-auto bg-gradient-to-br from-amber-50 via-orange-50/40 to-rose-50/30",
           topMode === "roadmap" &&
             "overflow-x-hidden overflow-y-visible bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
           topMode === "backlog" &&
@@ -5558,6 +5813,32 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 ref={planningRightSurfaceRef}
                 className="mt-2 mb-2 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-r-xl shadow-xl"
               >
+                {(() => {
+                  // Closed-year snapshot strip — mounted above the timeline
+                  // when the user is viewing a year in the past. Informational
+                  // only: counts the initiatives in the current view whose
+                  // continuations exist (continuations live in `year+1`,
+                  // which isn't loaded into `initiatives` here, so we count
+                  // initiatives with no continuation reference but we know
+                  // that fact only via `parentInitiativeId` on next-year
+                  // initiatives). For now we use a simple "viewing closed
+                  // year" framing — the count reveal lives in the year-end
+                  // popup flow that fires at the boundary.
+                  if (selectedYear >= clockNow().getFullYear()) return null;
+                  const yearEndLabel = new Date(selectedYear, 11, 31).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                  });
+                  return (
+                    <SnapshotHeaderStrip
+                      scope="year"
+                      periodLabel={`${selectedYear}`}
+                      closeDateLabel={yearEndLabel}
+                      rolledCount={0}
+                      nextPeriodLabel={`${selectedYear + 1}`}
+                    />
+                  );
+                })()}
                 <TimelineGrid
                 initiatives={initiatives}
                 zoom={1}
@@ -5636,6 +5917,8 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 sprintRetrospectiveByTeam={activeSprintRetrospectiveByTeam}
                 onSaveSprintRetrospective={saveSprintRetrospective}
                 onEnterSprintStoryBoard={openSprintStoryBoard}
+                onRequestSprintMove={handleRequestSprintMove}
+                isYearBoundaryBlocked={isYearBoundaryBlockedForActiveSprint}
                 sprintStoryBoardTeamId={sprintStoryBoardTeamId}
                 onSprintStoryBoardTeamChange={setSprintStoryBoardTeamId}
                 onFocusedQuarterChange={setFocusedQuarterLabel}
@@ -6001,6 +6284,23 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             </div>
           ) : topMode === "dashboard" ? (
             null
+          ) : topMode === "timeDebugger" ? (
+            <div className="flex min-h-0 min-w-0 flex-1 flex-row">
+              <div className="ml-1 mt-3 mb-4 min-h-0 min-w-0 flex-1">
+                <div className="h-full min-h-0 min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-md ring-1 ring-slate-200/60">
+                  <TimeDebuggerPanel
+                    initiatives={initiatives}
+                    roadmaps={roadmaps}
+                    selectedRoadmapId={selectedRoadmapId}
+                    selectedYear={selectedYear}
+                  />
+                </div>
+              </div>
+              <div
+                className="pointer-events-none relative flex h-full min-h-0 w-[18px] shrink-0 items-center justify-center self-stretch"
+                aria-hidden
+              />
+            </div>
           ) : topMode === "demoBuilder" ? (
             <div className="flex min-h-0 min-w-0 flex-1 flex-row">
               <div className="ml-1 mt-3 mb-4 min-h-0 min-w-0 flex-1">
@@ -6638,9 +6938,46 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           deleting={deletingEpic}
         />
       )}
+      {yearEndOverflow != null ? (
+        <RolloverOverflowModal
+          scope="year"
+          fromLabel={`${yearEndOverflow.overflowYear}`}
+          toLabel={`${yearEndOverflow.overflowYear + 1}`}
+          totalCount={yearEndOverflow.epicCount}
+          crossingNotes={[
+            `${yearEndOverflow.storyCount} stor${yearEndOverflow.storyCount === 1 ? "y" : "ies"} pinned at year cap (sprint ${YEAR_SPRINT_MAX})`,
+          ]}
+          groups={yearEndOverflowGroups}
+          primaryAction={{
+            label: `Add ${yearEndOverflow.overflowYear + 1}`,
+            onClick: () => void handleConfirmYearEndContinuation(),
+            busy: creatingContinuations,
+          }}
+          onDismiss={handleCancelYearEndOverflow}
+        />
+      ) : null}
+      {sprintMoveOpen != null ? (
+        <SprintMoveModal
+          initiatives={initiatives}
+          fromSprint={sprintMoveOpen}
+          month={monthLaneFromGlobalSprint(sprintMoveOpen).month}
+          filterEpicTeamIds={sprintStoryBoardTeamId ? [sprintStoryBoardTeamId] : null}
+          planYear={selectedYear}
+          isYearBoundaryBlocked={isYearBoundaryBlockedForActiveSprint}
+          workspaceDirectoryUsers={workspaceDirectoryUsers}
+          onConfirmMove={handleManualSprintMove}
+          onConfirmYearEnd={handleManualSprintMoveYearEnd}
+          onDismiss={handleDismissSprintMove}
+        />
+      ) : null}
       {/* <DebugLogPanel /> hidden in production look */}
       <GanttDebugOverlay />
     </DragContext>
   );
 }
+
+// The year-end overflow dialog is now rendered via `RolloverOverflowModal`
+// with `scope="year"` and a `primaryAction` for the Add-next-year handler —
+// see the main render path. The previous bespoke `YearEndOverflowDialog`
+// was removed because its body lacked the grouped initiative/epic list.
 

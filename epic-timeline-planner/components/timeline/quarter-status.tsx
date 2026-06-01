@@ -13,6 +13,9 @@ import {
 import { epicForBurndown, type EstimateSource } from "@/lib/epic-estimates";
 import { InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { nowMs as clockNowMs } from "@/lib/clock";
+import { projectInitiativesToCloseDate } from "@/lib/story-snapshot-projection";
+import { SnapshotHeaderStrip } from "@/components/timeline/snapshot-header-strip";
 
 const STATUS_COLORS: Record<string, string> = {
   "To do": "#f59e0b",
@@ -30,7 +33,31 @@ type QuarterStatusProps = {
 };
 
 export function QuarterStatus({ initiatives, quarterMonths, planYear }: QuarterStatusProps) {
-  const epicRows = useMemo(() => collectQuarterEpics(initiatives, quarterMonths), [initiatives, quarterMonths]);
+  // Close-day projection for past quarters — same pattern as MonthAnalytics.
+  // When the quarter has ended, status pie + burndown reflect what was true
+  // on Mar 31 (or whichever last day) instead of evolving with post-close
+  // edits / rollovers.
+  const quarterCloseMs = useMemo(() => {
+    const lastMonth = quarterMonths[quarterMonths.length - 1] ?? 12;
+    return new Date(planYear, lastMonth, 0, 23, 59, 59, 999).getTime();
+  }, [quarterMonths, planYear]);
+  const isPastQuarter = quarterCloseMs < clockNowMs();
+  const analyticsInitiatives = useMemo(
+    () => (isPastQuarter ? projectInitiativesToCloseDate(initiatives, quarterCloseMs) : initiatives),
+    [isPastQuarter, quarterCloseMs, initiatives],
+  );
+  const epicRows = useMemo(
+    () => collectQuarterEpics(analyticsInitiatives, quarterMonths),
+    [analyticsInitiatives, quarterMonths],
+  );
+  const quarterLabel = useMemo(() => {
+    const first = quarterMonths[0] ?? 1;
+    return first <= 3 ? "Q1" : first <= 6 ? "Q2" : first <= 9 ? "Q3" : "Q4";
+  }, [quarterMonths]);
+  const quarterCloseDateLabel = useMemo(
+    () => new Date(quarterCloseMs).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+    [quarterCloseMs],
+  );
   const [aggregateMode, setAggregateMode] = useState(true);
   const [metric, setMetric] = useState<QuarterBurndownMetric>("daysLeft");
   const [estimateSource, setEstimateSource] = useState<EstimateSource>("auto");
@@ -58,6 +85,16 @@ export function QuarterStatus({ initiatives, quarterMonths, planYear }: QuarterS
 
   return (
     <section className="space-y-6">
+      {isPastQuarter ? (
+        <SnapshotHeaderStrip
+          scope="quarter"
+          periodLabel={`${quarterLabel} ${planYear}`}
+          closeDateLabel={quarterCloseDateLabel}
+          rolledCount={0}
+          nextPeriodLabel="next quarter"
+          framing="charts"
+        />
+      ) : null}
       <article className="p-1">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h3 className="text-[15px] font-semibold text-slate-800">Quarter status filter</h3>

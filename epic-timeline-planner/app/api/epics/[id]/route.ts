@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { db } from "@/lib/db";
+import { ACTIVE_RECORD, db } from "@/lib/db";
+import { captureEpicDailySnapshot } from "@/lib/epic-daily-snapshots";
 
 const epicTeamIdSchema = z.string().trim().min(1).max(64);
 
@@ -49,8 +50,9 @@ export async function PATCH(
       );
     }
 
-    const existing = await db.epic.findUnique({
-      where: { id },
+    // Phase D: edit endpoint refuses soft-deleted epics.
+    const existing = await db.epic.findFirst({
+      where: { id, ...ACTIVE_RECORD },
       select: {
         title: true,
         icon: true,
@@ -153,6 +155,11 @@ export async function PATCH(
         },
       },
     });
+    // Phase C: capture the latest snapshot for today so closed-period views
+    // reading later than this edit see the post-edit values; closed views
+    // dated before today still resolve to the prior snapshot via the
+    // projection helper's most-recent-on-or-before rule.
+    await captureEpicDailySnapshot(epic);
 
     return NextResponse.json(epic);
   } catch (error) {
@@ -167,6 +174,17 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  await db.epic.delete({ where: { id } });
+  // Phase D: soft delete in a transaction so the epic and its child stories
+  // disappear from live views atomically. Snapshots on both stay intact so
+  // closed-period kanban / capacity / charts still render their cards. Hard
+  // delete only happens during developer reset (`resetAndSeedDemo`).
+  const now = new Date();
+  await db.$transaction([
+    db.userStory.updateMany({
+      where: { epicId: id, deletedAt: null },
+      data: { deletedAt: now },
+    }),
+    db.epic.update({ where: { id }, data: { deletedAt: now } }),
+  ]);
   return NextResponse.json({ ok: true });
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
+import { captureEpicDailySnapshot } from "@/lib/epic-daily-snapshots";
 
 const epicTeamIdSchema = z.enum(["platform", "experience", "data", "mobile", "growth"]);
 
@@ -73,6 +74,9 @@ export async function POST(
       history: { create: { entry: "Epic created" } },
     },
   });
+  // Phase C: capture an epic snapshot for day-1 so closed-period views can
+  // render the original values even after future edits.
+  await captureEpicDailySnapshot(epic);
 
   return NextResponse.json(epic, { status: 201 });
 }

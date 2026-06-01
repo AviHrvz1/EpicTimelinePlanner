@@ -4,6 +4,7 @@ import { useDndContext, useDroppable } from "@dnd-kit/core";
 import {
   Activity,
   AlertTriangle,
+  ArrowRightCircle,
   BarChart3,
   CalendarDays,
   Check,
@@ -92,6 +93,7 @@ import {
 } from "@/lib/workspace-users";
 import {
   clampYearSprint,
+  currentWorkYearSprintForPlan,
   firstGlobalSprintForMonth,
   globalSprintFromMonthLane,
   monthLaneFromGlobalSprint,
@@ -99,7 +101,10 @@ import {
   resolvedInitiativeYearSprintBounds,
   sprintEndDate,
   sprintStartDate,
+  YEAR_SPRINT_MAX,
 } from "@/lib/year-sprint";
+import { nowMs as clockNowMs } from "@/lib/clock";
+import { collectMovableStoriesForSprint } from "@/lib/sprint-close-move";
 import { cn } from "@/lib/utils";
 
 export type InitiativeScheduleRangePatch = {
@@ -1537,6 +1542,13 @@ type TimelineGridProps = {
   monthTeamBoardByKey?: Record<string, MonthTeamBoardPersisted>;
   /** Open story Kanban for a global sprint (tabs do not include a sprint-board tab). */
   onEnterSprintStoryBoard?: (yearSprint: number, teamId: string | null) => void;
+  /** Opens the manual `SprintMoveModal` for moving unfinished work to the
+   *  next sprint at sprint close. The parent owns the modal state. */
+  onRequestSprintMove?: (yearSprint: number) => void;
+  /** True when the active sprint is `YEAR_SPRINT_MAX` AND the roadmap has
+   *  no next year — switches the move button into the year-end continuation
+   *  prompt mode. */
+  isYearBoundaryBlocked?: boolean;
   /** Delivery team id when sprint story board was opened from a team lane (breadcrumbs + left epic list). */
   sprintStoryBoardTeamId?: string | null;
   /** Sprint view team filter selector (null = all teams). */
@@ -2488,6 +2500,8 @@ export function TimelineGrid({
   onCapacityEpicOriginalEstimateChange,
   monthTeamBoardByKey = {},
   onEnterSprintStoryBoard,
+  onRequestSprintMove,
+  isYearBoundaryBlocked = false,
   sprintStoryBoardTeamId = null,
   onSprintStoryBoardTeamChange,
   sprintCapacityBoard,
@@ -3970,6 +3984,77 @@ export function TimelineGrid({
       monthPlanTab === "sprint-status" ||
       monthPlanTab === "sprint-capacity" ||
       monthPlanTab === "sprint-retrospective");
+
+  // Closed-sprint Move + Jump chips live in the breadcrumb row immediately
+  // after the "Left" countdown chip. Same alice-blue rounded-full ring style
+  // as `SprintEndCountdown` so the three reads as one chip cluster.
+  const sprintCloseActionChipsJsx = useMemo(() => {
+    if (!showSprintEndCountdown) return null;
+    const ys = activeYearSprintForMonthDrill;
+    if (ys == null) return null;
+    const sprintClosed = sprintEndDate(currentYear, ys).getTime() <= clockNowMs();
+    if (!sprintClosed) return null;
+    const monthForCount = sprintBoardContextMonth ?? activeMonth ?? 1;
+    const teamFilter = sprintFilterTeamIds.length ? sprintFilterTeamIds : null;
+    const movableCount = collectMovableStoriesForSprint(initiatives, monthForCount, ys, teamFilter).length;
+    const atYearCap = ys >= YEAR_SPRINT_MAX;
+    const moveLabel = isYearBoundaryBlocked
+      ? `Add ${currentYear + 1} and continue`
+      : atYearCap
+        ? `Move ${movableCount} to S1 next year`
+        : `Move ${movableCount} to S${ys + 1}`;
+    const moveDisabled = movableCount === 0 && !isYearBoundaryBlocked && !atYearCap;
+    const workTargetSprint = currentWorkYearSprintForPlan(currentYear);
+    const showJump =
+      workTargetSprint != null && workTargetSprint !== ys && Boolean(onEnterSprintStoryBoard);
+    return (
+      <>
+        {onRequestSprintMove ? (
+          <button
+            type="button"
+            disabled={moveDisabled}
+            onClick={() => onRequestSprintMove(ys)}
+            title={moveDisabled ? "Nothing unfinished to move" : moveLabel}
+            className={cn(
+              "inline-flex h-7 max-w-full shrink-0 items-center gap-1 rounded-full bg-[aliceblue] px-2.5 text-[11px] font-semibold leading-none tracking-[0.02em] text-slate-800 ring-1 ring-sky-200 transition sm:gap-1.5 sm:px-3 sm:text-[12px]",
+              moveDisabled
+                ? "cursor-not-allowed text-slate-400 ring-slate-200"
+                : "cursor-pointer hover:bg-sky-100 hover:ring-sky-300",
+            )}
+          >
+            <ArrowRightCircle className="size-3 shrink-0 text-slate-700 sm:size-3.5" strokeWidth={2.25} aria-hidden />
+            <span className="truncate">{moveLabel}</span>
+          </button>
+        ) : null}
+        {showJump && workTargetSprint != null ? (
+          <button
+            type="button"
+            onClick={() =>
+              onEnterSprintStoryBoard?.(workTargetSprint, sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId))
+            }
+            title={`Jump to current sprint (Sprint ${workTargetSprint})`}
+            className="inline-flex h-7 max-w-full shrink-0 cursor-pointer items-center gap-1 rounded-full bg-[aliceblue] px-2.5 text-[11px] font-semibold leading-none tracking-[0.02em] text-slate-800 ring-1 ring-sky-200 transition hover:bg-sky-100 hover:ring-sky-300 sm:gap-1.5 sm:px-3 sm:text-[12px]"
+          >
+            <Flag className="size-3 shrink-0 text-rose-500 sm:size-3.5" strokeWidth={2.25} aria-hidden />
+            <span className="text-slate-500">Jump</span>
+            <span className="truncate">S{workTargetSprint}</span>
+          </button>
+        ) : null}
+      </>
+    );
+  }, [
+    showSprintEndCountdown,
+    activeYearSprintForMonthDrill,
+    currentYear,
+    sprintBoardContextMonth,
+    activeMonth,
+    sprintFilterTeamIds,
+    initiatives,
+    isYearBoundaryBlocked,
+    onRequestSprintMove,
+    onEnterSprintStoryBoard,
+    sprintStoryBoardTeamId,
+  ]);
 
   // Period scope detection for the non-sprint countdown chip. Only month gets a chip;
   // single-quarter and year (all-quarters) intentionally show no chip — those scopes are
@@ -6507,7 +6592,10 @@ export function TimelineGrid({
                     ) : null}
                   </div>
                   {showSprintEndCountdown && activeYearSprintForMonthDrill != null ? (
-                    <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
+                    <>
+                      <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
+                      {sprintCloseActionChipsJsx}
+                    </>
                   ) : periodCountdownScope ? (
                     <PeriodEndCountdown scope={periodCountdownScope} planYear={currentYear} index={periodCountdownIndex} />
                   ) : null}
@@ -6517,7 +6605,10 @@ export function TimelineGrid({
                   {(suppressInlineChips || summaryBarPortalElement) ? null : summaryYearChipsJsx}
                   {/* Sprint-capacity / sprint-status / sprint-retrospective views still get the sprint clock in the breadcrumb area, even when sprintKanbanSummaryStats is null (kanban-only). */}
                   {showSprintEndCountdown && activeYearSprintForMonthDrill != null ? (
-                    <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
+                    <>
+                      <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
+                      {sprintCloseActionChipsJsx}
+                    </>
                   ) : null}
                 </>
               )}
@@ -7369,9 +7460,6 @@ export function TimelineGrid({
                   onOpenStory={onOpenStory ?? (() => {})}
                   onOpenEpic={onOpenEpic}
                   onPatchStory={onSprintKanbanStoryPatch}
-                  onGoToOpenSprint={(ys) =>
-                    onEnterSprintStoryBoard?.(ys, sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId))
-                  }
                 />
               </div>
             ) : monthPlanTab === "sprint-capacity" ? (
@@ -7381,9 +7469,6 @@ export function TimelineGrid({
                   month={sprintBoardContextMonth ?? activeMonth ?? 1}
                   yearSprint={resolvedActiveYearSprint ?? 1}
                   planYear={currentYear}
-                  onGoToOpenSprint={(ys) =>
-                    onEnterSprintStoryBoard?.(ys, sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId))
-                  }
                   selectedTeamId={sprintStoryBoardEpicTeamFilter(sprintStoryBoardTeamId)}
                   workspaceDirectoryUsers={workspaceDirectoryUsers}
                   capacityBoard={sprintCapacityBoard ?? { capacities: {}, assignments: {} }}

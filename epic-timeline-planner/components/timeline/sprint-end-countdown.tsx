@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarCheck2, CalendarDays, Clock, Send, Sun, X } from "lucide-react";
+import { AlertTriangle, CalendarCheck2, CalendarDays, Clock, Send, Sun, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -314,16 +314,28 @@ export function SprintEndCountdown({ planYear, yearSprint }: { planYear: number;
         type="button"
         onClick={() => setPopupOpen(true)}
         className={cn(
-          "inline-flex h-7 max-w-full shrink-0 cursor-pointer items-center gap-1 rounded-full bg-[aliceblue] px-2.5 text-[11px] font-semibold leading-none tracking-[0.02em] text-slate-800 ring-1 ring-sky-200 tabular-nums transition hover:bg-sky-100 hover:ring-sky-300 sm:gap-1.5 sm:px-3 sm:text-[12px]",
-          parts.ended && "text-slate-600",
+          "inline-flex h-7 max-w-full shrink-0 cursor-pointer items-center gap-1 rounded-full px-2.5 text-[11px] font-semibold leading-none tracking-[0.02em] tabular-nums ring-1 transition sm:gap-1.5 sm:px-3 sm:text-[12px]",
+          /* Ended sprints get a warm amber treatment so the planner's eye
+           * immediately catches that the window has closed. Pulsing
+           * outline draws the attention but stays subtle enough not to
+           * be noisy on a long-closed sprint. */
+          parts.ended
+            ? "animate-pulse bg-amber-50 text-amber-900 ring-amber-300 shadow-[0_0_0_3px_rgba(251,191,36,0.18)] hover:bg-amber-100 hover:ring-amber-400"
+            : "bg-[aliceblue] text-slate-800 ring-sky-200 hover:bg-sky-100 hover:ring-sky-300",
         )}
-        title="View sprint timeline"
+        title={parts.ended ? "Sprint window has ended — see timeline" : "View sprint timeline"}
       >
-        <Clock className="size-3 shrink-0 text-slate-700 sm:size-3.5" strokeWidth={2.25} aria-hidden />
-        <span className="text-slate-500">Left</span>
+        {parts.ended ? (
+          <AlertTriangle className="size-3 shrink-0 text-amber-600 sm:size-3.5" strokeWidth={2.5} aria-hidden />
+        ) : (
+          <Clock className="size-3 shrink-0 text-slate-700 sm:size-3.5" strokeWidth={2.25} aria-hidden />
+        )}
+        <span className={cn(parts.ended ? "text-amber-700" : "text-slate-500")}>
+          {parts.ended ? "Sprint over" : "Left"}
+        </span>
         <span className="min-w-0 truncate" aria-live="polite">
           {parts.ended ? (
-            "Sprint ended"
+            <span className="font-bold uppercase tracking-wide">Closed</span>
           ) : (
             <>
               <span>{parts.days}d</span>

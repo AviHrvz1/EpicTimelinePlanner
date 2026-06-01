@@ -1055,7 +1055,7 @@ function InitiativeTreeEpicRow({
           className="min-w-0 flex-1 rounded-md pl-0.5 pr-0 text-left font-normal hover:bg-white/90"
           aria-label={`Open epic ${epic.title}`}
         >
-          <div className="flex min-w-0 items-center gap-0 pl-0">
+          <div className="flex min-w-0 items-center gap-1 pl-0">
             <p
               className={cn(
                 "min-w-0 truncate rounded px-1 text-[16px] font-normal leading-6 tracking-tight text-slate-900",
@@ -1064,6 +1064,14 @@ function InitiativeTreeEpicRow({
             >
               {epic.title}
             </p>
+            {epic.parentEpicId ? (
+              <span
+                className="inline-flex shrink-0 items-center rounded border border-indigo-200/80 bg-indigo-50 px-1 py-px text-[10px] font-semibold leading-tight text-indigo-700"
+                title={`Continuation of an epic from ${epic.planYear != null ? epic.planYear - 1 : "the prior year"}`}
+              >
+                ↩ {epic.planYear != null ? epic.planYear - 1 : "cont"}
+              </span>
+            ) : null}
           </div>
         </button>
       </div>
@@ -1465,6 +1473,14 @@ function InitiativeTreeCard({
                       >
                         {initiative.title}
                       </p>
+                      {initiative.parentInitiativeId ? (
+                        <span
+                          className="inline-flex shrink-0 items-center rounded border border-indigo-200/80 bg-indigo-50 px-1 py-px text-[10px] font-semibold leading-tight text-indigo-700"
+                          title={`Continuation of an initiative from ${initiative.year - 1}`}
+                        >
+                          ↩ {initiative.year - 1}
+                        </span>
+                      ) : null}
                     </div>
                     <button
                       type="button"

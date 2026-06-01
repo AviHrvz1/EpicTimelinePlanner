@@ -25,6 +25,9 @@ import {
   orderedEpicsForTeamInQuarterCapacity,
   type MonthTeamBoardPersisted,
 } from "@/lib/month-team-board";
+import { nowMs as clockNowMs } from "@/lib/clock";
+import { projectInitiativesToCloseDate } from "@/lib/story-snapshot-projection";
+import { SnapshotHeaderStrip } from "@/components/timeline/snapshot-header-strip";
 import { type InitiativeItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -169,6 +172,9 @@ export function QuarterTeamCapacityBoard({
   loadBasis = "originalEstimate",
   onLoadBasisChange,
 }: QuarterTeamCapacityBoardProps) {
+  // Quarter team capacity reads LIVE state. Without auto-rollover surface
+  // overflow, the quarter panel only shows epics planned for this quarter,
+  // period.
   const rows = collectQuarterEpics(initiatives, quarterMonths);
   const gradientKey = `quarter-${year}-${quarterLabel}`.replace(/[^a-zA-Z0-9]+/g, "-");
   const gaugeScaleMax = 60 * quarterMonths.length;
@@ -246,6 +252,19 @@ export function QuarterTeamCapacityBoard({
     }, 0);
   }
 
+  // Snapshot strip for past quarters. With Phase 3 overflow retired the
+  // strip is purely the "frozen at <date>" caption above the panel.
+  const quarterEndMonth = quarterMonths[quarterMonths.length - 1]!;
+  const quarterEndMs = new Date(year, quarterEndMonth, 0, 23, 59, 59, 999).getTime();
+  const isPastQuarter = quarterEndMs < clockNowMs();
+  const quarterCloseDateLabel = useMemo(() => {
+    const d = new Date(year, quarterEndMonth, 0);
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }, [year, quarterEndMonth]);
+  const nextQuarterLabel = quarterEndMonth < 12
+    ? (quarterEndMonth + 1 <= 3 ? "Q1" : quarterEndMonth + 1 <= 6 ? "Q2" : quarterEndMonth + 1 <= 9 ? "Q3" : "Q4")
+    : "next quarter";
+
   return (
     <div
       className="rounded-2xl border border-slate-300/60 p-4 shadow-sm"
@@ -254,6 +273,15 @@ export function QuarterTeamCapacityBoard({
       }}
     >
     <div className="space-y-6 pb-6">
+      {isPastQuarter ? (
+        <SnapshotHeaderStrip
+          scope="quarter"
+          periodLabel={`${quarterLabel} ${year}`}
+          closeDateLabel={quarterCloseDateLabel}
+          rolledCount={0}
+          nextPeriodLabel={nextQuarterLabel}
+        />
+      ) : null}
       <TeamLoadSummary
         teamLabel={
           teamFilterIds.length > 1

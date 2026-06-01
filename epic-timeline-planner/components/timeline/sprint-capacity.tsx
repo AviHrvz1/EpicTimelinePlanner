@@ -2,15 +2,18 @@
 
 import type { LucideIcon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowRight, Check, Flag, GripVertical, Info, Maximize2, Minimize2, Pin, PinOff, Search, User, UserRound, Users, UserX, X } from "lucide-react";
+import { ArrowDown, Check, GripVertical, Info, Maximize2, Minimize2, Pin, PinOff, Search, User, UserRound, Users, UserX, X } from "lucide-react";
 import { useDndContext, useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { capacityGaugeFluidStops } from "@/lib/capacity-thermometer";
 import { collectStoriesForSprintBoard } from "@/lib/sprint-plan";
+import { projectInitiativesToCloseDate } from "@/lib/story-snapshot-projection";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
+import { nowMs as clockNowMs } from "@/lib/clock";
 import { cn } from "@/lib/utils";
 import { formatAssigneeShortLabel } from "@/lib/assignee-display";
-import { currentWorkYearSprintForPlan, sprintEndDate } from "@/lib/year-sprint";
+import { parseStoryRollover } from "@/lib/story-rollover-history";
+import { sprintEndDate } from "@/lib/year-sprint";
 import {
   CAPACITY_DAYS_INPUT_NO_SPIN,
   CAPACITY_ROLLUP_INFO_TOOLTIP_CLASS,
@@ -164,6 +167,9 @@ type CapacityStoryCardModel = {
   daysLeft: number | null;
   assigneeLabel: string;
   status: "todo" | "inProgress" | "done" | "approved";
+  /** Pill summarising rollover lineage relative to the currently-viewed
+   *  sprint. `null` when the story has no rollover history for this view. */
+  rolloverPill: { dir: "in" | "out"; sprint: number; chainDepth: number } | null;
 };
 
 type SprintCapacityBoardProps = {
@@ -181,14 +187,8 @@ type SprintCapacityBoardProps = {
   onOpenStory: (storyId: string) => void;
   teamSelectorSlot?: ReactNode;
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
-  /** Year of the plan — when provided, the board derives `sprintClosed`
-   *  internally and (if also given an `onGoToOpenSprint`) renders the
-   *  same frosted closed-state overlay the sprint kanban uses (light
-   *  slate frost + closed-sign image + jump-to-current-sprint pill).
-   *  Data remains visible underneath. */
+  /** Year of the plan — used to derive `sprintClosed` so drag is disabled. */
   planYear?: number;
-  /** Fires when the user clicks the jump pill in the closed overlay. */
-  onGoToOpenSprint?: (yearSprint: number) => void;
 };
 
 function CapacityStoryCard({
@@ -315,7 +315,27 @@ function CapacityStoryCard({
               </span>
               {card.title}
             </button>
-            <p className="mt-0.5 truncate text-[11px] leading-snug text-slate-500">{card.epicTitle}</p>
+            <p className="mt-0.5 flex min-w-0 items-center gap-1 truncate text-[11px] leading-snug text-slate-500">
+              <span className="truncate">{card.epicTitle}</span>
+              {card.rolloverPill ? (
+                <span
+                  className={cn(
+                    "inline-flex shrink-0 items-center gap-0.5 rounded border px-1 py-px text-[9.5px] font-medium leading-tight",
+                    card.rolloverPill.dir === "in"
+                      ? "border-indigo-200/80 bg-indigo-50 text-indigo-700"
+                      : "border-slate-200/80 bg-slate-50 text-slate-600",
+                  )}
+                  title={
+                    card.rolloverPill.dir === "in"
+                      ? `Rolled in from sprint ${card.rolloverPill.sprint}${card.rolloverPill.chainDepth > 1 ? ` (chain ×${card.rolloverPill.chainDepth})` : ""}`
+                      : `Rolled out to sprint ${card.rolloverPill.sprint}${card.rolloverPill.chainDepth > 1 ? ` (chain ×${card.rolloverPill.chainDepth})` : ""}`
+                  }
+                >
+                  {card.rolloverPill.dir === "in" ? "↩" : "↪"} S{card.rolloverPill.sprint}
+                  {card.rolloverPill.chainDepth > 1 ? ` ·×${card.rolloverPill.chainDepth}` : null}
+                </span>
+              ) : null}
+            </p>
           </div>
         </div>
         <div className="flex min-w-0 items-center justify-between gap-2">
@@ -930,35 +950,40 @@ export function SprintCapacityBoard({
   teamSelectorSlot,
   workspaceDirectoryUsers = [],
   planYear,
-  onGoToOpenSprint,
 }: SprintCapacityBoardProps) {
-  // Closed-state overlay mirrors the sprint kanban: shown when the
-  // active sprint's end date has passed. Only renders if `planYear` is
-  // provided (without it we can't compute the sprint window).
+  /** Used downstream to disable drag once the sprint window has passed. */
   const sprintClosed =
-    planYear != null && sprintEndDate(planYear, yearSprint).getTime() <= Date.now();
-  const workTargetSprint =
-    planYear != null ? currentWorkYearSprintForPlan(planYear) : null;
-  const showGoToOpenSprint =
-    sprintClosed &&
-    workTargetSprint != null &&
-    workTargetSprint !== yearSprint &&
-    Boolean(onGoToOpenSprint);
-  /** Same story rows as sprint Kanban for the selected delivery team (or all teams). */
+    planYear != null && sprintEndDate(planYear, yearSprint).getTime() <= clockNowMs();
+  /** Capacity reads LIVE story state — same as the sprint kanban. After the
+   *  manual move at sprint close, moved cards disappear from the old sprint
+   *  capacity buckets; charts get retro-fidelity from the snapshot projection
+   *  in `buildSprintAnalytics`. */
   const rows = collectStoriesForSprintBoard(initiatives, month, yearSprint, selectedTeamId ? [selectedTeamId] : null);
   const storyById = new Map(
-    rows.map((row) => [
-      row.story.id,
-      {
-        id: row.story.id,
-        title: row.story.title,
-        epicTitle: row.epic.title,
-        estimatedDays: Number(row.story.estimatedDays ?? 0),
-        daysLeft: row.story.daysLeft ?? null,
-        assigneeLabel: storyAssigneeDisplayLabel(row.story),
-        status: row.story.status,
-      } satisfies CapacityStoryCardModel,
-    ]),
+    rows.map((row) => {
+      const lineage = parseStoryRollover(row.story);
+      let rolloverPill: CapacityStoryCardModel["rolloverPill"] = null;
+      if (lineage.rolledFromSprint != null && lineage.rolledToSprint != null) {
+        if (lineage.rolledToSprint === yearSprint) {
+          rolloverPill = { dir: "in", sprint: lineage.rolledFromSprint, chainDepth: lineage.chainDepth };
+        } else if (yearSprint >= lineage.rolledFromSprint && yearSprint < lineage.rolledToSprint) {
+          rolloverPill = { dir: "out", sprint: lineage.rolledToSprint, chainDepth: lineage.chainDepth };
+        }
+      }
+      return [
+        row.story.id,
+        {
+          id: row.story.id,
+          title: row.story.title,
+          epicTitle: row.epic.title,
+          estimatedDays: Number(row.story.estimatedDays ?? 0),
+          daysLeft: row.story.daysLeft ?? null,
+          assigneeLabel: storyAssigneeDisplayLabel(row.story),
+          status: row.story.status,
+          rolloverPill,
+        } satisfies CapacityStoryCardModel,
+      ];
+    }),
   );
   const assigneeRoster = assigneeMatchRosterForSprintTeam(selectedTeamId, workspaceDirectoryUsers);
   /**
@@ -1112,65 +1137,10 @@ export function SprintCapacityBoard({
         backgroundImage: "linear-gradient(135deg, #eff6ff 0%, #f5f3ff 50%, #fdf2f8 100%)",
       }}
     >
-      {sprintClosed ? (
-        <>
-          {/* Mirrors the sprint kanban's closed-state treatment: light
-           *  slate frost over the whole board + a closed-sign image
-           *  pinned near the top and a jump-to-current-sprint pill so
-           *  the user can bounce to the active sprint. Data underneath
-           *  stays legible because the frost is only `bg-slate-900/5`
-           *  with a 1px backdrop blur. */}
-          {/* `pointer-events-auto` makes the frost intercept clicks so
-           *  the inline estimate / days-left editors underneath can't
-           *  be triggered on a closed sprint. The jump pill at z-30
-           *  (also pointer-events-auto) sits above this layer and
-           *  remains clickable. */}
-          <div className="absolute inset-0 z-20 rounded-2xl bg-slate-900/[0.04] backdrop-blur-[1px]" />
-          <div className="pointer-events-none absolute inset-x-3 -top-[28px] z-30 flex w-[min(20rem,calc(100%-1.5rem))] flex-col items-stretch gap-3 left-1/2 -translate-x-1/2">
-            <div
-              className="flex flex-col items-stretch gap-2.5 px-4 py-3 text-[13px] font-semibold tracking-[0.01em] text-slate-800"
-              style={{
-                background: "rgba(255, 255, 255, 0.2)",
-                borderRadius: "16px",
-                boxShadow: "0 2px 16px rgba(15, 23, 42, 0.05)",
-                backdropFilter: "blur(1.2px)",
-                WebkitBackdropFilter: "blur(1.2px)",
-                border: "1px solid rgba(255, 255, 255, 0.44)",
-              }}
-            >
-              <img
-                src="/closed-sign-transparent.png"
-                alt={`Sprint ${yearSprint} is closed`}
-                className="mx-auto block h-auto max-h-44 w-auto object-contain"
-                draggable={false}
-              />
-              {showGoToOpenSprint ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (workTargetSprint != null && onGoToOpenSprint) {
-                      onGoToOpenSprint(workTargetSprint);
-                    }
-                  }}
-                  className="group/jump pointer-events-auto inline-flex w-full items-center gap-3 rounded-full border border-sky-200/80 bg-gradient-to-r from-sky-50 via-indigo-50 to-violet-50 px-4 py-2 text-left shadow-sm ring-1 ring-white/60 transition-all duration-150 hover:-translate-y-px hover:from-sky-100 hover:via-indigo-100 hover:to-violet-100 hover:shadow-md hover:ring-sky-200/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                >
-                  <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-100">
-                    <ArrowRight className="size-4 shrink-0 transition-transform duration-150 group-hover/jump:translate-x-0.5" strokeWidth={2.25} aria-hidden />
-                  </span>
-                  <span className="flex min-w-0 flex-col leading-tight">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-indigo-500">Jump to</span>
-                    <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-900">
-                      <span>Current sprint ·</span>
-                      <Flag className="size-3.5 shrink-0 text-rose-500" strokeWidth={2.2} aria-hidden />
-                      <span>Sprint {workTargetSprint}</span>
-                    </span>
-                  </span>
-                </button>
-              ) : null}
-            </div>
-          </div>
-        </>
-      ) : null}
+      {/* The closed-sprint snapshot strip + Move/Jump action row used to
+       *  live here. Both moved to the breadcrumb header (timeline-grid)
+       *  next to the SprintEndCountdown so the capacity surface stays
+       *  uncluttered. */}
     <div className="space-y-2 pb-6">
       <TeamLoadSummary
         teamLabel={teamLabel}

@@ -67,6 +67,9 @@ import { cn } from "@/lib/utils";
 import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
 import { clampYearSprint, globalSprintFromMonthLane, monthLaneFromGlobalSprint, sprintStartDate, sprintEndDate } from "@/lib/year-sprint";
 import { computeProgress, computeInitiativeProgress, type HealthStatus, type ProgressBasis, type ProgressResult } from "@/lib/progress";
+import { nowMs as clockNowMs } from "@/lib/clock";
+import { projectInitiativesToCloseDate } from "@/lib/story-snapshot-projection";
+import { SnapshotHeaderStrip, type SnapshotHeaderStripScope } from "@/components/timeline/snapshot-header-strip";
 import { ToggleGroup } from "@/components/timeline/basis-toggle-group";
 import { HealthBadge, HealthBadgeWithDetail, formatHealthTooltip } from "@/components/timeline/health-badge";
 import { UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
@@ -1275,6 +1278,27 @@ export function MonthAnalytics({
    */
   const metric: BurndownMetric = burndownBasis === "stories" ? "storyCount" : "daysLeft";
   const burnUpMetric: BurndownMetric = burnupBasis === "stories" ? "storyCount" : "daysLeft";
+  /**
+   * Close-day projection for past periods: when the period in scope (month,
+   * quarter, or year) has fully elapsed, the analytics charts should reflect
+   * what was true on the close day rather than evolving with post-close
+   * edits and sprint rollovers. We compute the period's last instant and
+   * (if it's in the past) re-project every story onto its close-day
+   * snapshot. Burndown / CFD read snapshots directly so they're unaffected
+   * either way — projection only matters for status pie + workload + other
+   * "right now" reads.
+   */
+  const periodCloseMs = useMemo(() => {
+    const lastMonth = (periodMonths != null && periodMonths.length > 0)
+      ? periodMonths[periodMonths.length - 1]!
+      : month;
+    return new Date(planYear, lastMonth, 0, 23, 59, 59, 999).getTime();
+  }, [periodMonths, month, planYear]);
+  const isPastPeriod = periodCloseMs < clockNowMs();
+  const analyticsInitiatives = useMemo(
+    () => (isPastPeriod ? projectInitiativesToCloseDate(initiatives, periodCloseMs) : initiatives),
+    [isPastPeriod, periodCloseMs, initiatives],
+  );
   const [workloadStatusFilters, setWorkloadStatusFilters] = useState<WorkloadFilterKey[]>(["all"]);
   /**
    * Recharts' entry animations on a cold mount run *while* `ResponsiveContainer`
@@ -1400,8 +1424,8 @@ export function MonthAnalytics({
   const isQuarterInsights = true;
   // Unfiltered epics for the initiative picker list
   const allScopeEpics = useMemo(
-    () => collectPeriodEpics(initiatives, scopeMonths, filterEpicTeamIds),
-    [initiatives, scopeMonths, filterEpicTeamIds],
+    () => collectPeriodEpics(analyticsInitiatives, scopeMonths, filterEpicTeamIds),
+    [analyticsInitiatives, scopeMonths, filterEpicTeamIds],
   );
   const scopeInitiativeOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -1416,12 +1440,12 @@ export function MonthAnalytics({
   }, [allScopeEpics]);
   const initiativeFilterId = selectedInitiativeId === "all" ? null : selectedInitiativeId;
   const monthEpics = useMemo(
-    () => collectPeriodEpics(initiatives, scopeMonths, filterEpicTeamIds, initiativeFilterId),
-    [initiatives, scopeMonths, filterEpicTeamIds, initiativeFilterId],
+    () => collectPeriodEpics(analyticsInitiatives, scopeMonths, filterEpicTeamIds, initiativeFilterId),
+    [analyticsInitiatives, scopeMonths, filterEpicTeamIds, initiativeFilterId],
   );
   const monthStories = useMemo(
-    () => collectPeriodStories(initiatives, scopeMonths, filterEpicTeamIds, initiativeFilterId),
-    [initiatives, scopeMonths, filterEpicTeamIds, initiativeFilterId],
+    () => collectPeriodStories(analyticsInitiatives, scopeMonths, filterEpicTeamIds, initiativeFilterId),
+    [analyticsInitiatives, scopeMonths, filterEpicTeamIds, initiativeFilterId],
   );
   const epicComboOptions = useMemo(
     () =>
@@ -3721,6 +3745,21 @@ export function MonthAnalytics({
   const sharedDrilldownArrowClass =
     "absolute -right-[2px] inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800";
 
+  // Snapshot strip framing for charts surface — when the scope period has
+  // ended, tell the user the charts are read from end-of-period snapshots,
+  // not live state. Scope determined by scopeMonths length: 1 = month,
+  // 3 = quarter, 12 = year.
+  const snapshotStripScope: SnapshotHeaderStripScope =
+    scopeMonths.length >= 12 ? "year" : scopeMonths.length >= 2 ? "quarter" : "month";
+  const snapshotPeriodLabel = scopeLabel === "Year"
+    ? `${planYear}`
+    : scopeLabel === "Quarter"
+      ? `${periodLabel ?? "Quarter"} ${planYear}`
+      : `${new Date(planYear, scopeStartMonth - 1).toLocaleString(undefined, { month: "short" })} ${planYear}`;
+  const snapshotCloseDateLabel = new Date(periodCloseMs).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
   return (
     <section
       className="mb-2 flex flex-col gap-3.5 rounded-xl p-4"
@@ -3729,6 +3768,16 @@ export function MonthAnalytics({
         backgroundSize: "24px 24px",
       }}
     >
+      {isPastPeriod ? (
+        <SnapshotHeaderStrip
+          scope={snapshotStripScope}
+          periodLabel={snapshotPeriodLabel}
+          closeDateLabel={snapshotCloseDateLabel}
+          rolledCount={0}
+          nextPeriodLabel="next period"
+          framing="charts"
+        />
+      ) : null}
       <div className="-mt-1 rounded-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-4 py-2 shadow-[inset_0_2px_5px_rgba(15,23,42,0.16),inset_0_-1px_0_rgba(255,255,255,0.55)]">
         <div className="flex flex-wrap items-center gap-2">
           <label className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-slate-700" htmlFor="month-insights-epic-filter">

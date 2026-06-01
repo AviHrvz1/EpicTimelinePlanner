@@ -7,10 +7,8 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-
 import { CSS } from "@dnd-kit/utilities";
 import type { LucideIcon } from "lucide-react";
 import {
-  ArrowRight,
   CheckCheck,
   CheckCircle2,
-  Flag,
   Folder,
   ListTodo,
   Pin,
@@ -27,9 +25,12 @@ import { epicDeliveryTeamAssignmentChip, monthTeamLabelForId } from "@/lib/month
 import { TeamAvatar } from "@/components/ui/team-avatar";
 import { assigneeMatchRosterForSprintTeam, type SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { collectStoriesForSprintBoard, collectEpicsForSprintKanban, type BoardStoryRow, type BoardEpicRow } from "@/lib/sprint-plan";
+import { parseStoryRollover } from "@/lib/story-rollover-history";
+import { projectInitiativesToCloseDate } from "@/lib/story-snapshot-projection";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { currentWorkYearSprintForPlan, sprintEndDate } from "@/lib/year-sprint";
+import { sprintEndDate } from "@/lib/year-sprint";
+import { nowMs as clockNowMs } from "@/lib/clock";
 import { formatAssigneeShortLabel } from "@/lib/assignee-display";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
@@ -140,6 +141,7 @@ function KanbanStoryCard({
   boardStoryAssigneeNames,
   workspaceDirectoryUsers,
   dragDisabled = false,
+  viewedYearSprint,
   onOpenStory,
   onUnscheduleStory,
   onRequestUnscheduleStory,
@@ -152,6 +154,12 @@ function KanbanStoryCard({
   boardStoryAssigneeNames: ReadonlySet<string>;
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
   dragDisabled?: boolean;
+  /** The sprint this card is being rendered FOR — used to surface the
+   *  `↩ S{from}` "rolled in" pill on the destination sprint after a manual
+   *  move. (The closed-sprint `↪` outgoing branch was retired alongside
+   *  Phase 3 scope expansion — moves are deliberate and the source sprint
+   *  no longer surfaces the moved card.) */
+  viewedYearSprint?: number;
   onOpenStory: (storyId: string) => void;
   onUnscheduleStory?: (storyId: string) => void;
   onRequestUnscheduleStory?: (storyId: string, storyTitle: string) => void;
@@ -232,6 +240,17 @@ function KanbanStoryCard({
 
   const editable = !dragDisabled && onPatchStory != null;
 
+  // Rollover lineage derived from history. A single pill summarises chain
+  // depth so chained moves (S6 → S7 → S8) stay one fixed-width label instead
+  // of three.
+  const rollover = useMemo(() => parseStoryRollover(story), [story]);
+  const rolloverPill: { sprint: number; chainDepth: number } | null = (() => {
+    if (viewedYearSprint == null) return null;
+    if (rollover.rolledFromSprint == null || rollover.rolledToSprint == null) return null;
+    if (rollover.rolledToSprint !== viewedYearSprint) return null;
+    return { sprint: rollover.rolledFromSprint, chainDepth: rollover.chainDepth };
+  })();
+
   // Days-burned-down progress: (estimated − left) / estimated. Stories in
   // done/approved have daysLeft=0 by API invariant, so they read 100%.
   // Stories with no estimate get no bar at all (nothing meaningful to show).
@@ -287,7 +306,18 @@ function KanbanStoryCard({
               <UserStoryIcon className="mt-[2px] size-4 shrink-0" />
               <span className="min-w-0">{story.title}</span>
             </div>
-            <p className="mt-1.5 truncate text-[13px] text-slate-500">{epic.title}</p>
+            <p className="mt-1.5 flex min-w-0 items-center gap-1.5 truncate text-[13px] text-slate-500">
+              <span className="truncate">{epic.title}</span>
+              {rolloverPill ? (
+                <span
+                  className="inline-flex shrink-0 items-center gap-0.5 rounded border border-indigo-200/80 bg-indigo-50 px-1 py-px text-[10px] font-medium leading-tight text-indigo-700"
+                  title={`Rolled in from sprint ${rolloverPill.sprint}${rolloverPill.chainDepth > 1 ? ` (chain ×${rolloverPill.chainDepth})` : ""}`}
+                >
+                  ↩ S{rolloverPill.sprint}
+                  {rolloverPill.chainDepth > 1 ? ` ·×${rolloverPill.chainDepth}` : null}
+                </span>
+              ) : null}
+            </p>
           </button>
           {onUnscheduleStory ? (
             <button
@@ -690,8 +720,6 @@ type SprintKanbanProps = {
   onOpenStory: (storyId: string) => void;
   onOpenEpic?: (epicId: string) => void;
   onPatchStory?: (storyId: string, patch: SprintKanbanStoryPatch) => void;
-  /** When viewing a closed sprint, jump to the first still-open sprint in `planYear` (same team filter). */
-  onGoToOpenSprint?: (yearSprint: number) => void;
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
 };
 
@@ -712,14 +740,14 @@ export function SprintKanbanBoard({
   onOpenStory,
   onOpenEpic,
   onPatchStory,
-  onGoToOpenSprint,
   workspaceDirectoryUsers = [],
 }: SprintKanbanProps) {
-  const sprintClosed = sprintEndDate(planYear, yearSprint).getTime() <= Date.now();
-  /** Fresh on each render so the target matches wall-clock "today" when the tab stays open across a sprint boundary. */
-  const workTargetSprint = currentWorkYearSprintForPlan(planYear);
-  const showGoToOpenSprint =
-    sprintClosed && workTargetSprint != null && workTargetSprint !== yearSprint && onGoToOpenSprint;
+  const sprintClosed = sprintEndDate(planYear, yearSprint).getTime() <= clockNowMs();
+  // Kanban reads LIVE story state. After the manual move at sprint close,
+  // moved cards must be GONE from the closed sprint's kanban (their
+  // `story.sprint` is now `N+1`). Charts get retro-fidelity from the snapshot
+  // projection in `buildSprintAnalytics`; the board itself shows what's
+  // truly there now.
   const allRows = useMemo(
     () => collectStoriesForSprintBoard(initiatives, month, yearSprint, filterEpicTeamIds),
     [initiatives, month, yearSprint, filterEpicTeamIds],
@@ -858,56 +886,10 @@ export function SprintKanbanBoard({
 
   return (
     <div className="relative flex w-full min-h-min flex-col gap-2">
-      {sprintClosed ? (
-        <>
-          <div className="pointer-events-none absolute inset-0 z-20 rounded-xl bg-slate-900/[0.04] backdrop-blur-[1px]" />
-          <div className="pointer-events-none absolute inset-x-3 -top-2 z-30 flex w-[min(20rem,calc(100%-1.5rem))] flex-col items-stretch gap-3 left-1/2 -translate-x-1/2">
-            <div
-              className="flex flex-col items-stretch gap-2.5 px-4 py-3 text-[13px] font-semibold tracking-[0.01em] text-slate-800"
-              style={{
-                background: "rgba(255, 255, 255, 0.2)",
-                borderRadius: "16px",
-                boxShadow: "0 2px 16px rgba(15, 23, 42, 0.05)",
-                backdropFilter: "blur(1.2px)",
-                WebkitBackdropFilter: "blur(1.2px)",
-                border: "1px solid rgba(255, 255, 255, 0.44)",
-              }}
-            >
-              <img
-                src="/closed-sign-transparent.png"
-                alt={`Sprint ${yearSprint} is closed`}
-                className="mx-auto block h-auto max-h-44 w-auto object-contain"
-                draggable={false}
-              />
-              {showGoToOpenSprint ? (
-                /* Jump-to-current-sprint pill, now nested INSIDE the
-                 * glassy frame next to the closed sign — one unified
-                 * panel instead of two stacked pieces. */
-                <button
-                  type="button"
-                  onClick={() => {
-                    const target = currentWorkYearSprintForPlan(planYear);
-                    if (target != null) onGoToOpenSprint!(target);
-                  }}
-                  className="group/jump pointer-events-auto inline-flex w-full items-center gap-3 rounded-full border border-sky-200/80 bg-gradient-to-r from-sky-50 via-indigo-50 to-violet-50 px-4 py-2 text-left shadow-sm ring-1 ring-white/60 transition-all duration-150 hover:-translate-y-px hover:from-sky-100 hover:via-indigo-100 hover:to-violet-100 hover:shadow-md hover:ring-sky-200/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                >
-                  <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-100">
-                    <ArrowRight className="size-4 shrink-0 transition-transform duration-150 group-hover/jump:translate-x-0.5" strokeWidth={2.25} aria-hidden />
-                  </span>
-                  <span className="flex min-w-0 flex-col leading-tight">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-indigo-500">Jump to</span>
-                    <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-900">
-                      <span>Current sprint ·</span>
-                      <Flag className="size-3.5 shrink-0 text-rose-500" strokeWidth={2.2} aria-hidden />
-                      <span>Sprint {workTargetSprint}</span>
-                    </span>
-                  </span>
-                </button>
-              ) : null}
-            </div>
-          </div>
-        </>
-      ) : null}
+      {/* The closed-sprint snapshot strip + Move/Jump action row used to
+       *  live here. Both moved to the breadcrumb header (timeline-grid)
+       *  next to the SprintEndCountdown so the kanban surface stays
+       *  uncluttered. */}
       {showToolbarRow ? (
         <div className="shrink-0 px-2.5 py-1">
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
@@ -1103,6 +1085,7 @@ export function SprintKanbanBoard({
                   boardStoryAssigneeNames={boardStoryAssigneeNames}
                   workspaceDirectoryUsers={workspaceDirectoryUsers}
                   dragDisabled={sprintClosed}
+                  viewedYearSprint={yearSprint}
                   onOpenStory={onOpenStory}
                   onUnscheduleStory={onUnscheduleStory}
                   onRequestUnscheduleStory={onRequestUnscheduleStory}

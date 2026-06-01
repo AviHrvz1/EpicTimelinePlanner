@@ -11,6 +11,9 @@ import {
 } from "@/lib/sprint-capacity";
 import { collectMonthScopeEpicsForSprintPanel, collectStoriesForSprintBoard, storyMatchesYearSprint } from "@/lib/sprint-plan";
 import { InitiativeItem, UserStoryItem } from "@/lib/types";
+import { now as clockNow, nowMs as clockNowMs } from "@/lib/clock";
+import { sprintEndDate } from "@/lib/year-sprint";
+import { projectInitiativesToCloseDate } from "@/lib/story-snapshot-projection";
 
 export type BurndownMetric = "daysLeft" | "storyCount";
 
@@ -223,7 +226,7 @@ function buildStatusPie(stories: UserStoryItem[], month: number, yearSprint: num
  */
 function sprintCalendarToday1Based(dayDates: Date[]): number {
   if (dayDates.length === 0) return 1;
-  const t = startOfDay(new Date()).getTime();
+  const t = startOfDay(clockNow()).getTime();
   const first = startOfDay(dayDates[0]).getTime();
   const last = startOfDay(dayDates[dayDates.length - 1]).getTime();
   if (t < first) return 1;
@@ -249,7 +252,7 @@ function buildBurndown(
   const dayDates = sprintDayDates(planYear, month, yearSprint);
   const horizon = Math.max(1, dayDates.length);
   const roundBurndown = (n: number) => (metric === "storyCount" ? Math.round(n) : Number(n.toFixed(1)));
-  const todayMs = startOfDay(new Date()).getTime();
+  const todayMs = startOfDay(clockNow()).getTime();
 
   // Build per-story snapshot lookup: storyId → sorted [{dateMs, daysLeft, status}]
   type SnapRow = { dateMs: number; daysLeft: number | null; status: StoryStatus };
@@ -838,7 +841,7 @@ function sprintDayDates(planYear: number, month: number, yearSprint: number): Da
 function sprintCalendarDaysRemaining(planYear: number, month: number, yearSprint: number): number {
   const dayDates = sprintDayDates(planYear, month, yearSprint);
   if (dayDates.length === 0) return 0;
-  const today = startOfDay(new Date());
+  const today = startOfDay(clockNow());
   const first = startOfDay(dayDates[0]);
   const lastEnd = endOfDay(dayDates[dayDates.length - 1]);
   const t = today.getTime();
@@ -862,7 +865,7 @@ function buildFlowTrend(
 
   const sprintFirstDay = dayDates[0];
   const sprintLastDay = dayDates[dayDates.length - 1];
-  const todayMs = startOfDay(new Date()).getTime();
+  const todayMs = startOfDay(clockNow()).getTime();
   const pastDates = dayDates.filter((d) => startOfDay(d).getTime() <= todayMs);
 
   // Build snapshot map same as burndown: storyId → sorted [{dateMs, status}]
@@ -945,19 +948,31 @@ export function buildSprintAnalytics(
   sprintCapacityBoard?: { capacities: Record<string, number>; assignments: Record<string, string[]> } | null,
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[] | null,
 ): SprintAnalyticsData {
-  const stories = collectMonthStories(initiatives, month, filterEpicTeamIds, estimateSource);
-  const workloadStories = collectWorkloadStories(initiatives, month, filterEpicTeamIds, workspaceDirectoryUsers);
+  // When the sprint is closed, project every story onto its close-day snapshot
+  // BEFORE collecting the analytics buckets. The pie / workload / capacity all
+  // read `story.status` + `story.daysLeft` — by switching the underlying data
+  // they all become honest retros without any per-function plumbing. Burndown
+  // continues to read raw snapshots directly so its day-by-day curve is
+  // unaffected.
+  const closeMs = sprintEndDate(planYear, yearSprint).getTime();
+  const sprintClosed = closeMs <= clockNowMs();
+  const sourceInitiatives = sprintClosed
+    ? projectInitiativesToCloseDate(initiatives, closeMs)
+    : initiatives;
+
+  const stories = collectMonthStories(sourceInitiatives, month, filterEpicTeamIds, estimateSource);
+  const workloadStories = collectWorkloadStories(sourceInitiatives, month, filterEpicTeamIds, workspaceDirectoryUsers);
   const workload = buildWorkloadByAssignee(workloadStories, month, yearSprint);
   const isTeamMode = !filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1;
   const workloadByTeam = isTeamMode
-    ? buildWorkloadByTeam(initiatives, month, yearSprint, filterEpicTeamIds?.length ? filterEpicTeamIds : null, workspaceDirectoryUsers)
+    ? buildWorkloadByTeam(sourceInitiatives, month, yearSprint, filterEpicTeamIds?.length ? filterEpicTeamIds : null, workspaceDirectoryUsers)
     : [];
   const capacity = buildWorkloadCapacityByAssignee(
     stories,
     month,
     yearSprint,
     planYear,
-    initiatives,
+    sourceInitiatives,
     sprintCapacityBoard,
     filterEpicTeamIds,
     workspaceDirectoryUsers,
@@ -965,7 +980,9 @@ export function buildSprintAnalytics(
   const flow = buildFlowTrend(stories, month, yearSprint, planYear);
   return {
     statusPie: buildStatusPie(stories, month, yearSprint),
-    burndown: buildBurndown(stories, month, yearSprint, metric, planYear),
+    // Burndown stays on the LIVE initiatives so it reads raw snapshots
+    // unprojected — projection would double-count the close-day value.
+    burndown: buildBurndown(collectMonthStories(initiatives, month, filterEpicTeamIds, estimateSource), month, yearSprint, metric, planYear),
     ...workload,
     workloadByTeam,
     ...capacity,

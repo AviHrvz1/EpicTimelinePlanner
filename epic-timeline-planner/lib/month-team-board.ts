@@ -128,7 +128,13 @@ function epicSpansMonth(epic: EpicItem, month: number): boolean {
   return epic.planStartMonth <= month && epic.planEndMonth >= month;
 }
 
-/** Epics visible in the month panel — mirrors the inclusion logic of monthAssignedEpics in the panel. */
+/**
+ * Epics visible in the month panel. An epic appears when its plan covers
+ * the month (or it's unscheduled under an in-scope initiative). No overflow
+ * branch — past months reflect their PLAN, not where unfinished work has
+ * since migrated. The manual `SprintMoveModal` already updates story sprint
+ * numbers deliberately; capacity panels stay plan-driven.
+ */
 export function collectMonthEpicsForTeamBoard(
   initiatives: InitiativeItem[],
   month: number,
@@ -147,7 +153,8 @@ export function collectMonthEpicsForTeamBoard(
       const isPlannedInMonth = epicSpansMonth(epic, month);
       const isUnscheduled =
         epic.planSprint == null && epic.planStartMonth == null && epic.planEndMonth == null;
-      if (!isPlannedInMonth && !(isUnscheduled && (initiativeSpansMonth || initiativeHasPlannedEpicInMonth))) continue;
+      const includeUnscheduled = isUnscheduled && (initiativeSpansMonth || initiativeHasPlannedEpicInMonth);
+      if (!isPlannedInMonth && !includeUnscheduled) continue;
       byEpicId.set(epic.id, { epic, initiative });
     }
   }

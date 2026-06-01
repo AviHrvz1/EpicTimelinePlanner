@@ -14,6 +14,8 @@
  *   - daysLeft is initialized to estimatedDays when a story is sized
  *   - daysLeft <= estimatedDays always
  */
+import { now as clockNow } from "@/lib/clock";
+
 export type HealthStatus = "done" | "onTrack" | "watch" | "atRisk" | "overdue";
 
 /** Which formula drives the rendered progress %.
@@ -100,7 +102,7 @@ export function workingDaysBetween(from: Date, to: Date): number {
 }
 
 export function computeProgress(input: ProgressInputs): ProgressResult {
-  const now = input.now ?? new Date();
+  const now = input.now ?? clockNow();
   const basis: ProgressBasis = input.basis ?? "days";
 
   let totalEffort = 0;

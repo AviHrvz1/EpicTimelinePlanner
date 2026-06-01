@@ -1,5 +1,8 @@
 import { StoryStatus } from "@/lib/generated/prisma";
-import { resolveEpicPlanYearSprint, resolveStoryYearSprint } from "@/lib/year-sprint";
+import {
+  resolveEpicPlanYearSprint,
+  resolveStoryYearSprint,
+} from "@/lib/year-sprint";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 
 export function storyMatchesYearSprint(
@@ -56,8 +59,15 @@ function epicIsOnPlanForMonth(epic: EpicItem, month: number): boolean {
 }
 
 /**
- * Epics shown in the month/sprint left panel for a month (planned in month or unscheduled under an in-scope initiative),
- * optionally narrowed to a delivery team when opening that team’s sprint board.
+ * Epics shown in the month/sprint left panel for a month (planned in month
+ * or unscheduled under an in-scope initiative), optionally narrowed to a
+ * delivery team when opening that team's sprint board.
+ *
+ * No overflow expansion: an epic appears here only when its plan overlaps
+ * this month, or when it's unscheduled under an in-scope initiative. The
+ * Phase 3 "epic has a story whose current sprint lands in this month"
+ * branch was retired alongside auto-rollover — moves are deliberate now and
+ * each story's `story.sprint` already points at the right month.
  */
 export function collectMonthScopeEpicsForSprintPanel(
   initiatives: InitiativeItem[],
@@ -89,10 +99,12 @@ export function collectMonthScopeEpicsForSprintPanel(
 }
 
 /**
- * Stories rendered on the sprint Kanban: same epic scope as the month/sprint left panel
- * (`collectMonthScopeEpicsForSprintPanel`), filtered to the active global sprint.
- * Using only “scheduled initiatives overlapping month” excluded unscheduled epics that still
- * appear in the panel, so cards could disappear after a successful drop.
+ * Stories rendered on the sprint Kanban: same epic scope as the month /
+ * sprint left panel ({@link collectMonthScopeEpicsForSprintPanel}),
+ * filtered to the active global sprint via `story.sprint`. Closed sprints
+ * naturally only render their approved cards because moved stories now
+ * carry the new sprint number and the planner explicitly chose which to
+ * move via the {@link SprintMoveModal}.
  */
 export function collectStoriesForSprintBoard(
   initiatives: InitiativeItem[],

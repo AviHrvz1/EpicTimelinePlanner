@@ -56,6 +56,12 @@ model Initiative {
   epics       Epic[]
   comments    InitiativeComment[]
   history     InitiativeHistory[]
+  /** Self-relation: when set, this initiative is a year-end continuation of
+   *  `parentInitiative` from the prior year. Preserves the link between
+   *  the original (frozen as history) and the new replan. */
+  parentInitiativeId String?
+  parentInitiative   Initiative?  @relation("InitiativeContinuation", fields: [parentInitiativeId], references: [id], onDelete: SetNull)
+  continuations      Initiative[] @relation("InitiativeContinuation")
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 }
@@ -110,8 +116,25 @@ model Epic {
   userStories    UserStory[]
   comments       EpicComment[]
   history        EpicHistory[]
+  /** Self-relation mirroring {@link Initiative.parentInitiativeId}: marks
+   *  this epic as a year-end continuation of its parent. Unscheduled at
+   *  creation (no plan dates) until the planner opens the date popover. */
+  parentEpicId   String?
+  parentEpic     Epic?         @relation("EpicContinuation", fields: [parentEpicId], references: [id], onDelete: SetNull)
+  continuations  Epic[]        @relation("EpicContinuation")
+  /** Phase C: per-day snapshot of editable epic fields so closed-period
+   *  views render frozen at close-day state. */
+  epicSnapshots  EpicDailySnapshot[]
+  /** Phase D: soft-delete timestamp. NULL = active row, non-null = row was
+   *  deleted at this instant. Live views filter for NULL; closed-period
+   *  views ignore the filter so historical kanban / capacity / charts still
+   *  render the card from its snapshots. Hard delete only happens during
+   *  developer reset (resetAndSeedDemo). */
+  deletedAt      DateTime?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
+
+  @@index([deletedAt])
 }
 
 model EpicComment {
@@ -153,8 +176,15 @@ model UserStory {
   comments      StoryComment[]
   history       StoryHistory[]
   snapshots     StoryDailySnapshot[]
+  /** Phase D: soft-delete timestamp. NULL = active row, non-null = row was
+   *  deleted at this instant. Live views filter for NULL; closed-period
+   *  views ignore the filter so historical kanban renders the card from its
+   *  snapshots. */
+  deletedAt     DateTime?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+
+  @@index([deletedAt])
 }
 
 model StoryComment {
@@ -184,6 +214,14 @@ model StoryDailySnapshot {
   estimatedDays Int?
   daysLeft     Int?
   assignee     String?
+  /** Phase B: text fields captured so closed-period views stay frozen
+   *  against later renames / description edits / priority + labels changes.
+   *  All nullable so pre-migration rows remain valid; projection helper
+   *  falls back to the live story field when a column is null. */
+  title        String?
+  description  String?
+  priority     String?
+  labels       String?
   createdAt    DateTime   @default(now())
 
   @@unique([storyId, snapshotDate])
@@ -364,4 +402,40 @@ model RateLimitEvent {
   createdAt DateTime @default(now())
 
   @@index([key, createdAt])
+}
+
+/**
+ * Phase C: per-day snapshot of editable epic fields. Mirrors
+ * {@link StoryDailySnapshot} — captured idempotently on every epic
+ * mutation (via {@link captureEpicDailySnapshot}) and once per day during
+ * demo refresh. Read by closed-period views (closed sprint kanban /
+ * capacity, past month / quarter capacity, year insights) so renaming an
+ * epic / changing its estimate / swapping its team in the present doesn't
+ * bleed back into history. All editable fields nullable so pre-migration
+ * rows remain valid; the projection helper falls back to live `epic.field`
+ * when a column is null.
+ */
+model EpicDailySnapshot {
+  id                   String   @id @default(uuid())
+  epicId               String
+  epic                 Epic     @relation(fields: [epicId], references: [id], onDelete: Cascade)
+  snapshotDate         DateTime
+  title                String?
+  description          String?
+  icon                 String?
+  color                String?
+  originalEstimateDays Int?
+  priority             String?
+  labels               String?
+  team                 String?
+  planStartMonth       Int?
+  planEndMonth         Int?
+  planSprint           Int?
+  planEndSprint        Int?
+  planStartDay         Int?
+  planEndDay           Int?
+  createdAt            DateTime @default(now())
+
+  @@unique([epicId, snapshotDate])
+  @@index([snapshotDate])
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { db } from "@/lib/db";
+import { ACTIVE_RECORD, db } from "@/lib/db";
 
 const createCommentSchema = z.object({
   body: z.string().trim().min(1).max(2000),
@@ -23,7 +23,8 @@ export async function POST(
     );
   }
 
-  const epic = await db.epic.findUnique({ where: { id }, select: { id: true } });
+  // Phase D: no comments on soft-deleted epics.
+  const epic = await db.epic.findFirst({ where: { id, ...ACTIVE_RECORD }, select: { id: true } });
   if (!epic) {
     return NextResponse.json({ message: "Epic not found" }, { status: 404 });
   }

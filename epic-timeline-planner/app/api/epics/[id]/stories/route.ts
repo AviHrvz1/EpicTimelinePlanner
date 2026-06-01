@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { StoryStatus } from "@/lib/generated/prisma";
 import { z } from "zod";
 
-import { db } from "@/lib/db";
+import { ACTIVE_RECORD, db } from "@/lib/db";
 import { captureStoryDailySnapshot } from "@/lib/story-daily-snapshots";
 import { YEAR_SPRINT_MAX, YEAR_SPRINT_MIN } from "@/lib/year-sprint";
 
@@ -42,8 +42,9 @@ export async function POST(
     );
   }
 
-  const epic = await db.epic.findUnique({
-    where: { id },
+  // Phase D: can't add a new story under a soft-deleted epic.
+  const epic = await db.epic.findFirst({
+    where: { id, ...ACTIVE_RECORD },
     select: {
       planQuarter: true,
       planStartMonth: true,

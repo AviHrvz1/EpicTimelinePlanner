@@ -118,6 +118,7 @@ export function TeamEpicCard({
   planningLabel,
   executionStatusLabel,
   executionStatusClassName,
+  overflowLabel,
   onOpenEpic,
   onRemoveEpicFromCapacity,
   onOriginalEstimateChange,
@@ -133,6 +134,9 @@ export function TeamEpicCard({
   planningLabel?: string;
   executionStatusLabel?: string;
   executionStatusClassName?: string;
+  /** When set, renders an indigo "OVRFLW · ↩ Mar" pill that calls out the
+   *  card as carried-over work rather than newly-planned for this period. */
+  overflowLabel?: string;
   onOpenEpic: (epicId: string) => void;
   onRemoveEpicFromCapacity: (epicId: string) => void;
   onOriginalEstimateChange: (epicId: string, estimatedDays: number) => void;
@@ -217,6 +221,14 @@ export function TeamEpicCard({
             {planningLabel ? (
               <span className="shrink-0 rounded border border-slate-200/70 bg-slate-50 px-1 py-px text-[10px] font-medium leading-tight text-slate-500">
                 {planningLabel}
+              </span>
+            ) : null}
+            {overflowLabel ? (
+              <span
+                className="shrink-0 rounded border border-indigo-200/80 bg-indigo-50 px-1 py-px text-[10px] font-semibold leading-tight text-indigo-700"
+                title="This epic is anchored to a different period — it's here only because some unfinished stories rolled in via sprint rollover."
+              >
+                {overflowLabel}
               </span>
             ) : null}
           </div>
@@ -309,6 +321,10 @@ export function TeamCapacityBucket({
     planningLabel?: string;
     executionStatusLabel?: string;
     executionStatusClassName?: string;
+    /** Pre-formatted "OVRFLW · ↩ Mar" pill shown when the epic appears in
+     *  this period only because of rolled-in stories. `undefined` for
+     *  epics in their planned home. */
+    overflowLabel?: string;
   }>;
   capacity: number;
   onCapacityChange: (days: number) => void;

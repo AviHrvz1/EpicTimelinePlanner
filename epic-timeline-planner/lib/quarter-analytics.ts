@@ -1,4 +1,5 @@
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
+import { now as clockNow } from "@/lib/clock";
 
 export type QuarterEpicRow = {
   epic: EpicItem;
@@ -72,7 +73,8 @@ export function collectQuarterEpics(
         overlapRange(epic.planStartMonth, epic.planEndMonth, qStart, qEnd);
       const isUnscheduled =
         epic.planSprint == null && epic.planStartMonth == null && epic.planEndMonth == null;
-      if (!epicHasPlan && !(isUnscheduled && (initiativeSpansQuarter || initiativeHasPlannedEpicInQuarter))) continue;
+      const includeUnscheduled = isUnscheduled && (initiativeSpansQuarter || initiativeHasPlannedEpicInQuarter);
+      if (!epicHasPlan && !includeUnscheduled) continue;
       byEpicId.set(epic.id, { epic, initiative });
     }
   }
@@ -106,7 +108,7 @@ export function buildQuarterBurndownSeries(
   quarterMonths: readonly number[],
   planYear: number,
 ): QuarterBurndownPoint[] {
-  const todayMs = startOfLocalDay(new Date());
+  const todayMs = startOfLocalDay(clockNow());
   const quarterDays = quarterMonths.flatMap((month) => {
     const total = MONTH_DAY_COUNTS[month] ?? 30;
     return Array.from({ length: total }, (_, idx) => {

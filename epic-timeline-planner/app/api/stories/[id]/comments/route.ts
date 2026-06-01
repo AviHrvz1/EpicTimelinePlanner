@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { db } from "@/lib/db";
+import { ACTIVE_RECORD, db } from "@/lib/db";
 
 const createCommentSchema = z.object({
   body: z.string().trim().min(1).max(2000),
@@ -23,7 +23,8 @@ export async function POST(
     );
   }
 
-  const story = await db.userStory.findUnique({ where: { id }, select: { id: true } });
+  // Phase D: no comments on soft-deleted stories.
+  const story = await db.userStory.findFirst({ where: { id, ...ACTIVE_RECORD }, select: { id: true } });
   if (!story) {
     return NextResponse.json({ message: "Story not found" }, { status: 404 });
   }

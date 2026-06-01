@@ -18,6 +18,7 @@ import path from "node:path";
 
 import { StoryStatus } from "@/lib/generated/prisma";
 import { db } from "@/lib/db";
+import { captureEpicDailySnapshot } from "@/lib/epic-daily-snapshots";
 import { collectAndUploadDemoAvatars } from "@/lib/demo-builder/avatars";
 import {
   DEMO_EPIC_DESCRIPTIONS,
@@ -69,6 +70,13 @@ export interface ResetSeedResult {
 export interface RefreshResult {
   added: number;
   through: string;
+}
+
+export type ScenarioKey = "sprintOverflow" | "monthOverflow" | "quarterOverflow" | "yearOverflow";
+
+export interface ScenarioSeedResult {
+  scenario: ScenarioKey;
+  mutated: number;
 }
 
 export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
@@ -318,6 +326,10 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
           priority: pickDemoEpicPriority(initIdx * 7 + teamIdx * 13),
         },
       });
+      // Phase C: day-1 epic snapshot so closed-period views can resolve to
+      // the original seeded epic state. `today` here is the seed run's
+      // wall-clock, matching the story snapshot dates also generated below.
+      await captureEpicDailySnapshot(epic, today);
       totalEpics += 1;
       const epicPriorityForStories = epic.priority ?? null;
 
@@ -830,6 +842,66 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
 }
 
 /**
+ * Reseeds the demo then forces a handful of stories at the chosen sprint
+ * boundary into `inProgress` so the time-travel rollover effect has guaranteed
+ * unfinished work to move. Spread across multiple epics so the year-overflow
+ * scenario exercises multi-epic continuation creation.
+ *
+ * Target sprints by scenario:
+ *   - sprintOverflow  → S5  (March L1, within Q1)
+ *   - quarterOverflow → S6  (March L2, last sprint of Q1, crosses to S7/Apr/Q2)
+ *   - monthOverflow   → S8  (April L2, crosses to S9/May, both in Q2)
+ *   - yearOverflow    → S24 (December L2, rollover clamps — overflow path)
+ */
+export async function seedScenario(scenario: ScenarioKey): Promise<ScenarioSeedResult> {
+  await resetAndSeedDemo();
+  const targetSprint = (
+    {
+      sprintOverflow: 5,
+      quarterOverflow: 6,
+      monthOverflow: 8,
+      yearOverflow: 24,
+    } as const
+  )[scenario];
+
+  // Pull a deliberate spread across epics — for the year scenario we want at
+  // least 3 distinct epics so continuation creation has to make multiple
+  // continuation rows, not just one.
+  const candidates = await db.userStory.findMany({
+    where: { sprint: targetSprint, status: { notIn: [StoryStatus.done, StoryStatus.approved] } },
+    take: 30,
+    select: { id: true, epicId: true, estimatedDays: true },
+    orderBy: { epicId: "asc" },
+  });
+
+  // Take up to ~3 stories per epic up to a total of 9 to keep the test set
+  // small and predictable.
+  const perEpic = new Map<string, number>();
+  const picked: typeof candidates = [];
+  for (const story of candidates) {
+    const count = perEpic.get(story.epicId) ?? 0;
+    if (count >= 3) continue;
+    perEpic.set(story.epicId, count + 1);
+    picked.push(story);
+    if (picked.length >= 9) break;
+  }
+
+  let mutated = 0;
+  for (const story of picked) {
+    await db.userStory.update({
+      where: { id: story.id },
+      data: {
+        status: StoryStatus.inProgress,
+        daysLeft: Math.max(1, story.estimatedDays ?? 2),
+      },
+    });
+    mutated += 1;
+  }
+
+  return { scenario, mutated };
+}
+
+/**
  * Cheap re-run: walk every existing demo story and extend its snapshot
  * series from the last snapshot's date up to today. Doesn't touch scope
  * (initiative/epic/user) or wipe anything. Live story `status`/`daysLeft`
@@ -889,6 +961,37 @@ export async function refreshDemoSnapshotsToToday(): Promise<RefreshResult> {
       data: { status: final.status, daysLeft: final.daysLeft },
     });
   }
+
+  // Phase C: capture an epic snapshot for every epic dated today. Idempotent
+  // via the unique (epicId, snapshotDate) constraint, so re-runs no-op.
+  // Demo epics don't change shape between seed runs so a single today-dated
+  // snapshot is enough for the projection helper to find values for any
+  // future view — pre-today closed views with no matching epic snapshot
+  // fall back to the live epic field, which still matches the seeded
+  // values until a user edits them.
+  const epics = await db.epic.findMany({
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      icon: true,
+      color: true,
+      originalEstimateDays: true,
+      priority: true,
+      labels: true,
+      team: true,
+      planStartMonth: true,
+      planEndMonth: true,
+      planSprint: true,
+      planEndSprint: true,
+      planStartDay: true,
+      planEndDay: true,
+    },
+  });
+  for (const epic of epics) {
+    await captureEpicDailySnapshot(epic, today);
+  }
+
   return {
     added,
     through: today.toISOString().slice(0, 10),

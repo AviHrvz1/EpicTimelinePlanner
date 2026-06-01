@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { StoryStatus } from "@/lib/generated/prisma";
 import { z } from "zod";
 
-import { db } from "@/lib/db";
+import { ACTIVE_RECORD, db } from "@/lib/db";
 import { captureStoryDailySnapshot } from "@/lib/story-daily-snapshots";
 import { YEAR_SPRINT_MAX, YEAR_SPRINT_MIN } from "@/lib/year-sprint";
 
@@ -50,8 +50,11 @@ export async function PATCH(
     );
   }
 
-  const existing = await db.userStory.findUnique({
-    where: { id },
+  // Phase D: edit endpoint refuses soft-deleted rows. Soft-deleted stories
+  // surface only in closed-period views; edits in the present would either
+  // resurrect them or corrupt the snapshot trail.
+  const existing = await db.userStory.findFirst({
+    where: { id, ...ACTIVE_RECORD },
     select: {
       title: true,
       icon: true,
@@ -122,8 +125,9 @@ export async function PATCH(
   if (patch.epicId !== undefined && patch.epicId !== existing.epicId) changes.push("Parent epic changed");
 
   const targetEpicId = patch.epicId ?? existing.epicId;
-  const targetEpic = await db.epic.findUnique({
-    where: { id: targetEpicId },
+  // Phase D: can't move a story to a soft-deleted epic.
+  const targetEpic = await db.epic.findFirst({
+    where: { id: targetEpicId, ...ACTIVE_RECORD },
     select: {
       planYear: true,
       planQuarter: true,
@@ -193,11 +197,18 @@ export async function DELETE(
 ) {
   try {
     const { id } = await context.params;
-    const existing = await db.userStory.findUnique({ where: { id }, select: { id: true } });
-    if (!existing) {
+    const existing = await db.userStory.findUnique({
+      where: { id },
+      select: { id: true, deletedAt: true },
+    });
+    if (!existing || existing.deletedAt != null) {
       return NextResponse.json({ message: "Story not found" }, { status: 404 });
     }
-    await db.userStory.delete({ where: { id } });
+    // Phase D: soft delete — flip the timestamp instead of removing the row.
+    // The story disappears from live views (which filter `deletedAt IS NULL`
+    // via `ACTIVE_RECORD`) but its snapshots stay, so closed-period kanban /
+    // capacity / charts still render the card.
+    await db.userStory.update({ where: { id }, data: { deletedAt: new Date() } });
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     console.error("[DELETE /api/stories/[id]]", err);

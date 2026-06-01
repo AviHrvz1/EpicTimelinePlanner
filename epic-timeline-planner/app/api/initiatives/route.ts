@@ -2,30 +2,41 @@ import { InitiativeStatus } from "@/lib/generated/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { db } from "@/lib/db";
+import { db, ACTIVE_RECORD } from "@/lib/db";
 
 const DEFAULT_YEAR = new Date().getFullYear();
 const DEFAULT_ROADMAP_ID = "default-roadmap-0000-0000-000000000001";
 
-const INITIATIVE_INCLUDE = {
-  comments: { orderBy: { createdAt: "desc" as const } },
-  history: { orderBy: { createdAt: "desc" as const } },
-  epics: {
-    orderBy: { createdAt: "asc" as const },
-    include: {
-      comments: { orderBy: { createdAt: "desc" as const } },
-      history: { orderBy: { createdAt: "desc" as const } },
-      userStories: {
-        orderBy: [{ backlogOrder: "asc" as const }, { createdAt: "asc" as const }],
-        include: {
-          comments: { orderBy: { createdAt: "desc" as const } },
-          history: { orderBy: { createdAt: "desc" as const } },
-          snapshots: { orderBy: { snapshotDate: "asc" as const } },
+function buildInitiativeInclude(includeDeleted: boolean) {
+  // Phase D: by default filter out soft-deleted rows so live consumers
+  // (backlog, current sprint kanban, current capacity panels) never see
+  // deleted stories/epics. The timeline view opts in via `includeDeleted=1`
+  // because its closed-period scope expansion needs the rows to render
+  // snapshot data on closed kanban / capacity / charts.
+  const userStoriesFilter = includeDeleted ? {} : { where: ACTIVE_RECORD };
+  const epicsFilter = includeDeleted ? {} : { where: ACTIVE_RECORD };
+  return {
+    comments: { orderBy: { createdAt: "desc" as const } },
+    history: { orderBy: { createdAt: "desc" as const } },
+    epics: {
+      ...epicsFilter,
+      orderBy: { createdAt: "asc" as const },
+      include: {
+        comments: { orderBy: { createdAt: "desc" as const } },
+        history: { orderBy: { createdAt: "desc" as const } },
+        userStories: {
+          ...userStoriesFilter,
+          orderBy: [{ backlogOrder: "asc" as const }, { createdAt: "asc" as const }],
+          include: {
+            comments: { orderBy: { createdAt: "desc" as const } },
+            history: { orderBy: { createdAt: "desc" as const } },
+            snapshots: { orderBy: { snapshotDate: "asc" as const } },
+          },
         },
       },
     },
-  },
-};
+  };
+}
 
 /**
  * Slim include used by `?slim=1` requests (backlog workspace). Drops the
@@ -34,16 +45,21 @@ const INITIATIVE_INCLUDE = {
  * snapshots each, this cuts the response payload from megabytes to ~100KB
  * and the server-side query from ~500-900ms down to ~50ms.
  */
-const INITIATIVE_INCLUDE_SLIM = {
-  epics: {
-    orderBy: { createdAt: "asc" as const },
-    include: {
-      userStories: {
-        orderBy: [{ backlogOrder: "asc" as const }, { createdAt: "asc" as const }],
+function buildInitiativeIncludeSlim(includeDeleted: boolean) {
+  const filter = includeDeleted ? {} : { where: ACTIVE_RECORD };
+  return {
+    epics: {
+      ...filter,
+      orderBy: { createdAt: "asc" as const },
+      include: {
+        userStories: {
+          ...filter,
+          orderBy: [{ backlogOrder: "asc" as const }, { createdAt: "asc" as const }],
+        },
       },
     },
-  },
-};
+  };
+}
 
 const createInitiativeSchema = z.object({
   title: z.string().trim().min(2).max(120),
@@ -69,13 +85,18 @@ export async function GET(request: NextRequest) {
   const allRoadmaps = roadmapIdParam === "all";
   const roadmapId = allRoadmaps ? undefined : (roadmapIdParam || DEFAULT_ROADMAP_ID);
   const slim = request.nextUrl.searchParams.get("slim") === "1";
+  // Phase D: timeline opts in via `?includeDeleted=1` so closed-period
+  // scope expansion can render snapshot data for rows that have since
+  // been soft-deleted. Backlog + live consumers leave it absent and get
+  // only active rows.
+  const includeDeleted = request.nextUrl.searchParams.get("includeDeleted") === "1";
   const initiatives = await db.initiative.findMany({
     where: {
       ...(year !== undefined ? { year } : {}),
       ...(roadmapId ? { roadmapId } : {}),
     },
     orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
-    include: slim ? INITIATIVE_INCLUDE_SLIM : INITIATIVE_INCLUDE,
+    include: slim ? buildInitiativeIncludeSlim(includeDeleted) : buildInitiativeInclude(includeDeleted),
   });
   return NextResponse.json(initiatives);
 }
