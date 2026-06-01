@@ -252,7 +252,7 @@ export function InitiativeTimelineBar({
               title={teamAssignmentChip.label}
             >
               <TeamAvatar slug={teamAssignmentChip.slug} sizePx={10} className="opacity-90" fallback={<Users className="size-2.5 shrink-0 opacity-70" aria-hidden />} />
-
+              <span className="truncate">{teamAssignmentChip.label}</span>
             </span>
           ) : null}
         </div>
@@ -428,31 +428,38 @@ export function EpicPlanTimelineBar({
           ) : null}
         </span>
       </div>
-      {(showProgress && (isOverdue || healthStatus)) || teamAssignmentChip ? (
+      {(showProgress && (epicStatus || isOverdue || healthStatus)) || teamAssignmentChip ? (
         <div className="-mb-1.5 mt-0.5 flex items-center justify-between gap-2 px-1">
-          {showProgress && isOverdue ? (
-            // Status pill removed from the Gantt to free horizontal room on
-            // narrow bars — the percentage inside the bar already signals
-            // how far the work is along, and detail status lives in the
-            // dialog. Only the Overdue indicator stays here because it's
-            // the one signal that actually needs to break the bar's rhythm.
-            // When the planner extends the bar past today, isOverdue flips
-            // off and the HealthBadge below kicks in with On Track / Watch
-            // / At Risk / Done — so real-time feedback is preserved while
-            // dragging an overdue epic to a recoverable schedule.
-            <EpicStatusBadge
-              status={epicStatus ?? "todo"}
-              isOverdue
-              tooltip={healthTooltip}
-              onClick={onInsightsClick}
-              overdueOnly
-            />
-          ) : showProgress && healthStatus ? (
-            <HealthBadge
-              status={healthStatus}
-              tooltip={healthTooltip}
-              onClick={onInsightsClick}
-            />
+          {showProgress && (epicStatus || isOverdue || healthStatus) ? (
+            // The bar's badge row now carries up to two pills side-by-side:
+            //   • Epic status (To do / In progress / Review / Done) — sourced
+            //     from `epicStatus` (rolled up from child story statuses) so
+            //     the planner sees the actual progression label, not just a
+            //     synthetic verdict. If the epic is overdue, an `Overdue`
+            //     indicator pins to the right of the status pill.
+            //   • Health verdict (`HealthBadge`) — only renders when the bar
+            //     is NOT overdue, since "Overdue" already preempts the
+            //     `On Track / Watch / At Risk / Done` reading. This keeps the
+            //     reschedule workflow honest: drag an overdue bar past today
+            //     and the Overdue pill flips off; the HealthBadge appears in
+            //     its place with the new verdict.
+            <span className="inline-flex items-center gap-1">
+              {epicStatus ? (
+                <EpicStatusBadge
+                  status={epicStatus}
+                  isOverdue={isOverdue}
+                  tooltip={healthTooltip}
+                  onClick={onInsightsClick}
+                />
+              ) : null}
+              {!isOverdue && healthStatus ? (
+                <HealthBadge
+                  status={healthStatus}
+                  tooltip={healthTooltip}
+                  onClick={onInsightsClick}
+                />
+              ) : null}
+            </span>
           ) : <span />}
           {teamAssignmentChip ? (
             <span
@@ -460,7 +467,7 @@ export function EpicPlanTimelineBar({
               title={teamAssignmentChip.label}
             >
               <TeamAvatar slug={teamAssignmentChip.slug} sizePx={10} className="opacity-90" fallback={<Users className="size-2.5 shrink-0 opacity-70" aria-hidden />} />
-
+              <span className="truncate">{teamAssignmentChip.label}</span>
             </span>
           ) : null}
         </div>

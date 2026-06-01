@@ -1671,6 +1671,35 @@ type TimelineGridProps = {
    * parent so both panels show identical % values. */
   progressBasis: ProgressBasis;
   onProgressBasisChange: (next: ProgressBasis) => void;
+  /**
+   * Optional CONTROLLED health filter. When provided, the popover, Gantt,
+   * and InitiativeListPanel all read/write the same Set of pinned health
+   * statuses. When omitted, TimelineGrid keeps the filter internal and
+   * only the popover / Gantt see it. Lift this state when you want the
+   * middle panel to filter alongside the roadmap health view.
+   */
+  healthFilterExternal?: Set<HealthStatus>;
+  onHealthFilterChange?: (next: Set<HealthStatus>) => void;
+  /**
+   * Execution-status filter mirrored from the middle panel — Empty Set
+   * means "no filter active." When non-empty, the Gantt drops any bar
+   * whose derived epic status isn't in the Set. Independent from
+   * `healthFilterExternal`; the planner can have one or the other (the
+   * dropdown enforces mutual exclusion in the panel).
+   */
+  ganttStatusFilterExternal?: Set<"todo" | "inProgress" | "review" | "done">;
+  /**
+   * Quarter filter mirrored from the panel. When non-empty, the Gantt
+   * drops epics whose plan-start quarter isn't in the Set. Lets the
+   * planner pick `Q2` in the dropdown and have the Gantt fall to just
+   * Q2-starting work.
+   */
+  ganttQuarterFilterExternal?: Set<"Q1" | "Q2" | "Q3" | "Q4">;
+  /** Controlled mirror of the Gantt's team-chip overlay. When provided,
+   *  the parent decides; when omitted, TimelineGrid keeps the state
+   *  internal (so the toolbar toggle still works in standalone uses). */
+  showGanttTeamChipsExternal?: boolean;
+  onShowGanttTeamChipsChange?: (next: boolean) => void;
   /** Pre-selected epic in the insights scope picker (from URL on first load). */
   initialInsightsScopeEpicId?: string | null;
   /** Pre-selected initiative in the insights scope picker (from URL on first load). */
@@ -2574,6 +2603,12 @@ export function TimelineGrid({
   onShowRoadmapProgressChange,
   progressBasis,
   onProgressBasisChange,
+  healthFilterExternal,
+  onHealthFilterChange,
+  ganttStatusFilterExternal,
+  ganttQuarterFilterExternal,
+  showGanttTeamChipsExternal,
+  onShowGanttTeamChipsChange,
   initialInsightsScopeEpicId,
   initialInsightsScopeInitId,
   onInsightsScopeChange,
@@ -2627,7 +2662,18 @@ export function TimelineGrid({
     }
   }, [capacityLoadBasis]);
   const [showYearSprintChips, setShowYearSprintChips] = useState(false);
-  const [showGanttTeamChips, setShowGanttTeamChips] = useState(false);
+  const [showGanttTeamChipsInternal, setShowGanttTeamChipsInternal] = useState(false);
+  /** Optionally controlled by the parent (lifted state). When the prop
+   *  is omitted, the toolbar toggle drives the internal state. */
+  const showGanttTeamChips = showGanttTeamChipsExternal ?? showGanttTeamChipsInternal;
+  const setShowGanttTeamChips = useCallback(
+    (next: boolean | ((prev: boolean) => boolean)) => {
+      const resolved = typeof next === "function" ? next(showGanttTeamChips) : next;
+      if (onShowGanttTeamChipsChange) onShowGanttTeamChipsChange(resolved);
+      else setShowGanttTeamChipsInternal(resolved);
+    },
+    [onShowGanttTeamChipsChange, showGanttTeamChips],
+  );
   /** Health-summary popover anchored to the toolbar's Progress button. */
   const [healthPopoverOpen, setHealthPopoverOpen] = useState(false);
 
@@ -2669,8 +2715,18 @@ export function TimelineGrid({
     };
   }, [_onOpenStoryProp, closeHealthPopover]);
   /** Multi-select set of pinned statuses; bars not in the set get dimmed.
-   * Empty set = no filter active (all bars visible at full opacity). */
-  const [healthFilter, setHealthFilter] = useState<Set<HealthStatus>>(() => new Set());
+   * Empty set = no filter active (all bars visible at full opacity).
+   * Optionally controlled by parent (`healthFilterExternal` / `onHealthFilterChange`)
+   * so the InitiativeListPanel can share the same filter state. */
+  const [healthFilterInternal, setHealthFilterInternal] = useState<Set<HealthStatus>>(() => new Set());
+  const healthFilter = healthFilterExternal ?? healthFilterInternal;
+  const setHealthFilter = useCallback(
+    (next: Set<HealthStatus>) => {
+      if (onHealthFilterChange) onHealthFilterChange(next);
+      else setHealthFilterInternal(next);
+    },
+    [onHealthFilterChange],
+  );
   const progressBtnRef = useRef<HTMLButtonElement | null>(null);
   /** When true, year or quarter roadmap Gantt uses fixed sprint column width (column threshold via ResizeObserver). */
   const [yearRoadmapHScroll, setYearRoadmapHScroll] = useState(false);
@@ -5248,82 +5304,231 @@ export function TimelineGrid({
     progressBasis,
   ]);
 
+  /**
+   * Lifted from the middle panel — same Set drives the panel's epic list
+   * filter, so when the planner picks `In Progress` in the unified Statuses
+   * dropdown the Gantt also drops non-matching bars (and the initiative
+   * grouping rolls up: an initiative is kept only when at least one of its
+   * epics' derived status matches the filter).
+   */
+  const ganttStatusFilter = ganttStatusFilterExternal ?? null;
+  const epicMatchesGanttStatusFilter = useCallback(
+    (epic: EpicItem): boolean => {
+      if (!ganttStatusFilter || ganttStatusFilter.size === 0) return true;
+      const s = deriveEpicStatusKey(epic);
+      return s != null && ganttStatusFilter.has(s);
+    },
+    [ganttStatusFilter],
+  );
+  const initiativeMatchesGanttStatusFilter = useCallback(
+    (initiative: InitiativeItem): boolean => {
+      if (!ganttStatusFilter || ganttStatusFilter.size === 0) return true;
+      return (initiative.epics ?? []).some((epic) => epicMatchesGanttStatusFilter(epic));
+    },
+    [ganttStatusFilter, epicMatchesGanttStatusFilter],
+  );
+  /**
+   * Quarter filter — "show this epic if its plan-start quarter is in the
+   * picked Set." When the planner picks `Q2`, the Gantt drops epics that
+   * started earlier and merely span into Q2 (e.g. a Q1→Q2 epic). Matches
+   * the panel's own quarter cut.
+   */
+  const ganttQuarterFilter = ganttQuarterFilterExternal ?? null;
+  const quarterFromMonthInline = (m: number): "Q1" | "Q2" | "Q3" | "Q4" => {
+    if (m <= 3) return "Q1";
+    if (m <= 6) return "Q2";
+    if (m <= 9) return "Q3";
+    return "Q4";
+  };
+  const epicMatchesGanttQuarterFilter = useCallback(
+    (epic: EpicItem): boolean => {
+      if (!ganttQuarterFilter || ganttQuarterFilter.size === 0) return true;
+      if (epic.planStartMonth == null) return false;
+      return ganttQuarterFilter.has(quarterFromMonthInline(epic.planStartMonth));
+    },
+    [ganttQuarterFilter],
+  );
+  const initiativeMatchesGanttQuarterFilter = useCallback(
+    (initiative: InitiativeItem): boolean => {
+      if (!ganttQuarterFilter || ganttQuarterFilter.size === 0) return true;
+      return (initiative.epics ?? []).some((epic) => epicMatchesGanttQuarterFilter(epic));
+    },
+    [ganttQuarterFilter, epicMatchesGanttQuarterFilter],
+  );
+
   // Year-roadmap rows after the active health filter is applied. Mirrors the
   // search-filter pattern: items whose status isn't in the filter set get
   // dropped, and any row that ends up empty is dropped too. When the filter
-  // set is empty we return the input rows untouched.
+  // set is empty we return the input rows untouched. The execution-status
+  // filter (from the middle panel) is chained AFTER the health filter — the
+  // two are mutually exclusive at the dropdown layer, so in practice only
+  // one of them filters at a time.
   const ganttHealthFilteredYearInitiativeRows = useMemo(() => {
-    if (healthFilter.size === 0) return ganttSearchAppliedYearInitiativeRows;
-    return ganttSearchAppliedYearInitiativeRows
-      .map((g) => ({
-        ...g,
-        items: g.items.filter((i) => {
-          const s = ganttHealthData.statusByBarId.get(i.initiative.id);
-          return s != null && healthFilter.has(s);
-        }),
-      }))
-      .filter((g) => g.items.length > 0);
-  }, [ganttSearchAppliedYearInitiativeRows, ganttHealthData.statusByBarId, healthFilter]);
+    let rows = ganttSearchAppliedYearInitiativeRows;
+    if (healthFilter.size > 0) {
+      rows = rows
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((i) => {
+            const s = ganttHealthData.statusByBarId.get(i.initiative.id);
+            return s != null && healthFilter.has(s);
+          }),
+        }))
+        .filter((g) => g.items.length > 0);
+    }
+    if (ganttStatusFilter && ganttStatusFilter.size > 0) {
+      rows = rows
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((i) => initiativeMatchesGanttStatusFilter(i.initiative)),
+        }))
+        .filter((g) => g.items.length > 0);
+    }
+    if (ganttQuarterFilter && ganttQuarterFilter.size > 0) {
+      rows = rows
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((i) => initiativeMatchesGanttQuarterFilter(i.initiative)),
+        }))
+        .filter((g) => g.items.length > 0);
+    }
+    return rows;
+  }, [ganttSearchAppliedYearInitiativeRows, ganttHealthData.statusByBarId, healthFilter, ganttStatusFilter, initiativeMatchesGanttStatusFilter, ganttQuarterFilter, initiativeMatchesGanttQuarterFilter]);
 
   const ganttHealthFilteredYearEpicRows = useMemo(() => {
-    if (healthFilter.size === 0) return ganttSearchAppliedYearEpicRows;
-    return ganttSearchAppliedYearEpicRows
-      .map((g) => ({
-        ...g,
-        items: g.items.filter((i) => {
-          const s = ganttHealthData.statusByBarId.get(i.epic.id);
-          return s != null && healthFilter.has(s);
-        }),
-      }))
-      .filter((g) => g.items.length > 0);
-  }, [ganttSearchAppliedYearEpicRows, ganttHealthData.statusByBarId, healthFilter]);
+    let rows = ganttSearchAppliedYearEpicRows;
+    if (healthFilter.size > 0) {
+      rows = rows
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((i) => {
+            const s = ganttHealthData.statusByBarId.get(i.epic.id);
+            return s != null && healthFilter.has(s);
+          }),
+        }))
+        .filter((g) => g.items.length > 0);
+    }
+    if (ganttStatusFilter && ganttStatusFilter.size > 0) {
+      rows = rows
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((i) => epicMatchesGanttStatusFilter(i.epic)),
+        }))
+        .filter((g) => g.items.length > 0);
+    }
+    if (ganttQuarterFilter && ganttQuarterFilter.size > 0) {
+      rows = rows
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((i) => epicMatchesGanttQuarterFilter(i.epic)),
+        }))
+        .filter((g) => g.items.length > 0);
+    }
+    return rows;
+  }, [ganttSearchAppliedYearEpicRows, ganttHealthData.statusByBarId, healthFilter, ganttStatusFilter, epicMatchesGanttStatusFilter, ganttQuarterFilter, epicMatchesGanttQuarterFilter]);
 
   // Mirror of the above for the focused-quarter view so the popover's
   // filter chips also hide non-matching bars when a single quarter is
   // selected.
   const ganttHealthFilteredQuarterInitiativeRows = useMemo(() => {
-    if (healthFilter.size === 0) return ganttSearchAppliedQuarterInitiativeRows;
-    return ganttSearchAppliedQuarterInitiativeRows
-      .map((g) => ({
-        ...g,
-        items: g.items.filter((i) => {
-          const s = ganttHealthData.statusByBarId.get(i.initiative.id);
-          return s != null && healthFilter.has(s);
-        }),
-      }))
-      .filter((g) => g.items.length > 0);
-  }, [ganttSearchAppliedQuarterInitiativeRows, ganttHealthData.statusByBarId, healthFilter]);
+    let rows = ganttSearchAppliedQuarterInitiativeRows;
+    if (healthFilter.size > 0) {
+      rows = rows
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((i) => {
+            const s = ganttHealthData.statusByBarId.get(i.initiative.id);
+            return s != null && healthFilter.has(s);
+          }),
+        }))
+        .filter((g) => g.items.length > 0);
+    }
+    if (ganttStatusFilter && ganttStatusFilter.size > 0) {
+      rows = rows
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((i) => initiativeMatchesGanttStatusFilter(i.initiative)),
+        }))
+        .filter((g) => g.items.length > 0);
+    }
+    if (ganttQuarterFilter && ganttQuarterFilter.size > 0) {
+      rows = rows
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((i) => initiativeMatchesGanttQuarterFilter(i.initiative)),
+        }))
+        .filter((g) => g.items.length > 0);
+    }
+    return rows;
+  }, [ganttSearchAppliedQuarterInitiativeRows, ganttHealthData.statusByBarId, healthFilter, ganttStatusFilter, initiativeMatchesGanttStatusFilter, ganttQuarterFilter, initiativeMatchesGanttQuarterFilter]);
 
   const ganttHealthFilteredQuarterEpicRows = useMemo(() => {
-    if (healthFilter.size === 0) return ganttSearchAppliedQuarterEpicRows;
-    return ganttSearchAppliedQuarterEpicRows
-      .map((g) => ({
-        ...g,
-        items: g.items.filter((i) => {
-          const s = ganttHealthData.statusByBarId.get(i.epic.id);
-          return s != null && healthFilter.has(s);
-        }),
-      }))
-      .filter((g) => g.items.length > 0);
-  }, [ganttSearchAppliedQuarterEpicRows, ganttHealthData.statusByBarId, healthFilter]);
+    let rows = ganttSearchAppliedQuarterEpicRows;
+    if (healthFilter.size > 0) {
+      rows = rows
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((i) => {
+            const s = ganttHealthData.statusByBarId.get(i.epic.id);
+            return s != null && healthFilter.has(s);
+          }),
+        }))
+        .filter((g) => g.items.length > 0);
+    }
+    if (ganttStatusFilter && ganttStatusFilter.size > 0) {
+      rows = rows
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((i) => epicMatchesGanttStatusFilter(i.epic)),
+        }))
+        .filter((g) => g.items.length > 0);
+    }
+    if (ganttQuarterFilter && ganttQuarterFilter.size > 0) {
+      rows = rows
+        .map((g) => ({
+          ...g,
+          items: g.items.filter((i) => epicMatchesGanttQuarterFilter(i.epic)),
+        }))
+        .filter((g) => g.items.length > 0);
+    }
+    return rows;
+  }, [ganttSearchAppliedQuarterEpicRows, ganttHealthData.statusByBarId, healthFilter, ganttStatusFilter, epicMatchesGanttStatusFilter, ganttQuarterFilter, epicMatchesGanttQuarterFilter]);
 
   // Month view is flat (not grouped by timeline row), so the filter just
   // drops items whose status isn't in the active set.
   const ganttHealthFilteredMonthEpicRows = useMemo(() => {
-    if (healthFilter.size === 0) return ganttSearchAppliedMonthEpicRows;
-    return ganttSearchAppliedMonthEpicRows.filter(({ epic }) => {
-      const s = ganttHealthData.statusByBarId.get(epic.id);
-      return s != null && healthFilter.has(s);
-    });
-  }, [ganttSearchAppliedMonthEpicRows, ganttHealthData.statusByBarId, healthFilter]);
+    let rows = ganttSearchAppliedMonthEpicRows;
+    if (healthFilter.size > 0) {
+      rows = rows.filter(({ epic }) => {
+        const s = ganttHealthData.statusByBarId.get(epic.id);
+        return s != null && healthFilter.has(s);
+      });
+    }
+    if (ganttStatusFilter && ganttStatusFilter.size > 0) {
+      rows = rows.filter(({ epic }) => epicMatchesGanttStatusFilter(epic));
+    }
+    if (ganttQuarterFilter && ganttQuarterFilter.size > 0) {
+      rows = rows.filter(({ epic }) => epicMatchesGanttQuarterFilter(epic));
+    }
+    return rows;
+  }, [ganttSearchAppliedMonthEpicRows, ganttHealthData.statusByBarId, healthFilter, ganttStatusFilter, epicMatchesGanttStatusFilter, ganttQuarterFilter, epicMatchesGanttQuarterFilter]);
 
   const ganttHealthFilteredMonthInitiativeRows = useMemo(() => {
-    if (healthFilter.size === 0) return ganttSearchAppliedMonthInitiativeRows;
-    return ganttSearchAppliedMonthInitiativeRows.filter((initiative) => {
-      const s = ganttHealthData.statusByBarId.get(initiative.id);
-      return s != null && healthFilter.has(s);
-    });
-  }, [ganttSearchAppliedMonthInitiativeRows, ganttHealthData.statusByBarId, healthFilter]);
+    let rows = ganttSearchAppliedMonthInitiativeRows;
+    if (healthFilter.size > 0) {
+      rows = rows.filter((initiative) => {
+        const s = ganttHealthData.statusByBarId.get(initiative.id);
+        return s != null && healthFilter.has(s);
+      });
+    }
+    if (ganttStatusFilter && ganttStatusFilter.size > 0) {
+      rows = rows.filter((initiative) => initiativeMatchesGanttStatusFilter(initiative));
+    }
+    if (ganttQuarterFilter && ganttQuarterFilter.size > 0) {
+      rows = rows.filter((initiative) => initiativeMatchesGanttQuarterFilter(initiative));
+    }
+    return rows;
+  }, [ganttSearchAppliedMonthInitiativeRows, ganttHealthData.statusByBarId, healthFilter, ganttStatusFilter, initiativeMatchesGanttStatusFilter, ganttQuarterFilter, initiativeMatchesGanttQuarterFilter]);
 
   // Clear the active health filter whenever the view mode swaps so a filter
   // pinned in "epics" view doesn't silently survive into "initiatives" view
@@ -5862,10 +6067,17 @@ export function TimelineGrid({
                               emphasizeFlash={emphasizeFlash}
                               emphasizeTick={emphasizeTick}
                               showProgress={showRoadmapProgress}
-                              healthStatus={showRoadmapProgress && epicHasData ? epicHealth.status : null}
+                              healthStatus={showRoadmapProgress && epicHasData && healthFilter.size > 0 ? epicHealth.status : null}
                               healthTooltip={epicHealthTooltip}
-                              epicStatus={showRoadmapProgress ? epicLiveStatus : null}
-                              isOverdue={showRoadmapProgress && isOverdueLive}
+                              epicStatus={showRoadmapProgress && healthFilter.size === 0 ? epicLiveStatus : null}
+                              // Overdue is a HEALTH-VERDICT signal — it lives next
+                              // to On Track / At Risk / Watch in the popover taxonomy.
+                              // Hiding it from the status-pill mode keeps the two
+                              // filter lanes visually independent (regular status
+                              // shows execution; health verdict shows scheduling
+                              // risk). The Overdue pill still appears via HealthBadge
+                              // when `healthFilter.size > 0` and the epic is overdue.
+                              isOverdue={false}
                               onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                               onClick={() => onOpenEpic(row.epic.id)}
                               onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", row.epic.id)}
@@ -8334,10 +8546,12 @@ export function TimelineGrid({
                                       emphasizeFlash={emphasizeFlash}
                                       emphasizeTick={emphasizeTick}
                                       showProgress={showRoadmapProgress}
-                                      healthStatus={showRoadmapProgress && epicHasDataQ ? epicHealthQ.status : null}
+                                      healthStatus={showRoadmapProgress && epicHasDataQ && healthFilter.size > 0 ? epicHealthQ.status : null}
                                       healthTooltip={epicHealthTooltipQ}
-                                      epicStatus={showRoadmapProgress ? epicLiveStatusQ : null}
-                                      isOverdue={showRoadmapProgress && isOverdueLiveQ}
+                                      epicStatus={showRoadmapProgress && healthFilter.size === 0 ? epicLiveStatusQ : null}
+                                      // See year-roadmap branch — Overdue lives in the health-
+                                      // verdict pill exclusively, never alongside the status pill.
+                                      isOverdue={false}
                                       onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                                       onClick={() => onOpenEpic(row.epic.id)}
                                       onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", row.epic.id)}

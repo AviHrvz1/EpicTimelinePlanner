@@ -2,7 +2,11 @@
 
 import { useDndContext, useDraggable, useDroppable } from "@dnd-kit/core";
 import {
+  Activity,
+  AlertOctagon,
+  AlertTriangle,
   CalendarDays,
+  Check,
   CheckCheck,
   CheckCircle2,
   ChevronDown,
@@ -26,6 +30,7 @@ import {
   Zap,
 } from "lucide-react";
 import {
+  Fragment,
   type ReactNode,
   type RefObject,
   useCallback,
@@ -57,7 +62,8 @@ import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { normalizeWorkspaceUserTeam, teamLabelForWorkspaceUser } from "@/lib/workspace-users";
 import { InitiativeStatus } from "@/lib/generated/prisma";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
-import { resolveStoryYearSprint } from "@/lib/year-sprint";
+import { resolveStoryYearSprint, sprintStartDate, sprintEndDate, globalSprintFromMonthLane } from "@/lib/year-sprint";
+import { computeProgress, type HealthStatus } from "@/lib/progress";
 import { resolveAssigneeAvatar, UserAvatar } from "@/components/ui/user-avatar";
 import { TeamAvatar } from "@/components/ui/team-avatar";
 import { formatAssigneeShortLabel } from "@/lib/assignee-display";
@@ -229,6 +235,18 @@ type IconFilterOption<T extends string> = {
   value: T;
   label: string;
   icon: ReactNode;
+  /** When true, render a horizontal divider ABOVE this option in the
+   *  dropdown. Used to group related filters (e.g. health verdicts vs
+   *  execution statuses) in a single dropdown without a second control. */
+  separatorBefore?: boolean;
+  /** Optional small section heading rendered with the separator. */
+  sectionLabel?: string;
+  /** Icon rendered to the LEFT of the section heading. */
+  sectionIcon?: ReactNode;
+  /** Tailwind classes applied to every item inside this section (until the
+   *  next `separatorBefore`). Lets the dropdown visually distinguish
+   *  groups — e.g. a soft tint behind health verdicts. */
+  sectionItemClassName?: string;
 };
 
 function QuarterProgressGlyph({ steps }: { steps: 1 | 2 | 3 | 4 }) {
@@ -329,32 +347,59 @@ function IconFilterSelect<T extends string>({
         <ChevronDown className="size-3.5 shrink-0 text-slate-500 transition group-open:rotate-180" aria-hidden />
       </summary>
       <div className="absolute top-full left-0 z-50 mt-1 w-full min-w-max rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
-        {options.map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => {
-              if (disabled) return;
-              onToggle(opt.value);
-            }}
-            disabled={disabled}
-            className={cn(
-              "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-slate-700 hover:bg-slate-100",
-              disabled && "cursor-not-allowed opacity-60 hover:bg-transparent",
-              (isAllSelected ? opt.value === allValue : values.includes(opt.value)) && "bg-slate-100 text-slate-900",
-            )}
-          >
-            <input
-              type="checkbox"
-              tabIndex={-1}
-              readOnly
-              checked={isAllSelected ? opt.value === allValue : values.includes(opt.value)}
-              className="size-3.5 rounded border-slate-300 text-slate-700"
-            />
-            <span className="shrink-0">{opt.icon}</span>
-            <span className="whitespace-nowrap">{opt.label}</span>
-          </button>
-        ))}
+        {(() => {
+          // Walk forward, remembering the most recent separator's
+          // sectionItemClassName so every option after it inherits the same
+          // background tint (until the next separator overrides).
+          let currentSectionItemClass: string | undefined;
+          return options.map((opt) => {
+            if (opt.separatorBefore) currentSectionItemClass = opt.sectionItemClassName;
+            const itemTone = currentSectionItemClass;
+            return (
+              <Fragment key={opt.value}>
+                {opt.separatorBefore ? (
+                  <div
+                    className={cn(
+                      "mx-1 mt-1.5 mb-1 border-t border-slate-200/80 pt-1",
+                      opt.sectionItemClassName,
+                    )}
+                  >
+                    {opt.sectionLabel ? (
+                      <span className="inline-flex items-center gap-1.5 px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-500">
+                        {opt.sectionIcon ? <span className="shrink-0">{opt.sectionIcon}</span> : null}
+                        {opt.sectionLabel}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (disabled) return;
+                    onToggle(opt.value);
+                  }}
+                  disabled={disabled}
+                  className={cn(
+                    "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-slate-700 hover:bg-slate-100",
+                    itemTone,
+                    disabled && "cursor-not-allowed opacity-60 hover:bg-transparent",
+                    (isAllSelected ? opt.value === allValue : values.includes(opt.value)) && "bg-slate-100 text-slate-900",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    tabIndex={-1}
+                    readOnly
+                    checked={isAllSelected ? opt.value === allValue : values.includes(opt.value)}
+                    className="size-3.5 rounded border-slate-300 text-slate-700"
+                  />
+                  <span className="shrink-0">{opt.icon}</span>
+                  <span className="whitespace-nowrap">{opt.label}</span>
+                </button>
+              </Fragment>
+            );
+          });
+        })()}
       </div>
     </details>
   );
@@ -863,6 +908,37 @@ type InitiativeListPanelProps = {
    * Experience / Data.
    */
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
+  /** Roadmap plan year — required to compute health verdicts (sprint start/end dates) for the
+   *  in-panel health filter chips. */
+  planYear?: number;
+  /** Shared with the Roadmap Health popover and the Gantt — clicking a chip
+   *  here updates the same Set the popover writes to, so the two views
+   *  filter in lockstep. */
+  healthFilter?: Set<HealthStatus>;
+  onHealthFilterChange?: (next: Set<HealthStatus>) => void;
+  /** Fires whenever the planner picks a non-"all" option in the unified
+   *  Statuses dropdown — either a regular status OR a health verdict. Used
+   *  by the parent to force-enable the roadmap Progress toggle so the
+   *  filtered effect actually shows up on the Gantt bars. */
+  onUserPickedFilter?: () => void;
+  /** Fires with a derived `Set<UserStoryItem["status"]>` whenever the
+   *  panel's execution-status filter changes. Empty Set means "no filter
+   *  active" (matches "all"). Used by the parent to apply the same cut to
+   *  the Gantt rows — so picking `In Progress` in the dropdown hides
+   *  non-matching epics from the bars too. Plan-only statuses (Scheduled /
+   *  Unscheduled) are ignored here since the Gantt only renders scheduled
+   *  epics anyway. */
+  onPanelStatusFilterDerivedChange?: (next: Set<UserStoryItem["status"]>) => void;
+  /** Fires with a derived Set of selected quarters whenever the panel's
+   *  quarter filter changes. Empty Set means "All Quarters". Parent uses
+   *  this to also cut the Gantt rows to epics whose plan-start quarter is
+   *  in the filter. */
+  onPanelQuarterFilterDerivedChange?: (next: Set<"Q1" | "Q2" | "Q3" | "Q4">) => void;
+  /** Fires with `true` when at least one team has been pinned in the
+   *  panel team filter (i.e. user picked something other than "all"). Used
+   *  by the parent to force-enable the Gantt's team-chip overlay so the
+   *  bars surface which delivery team owns them. */
+  onPanelTeamFilterActiveChange?: (active: boolean) => void;
 };
 
 function DraggableInitiativeCard({
@@ -2083,6 +2159,13 @@ export function InitiativeListPanel({
   workspaceDirectoryUsers = [],
   isOnEpicGanttTab = false,
   isCapacityPlanningMode = false,
+  planYear,
+  healthFilter,
+  onHealthFilterChange,
+  onUserPickedFilter,
+  onPanelStatusFilterDerivedChange,
+  onPanelQuarterFilterDerivedChange,
+  onPanelTeamFilterActiveChange,
 }: InitiativeListPanelProps) {
   const { active } = useDndContext();
   const isTimelineEpicDragActive = active != null && String(active.id).startsWith("timeline-epic:");
@@ -2268,9 +2351,26 @@ export function InitiativeListPanel({
       ...customOpts,
     ];
   }, [workspaceDirectoryUsers, initiatives]);
-  const statusFilterOptions: IconFilterOption<
-    "all" | "Scheduled" | "Unscheduled" | "To Do" | "In Progress" | "Review / Testing" | "Done"
-  >[] = [
+  /**
+   * Unified status filter — execution statuses up top, health verdicts below
+   * a divider. Health values are prefixed `health:` so the toggle handler
+   * can route to the right state (`healthFilter` Set vs `panelStatusFilters`
+   * array) without colliding with the existing "Done" execution label.
+   */
+  type StatusOrHealthFilterValue =
+    | "all"
+    | "Scheduled"
+    | "Unscheduled"
+    | "To Do"
+    | "In Progress"
+    | "Review / Testing"
+    | "Done"
+    | "health:onTrack"
+    | "health:watch"
+    | "health:atRisk"
+    | "health:overdue"
+    | "health:done";
+  const statusFilterOptions: IconFilterOption<StatusOrHealthFilterValue>[] = [
     { value: "all", label: "All Statuses", icon: <ListFilter className="size-3.5 text-emerald-400" /> },
     { value: "Scheduled", label: "Scheduled", icon: <CalendarDays className="size-3.5 text-slate-500" /> },
     { value: "Unscheduled", label: "Unscheduled", icon: <Circle className="size-3.5 text-slate-500" /> },
@@ -2278,14 +2378,132 @@ export function InitiativeListPanel({
     { value: "In Progress", label: "In Progress", icon: <PlayCircle className="size-3.5 text-slate-500" /> },
     { value: "Review / Testing", label: "Review / Testing", icon: <CheckCheck className="size-3.5 text-slate-500" /> },
     { value: "Done", label: "Done", icon: <CheckCircle2 className="size-3.5 text-slate-500" /> },
+    {
+      value: "health:onTrack",
+      label: "On Track",
+      icon: <Check className="size-3.5 text-emerald-600" />,
+      separatorBefore: true,
+      sectionLabel: "Health Verdict",
+      // Matches the toolbar's `Health` chip iconography so the planner
+      // visually links the dropdown section to the popover surface.
+      sectionIcon: <Activity className="size-3 text-emerald-600" aria-hidden />,
+      // Soft rose tint behind every row in this section so the planner
+      // sees at a glance which lane each option belongs to. Pairs with the
+      // section's AlertOctagon icon (the same iconography the popover's
+      // Overdue verdict uses).
+      sectionItemClassName: "bg-rose-50/55",
+    },
+    {
+      value: "health:watch",
+      label: "Watch",
+      icon: <AlertTriangle className="size-3.5 text-amber-600" />,
+    },
+    {
+      value: "health:atRisk",
+      label: "At Risk",
+      icon: <AlertTriangle className="size-3.5 text-rose-600" />,
+    },
+    {
+      value: "health:overdue",
+      label: "Overdue",
+      icon: <AlertOctagon className="size-3.5 text-rose-700" />,
+    },
+    {
+      value: "health:done",
+      label: "Done (Health)",
+      icon: <CheckCheck className="size-3.5 text-emerald-600" />,
+    },
   ];
+  // Merge both state sets into the single `values` array the dropdown expects.
+  // Health values get the `health:` prefix; status values use their raw label.
+  const mergedStatusFilterValues: StatusOrHealthFilterValue[] = (() => {
+    const out: StatusOrHealthFilterValue[] = [];
+    const hasStatusActive = !panelStatusFilters.includes("all") && panelStatusFilters.length > 0;
+    const hasHealthActive = healthFilter != null && healthFilter.size > 0;
+    if (!hasStatusActive && !hasHealthActive) return ["all"];
+    for (const v of panelStatusFilters) {
+      if (v !== "all") out.push(v as StatusOrHealthFilterValue);
+    }
+    if (healthFilter) {
+      for (const h of healthFilter) out.push(`health:${h}` as StatusOrHealthFilterValue);
+    }
+    return out;
+  })();
+  /**
+   * Status and Health Verdict are MUTUALLY EXCLUSIVE in this dropdown — the
+   * Gantt can't sensibly render both pill rows at once (one would always
+   * occlude the other), and asking the planner to mentally union them is
+   * worse than just picking a lane. Clicking a regular status clears the
+   * health Set; clicking a health verdict clears the status array.
+   */
+  const handleMergedStatusToggle = (value: StatusOrHealthFilterValue) => {
+    if (value === "all") {
+      setPanelStatusFilters(["all"]);
+      onHealthFilterChange?.(new Set());
+      return;
+    }
+    if (value.startsWith("health:")) {
+      // Pick a health verdict → drop any execution-status filter so the bars
+      // swap from "status pill" mode to "health verdict pill" mode.
+      setPanelStatusFilters(["all"]);
+      if (!onHealthFilterChange) return;
+      const key = value.slice("health:".length) as HealthStatus;
+      const next = new Set<HealthStatus>(healthFilter ?? new Set());
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      onHealthFilterChange(next);
+      onUserPickedFilter?.();
+      return;
+    }
+    // Pick a regular status → drop the health filter so the bars swap to
+    // showing the execution-status pill instead of the health verdict.
+    onHealthFilterChange?.(new Set());
+    setPanelStatusFilters((prev) =>
+      toggleMultiFilter(prev, value as Exclude<StatusOrHealthFilterValue, `health:${string}`>, "all"),
+    );
+    onUserPickedFilter?.();
+  };
+  /**
+   * Health-verdict map per epic. Same `computeProgress` math the Gantt /
+   * Roadmap Health popover use, with the panel's `planYear` + `progressBasis`
+   * so the chip filter matches what the popover already displayed. Epics
+   * without a plan window are absent from the map (treated as "no verdict"
+   * — they pass through any health filter).
+   */
+  const healthByEpicId = useMemo(() => {
+    const map = new Map<string, HealthStatus>();
+    if (planYear == null) return map;
+    for (const initiative of initiatives) {
+      for (const epic of initiative.epics ?? []) {
+        if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
+        const startGlobalSprint = globalSprintFromMonthLane(
+          epic.planStartMonth,
+          epic.planSprint === 2 ? 2 : 1,
+        );
+        const endGlobalSprint = globalSprintFromMonthLane(
+          epic.planEndMonth,
+          epic.planEndSprint === 1 ? 1 : 2,
+        );
+        const h = computeProgress({
+          stories: epic.userStories ?? [],
+          start: sprintStartDate(planYear, startGlobalSprint),
+          end: sprintEndDate(planYear, endGlobalSprint),
+          basis: progressBasis,
+          epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
+        });
+        map.set(epic.id, h.status);
+      }
+    }
+    return map;
+  }, [initiatives, planYear, progressBasis]);
   const filtersAreDefault =
     panelQuarterFilters.length === 1 &&
     panelQuarterFilters[0] === "all" &&
     panelTeamFilterIds.length === 1 &&
     panelTeamFilterIds[0] === "all" &&
     panelStatusFilters.length === 1 &&
-    panelStatusFilters[0] === "all";
+    panelStatusFilters[0] === "all" &&
+    (!healthFilter || healthFilter.size === 0);
   const notifySprintTeamFromPanelTeamIds = useCallback(
     (next: string[]) => {
       if (!onSprintBoardTeamFilterSync) return;
@@ -2316,7 +2534,45 @@ export function InitiativeListPanel({
     setPanelTeamFilterIds(["all"]);
     setPanelStatusFilters(["all"]);
     onSprintBoardTeamFilterSync?.(null);
+    onHealthFilterChange?.(new Set());
   };
+  /**
+   * Bridge the panel's local execution-status filter to the parent so the
+   * Gantt can apply the same cut. Only emits the 4 execution statuses
+   * (todo / inProgress / review / done) — plan statuses Scheduled /
+   * Unscheduled don't translate to the Gantt's "show this bar?" question.
+   */
+  useEffect(() => {
+    if (!onPanelStatusFilterDerivedChange) return;
+    const set = new Set<UserStoryItem["status"]>();
+    if (!panelStatusFilters.includes("all")) {
+      if (panelStatusFilters.includes("To Do")) set.add("todo");
+      if (panelStatusFilters.includes("In Progress")) set.add("inProgress");
+      if (panelStatusFilters.includes("Review / Testing")) set.add("review");
+      if (panelStatusFilters.includes("Done")) set.add("done");
+    }
+    onPanelStatusFilterDerivedChange(set);
+  }, [panelStatusFilters, onPanelStatusFilterDerivedChange]);
+  /** Emit selected quarters (empty when "all") so the parent can cut the
+   *  Gantt to epics whose plan-start quarter matches. */
+  useEffect(() => {
+    if (!onPanelQuarterFilterDerivedChange) return;
+    const set = new Set<"Q1" | "Q2" | "Q3" | "Q4">();
+    if (!panelQuarterFilters.includes("all")) {
+      for (const q of panelQuarterFilters) {
+        if (q === "Q1" || q === "Q2" || q === "Q3" || q === "Q4") set.add(q);
+      }
+    }
+    onPanelQuarterFilterDerivedChange(set);
+  }, [panelQuarterFilters, onPanelQuarterFilterDerivedChange]);
+  /** Emit `true` whenever the planner has pinned at least one specific
+   *  team. Parent uses this to auto-light the Gantt's team-chip overlay
+   *  (otherwise the planner has to find + flip the toolbar toggle). */
+  useEffect(() => {
+    if (!onPanelTeamFilterActiveChange) return;
+    const active = !panelTeamFilterIds.includes("all") && panelTeamFilterIds.length > 0;
+    onPanelTeamFilterActiveChange(active);
+  }, [panelTeamFilterIds, onPanelTeamFilterActiveChange]);
   const toggleMultiFilter = <T extends string>(prev: T[], value: T, allToken: T): T[] => {
     if (value === allToken) return [allToken];
     const withoutAll = prev.filter((x) => x !== allToken);
@@ -2478,6 +2734,11 @@ export function InitiativeListPanel({
           return false;
         }
       }
+      if (healthFilter && healthFilter.size > 0) {
+        const verdict = healthByEpicId.get(epic.id);
+        // Skip epics without a verdict (no plan window) when filter is active.
+        if (verdict == null || !healthFilter.has(verdict)) return false;
+      }
       return true;
     });
   }, [monthPanelEpics, panelQuarterFilters, panelStatusFilters, panelTeamFilterIds]);
@@ -2625,22 +2886,41 @@ export function InitiativeListPanel({
         const hasScheduledEpics = (initiative.epics ?? []).some(
           (epic) => epicPlanningStatusMeta(epic).label !== "Unscheduled",
         );
-        const initiativeExecution = initiativeExecutionStatusMeta(initiative).label as
-          | "To Do"
-          | "In Progress"
-          | "Review / Testing"
-          | "Done";
+        /**
+         * Execution-status check: show this initiative if ANY of its child
+         * epics rolls up to a matching status — same "any-of" semantics the
+         * Gantt uses. The previous "initiative rolls up to one label" path
+         * was too strict (e.g. `Review / Testing` required ALL epics to be
+         * in review/done) and produced a 0-row panel while the Gantt still
+         * showed plenty of matching bars.
+         */
+        const epicExecutionLabels = (initiative.epics ?? []).map(
+          (epic) => epicExecutionStatusMeta(epic).label,
+        );
+        const anyEpicMatchesExecution = epicExecutionLabels.some((label) =>
+          panelStatusFilters.includes(label as "To Do" | "In Progress" | "Review / Testing" | "Done"),
+        );
         const matches =
           (panelStatusFilters.includes("Unscheduled") && (initiative.status === "backlog" || hasUnscheduledEpics)) ||
           (panelStatusFilters.includes("Scheduled") && (initiative.status === "scheduled" || hasScheduledEpics)) ||
-          panelStatusFilters.includes(initiativeExecution);
+          anyEpicMatchesExecution;
         if (!matches) {
           return false;
         }
       }
+      if (healthFilter && healthFilter.size > 0) {
+        // Show an initiative only when at least one of its epics has a
+        // verdict in the active set — mirrors the popover's "epic-level"
+        // selection semantics.
+        const epicMatches = (initiative.epics ?? []).some((epic) => {
+          const verdict = healthByEpicId.get(epic.id);
+          return verdict != null && healthFilter.has(verdict);
+        });
+        if (!epicMatches) return false;
+      }
       return true;
     });
-  }, [initiativeList, initiativeSearch, panelQuarterFilters, panelStatusFilters, panelTeamFilterIds]);
+  }, [initiativeList, initiativeSearch, panelQuarterFilters, panelStatusFilters, panelTeamFilterIds, healthFilter, healthByEpicId]);
   const initiativeSearchSuggestions = useMemo(() => {
     const set = new Set<string>();
     for (const initiative of initiativeList) {
@@ -2898,10 +3178,10 @@ export function InitiativeListPanel({
               allValue="all"
             />
             <IconFilterSelect
-              values={panelStatusFilters}
-              onToggle={(value) => setPanelStatusFilters((prev) => toggleMultiFilter(prev, value, "all"))}
+              values={mergedStatusFilterValues}
+              onToggle={handleMergedStatusToggle}
               options={statusFilterOptions}
-              ariaLabel="Filter left panel by status"
+              ariaLabel="Filter left panel by status or health verdict"
               allValue="all"
             />
             <button
@@ -3191,10 +3471,10 @@ export function InitiativeListPanel({
               allValue="all"
             />
             <IconFilterSelect
-              values={panelStatusFilters}
-              onToggle={(value) => setPanelStatusFilters((prev) => toggleMultiFilter(prev, value, "all"))}
+              values={mergedStatusFilterValues}
+              onToggle={handleMergedStatusToggle}
               options={statusFilterOptions}
-              ariaLabel="Filter initiatives by status"
+              ariaLabel="Filter initiatives by status or health verdict"
               allValue="all"
             />
             <button
@@ -3325,7 +3605,23 @@ export function InitiativeListPanel({
           ) : (
             <>
               <BacklogDropSlot index={0} />
-              {filteredInitiatives.map((initiative, idx) => (
+              {filteredInitiatives.map((initiativeRaw, idx) => {
+                // Trim down the initiative's epic list to those matching
+                // the active health verdict filter — keeps the expanded
+                // tree consistent with the verdict the planner picked
+                // (otherwise expanding an "Overdue"-filtered initiative
+                // would show all its epics, not just the overdue ones).
+                const initiative =
+                  healthFilter && healthFilter.size > 0
+                    ? {
+                        ...initiativeRaw,
+                        epics: (initiativeRaw.epics ?? []).filter((epic) => {
+                          const verdict = healthByEpicId.get(epic.id);
+                          return verdict != null && healthFilter.has(verdict);
+                        }),
+                      }
+                    : initiativeRaw;
+                return (
                 <div key={initiative.id}>
                   <InitiativeTreeCard
                     initiative={initiative}
@@ -3362,7 +3658,8 @@ export function InitiativeListPanel({
                   />
                   <BacklogDropSlot index={idx + 1} />
                 </div>
-              ))}
+                );
+              })}
             </>
           )}
         </div>

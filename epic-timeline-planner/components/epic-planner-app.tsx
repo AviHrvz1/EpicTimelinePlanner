@@ -27,6 +27,7 @@ import { StoryDetailsDialog } from "@/components/stories/story-details-dialog";
 import { DragContext } from "@/components/timeline/drag-context";
 import { type SprintRetrospectiveDoc } from "@/components/timeline/sprint-retrospective";
 import { TimelineGrid, type MonthPlanSurfaceTab, type QuarterSurfaceTab } from "@/components/timeline/timeline-grid";
+import type { HealthStatus } from "@/lib/progress";
 import { Button } from "@/components/ui/button";
 import {
   EPICS_UNPLAN_DROP_ID,
@@ -1354,6 +1355,55 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     if (typeof window === "undefined") return;
     window.localStorage.setItem("epicPlanner.progressBasis", progressBasis);
   }, [progressBasis]);
+  /**
+   * Shared health-filter state — picked from the Roadmap Health popover
+   * (`done` / `onTrack` / `watch` / `atRisk` / `overdue`). Lifted here so
+   * both the Gantt (TimelineGrid dims non-matching bars) and the middle
+   * panel (InitiativeListPanel renders matching chip group + filters
+   * displayed epics) read from the same Set. Empty set = no filter.
+   */
+  const [healthFilter, setHealthFilter] = useState<Set<HealthStatus>>(() => new Set());
+  /**
+   * Derived from the middle panel's execution-status filter. The panel
+   * emits this Set whenever the planner picks To Do / In Progress / Review
+   * / Done in the unified Statuses dropdown. Lifted here so the Gantt can
+   * apply the same cut and only show matching bars.
+   */
+  const [ganttStatusFilter, setGanttStatusFilter] = useState<Set<"todo" | "inProgress" | "review" | "done">>(
+    () => new Set(),
+  );
+  /** Same lift pattern as the status filter — emitted by the panel,
+   *  passed to TimelineGrid so the Gantt only renders epics whose
+   *  plan-start quarter is in the set. Empty Set = no filter. */
+  const [ganttQuarterFilter, setGanttQuarterFilter] = useState<Set<"Q1" | "Q2" | "Q3" | "Q4">>(() => new Set());
+  /**
+   * Controlled mirror of the Gantt's team-chip overlay toggle. When the
+   * planner pins teams in the middle panel, flip the overlay on so the
+   * bars surface their owning team without the planner having to find the
+   * toolbar toggle. We never auto-turn-OFF — once a planner has team
+   * chips visible, they probably want them to stay.
+   */
+  const [showGanttTeamChipsCtrl, setShowGanttTeamChipsCtrl] = useState(false);
+  const handlePanelTeamFilterActiveChange = useCallback((active: boolean) => {
+    if (active) setShowGanttTeamChipsCtrl(true);
+  }, []);
+  /**
+   * Picking a health verdict implies the planner wants to SEE the verdict
+   * on the bars — but the status pill / percentage / HealthBadge row is
+   * gated by the Progress toggle. Force the toggle on whenever a non-empty
+   * health filter goes active so the bars actually reflect the filter
+   * choice. Clearing the filter doesn't auto-turn-off the toggle — that
+   * stays planner-controlled.
+   */
+  const handleHealthFilterChange = useCallback(
+    (next: Set<HealthStatus>) => {
+      setHealthFilter(next);
+      if (next.size > 0) {
+        setShowRoadmapProgress(true);
+      }
+    },
+    [],
+  );
   const layoutRef = useRef<HTMLDivElement | null>(null);
   /** When true, we hid the initiative rail for insights/retro; restore on leaving those surfaces. */
   const leftInitiativePanelAutoCollapsedForInsightsRef = useRef(false);
@@ -5701,6 +5751,13 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                       initiatives={initiatives}
                       activeMonth={initiativeListActiveMonth}
                       progressBasis={progressBasis}
+                      planYear={selectedYear}
+                      healthFilter={healthFilter}
+                      onHealthFilterChange={handleHealthFilterChange}
+                      onUserPickedFilter={() => setShowRoadmapProgress(true)}
+                      onPanelStatusFilterDerivedChange={setGanttStatusFilter}
+                      onPanelQuarterFilterDerivedChange={setGanttQuarterFilter}
+                      onPanelTeamFilterActiveChange={handlePanelTeamFilterActiveChange}
                       storyProgressDetailsVisible={showRoadmapProgress}
                       useEpicPlanLeftPanel={initiativeListActiveMonth != null}
                       activeYearSprint={activeYearSprint}
@@ -5906,6 +5963,12 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 onShowRoadmapProgressChange={setShowRoadmapProgress}
                 progressBasis={progressBasis}
                 onProgressBasisChange={setProgressBasis}
+                healthFilterExternal={healthFilter}
+                onHealthFilterChange={handleHealthFilterChange}
+                ganttStatusFilterExternal={ganttStatusFilter}
+                ganttQuarterFilterExternal={ganttQuarterFilter}
+                showGanttTeamChipsExternal={showGanttTeamChipsCtrl}
+                onShowGanttTeamChipsChange={setShowGanttTeamChipsCtrl}
                 initialInsightsScopeEpicId={insightsScopeEpicId}
                 initialInsightsScopeInitId={insightsScopeInitId}
                 onInsightsScopeChange={handleInsightsScopePropChange}
