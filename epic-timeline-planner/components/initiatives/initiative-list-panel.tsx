@@ -1803,7 +1803,7 @@ function SprintEpicCard({
           <button
             type="button"
             onClick={handleToggle}
-            className="inline-flex h-7 shrink-0 items-center rounded-sm text-slate-500 transition-colors hover:text-slate-700"
+            className="inline-flex h-6 shrink-0 items-center rounded-sm text-slate-500 transition-colors hover:text-slate-700"
             aria-label={isOpen ? "Collapse epic" : "Expand epic"}
             aria-expanded={isOpen}
           >
@@ -1817,7 +1817,7 @@ function SprintEpicCard({
           {(isCapacityMode ? !epicTeamId : (!isEpicScheduledOnGantt && epicPlanDragEnabled)) ? (
             <button
               type="button"
-              className="relative inline-flex h-7 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+              className="relative inline-flex h-6 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
               aria-label="Drag epic"
               {...listeners}
               {...attributes}
@@ -1829,7 +1829,7 @@ function SprintEpicCard({
             </button>
           ) : null}
         </div>
-        <span className="inline-flex h-7 shrink-0 items-center" aria-hidden>
+        <span className="inline-flex h-6 shrink-0 items-center" aria-hidden>
           <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-3.5 [&_svg]:text-sky-500" />
         </span>
         <div className="min-w-0 flex-1 text-left">

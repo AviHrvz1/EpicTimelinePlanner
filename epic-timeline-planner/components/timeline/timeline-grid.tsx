@@ -16,6 +16,7 @@ import {
   FileDown,
   FileText,
   FileWarning,
+  Filter,
   Flag,
   Folder,
   Inbox,
@@ -66,7 +67,7 @@ import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
 import { SprintRetrospectiveEditor, type SprintRetrospectiveDoc } from "@/components/timeline/sprint-retrospective";
 import { QuarterYearProgressIcon } from "@/components/ui/quarter-year-progress-icon";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
-import { computeSprintKanbanSummaryStats, collectStoriesForSprintBoard, collectEpicsForSprintKanban } from "@/lib/sprint-plan";
+import { computeSprintKanbanSummaryStats, collectStoriesForSprintBoard, collectEpicsForSprintKanban, storyMatchesYearSprint } from "@/lib/sprint-plan";
 import { buildSprintAnalytics } from "@/lib/sprint-analytics";
 import { sprintStoryBoardEpicTeamFilter, type SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { TIMELINE_GANTT_ROWS_CONTAINER_ID } from "@/lib/gantt-lane-from-pointer";
@@ -2460,7 +2461,12 @@ function SprintDropCell({ month, lane }: { month: number; lane: 1 | 2 }) {
   );
 }
 
-type EstimateCoveragePanelTab = "unestimated" | "estimated" | "epicsNoDesc" | "storiesNoDesc";
+type EstimateCoveragePanelTab =
+  | "unestimated"
+  | "estimated"
+  | "epicsNoDesc"
+  | "storiesNoDesc"
+  | "unscheduledStories";
 
 export function TimelineGrid({
   initiatives,
@@ -2999,12 +3005,13 @@ export function TimelineGrid({
     }, 300);
   }, []);
 
-  const openEstEpicsPanel = useCallback(() => {
+  const openEstEpicsPanel = useCallback((initialTab?: EstimateCoveragePanelTab) => {
     if (estEpicsPanelCloseTimerRef.current) {
       clearTimeout(estEpicsPanelCloseTimerRef.current);
       estEpicsPanelCloseTimerRef.current = null;
     }
     skipEstEpicsPanelEnterRef.current = false;
+    if (initialTab) setEstimateCoveragePanelTab(initialTab);
     if (estEpicsPanelOpen) {
       setEstEpicsPanelEntered(true);
       return;
@@ -3414,8 +3421,51 @@ export function TimelineGrid({
     }
   }, [healthPopoverOpen, activeMonth, quarterViewTab, monthPlanTab, onShowRoadmapProgressChange]);
   const scopedEpicsForEstimatePanel = useMemo(() => {
+    /**
+     * Sprint-aware scope: when on any sprint surface (kanban / status / capacity / retro),
+     * scope by team-filtered epics across all initiatives (mirrors
+     * `computeSprintKanbanSummaryStats` so the popup matches the chip counts
+     * exactly). On non-sprint surfaces, fall back to the month / quarter / year
+     * scope that uses scheduled initiatives overlapping the focus window.
+     */
+    const onSprintSurface =
+      monthPlanTab === "sprint-kanban" ||
+      monthPlanTab === "sprint-status" ||
+      monthPlanTab === "sprint-capacity" ||
+      monthPlanTab === "sprint-retrospective";
+    const sprintFromExternal =
+      activeSprintExternal !== undefined && activeSprintExternal != null
+        ? clampYearSprint(activeSprintExternal)
+        : null;
+    const sprintFromState = activeSprint != null ? clampYearSprint(activeSprint) : null;
+    const candidateSprint =
+      sprintFromExternal ??
+      sprintFromState ??
+      (activeMonth != null ? firstGlobalSprintForMonth(activeMonth) : null);
+    const sprintCtxMonth =
+      activeMonth != null
+        ? activeMonth
+        : candidateSprint != null
+          ? monthLaneFromGlobalSprint(candidateSprint).month
+          : null;
+    const sprintCtx =
+      onSprintSurface && candidateSprint != null && sprintCtxMonth != null
+        ? {
+            month: sprintCtxMonth,
+            yearSprint: candidateSprint,
+            teamIds: sprintFilterTeamIds.length ? sprintFilterTeamIds : null,
+          }
+        : null;
+
     let scopedRows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
-    if (activeMonth) {
+    if (sprintCtx) {
+      const teamIds = sprintCtx.teamIds;
+      scopedRows = initiatives.flatMap((initiative) =>
+        (initiative.epics ?? [])
+          .filter((epic) => !teamIds || teamIds.includes(epic.team ?? ""))
+          .map((epic) => ({ epic, initiative })),
+      );
+    } else if (activeMonth) {
       scopedRows = initiatives
         .filter((initiative) => {
           if (initiative.status !== "scheduled") return false;
@@ -3438,8 +3488,26 @@ export function TimelineGrid({
     }
     const estimated = scopedRows.filter((row) => Number(row.epic.originalEstimateDays ?? 0) > 0);
     const unestimated = scopedRows.filter((row) => Number(row.epic.originalEstimateDays ?? 0) <= 0);
-    return { all: scopedRows, estimated, unestimated };
-  }, [activeMonth, focusedQuarter, initiatives]);
+    const unscheduledStories: Array<{ story: UserStoryItem; epic: EpicItem; initiative: InitiativeItem }> = [];
+    if (sprintCtx) {
+      for (const row of scopedRows) {
+        for (const story of row.epic.userStories ?? []) {
+          if (!storyMatchesYearSprint(story, sprintCtx.month, sprintCtx.yearSprint)) {
+            unscheduledStories.push({ story, epic: row.epic, initiative: row.initiative });
+          }
+        }
+      }
+    }
+    return { all: scopedRows, estimated, unestimated, unscheduledStories, sprintCtx };
+  }, [
+    activeMonth,
+    focusedQuarter,
+    initiatives,
+    monthPlanTab,
+    activeSprint,
+    activeSprintExternal,
+    sprintFilterTeamIds,
+  ]);
   const scopedEpicsWithoutDescription = useMemo(
     () => scopedEpicsForEstimatePanel.all.filter((row) => !String(row.epic.description ?? "").trim()),
     [scopedEpicsForEstimatePanel.all],
@@ -3507,11 +3575,13 @@ export function TimelineGrid({
   const summaryChipUnscheduledClass = chipIdle;
   const summaryChipProgressCircleClass = "size-3 shrink-0 sm:size-3.5";
 
-  const estimatePanelScopeLabel = activeMonth
-    ? `${MONTHS[activeMonth - 1]}`
-    : focusedQuarter
-      ? focusedQuarter.label
-      : "All Quarters";
+  const estimatePanelScopeLabel = scopedEpicsForEstimatePanel.sprintCtx
+    ? `${MONTHS[scopedEpicsForEstimatePanel.sprintCtx.month - 1]} · Sprint ${scopedEpicsForEstimatePanel.sprintCtx.yearSprint}`
+    : activeMonth
+      ? `${MONTHS[activeMonth - 1]}`
+      : focusedQuarter
+        ? focusedQuarter.label
+        : "All Quarters";
 
   useEffect(() => {
     const justOpened = estEpicsPanelOpen && !prevEstPanelOpenRef.current;
@@ -3523,6 +3593,20 @@ export function TimelineGrid({
     prevEstPanelOpenRef.current = estEpicsPanelOpen;
     prevEstScopeKeyRef.current = estimatePanelScopeLabel;
   }, [estEpicsPanelOpen, estimatePanelScopeLabel, scopedEpicsForEstimatePanel.all]);
+
+  /**
+   * Snap the panel tab off the sprint-only "unscheduledStories" tab when the
+   * user navigates off the sprint surface (e.g. closes Sprint Kanban). Avoids
+   * an empty section if the panel is still open.
+   */
+  useEffect(() => {
+    if (
+      estimateCoveragePanelTab === "unscheduledStories" &&
+      scopedEpicsForEstimatePanel.sprintCtx == null
+    ) {
+      setEstimateCoveragePanelTab("unestimated");
+    }
+  }, [estimateCoveragePanelTab, scopedEpicsForEstimatePanel.sprintCtx]);
 
   const estimatePanelTableClass =
     "w-full table-fixed border-collapse text-[15px] text-slate-950";
@@ -3889,6 +3973,7 @@ export function TimelineGrid({
 
   function renderStoriesWithoutDescriptionTable(
     rows: Array<{ story: UserStoryItem; epic: EpicItem; initiative: InitiativeItem }>,
+    emptyMessage = "No user stories without a description in this scope.",
   ) {
     const narrowHead = cn(estimatePanelHeadCellClass, "text-[10px]");
     return (
@@ -3906,7 +3991,7 @@ export function TimelineGrid({
           {rows.length === 0 ? (
             <tr>
               <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-500")} colSpan={5}>
-                No user stories without a description in this scope.
+                {emptyMessage}
               </td>
             </tr>
           ) : (
@@ -4072,12 +4157,31 @@ export function TimelineGrid({
         {rolledInCount > 0 ? (
           <button
             type="button"
-            onClick={() => setRolledInModalSprint(ys)}
-            title={`See what carried over into Sprint ${ys}`}
-            className="inline-flex h-7 max-w-full shrink-0 cursor-pointer items-center gap-1 rounded-full bg-[aliceblue] px-2.5 text-[11px] font-semibold leading-none tracking-[0.02em] text-slate-800 ring-1 ring-sky-200 transition hover:bg-sky-100 hover:ring-sky-300 sm:gap-1.5 sm:px-3 sm:text-[12px]"
+            onClick={() => setSprintKanbanCarriedOverOnly((v) => !v)}
+            aria-pressed={sprintKanbanCarriedOverOnly}
+            title={
+              sprintKanbanCarriedOverOnly
+                ? "Show all stories"
+                : `Filter kanban to ${rolledInCount} carried-over stor${rolledInCount === 1 ? "y" : "ies"}`
+            }
+            className={cn(
+              "inline-flex h-7 max-w-full shrink-0 cursor-pointer items-center gap-1 rounded-full px-2.5 text-[11px] font-semibold leading-none tracking-[0.02em] transition sm:gap-1.5 sm:px-3 sm:text-[12px]",
+              sprintKanbanCarriedOverOnly
+                ? "bg-sky-100 text-sky-950 ring-1 ring-sky-300 shadow-[inset_0_1px_2px_rgba(15,23,42,0.08)]"
+                : "bg-[aliceblue] text-slate-800 ring-1 ring-sky-200 hover:bg-sky-100 hover:ring-sky-300",
+            )}
           >
-            <Inbox className="size-3 shrink-0 text-indigo-500 sm:size-3.5" strokeWidth={2.25} aria-hidden />
-            <span className="text-slate-500">Carried over</span>
+            <Filter
+              className={cn(
+                "size-3 shrink-0 sm:size-3.5",
+                sprintKanbanCarriedOverOnly ? "text-sky-700" : "text-indigo-500",
+              )}
+              strokeWidth={2.25}
+              aria-hidden
+            />
+            <span className={cn(sprintKanbanCarriedOverOnly ? "text-sky-900" : "text-slate-500")}>
+              Carried over
+            </span>
             <span className="truncate">{rolledInCount}</span>
           </button>
         ) : null}
@@ -5972,27 +6076,20 @@ export function TimelineGrid({
         <Activity className="size-3 shrink-0" strokeWidth={2.2} aria-hidden />
         Progress
       </button>
-      {/* Carried-over toolbar toggle — only renders when the current sprint
+      {/* Carried-over toolbar chip — only renders when the current sprint
        *  actually has stories that rolled over from a prior sprint. Clicking
-       *  flips a board-local filter so the kanban shows only those rows. */}
+       *  opens the audit modal listing exactly which stories carried over. */}
       {resolvedActiveYearSprint != null && (() => {
         const carriedOverCount = collectStoriesRolledIntoSprint(initiatives, resolvedActiveYearSprint).length;
         if (carriedOverCount === 0) return null;
         return (
           <button
             type="button"
-            onClick={() => setSprintKanbanCarriedOverOnly((v) => !v)}
-            aria-pressed={sprintKanbanCarriedOverOnly}
-            title={
-              sprintKanbanCarriedOverOnly
-                ? "Show all stories"
-                : `Filter to ${carriedOverCount} carried-over stor${carriedOverCount === 1 ? "y" : "ies"}`
-            }
+            onClick={() => setRolledInModalSprint(resolvedActiveYearSprint)}
+            title={`See what carried over into Sprint ${resolvedActiveYearSprint}`}
             className={cn(
               summaryChipBaseClass,
-              sprintKanbanCarriedOverOnly
-                ? "bg-gradient-to-br from-indigo-100 via-indigo-200 to-indigo-200 text-indigo-950 ring-1 ring-indigo-300/75 shadow-sm"
-                : "bg-gradient-to-br from-indigo-50 via-indigo-100 to-indigo-100 text-indigo-950 ring-1 ring-indigo-200/75 hover:from-indigo-100 hover:via-indigo-200 hover:to-indigo-200",
+              "bg-gradient-to-br from-indigo-50 via-indigo-100 to-indigo-100 text-indigo-950 ring-1 ring-indigo-200/75 hover:from-indigo-100 hover:via-indigo-200 hover:to-indigo-200",
             )}
           >
             <Inbox className="size-3 shrink-0" strokeWidth={2.2} aria-hidden />
@@ -6055,11 +6152,16 @@ export function TimelineGrid({
         <span className="hidden sm:inline">Epic Estimated</span>
         <span className="sm:hidden">Estimated</span>
       </button>
-      <div className={summaryChipUnscheduledClass}>
+      <button
+        type="button"
+        onClick={() => openEstEpicsPanel("unscheduledStories")}
+        className={summaryChipUnscheduledClass}
+        title="Open unscheduled stories panel"
+      >
         <span className="truncate">{sprintKanbanSummaryStats.storyUnscheduled}</span>
         <span className="hidden sm:inline">User Stories Unscheduled</span>
         <span className="sm:hidden">US Unsch.</span>
-      </div>
+      </button>
     </>
   ) : null;
 
@@ -8600,24 +8702,34 @@ export function TimelineGrid({
                       id: "unestimated" as const,
                       label: "Unestimated epics",
                       count: scopedEpicsForEstimatePanel.unestimated.length,
+                      show: true,
                     },
                     {
                       id: "estimated" as const,
                       label: "Estimated epics",
                       count: scopedEpicsForEstimatePanel.estimated.length,
+                      show: true,
+                    },
+                    {
+                      id: "unscheduledStories" as const,
+                      label: "Unscheduled stories",
+                      count: scopedEpicsForEstimatePanel.unscheduledStories.length,
+                      show: scopedEpicsForEstimatePanel.sprintCtx != null,
                     },
                     {
                       id: "epicsNoDesc" as const,
                       label: "Epics · no description",
                       count: scopedEpicsWithoutDescription.length,
+                      show: true,
                     },
                     {
                       id: "storiesNoDesc" as const,
                       label: "Stories · no description",
                       count: scopedStoriesWithoutDescription.length,
+                      show: true,
                     },
                   ] as const
-                ).map((tab) => {
+                ).filter((tab) => tab.show).map((tab) => {
                   const active = estimateCoveragePanelTab === tab.id;
                   return (
                     <button
@@ -8715,6 +8827,27 @@ export function TimelineGrid({
                     </div>
                     <div className="overflow-x-auto bg-white">
                       {renderEstimatePanelTable(scopedEpicsForEstimatePanel.estimated, "estimated")}
+                    </div>
+                  </section>
+                ) : estimateCoveragePanelTab === "unscheduledStories" ? (
+                  <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <div className="flex shrink-0 items-center gap-2 bg-[#0897d5] px-3 py-2.5">
+                      <p className="inline-flex min-w-0 items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.02em] text-white">
+                        <Inbox className="size-4 shrink-0 text-white/90" strokeWidth={2.2} />
+                        <span className="truncate">
+                          {scopedEpicsForEstimatePanel.sprintCtx
+                            ? `Stories not on Sprint ${scopedEpicsForEstimatePanel.sprintCtx.yearSprint}`
+                            : "Unscheduled stories"}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="overflow-x-auto bg-white">
+                      {renderStoriesWithoutDescriptionTable(
+                        scopedEpicsForEstimatePanel.unscheduledStories,
+                        scopedEpicsForEstimatePanel.sprintCtx
+                          ? `Every team-filtered story is already on Sprint ${scopedEpicsForEstimatePanel.sprintCtx.yearSprint}.`
+                          : "No unscheduled stories in this scope.",
+                      )}
                     </div>
                   </section>
                 ) : estimateCoveragePanelTab === "epicsNoDesc" ? (
