@@ -52,6 +52,7 @@ import { createPortal } from "react-dom";
 import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
 import { RoadmapSelector } from "@/components/timeline/roadmap-selector";
 import { TeamAvatar } from "@/components/ui/team-avatar";
+import { UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
 import { HealthBadge, formatHealthTooltip } from "@/components/timeline/health-badge";
 import { RoadmapHealthPopover, type ProgressBasis } from "@/components/timeline/roadmap-health-popover";
 import { computeInitiativeProgress, computeProgress, type HealthStatus } from "@/lib/progress";
@@ -3228,13 +3229,31 @@ export function TimelineGrid({
                     </button>
                   </td>
                   <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
-                    {estimatePanelEpicSprintLabel(row.epic)}
+                    <span className="inline-flex min-w-0 items-center gap-1.5">
+                      <Flag className="size-3.5 shrink-0 text-rose-500" strokeWidth={2.1} aria-hidden />
+                      <span className="truncate">{estimatePanelEpicSprintLabel(row.epic)}</span>
+                    </span>
                   </td>
                   <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
-                    {estimatePanelTeamLabel(row.epic.team)}
+                    <span className="inline-flex min-w-0 items-center gap-1.5">
+                      <TeamAvatar
+                        slug={row.epic.team ?? null}
+                        sizePx={16}
+                        fallback={<Users className="size-3.5 shrink-0 text-slate-400" aria-hidden />}
+                      />
+                      <span className="truncate">{estimatePanelTeamLabel(row.epic.team)}</span>
+                    </span>
                   </td>
                   <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
-                    {estimatePanelAssigneeLabel(row.epic.assignee)}
+                    {(() => {
+                      const resolved = resolveAssigneeAvatar(row.epic.assignee, workspaceDirectoryUsers);
+                      return (
+                        <span className="inline-flex min-w-0 items-center gap-1.5">
+                          <UserAvatar name={resolved.name} image={resolved.image} size={18} className="ring-0" />
+                          <span className="truncate">{estimatePanelAssigneeLabel(row.epic.assignee)}</span>
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className={cn(estimatePanelCellClass, "text-center text-[14px] font-semibold tabular-nums text-slate-950")}>
                     {Math.max(0, Number(row.epic.originalEstimateDays ?? 0))}d
@@ -3298,13 +3317,31 @@ export function TimelineGrid({
                           </td>
                           <td className={cn(estimatePanelCellClass, "text-[13px] text-slate-400")}>—</td>
                           <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-600")}>
-                            {estimatePanelStorySprintLabel(story)}
+                            <span className="inline-flex min-w-0 items-center gap-1.5">
+                              <Flag className="size-3.5 shrink-0 text-rose-500" strokeWidth={2.1} aria-hidden />
+                              <span className="truncate">{estimatePanelStorySprintLabel(story)}</span>
+                            </span>
                           </td>
                           <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-600")}>
-                            {estimatePanelTeamLabel(row.epic.team)}
+                            <span className="inline-flex min-w-0 items-center gap-1.5">
+                              <TeamAvatar
+                                slug={row.epic.team ?? null}
+                                sizePx={16}
+                                fallback={<Users className="size-3.5 shrink-0 text-slate-400" aria-hidden />}
+                              />
+                              <span className="truncate">{estimatePanelTeamLabel(row.epic.team)}</span>
+                            </span>
                           </td>
                           <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-600")}>
-                            {estimatePanelAssigneeLabel(story.assignee)}
+                            {(() => {
+                              const resolved = resolveAssigneeAvatar(story.assignee, workspaceDirectoryUsers);
+                              return (
+                                <span className="inline-flex min-w-0 items-center gap-1.5">
+                                  <UserAvatar name={resolved.name} image={resolved.image} size={18} className="ring-0" />
+                                  <span className="truncate">{estimatePanelAssigneeLabel(story.assignee)}</span>
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td className={cn(estimatePanelCellClass, "text-center text-[13px] font-semibold tabular-nums text-slate-950")}>
                             {Math.max(0, Number(story.estimatedDays ?? 0))}d
@@ -3401,13 +3438,31 @@ export function TimelineGrid({
                       </div>
                     </td>
                     <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
-                      {estimatePanelEpicSprintLabel(row.epic)}
+                      <span className="inline-flex min-w-0 items-center gap-1.5">
+                        <Flag className="size-3.5 shrink-0 text-rose-500" strokeWidth={2.1} aria-hidden />
+                        <span className="truncate">{estimatePanelEpicSprintLabel(row.epic)}</span>
+                      </span>
                     </td>
                     <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
-                      {estimatePanelTeamLabel(row.epic.team)}
+                      <span className="inline-flex min-w-0 items-center gap-1.5">
+                        <TeamAvatar
+                          slug={row.epic.team ?? null}
+                          sizePx={16}
+                          fallback={<Users className="size-3.5 shrink-0 text-slate-400" aria-hidden />}
+                        />
+                        <span className="truncate">{estimatePanelTeamLabel(row.epic.team)}</span>
+                      </span>
                     </td>
                     <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
-                      {estimatePanelAssigneeLabel(row.epic.assignee)}
+                      {(() => {
+                        const resolved = resolveAssigneeAvatar(row.epic.assignee, workspaceDirectoryUsers);
+                        return (
+                          <span className="inline-flex min-w-0 items-center gap-1.5">
+                            <UserAvatar name={resolved.name} image={resolved.image} size={18} className="ring-0" />
+                            <span className="truncate">{estimatePanelAssigneeLabel(row.epic.assignee)}</span>
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className={cn(estimatePanelCellClass, "text-slate-600")}>
                       <button
@@ -3449,13 +3504,31 @@ export function TimelineGrid({
                               </span>
                             </td>
                             <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-600")}>
-                              {estimatePanelStorySprintLabel(story)}
+                              <span className="inline-flex min-w-0 items-center gap-1.5">
+                                <Flag className="size-3.5 shrink-0 text-rose-500" strokeWidth={2.1} aria-hidden />
+                                <span className="truncate">{estimatePanelStorySprintLabel(story)}</span>
+                              </span>
                             </td>
                             <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-600")}>
-                              {estimatePanelTeamLabel(row.epic.team)}
+                              <span className="inline-flex min-w-0 items-center gap-1.5">
+                                <TeamAvatar
+                                  slug={row.epic.team ?? null}
+                                  sizePx={16}
+                                  fallback={<Users className="size-3.5 shrink-0 text-slate-400" aria-hidden />}
+                                />
+                                <span className="truncate">{estimatePanelTeamLabel(row.epic.team)}</span>
+                              </span>
                             </td>
                             <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-600")}>
-                              {estimatePanelAssigneeLabel(story.assignee)}
+                              {(() => {
+                                const resolved = resolveAssigneeAvatar(story.assignee, workspaceDirectoryUsers);
+                                return (
+                                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                                    <UserAvatar name={resolved.name} image={resolved.image} size={18} className="ring-0" />
+                                    <span className="truncate">{estimatePanelAssigneeLabel(story.assignee)}</span>
+                                  </span>
+                                );
+                              })()}
                             </td>
                             <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-400")}>—</td>
                           </tr>
@@ -3519,13 +3592,31 @@ export function TimelineGrid({
                   </button>
                 </td>
                 <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
-                  {estimatePanelStorySprintLabel(row.story)}
+                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                    <Flag className="size-3.5 shrink-0 text-rose-500" strokeWidth={2.1} aria-hidden />
+                    <span className="truncate">{estimatePanelStorySprintLabel(row.story)}</span>
+                  </span>
                 </td>
                 <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
-                  {estimatePanelTeamLabel(row.epic.team)}
+                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                    <TeamAvatar
+                      slug={row.epic.team ?? null}
+                      sizePx={16}
+                      fallback={<Users className="size-3.5 shrink-0 text-slate-400" aria-hidden />}
+                    />
+                    <span className="truncate">{estimatePanelTeamLabel(row.epic.team)}</span>
+                  </span>
                 </td>
                 <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
-                  {estimatePanelAssigneeLabel(row.story.assignee)}
+                  {(() => {
+                    const resolved = resolveAssigneeAvatar(row.story.assignee, workspaceDirectoryUsers);
+                    return (
+                      <span className="inline-flex min-w-0 items-center gap-1.5">
+                        <UserAvatar name={resolved.name} image={resolved.image} size={18} className="ring-0" />
+                        <span className="truncate">{estimatePanelAssigneeLabel(row.story.assignee)}</span>
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td className={cn(estimatePanelCellClass, "text-slate-600")}>
                   <button
