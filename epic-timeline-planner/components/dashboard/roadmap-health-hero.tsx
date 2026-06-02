@@ -177,7 +177,35 @@ export function RoadmapHealthHero({
             </span>
             Roadmap Health
           </h1>
-          <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+        </div>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <IconButton icon={Bell} label="Notifications" badge />
+          <IconButton icon={HelpCircle} label="Help" />
+          <UserChip />
+        </div>
+        {/* Legacy summary-chip portal target — hidden visually, kept alive
+            so TimelineGrid's portal mounts don't crash. */}
+        <div ref={summaryBarRef} className="hidden" aria-hidden />
+      </div>
+
+      {/* Row 2 — tall bordered hero card. Left padding matches row 1
+          (pl-6) so the card's left edge aligns with the Roadmap Health
+          shield icon above it. Collapsible via the chevron in the H1. */}
+      <div
+        className={cn(
+          "overflow-hidden transition-[max-height,opacity,padding] duration-300 ease-out",
+          isPanelExpanded
+            ? "max-h-[1200px] opacity-100 pb-5 pt-1"
+            : "max-h-0 opacity-0 pb-0 pt-0",
+        )}
+        aria-hidden={!isPanelExpanded}
+      >
+      <div className="overflow-x-auto pl-6 pr-6">
+        <div className="flex w-full min-w-min flex-col gap-3 rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-sm">
+          {/* In-card header: roadmap picker + Health calculation filter.
+              Used to live in row 1 next to the H1; tucked inside the card
+              so the title row stays compact. */}
+          <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-1.5">
             <RoadmapSelector
               appearance="subtitle"
               roadmaps={roadmaps}
@@ -211,31 +239,9 @@ export function RoadmapHealthHero({
               />
             </div>
           </div>
-        </div>
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          <IconButton icon={Bell} label="Notifications" badge />
-          <IconButton icon={HelpCircle} label="Help" />
-          <UserChip />
-        </div>
-        {/* Legacy summary-chip portal target — hidden visually, kept alive
-            so TimelineGrid's portal mounts don't crash. */}
-        <div ref={summaryBarRef} className="hidden" aria-hidden />
-      </div>
-
-      {/* Row 2 — tall bordered hero card. Left padding matches row 1
-          (pl-6) so the card's left edge aligns with the Roadmap Health
-          shield icon above it. Collapsible via the chevron in the H1. */}
-      <div
-        className={cn(
-          "overflow-hidden transition-[max-height,opacity,padding] duration-300 ease-out",
-          isPanelExpanded
-            ? "max-h-[1200px] opacity-100 pb-5 pt-1"
-            : "max-h-0 opacity-0 pb-0 pt-0",
-        )}
-        aria-hidden={!isPanelExpanded}
-      >
-      <div className="overflow-x-auto pl-6 pr-6">
-        <div className="flex w-full min-w-min flex-wrap items-center justify-end gap-x-5 gap-y-4 rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-sm">
+          <div className="h-px w-full bg-slate-200/70" aria-hidden />
+          {/* Stat blocks + donuts — the original row 2 content. */}
+          <div className="flex w-full min-w-min flex-wrap items-center justify-end gap-x-5 gap-y-4">
           <StatBlock
             icon={<Zap className="size-7 text-blue-600" strokeWidth={1.9} aria-hidden />}
             value={stats.initiativesCount}
@@ -363,6 +369,7 @@ export function RoadmapHealthHero({
                 : undefined
             }
           />
+          </div>
         </div>
       </div>
       </div>
@@ -541,14 +548,7 @@ function DonutCard({
           centerCount={centerCount}
           centerLabel={centerLabel}
         />
-        <ul
-          className={cn(
-            "items-center gap-x-4 gap-y-1.5 text-[13px] leading-tight",
-            onSliceClick
-              ? "flex flex-col items-stretch"
-              : "grid grid-cols-[auto_minmax(2rem,auto)_minmax(2.75rem,auto)]",
-          )}
-        >
+        <ul className="grid grid-cols-[auto_minmax(2rem,auto)_minmax(2.75rem,auto)] items-center gap-x-4 gap-y-1.5 text-[13px] leading-tight">
           {slices
             .filter((s) => s.value > 0)
             .map((slice) => {
@@ -556,37 +556,36 @@ function DonutCard({
               const active = activeLabels?.has(slice.label) ?? false;
               if (onSliceClick) {
                 return (
-                  <li key={slice.label}>
-                    <button
-                      type="button"
-                      onClick={() => onSliceClick(slice.label)}
-                      aria-pressed={active}
-                      className={cn(
-                        "grid w-full grid-cols-[auto_minmax(2rem,auto)_minmax(2.75rem,auto)] items-center gap-x-4 rounded-md px-1.5 py-0.5 text-left transition outline-none",
-                        "focus-visible:ring-2 focus-visible:ring-indigo-300",
-                        active
-                          ? "bg-indigo-50 ring-1 ring-indigo-200/80"
-                          : "ring-1 ring-transparent hover:bg-slate-50",
-                      )}
-                    >
-                      <span className="flex items-center gap-2 whitespace-nowrap">
-                        <span
-                          className="inline-block size-2 shrink-0 rounded-full"
-                          style={{ background: slice.color }}
-                          aria-hidden
-                        />
-                        <span className={active ? "font-semibold text-indigo-900" : "text-slate-700"}>
-                          {slice.label}
-                        </span>
+                  <button
+                    key={slice.label}
+                    type="button"
+                    onClick={() => onSliceClick(slice.label)}
+                    aria-pressed={active}
+                    className={cn(
+                      "col-span-3 grid grid-cols-subgrid items-center gap-x-4 rounded-md px-1.5 py-0.5 text-left transition outline-none",
+                      "focus-visible:ring-2 focus-visible:ring-indigo-300",
+                      active
+                        ? "bg-indigo-50 ring-1 ring-indigo-200/80"
+                        : "ring-1 ring-transparent hover:bg-slate-50",
+                    )}
+                  >
+                    <span className="flex items-center gap-2 whitespace-nowrap">
+                      <span
+                        className="inline-block size-2 shrink-0 rounded-full"
+                        style={{ background: slice.color }}
+                        aria-hidden
+                      />
+                      <span className={active ? "font-semibold text-indigo-900" : "text-slate-700"}>
+                        {slice.label}
                       </span>
-                      <span className={cn("text-left font-semibold tabular-nums", active ? "text-indigo-900" : "text-slate-900")}>
-                        {slice.value}
-                      </span>
-                      <span className={cn("text-left text-[12px] tabular-nums", active ? "text-indigo-700" : "text-slate-500")}>
-                        ({pct}%)
-                      </span>
-                    </button>
-                  </li>
+                    </span>
+                    <span className={cn("text-left font-semibold tabular-nums", active ? "text-indigo-900" : "text-slate-900")}>
+                      {slice.value}
+                    </span>
+                    <span className={cn("text-left text-[12px] tabular-nums", active ? "text-indigo-700" : "text-slate-500")}>
+                      ({pct}%)
+                    </span>
+                  </button>
                 );
               }
               return (
@@ -609,7 +608,7 @@ function DonutCard({
               );
             })}
           {total === 0 ? (
-            <li className={onSliceClick ? "text-slate-400" : "col-span-3 text-slate-400"}>No data</li>
+            <li className="col-span-3 text-slate-400">No data</li>
           ) : null}
         </ul>
         {sideTotal ? (
