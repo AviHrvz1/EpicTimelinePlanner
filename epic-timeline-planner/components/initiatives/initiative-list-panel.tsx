@@ -1465,7 +1465,7 @@ function InitiativeTreeEpicRow({
           <div className="flex min-w-0 items-center gap-1 pl-0">
             <p
               className={cn(
-                "min-w-0 truncate rounded px-1 text-[16px] font-normal leading-6 tracking-tight text-slate-900",
+                "min-w-0 truncate rounded px-1 text-[15px] font-normal leading-5 tracking-tight text-slate-900",
                 searchQuery && epic.title.toLowerCase().includes(searchQuery) && "bg-yellow-100",
               )}
             >
@@ -1545,7 +1545,7 @@ function InitiativeTreeEpicRow({
                 <p className="text-[11px] text-muted-foreground">No user stories.</p>
               ) : null}
               {stories.length > 0 ? (
-                <ul className="space-y-0.5">
+                <ul className="space-y-2">
                   {stories.map((story, storyIdx) => {
                     const isLast = storyIdx === stories.length - 1;
                     const meta = storyStatusMeta(story, planContextMonth);
@@ -1554,45 +1554,49 @@ function InitiativeTreeEpicRow({
                     const a11y = [story.title, assigneeName, statusLabel, sprintLabel].filter(Boolean).join(", ");
                     return (
                       <li key={story.id} className="relative pl-6">
-                        <span className="absolute left-0 top-0 w-px bg-border/70" style={{ height: isLast ? "50%" : "100%" }} />
-                        <span className="absolute left-0 top-1/2 h-px w-4 -translate-y-px bg-border/70" />
-                        <div className="group/story flex min-h-[28px] w-full items-center gap-2 rounded-md py-0.5 pr-0.5 pl-0 transition-colors hover:bg-slate-100/70">
-                          <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
-                            <UserStoryIcon />
-                          </span>
-                          <MiddlePanelStoryTitleButton
-                            storyTitle={story.title}
-                            ariaLabel={a11y}
-                            onOpen={() => onOpenStory(story.id)}
-                            className="text-left text-[14px] font-normal text-slate-700 antialiased hover:text-foreground"
-                            highlight={Boolean(searchQuery && story.title.toLowerCase().includes(searchQuery))}
-                          />
-                          <div className="flex max-w-[58%] shrink-0 items-center justify-end gap-1">
-                            {assigneeName ? (() => {
-                              const resolved = resolveAssigneeAvatar(assigneeName, workspaceDirectoryUsers);
-                              return (
-                                <span
-                                  className="inline-flex max-w-[7.5rem] shrink-0 items-center gap-1 truncate rounded-md border border-border/60 bg-background py-0.5 pl-0.5 pr-1 text-[11px] font-medium text-slate-600"
-                                  title={assigneeName}
-                                >
-                                  {resolved.image ? (
-                                    <UserAvatar name={resolved.name} image={resolved.image} size={16} />
-                                  ) : (
-                                    <User className="size-3 shrink-0 text-slate-500" aria-hidden />
-                                  )}
-                                  <span className="min-w-0 truncate">{formatAssigneeShortLabel(assigneeName)}</span>
-                                </span>
-                              );
-                            })() : null}
-                            {sprintLabel ? (
-                              <span className="max-w-[7rem] truncate border border-border/60 bg-background px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-                                {sprintLabel}
-                              </span>
-                            ) : null}
-                            {showStatusBadge ? (
-                              <span className={cn("shrink-0 tabular-nums", statusClassName)}>{statusLabel}</span>
-                            ) : null}
+                        <span className="absolute left-0 top-0 w-px bg-border/70" style={{ height: isLast ? "14px" : "100%" }} />
+                        <span className="absolute left-0 top-[14px] h-px w-4 -translate-y-px bg-border/70" />
+                        <div className="group/story flex w-full flex-col rounded-md pr-0.5 pl-0 transition-colors hover:bg-slate-100/70">
+                          <div className="flex min-h-[28px] w-full items-center gap-0.5">
+                            <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
+                              <UserStoryIcon />
+                            </span>
+                            <MiddlePanelStoryTitleButton
+                              storyTitle={story.title}
+                              ariaLabel={a11y}
+                              onOpen={() => onOpenStory(story.id)}
+                              className="text-left text-[15px] font-normal text-slate-700 antialiased hover:text-foreground"
+                              highlight={Boolean(searchQuery && story.title.toLowerCase().includes(searchQuery))}
+                            />
                           </div>
+                          {assigneeName || sprintLabel || showStatusBadge ? (
+                            <div className="mt-1.5 flex w-full flex-wrap items-center justify-end gap-1 pl-6">
+                              {assigneeName ? (() => {
+                                const resolved = resolveAssigneeAvatar(assigneeName, workspaceDirectoryUsers);
+                                return (
+                                  <span
+                                    className="inline-flex max-w-[7.5rem] shrink-0 items-center gap-1 truncate border border-border/60 bg-background py-0.5 pl-0.5 pr-1 text-[12px] font-medium text-slate-600"
+                                    title={assigneeName}
+                                  >
+                                    {resolved.image ? (
+                                      <UserAvatar name={resolved.name} image={resolved.image} size={16} />
+                                    ) : (
+                                      <User className="size-3 shrink-0 text-slate-500" aria-hidden />
+                                    )}
+                                    <span className="min-w-0 truncate">{formatAssigneeShortLabel(assigneeName)}</span>
+                                  </span>
+                                );
+                              })() : null}
+                              {sprintLabel ? (
+                                <span className="max-w-[7rem] truncate border border-border/60 bg-background px-1.5 py-0.5 text-[12px] font-medium text-muted-foreground">
+                                  {sprintLabel}
+                                </span>
+                              ) : null}
+                              {showStatusBadge ? (
+                                <span className={cn("shrink-0 tabular-nums", statusClassName)}>{statusLabel}</span>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </div>
                       </li>
                     );
@@ -2238,7 +2242,7 @@ function SprintEpicCard({
           >
             <div className="flex w-full min-w-0 items-center gap-0">
               <div className="flex min-w-0 flex-1 items-center gap-0 pl-0">
-                <p className="min-w-0 truncate text-[14px] font-normal leading-5 tracking-tight text-slate-900">
+                <p className="min-w-0 truncate text-[18px] font-medium leading-7 tracking-tight text-slate-900">
                   {epic.title}
                 </p>
               </div>
@@ -2299,8 +2303,9 @@ function SprintEpicCard({
         </div>
       </div>
       {isOpen ? (
-        <div className="mt-2 ml-8 space-y-1 font-sans">
-          {stories.map((story) => {
+        <div className="mt-2 ml-8 space-y-2 font-sans">
+          {stories.map((story, storyIdx) => {
+            const isLast = storyIdx === stories.length - 1;
             const meta = storyStatusMeta(story, planContextMonth);
             const { sprintLabel, statusLabel, statusClassName, showStatusBadge } = meta;
             const assigneeName = storyAssigneeDisplayName(story);
@@ -2313,52 +2318,59 @@ function SprintEpicCard({
               const a11y = [story.title, assigneeName, statusLabel, sprintLabel].filter(Boolean).join(", ");
               const isAssigned = assigneeName != null;
               return (
-                <div
-                  key={story.id}
-                  className="group/story flex min-h-[28px] w-full items-center gap-1.5 rounded-md py-0.5 pr-0.5 transition-colors hover:bg-muted/40"
-                >
-                  {storyDragEnabled ? (
-                    isCapacityMode
-                      ? (!isAssigned ? <StoryDragHandle storyId={story.id} /> : null)
-                      : (!isScheduledInActiveSprint ? <StoryDragHandle storyId={story.id} /> : null)
-                  ) : null}
-                  <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
-                    <UserStoryIcon />
-                    {hintStoryId === story.id ? (
-                      <DragToKanbanArrowIcon className="animate-epic-drag-hint-arrow pointer-events-none absolute left-0 top-1/2 size-7 text-indigo-500" />
+                <div key={story.id} className="relative pl-6">
+                  <span className="absolute left-0 top-0 w-px bg-border/70" style={{ height: isLast ? "14px" : "100%" }} />
+                  <span className="absolute left-0 top-[14px] h-px w-4 -translate-y-px bg-border/70" />
+                  <div
+                    className="group/story flex w-full flex-col rounded-md pr-0.5 transition-colors hover:bg-muted/40"
+                  >
+                  <div className="flex min-h-[28px] w-full items-center gap-0.5">
+                    {storyDragEnabled ? (
+                      isCapacityMode
+                        ? (!isAssigned ? <StoryDragHandle storyId={story.id} /> : null)
+                        : (!isScheduledInActiveSprint ? <StoryDragHandle storyId={story.id} /> : null)
                     ) : null}
-                  </span>
-                  <MiddlePanelStoryTitleButton
-                    storyTitle={story.title}
-                    ariaLabel={a11y}
-                    onOpen={() => onOpenStory(story.id)}
-                    className="rounded-md px-0.5 text-left text-[14px] font-normal text-slate-700 hover:text-foreground"
-                  />
-                  <div className="flex max-w-[58%] shrink-0 items-center justify-end gap-1">
-                    {assigneeName ? (() => {
-                      const resolved = resolveAssigneeAvatar(assigneeName, workspaceDirectoryUsers);
-                      return (
-                        <span
-                          className="inline-flex max-w-[7.5rem] shrink-0 items-center gap-1 truncate rounded-md border border-border/60 bg-background py-0.5 pl-0.5 pr-1 text-[11px] font-medium text-slate-600"
-                          title={assigneeName}
-                        >
-                          {resolved.image ? (
-                            <UserAvatar name={resolved.name} image={resolved.image} size={16} />
-                          ) : (
-                            <User className="size-3 shrink-0 text-slate-500" aria-hidden />
-                          )}
-                          <span className="min-w-0 truncate">{formatAssigneeShortLabel(assigneeName)}</span>
+                    <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
+                      <UserStoryIcon />
+                      {hintStoryId === story.id ? (
+                        <DragToKanbanArrowIcon className="animate-epic-drag-hint-arrow pointer-events-none absolute left-0 top-1/2 size-7 text-indigo-500" />
+                      ) : null}
+                    </span>
+                    <MiddlePanelStoryTitleButton
+                      storyTitle={story.title}
+                      ariaLabel={a11y}
+                      onOpen={() => onOpenStory(story.id)}
+                      className="rounded-md px-0.5 text-left text-[15px] font-normal text-slate-700 hover:text-foreground"
+                    />
+                  </div>
+                  {assigneeName || sprintLabel || showStatusBadge ? (
+                    <div className="mt-1.5 flex w-full flex-wrap items-center justify-end gap-1 pl-6">
+                      {assigneeName ? (() => {
+                        const resolved = resolveAssigneeAvatar(assigneeName, workspaceDirectoryUsers);
+                        return (
+                          <span
+                            className="inline-flex max-w-[7.5rem] shrink-0 items-center gap-1 truncate border border-border/60 bg-background py-0.5 pl-0.5 pr-1 text-[11px] font-medium text-slate-600"
+                            title={assigneeName}
+                          >
+                            {resolved.image ? (
+                              <UserAvatar name={resolved.name} image={resolved.image} size={16} />
+                            ) : (
+                              <User className="size-3 shrink-0 text-slate-500" aria-hidden />
+                            )}
+                            <span className="min-w-0 truncate">{formatAssigneeShortLabel(assigneeName)}</span>
+                          </span>
+                        );
+                      })() : null}
+                      {sprintLabel ? (
+                        <span className="max-w-[7rem] truncate border border-border/60 bg-background px-1.5 py-0.5 text-[12px] font-medium text-muted-foreground">
+                          {sprintLabel}
                         </span>
-                      );
-                    })() : null}
-                    {sprintLabel ? (
-                      <span className="max-w-[7rem] truncate border border-border/60 bg-background px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-                        {sprintLabel}
-                      </span>
-                    ) : null}
-                    {showStatusBadge ? (
-                      <span className={cn("shrink-0 tabular-nums", statusClassName)}>{statusLabel}</span>
-                    ) : null}
+                      ) : null}
+                      {showStatusBadge ? (
+                        <span className={cn("shrink-0 tabular-nums", statusClassName)}>{statusLabel}</span>
+                      ) : null}
+                    </div>
+                  ) : null}
                   </div>
                 </div>
               );
