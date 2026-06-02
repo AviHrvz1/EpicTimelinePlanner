@@ -277,6 +277,7 @@ function IconFilterSelect<T extends string>({
   ariaLabel,
   allValue,
   disabled = false,
+  appearance = "checkbox",
 }: {
   values: T[];
   onToggle: (value: T) => void;
@@ -284,6 +285,10 @@ function IconFilterSelect<T extends string>({
   ariaLabel: string;
   allValue: T;
   disabled?: boolean;
+  /** "radio" replaces the checkbox glyph with a single-select radio dot —
+   *  signals to the planner that picking another value REPLACES the prior
+   *  pick (no accumulation). Used by the Quarters dropdown. */
+  appearance?: "checkbox" | "radio";
 }) {
   const detailsRef = useRef<HTMLDetailsElement | null>(null);
   const closeTimeoutRef = useRef<number | null>(null);
@@ -387,13 +392,29 @@ function IconFilterSelect<T extends string>({
                     (isAllSelected ? opt.value === allValue : values.includes(opt.value)) && "bg-slate-100 text-slate-900",
                   )}
                 >
-                  <input
-                    type="checkbox"
-                    tabIndex={-1}
-                    readOnly
-                    checked={isAllSelected ? opt.value === allValue : values.includes(opt.value)}
-                    className="size-3.5 rounded border-slate-300 text-slate-700"
-                  />
+                  {appearance === "radio" ? (
+                    <span
+                      className={cn(
+                        "inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border",
+                        (isAllSelected ? opt.value === allValue : values.includes(opt.value))
+                          ? "border-slate-700 bg-slate-700"
+                          : "border-slate-300 bg-white",
+                      )}
+                      aria-hidden
+                    >
+                      {(isAllSelected ? opt.value === allValue : values.includes(opt.value)) ? (
+                        <span className="block h-1.5 w-1.5 rounded-full bg-white" />
+                      ) : null}
+                    </span>
+                  ) : (
+                    <input
+                      type="checkbox"
+                      tabIndex={-1}
+                      readOnly
+                      checked={isAllSelected ? opt.value === allValue : values.includes(opt.value)}
+                      className="size-3.5 rounded border-slate-300 text-slate-700"
+                    />
+                  )}
                   <span className="shrink-0">{opt.icon}</span>
                   <span className="whitespace-nowrap">{opt.label}</span>
                 </button>
@@ -791,7 +812,7 @@ function TeamFilterAutocomplete({
         <input
           ref={inputRef}
           type="text"
-          value={open ? query : displayLabel}
+          value={open ? (query.length > 0 ? query : displayLabel) : displayLabel}
           placeholder={placeholder}
           disabled={disabled}
           aria-label={ariaLabel}
@@ -2759,6 +2780,21 @@ export function InitiativeListPanel({
     onHealthFilterChange?.(new Set());
   };
   /**
+   * Quarter dropdown is SINGLE-select (radio-style) — a year only ever has
+   * a meaningful sequence semantics, never an arbitrary Set, so picking
+   * one quarter replaces the prior choice instead of accumulating. Clicking
+   * the already-active quarter resets to "all" (year view). Pairs with the
+   * sync effect in epic-planner-app.tsx that focuses the Gantt on the
+   * picked quarter.
+   */
+  const handleQuarterPick = (value: "all" | "Q1" | "Q2" | "Q3" | "Q4") => {
+    setPanelQuarterFilters((prev) => {
+      if (value === "all") return prev.length === 1 && prev[0] === "all" ? prev : ["all"];
+      const isAlreadyOnlyPick = prev.length === 1 && prev[0] === value;
+      return isAlreadyOnlyPick ? ["all"] : [value];
+    });
+  };
+  /**
    * Bridge the panel's local execution-status filter to the parent so the
    * Gantt can apply the same cut. Only emits the 4 execution statuses
    * (todo / inProgress / review / done) — plan statuses Scheduled /
@@ -3383,27 +3419,7 @@ export function InitiativeListPanel({
               </div>
             ) : null}
           </div>
-          <div className="mt-4 grid grid-cols-[minmax(0,6.5rem)_minmax(0,1fr)_minmax(0,1fr)_auto_auto] gap-1.5">
-            {activeMonth != null ? (
-              <IconFilterSelect
-                values={["current"]}
-                onToggle={() => {}}
-                options={monthFilterOptions}
-                ariaLabel={isSprintModeActive ? "Month filter (active sprint month)" : "Month filter (locked to selected month)"}
-                allValue="current"
-                // Sprint surfaces keep the month chip interactive (no greyed-out look); other month-scoped views stay locked.
-                disabled={!isSprintModeActive}
-              />
-            ) : (
-              <IconFilterSelect
-                values={panelQuarterFilters}
-                onToggle={(value) => setPanelQuarterFilters((prev) => toggleMultiFilter(prev, value, "all"))}
-                options={quarterFilterOptions}
-                ariaLabel="Filter left panel by quarter"
-                allValue="all"
-                disabled={panelQuarterFilterLocked}
-              />
-            )}
+          <div className="mt-4 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto_auto] gap-2">
             <TeamFilterAutocomplete
               values={panelTeamFilterIds}
               onToggle={handlePanelTeamFilterToggle}
@@ -3418,6 +3434,27 @@ export function InitiativeListPanel({
               ariaLabel="Filter left panel by status"
               allValue="all"
             />
+            {activeMonth != null ? (
+              <IconFilterSelect
+                values={["current"]}
+                onToggle={() => {}}
+                options={monthFilterOptions}
+                ariaLabel={isSprintModeActive ? "Month filter (active sprint month)" : "Month filter (locked to selected month)"}
+                allValue="current"
+                // Sprint surfaces keep the month chip interactive (no greyed-out look); other month-scoped views stay locked.
+                disabled={!isSprintModeActive}
+              />
+            ) : (
+              <IconFilterSelect
+                values={panelQuarterFilters}
+                onToggle={handleQuarterPick}
+                options={quarterFilterOptions}
+                ariaLabel="Filter left panel by quarter"
+                allValue="all"
+                disabled={panelQuarterFilterLocked}
+                appearance="radio"
+              />
+            )}
             <HealthFilterMenu
               healthFilter={healthFilter}
               onHealthFilterChange={onHealthFilterChange}
@@ -3701,15 +3738,7 @@ export function InitiativeListPanel({
               </div>
             ) : null}
           </div>
-          <div className="mt-4 grid grid-cols-[minmax(0,6.5rem)_minmax(0,1fr)_minmax(0,1fr)_auto_auto] gap-1.5">
-            <IconFilterSelect
-              values={panelQuarterFilters}
-              onToggle={(value) => setPanelQuarterFilters((prev) => toggleMultiFilter(prev, value, "all"))}
-              options={quarterFilterOptions}
-              ariaLabel="Filter initiatives by quarter"
-              allValue="all"
-              disabled={panelQuarterFilterLocked}
-            />
+          <div className="mt-4 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto_auto] gap-2">
             <TeamFilterAutocomplete
               values={panelTeamFilterIds}
               onToggle={handlePanelTeamFilterToggle}
@@ -3723,6 +3752,15 @@ export function InitiativeListPanel({
               options={statusFilterOptions}
               ariaLabel="Filter initiatives by status"
               allValue="all"
+            />
+            <IconFilterSelect
+              values={panelQuarterFilters}
+              onToggle={handleQuarterPick}
+              options={quarterFilterOptions}
+              ariaLabel="Filter initiatives by quarter"
+              allValue="all"
+              disabled={panelQuarterFilterLocked}
+              appearance="radio"
             />
             <HealthFilterMenu
               healthFilter={healthFilter}
