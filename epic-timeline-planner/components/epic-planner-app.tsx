@@ -5672,12 +5672,6 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           labels. Lives outside <main> so it doesn't scroll with content. */}
       <div
         className="fixed inset-y-0 left-0 z-[60] w-[58px] overflow-visible"
-        onFocusCapture={() => setIsModeRailExpanded(true)}
-        onBlurCapture={(e) => {
-          const next = e.relatedTarget;
-          if (next instanceof Node && e.currentTarget.contains(next)) return;
-          setIsModeRailExpanded(false);
-        }}
       >
         <div
           className={cn(
@@ -5710,7 +5704,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             title="Bird Eye Viewer — back to roadmap"
             aria-label="Back to roadmap"
             className={cn(
-              "group flex shrink-0 items-center transition-[padding] duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400",
+              "group flex shrink-0 items-center rounded-md transition-[padding] duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300",
               isModeRailExpanded ? "justify-start px-3 pt-3 pb-2" : "justify-center px-0 pt-3 pb-1",
             )}
           >
@@ -5731,7 +5725,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           </button>
           <div
             className={cn(
-              "mx-2 shrink-0 border-t border-slate-200/70 transition-opacity duration-200",
+              "mx-2 shrink-0 border-t border-gray-200 transition-opacity duration-200",
               isModeRailExpanded ? "opacity-100" : "opacity-60",
             )}
           />
@@ -5741,26 +5735,23 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       <main
         className={cn(
           "flex h-screen min-h-0 flex-col pb-8 pl-[58px]",
-          // Roadmap mode: drop main's right padding so the breadcrumb
-          // gradient panels (dashboard hero + body row strip) extend
-          // all the way to the scrollbar. Otherwise the 20px pr-5
-          // shows main's blue/violet/pink gradient as a light gap
-          // beside the breadcrumb gradient.
-          topMode === "roadmap" ? "pr-0" : "pr-5",
-          // Page-level scrollbar styling (roadmap mode). Color matches
-          // the project's pastel palette (sky-100 → indigo-100 →
-          // violet-100), same as the initiative panel scrollbar.
-          // mr-[20px] shifts the scrollbar 20px in from the viewport
-          // right edge so it doesn't sit flush against the fixed white
-          // separator — a same-gradient backdrop div fills that 20px
-          // gap so no body-bg shows through.
-          topMode === "roadmap" && cn(
-            "[scrollbar-color:theme(colors.indigo.400)_transparent]",
+          // Drop main's right padding for the modes that opt-in to the
+          // page-level indigo scrollbar so panels extend all the way
+          // to the scrollbar edge — otherwise main's gradient shows
+          // through as a light gap beside the panel.
+          (topMode === "roadmap" || topMode === "backlog" || topMode === "dashboard" || topMode === "users")
+            ? "pr-0"
+            : "pr-5",
+          // Page-level scrollbar styling shared across roadmap, backlog,
+          // dashboard, and users modes. Indigo thumb (indigo-500 on
+          // hover) matches the project's accent palette.
+          (topMode === "roadmap" || topMode === "backlog" || topMode === "dashboard" || topMode === "users") && cn(
+            "[scrollbar-color:theme(colors.blue.500)_transparent]",
             "[&::-webkit-scrollbar]:w-1.5",
             "[&::-webkit-scrollbar-track]:bg-transparent",
             "[&::-webkit-scrollbar-thumb]:rounded-full",
-            "[&::-webkit-scrollbar-thumb]:bg-indigo-400",
-            "hover:[&::-webkit-scrollbar-thumb]:bg-indigo-500",
+            "[&::-webkit-scrollbar-thumb]:bg-blue-500",
+            "hover:[&::-webkit-scrollbar-thumb]:bg-blue-600",
           ),
           topMode === "users" && "overflow-x-hidden overflow-y-auto bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
           topMode === "demoBuilder" && "overflow-x-hidden overflow-y-auto bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
@@ -5768,7 +5759,9 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           topMode === "roadmap" &&
             "overflow-x-hidden overflow-y-auto bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
           topMode === "backlog" &&
-            "overflow-hidden bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
+            "overflow-x-hidden overflow-y-auto bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
+          topMode === "dashboard" &&
+            "overflow-x-hidden overflow-y-auto bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
         )}
       >
         {/* Roadmap Health hero — replaces the legacy top bar. Absorbs the
@@ -5817,16 +5810,21 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         />
         <div
           className={cn(
-            "mx-auto flex w-full max-w-[2550px] flex-row gap-1.5 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 pr-3",
+            "mx-auto flex w-full max-w-[2550px] flex-row gap-1.5 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 pl-2",
+            // backlog + users need no right inset so their white panel
+            // reaches the same x as the Roadmap Health hero (each panel
+            // has its own internal margin that visually shifts them).
+            // Hero alignment for the other modes stays at pr-[16px].
+            (topMode === "backlog" || topMode === "users") ? "pr-0" : "pr-[16px]",
             topMode === "backlog"
-              ? "min-h-0 min-w-0 flex-1 items-stretch overflow-x-hidden overflow-y-hidden"
+              ? "min-h-0 min-w-0 flex-1 items-stretch overflow-x-visible overflow-y-visible"
               : "flex-1 min-h-0 overflow-y-visible",
-            // For roadmap mode, lock the body row to a full viewport
-            // height so the Gantt + middle initiative panel are as
-            // tall as possible. Combined with the hero stacked above,
-            // total content exceeds the viewport and the page scrolls
-            // down to reveal more of both panels.
-            topMode === "roadmap" && "min-h-[100vh]",
+            // Lock the body row to a full viewport height for the modes
+            // that opt into page-level scrolling, so the inner panels
+            // (Gantt, backlog table, users directory, dashboard) stay
+            // tall enough that the page can scroll down to reveal more
+            // of them rather than the panels compressing.
+            (topMode === "roadmap" || topMode === "backlog" || topMode === "dashboard" || topMode === "users") && "min-h-[100vh]",
             topMode !== "backlog" && (isModeRailExpanded ? "overflow-x-visible" : "overflow-x-hidden"),
           )}
         >
@@ -5835,7 +5833,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               "flex min-h-0 min-w-0 flex-1 flex-col gap-5",
               topMode === "dashboard" && "pt-2",
               topMode === "backlog"
-                ? "h-full min-h-0 overflow-x-hidden overflow-y-hidden"
+                ? "h-full min-h-0 overflow-x-hidden overflow-y-visible"
                 : "overflow-x-hidden overflow-y-visible",
             )}
           >
@@ -6577,9 +6575,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               <div
                 className="pointer-events-none relative flex h-full min-h-0 w-[18px] shrink-0 items-center justify-center self-stretch"
                 aria-hidden
-              >
-                <div className="pointer-events-none absolute inset-y-0 left-[15px] z-30 w-[6px] -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.10)]" aria-hidden />
-              </div>
+              />
             </div>
           ) : topMode === "users" ? (
             <div className="flex min-h-0 min-w-0 flex-1 flex-row">
@@ -6594,9 +6590,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               <div
                 className="pointer-events-none relative flex h-full min-h-0 w-[18px] shrink-0 items-center justify-center self-stretch"
                 aria-hidden
-              >
-                <div className="pointer-events-none absolute inset-y-0 left-[15px] z-30 w-[6px] -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.10)]" aria-hidden />
-              </div>
+              />
             </div>
           ) : null}
           {/* Backlog stays mounted once visited — same pattern as Dashboard
@@ -6763,9 +6757,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               <div
                 className="pointer-events-none relative flex h-full min-h-0 w-[18px] shrink-0 items-center justify-center self-stretch"
                 aria-hidden
-              >
-                <div className="pointer-events-none absolute inset-y-0 left-[15px] z-30 w-[6px] -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.10)]" aria-hidden />
-              </div>
+              />
             </div>
           ) : null}
           {/* Dashboard stays mounted once visited so unsaved drafts persist when the user temporarily navigates to another mode. */}

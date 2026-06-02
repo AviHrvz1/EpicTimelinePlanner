@@ -8541,7 +8541,6 @@ export function BacklogPlanningPanel({
         </div>
       </div>
       {summaryBarPortalElement ? createPortal(summaryChipsJsx, summaryBarPortalElement) : null}
-      <FilterLatencyDebugger />
 
       {/* Slim global toolbar — only the controls that don't belong to a
           specific column. Search, Status/Sprint/Team/Assignee/Parent/Labels/
