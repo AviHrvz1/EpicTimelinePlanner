@@ -490,7 +490,12 @@ function DonutSvg({
   const inner = 23;
   const strokeWidth = radius - inner;
   const circumference = 2 * Math.PI * radius;
-  let dashOffset = 0;
+  // Label radius — the SVG stroke is drawn CENTERED on the path circle at
+  // r=radius, so the visible band runs (radius - strokeWidth/2) to
+  // (radius + strokeWidth/2). Labels go on the path itself so they sit
+  // dead-center on the colored ring.
+  const labelRadius = radius;
+  let cumulative = 0;
   return (
     <div className="relative shrink-0">
       <svg viewBox="-50 -50 100 100" className="size-[140px]" role="img" aria-label={`Total: ${total}`}>
@@ -510,13 +515,46 @@ function DonutSvg({
                   stroke={slice.color}
                   strokeWidth={strokeWidth}
                   strokeDasharray={dasharray}
-                  strokeDashoffset={-dashOffset}
+                  strokeDashoffset={-cumulative * circumference}
                   transform="rotate(-90)"
                 />
               );
-              dashOffset += fraction * circumference;
+              cumulative += fraction;
               return node;
             })
+          : null}
+        {/* Per-slice percentage labels — only render when the slice is wide
+            enough (≥7%) to fit the text without overflowing into neighbors. */}
+        {total > 0
+          ? (() => {
+              let running = 0;
+              return slices.map((slice) => {
+                if (slice.value <= 0) return null;
+                const fraction = slice.value / total;
+                const midFraction = running + fraction / 2;
+                running += fraction;
+                if (fraction < 0.08) return null;
+                // Convert mid-angle (rotated -90° so 0% = top) to x/y.
+                const angle = midFraction * 2 * Math.PI - Math.PI / 2;
+                const x = Math.cos(angle) * labelRadius;
+                const y = Math.sin(angle) * labelRadius;
+                const pct = Math.round(fraction * 100);
+                return (
+                  <text
+                    key={`pct-${slice.label}`}
+                    x={x}
+                    y={y}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    style={{ fontSize: "8px", fontWeight: 700 }}
+                    fill="#0f172a"
+                    aria-hidden
+                  >
+                    {pct}%
+                  </text>
+                );
+              });
+            })()
           : null}
       </svg>
       {centerCount != null ? (

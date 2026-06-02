@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { LogOut, Settings, User } from "lucide-react";
+import { ChevronDown, LogOut, Settings, User } from "lucide-react";
 import { toast } from "sonner";
 
 import { signOut, useSession } from "@/lib/auth-client";
@@ -104,18 +104,18 @@ export function UserChip() {
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         title={displayName}
-        className="group inline-flex h-[32px] shrink-0 items-center gap-2 whitespace-nowrap rounded-l-none rounded-r-full border-0 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 pl-3 pr-4 text-[12.5px] font-semibold leading-none tracking-wide text-indigo-900 ring-1 ring-indigo-200/80 transition-colors hover:from-sky-200/80 hover:via-indigo-200/80 hover:to-violet-200/80 hover:ring-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+        className="group inline-flex h-[36px] shrink-0 items-center gap-2 whitespace-nowrap rounded-full border-0 bg-transparent pl-1 pr-2 text-[12.5px] font-semibold leading-none tracking-wide text-slate-800 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
       >
         {effectiveImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={effectiveImage}
             alt=""
-            className="size-[26px] shrink-0 rounded-full object-cover"
+            className="size-[32px] shrink-0 rounded-full object-cover"
           />
         ) : (
           <span
-            className="inline-flex size-[26px] shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
+            className="inline-flex size-[32px] shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white"
             style={{ background: avatarBg }}
             aria-hidden
           >
@@ -130,12 +130,19 @@ export function UserChip() {
           <User className="size-4 shrink-0 text-indigo-500" strokeWidth={2.2} aria-hidden />
         )}
         <span className="max-w-[160px] truncate">{displayName}</span>
+        <ChevronDown
+          className={cn(
+            "size-3.5 shrink-0 text-slate-500 transition-transform",
+            menuOpen && "rotate-180",
+          )}
+          aria-hidden
+        />
       </button>
 
       {menuOpen && (
         <div
           role="menu"
-          className="absolute left-0 top-full z-[1000] mt-1.5 min-w-[220px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-xl"
+          className="absolute right-0 top-full z-[1000] mt-1.5 min-w-[220px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-xl"
         >
           <div className="px-3 py-2 border-b border-slate-100">
             <p className="truncate text-[12px] font-semibold text-slate-800">{displayName}</p>
