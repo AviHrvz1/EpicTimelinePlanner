@@ -21,6 +21,7 @@ import { computeProgress, type HealthStatus } from "@/lib/progress";
 import { monthTeamLabelForId } from "@/lib/month-team-board";
 import { globalSprintFromMonthLane, sprintEndDate, sprintStartDate } from "@/lib/year-sprint";
 import { TeamAvatar } from "@/components/ui/team-avatar";
+import { InsightsDrilldownModal } from "@/components/timeline/insights-drilldown-modal";
 import type { InitiativeItem, RoadmapItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -149,10 +150,44 @@ export function RoadmapHealthHero({
     progressBasis,
   ]);
   const [isPanelExpanded, setIsPanelExpanded] = useState(true);
+  /** Selected team for the Team Progress drilldown. Null = no modal. */
+  const [drilldownTeam, setDrilldownTeam] = useState<{
+    teamId: string;
+    label: string;
+  } | null>(null);
+  const drilldownStories = useMemo(() => {
+    if (!drilldownTeam) return [];
+    const out: Array<{
+      story: { id: string; title: string; status: string; sprint: number | null; estimatedDays: number | null; daysLeft: number | null; assignee: string | null };
+      epicTitle: string;
+    }> = [];
+    for (const initiative of initiatives) {
+      for (const epic of initiative.epics ?? []) {
+        const teamKey = (epic.team ?? "").trim() || "__unassigned__";
+        if (teamKey !== drilldownTeam.teamId) continue;
+        for (const story of epic.userStories ?? []) {
+          out.push({
+            story: {
+              id: story.id,
+              title: story.title,
+              status: String(story.status),
+              sprint: story.sprint ?? null,
+              estimatedDays: story.estimatedDays ?? null,
+              daysLeft: story.daysLeft ?? null,
+              assignee: story.assignee ?? null,
+            },
+            epicTitle: epic.title,
+          });
+        }
+      }
+    }
+    return out;
+  }, [initiatives, drilldownTeam]);
 
   return (
-    <div className="shrink-0 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 pt-1.5 pb-0 pl-2 pr-[20px]">
-    <div className="relative rounded-lg border border-slate-200 bg-white overflow-hidden">
+    <>
+    <div className="shrink-0 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 pt-1.5 pb-0 pl-2 pr-[16px]">
+    <div className="relative rounded-lg border border-indigo-200/70 bg-white overflow-hidden">
       {/* Row 1 — compact filter band. Title block stacks: H1 → roadmap
           subtitle → "Health calculation" filter, all left-aligned at the
           same x-position. Right cluster (Bell / Help / UserChip) stays
@@ -291,12 +326,23 @@ export function RoadmapHealthHero({
               justify-between spreads the four charts across the full
               width of the panel with the dividers absorbing slack. */}
           <div className="flex w-full min-w-min flex-nowrap items-center justify-between gap-x-6">
-          <TeamProgressCard rows={stats.teamProgress} />
+          <TeamProgressCard
+            rows={stats.teamProgress}
+            unitSuffix={progressBasis === "stories" ? "" : "d"}
+            onRowClick={(teamId, label) => setDrilldownTeam({ teamId, label })}
+          />
           <Divider />
           <DonutCard
             title="Work Progress (all epics)"
-            centerCount={stats.storiesCount}
-            centerLabel="Stories"
+            centerCount={
+              progressBasis === "stories"
+                ? stats.storiesCount
+                : stats.workProgress.inProgress +
+                  stats.workProgress.done +
+                  stats.workProgress.todo +
+                  stats.workProgress.review
+            }
+            centerLabel={progressBasis === "stories" ? "Stories" : "Days"}
             slices={[
               { label: "In progress", value: stats.workProgress.inProgress, color: "#3b82f6" },
               { label: "Done", value: stats.workProgress.done, color: "#10b981" },
@@ -357,9 +403,17 @@ export function RoadmapHealthHero({
           />
           <Divider />
           <DonutCard
-            title="Epic Estimates (all epics)"
-            centerCount={stats.epicEstimates.daysSum}
-            centerLabel="Total Days"
+            title={
+              progressBasis === "epicEst"
+                ? "Epic Estimates (all epics)"
+                : "Story Estimates (all stories)"
+            }
+            centerCount={
+              progressBasis === "epicEst"
+                ? stats.epicEstimates.daysSum
+                : stats.epicEstimates.estimated + stats.epicEstimates.unestimated
+            }
+            centerLabel={progressBasis === "epicEst" ? "Total Days" : "Stories"}
             slices={[
               { label: "Estimated", value: stats.epicEstimates.estimated, color: "#6366f1" },
               { label: "Unestimated", value: stats.epicEstimates.unestimated, color: "#cbd5e1" },
@@ -402,6 +456,17 @@ export function RoadmapHealthHero({
       </div>
     </div>
     </div>
+    {drilldownTeam ? (
+      <InsightsDrilldownModal
+        title={`Team Progress · ${drilldownTeam.label}`}
+        icon={<Users className="size-4 text-slate-600" aria-hidden />}
+        subtitle={`${drilldownStories.length} stor${drilldownStories.length === 1 ? "y" : "ies"} in scope`}
+        onClose={() => setDrilldownTeam(null)}
+      >
+        <TeamDrilldownTable rows={drilldownStories} />
+      </InsightsDrilldownModal>
+    ) : null}
+    </>
   );
 }
 
@@ -536,6 +601,72 @@ function Divider() {
   return <div className="mx-0.5 hidden h-12 w-px shrink-0 self-center bg-slate-200/80 sm:block" />;
 }
 
+/** Story table rendered inside the Team Progress drilldown modal.
+ *  Compact layout mirroring the insights drilldown's chrome. */
+function TeamDrilldownTable({
+  rows,
+}: {
+  rows: Array<{
+    story: {
+      id: string;
+      title: string;
+      status: string;
+      sprint: number | null;
+      estimatedDays: number | null;
+      daysLeft: number | null;
+      assignee: string | null;
+    };
+    epicTitle: string;
+  }>;
+}) {
+  if (rows.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center text-[13px] text-slate-400">
+        No stories for this team.
+      </div>
+    );
+  }
+  return (
+    <div className="h-full overflow-y-auto">
+      <table className="w-full border-collapse text-[13px]">
+        <thead className="sticky top-0 z-10 bg-[#0897d5] text-white shadow-[0_1px_0_rgba(15,23,42,0.04)]">
+          <tr>
+            <th className="px-3 py-2 text-left font-semibold">Story</th>
+            <th className="px-3 py-2 text-left font-semibold">Epic</th>
+            <th className="px-3 py-2 text-left font-semibold">Sprint</th>
+            <th className="px-3 py-2 text-left font-semibold">Assignee</th>
+            <th className="px-3 py-2 text-left font-semibold">Status</th>
+            <th className="px-3 py-2 text-right font-semibold">Est days</th>
+            <th className="px-3 py-2 text-right font-semibold">Days left</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ story, epicTitle }, i) => (
+            <tr
+              key={story.id}
+              className={i % 2 === 0 ? "bg-[#d8f2ff]/50" : "bg-white"}
+            >
+              <td className="px-3 py-2 font-medium text-slate-900">{story.title}</td>
+              <td className="px-3 py-2 text-slate-700">{epicTitle}</td>
+              <td className="px-3 py-2 text-slate-700">
+                {story.sprint != null ? `Sprint ${story.sprint}` : "—"}
+              </td>
+              <td className="px-3 py-2 text-slate-700">{story.assignee || "Unassigned"}</td>
+              <td className="px-3 py-2 text-slate-700">{story.status}</td>
+              <td className="px-3 py-2 text-right tabular-nums text-slate-900">
+                {Number(story.estimatedDays ?? 0)}d
+              </td>
+              <td className="px-3 py-2 text-right tabular-nums text-slate-900">
+                {Number(story.daysLeft ?? 0)}d
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 /** Compact "Team Progress (all epics)" card. Mirrors the insights chart
  *  in spirit — one row per team with avatar, % done, est/left numbers,
  *  and a horizontal progress bar — but trimmed to fit alongside the
@@ -543,7 +674,11 @@ function Divider() {
  *  roadmap (all quarters) rather than the active month. */
 function TeamProgressCard({
   rows,
+  unitSuffix = "d",
+  onRowClick,
 }: {
+  unitSuffix?: string;
+  onRowClick?: (teamId: string, label: string) => void;
   rows: Array<{
     teamId: string;
     label: string;
@@ -585,7 +720,18 @@ function TeamProgressCard({
             const watch = row.status === "watch";
             const allDone = row.daysLeft === 0 && row.estTotal > 0;
             return (
-              <div key={row.teamId} className="rounded-md px-1 py-0.5">
+              <button
+                key={row.teamId}
+                type="button"
+                onClick={onRowClick ? () => onRowClick(row.teamId, row.label) : undefined}
+                disabled={!onRowClick}
+                className={cn(
+                  "w-full rounded-md px-1 py-0.5 text-left transition outline-none",
+                  onRowClick
+                    ? "cursor-pointer hover:bg-gradient-to-r hover:from-sky-50 hover:via-indigo-50 hover:to-violet-50 hover:ring-1 hover:ring-indigo-200/70 focus-visible:ring-2 focus-visible:ring-indigo-300"
+                    : "cursor-default",
+                )}
+              >
                 <div className="flex items-center gap-2">
                   <TeamAvatar
                     slug={row.teamId === "__unassigned__" ? null : row.teamId}
@@ -621,9 +767,9 @@ function TeamProgressCard({
                         <span className="shrink-0 text-[10.5px] font-semibold tabular-nums text-slate-500">{row.donePct}%</span>
                       </span>
                       <span className="shrink-0 text-[10.5px] tabular-nums text-slate-500">
-                        <span className="font-semibold text-slate-700">{row.estTotal}d</span>
+                        <span className="font-semibold text-slate-700">{row.estTotal}{unitSuffix}</span>
                         <span className="mx-1 text-slate-300">·</span>
-                        <span className={cn("font-semibold", atRisk || watch ? "text-amber-700" : "text-slate-700")}>{row.daysLeft}d</span>
+                        <span className={cn("font-semibold", atRisk || watch ? "text-amber-700" : "text-slate-700")}>{row.daysLeft}{unitSuffix}</span>
                         <span className="ml-0.5 text-slate-400">left</span>
                       </span>
                     </div>
@@ -638,7 +784,7 @@ function TeamProgressCard({
                     </div>
                   </div>
                 </div>
-              </div>
+              </button>
             );
           })
         )}
@@ -954,11 +1100,21 @@ function computeRoadmapStats(
         epicsScheduledCount += 1;
       }
       const estDays = Number(epic.originalEstimateDays ?? 0);
-      if (estDays > 0) {
-        epicEstimates.estimated += 1;
-        epicEstimates.daysSum += estDays;
+      // Epic Estimates donut reflects the current basis:
+      //  - epicEst: count epics with vs without originalEstimateDays (current)
+      //  - days / stories: count STORIES with vs without estimatedDays > 0
+      //    (handled in the per-story loop below for stories basis)
+      if (progressBasis === "epicEst") {
+        if (estDays > 0) {
+          epicEstimates.estimated += 1;
+          epicEstimates.daysSum += estDays;
+        } else {
+          epicEstimates.unestimated += 1;
+        }
       } else {
-        epicEstimates.unestimated += 1;
+        // days basis still uses epic-level estimates as the "Total Days"
+        // sum, but the slice split happens at the story level below.
+        if (estDays > 0) epicEstimates.daysSum += estDays;
       }
       if (!(epic.description ?? "").trim()) epicsWithoutDescCount += 1;
       const team = (epic.team ?? "").trim();
@@ -1005,29 +1161,49 @@ function computeRoadmapStats(
         storiesCount += 1;
         if (!(story.description ?? "").trim()) storiesWithoutDescCount += 1;
         if (story.sprint != null) sprintIds.add(story.sprint);
+        const estDaysStory = Math.max(0, Number(story.estimatedDays ?? 0));
+        // Work Progress slice values respect the basis:
+        //  - stories: count of stories per status
+        //  - days / epicEst: SUM of story estimatedDays per status
+        const wpAdd = progressBasis === "stories" ? 1 : estDaysStory;
         switch (story.status) {
           case "inProgress":
-            workProgress.inProgress += 1;
+            workProgress.inProgress += wpAdd;
             break;
           case "done":
-            workProgress.done += 1;
+            workProgress.done += wpAdd;
             break;
           case "review":
-            workProgress.review += 1;
+            workProgress.review += wpAdd;
             break;
           case "todo":
           default:
-            workProgress.todo += 1;
+            workProgress.todo += wpAdd;
         }
-        const est = Math.max(0, Number(story.estimatedDays ?? 0));
+        // Epic Estimates donut, when basis is days/stories, splits at the
+        // story level — count of stories estimated vs unestimated.
+        if (progressBasis !== "epicEst") {
+          if (estDaysStory > 0) epicEstimates.estimated += 1;
+          else epicEstimates.unestimated += 1;
+        }
+        // Team Progress per-team rollup:
+        //  - stories: estTotal = story count, daysLeft = open story count
+        //  - days: estTotal = sum estimatedDays, daysLeft = sum story daysLeft
+        //  - epicEst: same as days; the team progress isn't naturally
+        //    epic-only since stories drive completion.
         const left = Math.max(
           0,
           story.status === "done"
             ? 0
             : Number(story.daysLeft ?? story.estimatedDays ?? 0),
         );
-        teamAcc.estTotal += est;
-        teamAcc.daysLeft += left;
+        if (progressBasis === "stories") {
+          teamAcc.estTotal += 1;
+          teamAcc.daysLeft += story.status === "done" ? 0 : 1;
+        } else {
+          teamAcc.estTotal += estDaysStory;
+          teamAcc.daysLeft += left;
+        }
       }
     }
   }

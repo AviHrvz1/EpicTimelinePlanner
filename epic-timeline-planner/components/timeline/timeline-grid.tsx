@@ -8661,7 +8661,7 @@ export function TimelineGrid({
         )}
       </div>
       {estEpicsPanelOpen ? (
-        <div className="pointer-events-none fixed inset-0 z-[140]">
+        <div className="pointer-events-none fixed inset-0 z-[60]">
           <div
             className="pointer-events-auto absolute inset-0 bg-transparent"
             onClick={() => closeEstEpicsPanel()}

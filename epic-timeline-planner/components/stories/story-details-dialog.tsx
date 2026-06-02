@@ -693,7 +693,7 @@ export function StoryDetailsDialog({
   return (
     <div
       className={cn(
-        "fixed inset-0 z-[80] bg-slate-900/30 backdrop-blur-[1px]",
+        "fixed inset-0 z-[9700] bg-slate-900/30 backdrop-blur-[1px]",
         !anchored && "flex items-stretch justify-end p-0",
         !leaving && "epic-dialog-backdrop",
         leaving && "epic-dialog-backdrop--exit",

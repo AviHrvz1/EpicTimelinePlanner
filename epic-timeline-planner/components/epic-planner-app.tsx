@@ -5740,12 +5740,33 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       </div>
       <main
         className={cn(
-          "flex h-screen min-h-0 flex-col pb-8 pl-[58px] pr-5",
+          "flex h-screen min-h-0 flex-col pb-8 pl-[58px]",
+          // Roadmap mode: drop main's right padding so the breadcrumb
+          // gradient panels (dashboard hero + body row strip) extend
+          // all the way to the scrollbar. Otherwise the 20px pr-5
+          // shows main's blue/violet/pink gradient as a light gap
+          // beside the breadcrumb gradient.
+          topMode === "roadmap" ? "pr-0" : "pr-5",
+          // Page-level scrollbar styling (roadmap mode). Color matches
+          // the project's pastel palette (sky-100 → indigo-100 →
+          // violet-100), same as the initiative panel scrollbar.
+          // mr-[20px] shifts the scrollbar 20px in from the viewport
+          // right edge so it doesn't sit flush against the fixed white
+          // separator — a same-gradient backdrop div fills that 20px
+          // gap so no body-bg shows through.
+          topMode === "roadmap" && cn(
+            "[scrollbar-color:theme(colors.indigo.400)_transparent]",
+            "[&::-webkit-scrollbar]:w-1.5",
+            "[&::-webkit-scrollbar-track]:bg-transparent",
+            "[&::-webkit-scrollbar-thumb]:rounded-full",
+            "[&::-webkit-scrollbar-thumb]:bg-indigo-400",
+            "hover:[&::-webkit-scrollbar-thumb]:bg-indigo-500",
+          ),
           topMode === "users" && "overflow-x-hidden overflow-y-auto bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
           topMode === "demoBuilder" && "overflow-x-hidden overflow-y-auto bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
           topMode === "timeDebugger" && "overflow-x-hidden overflow-y-auto bg-gradient-to-br from-amber-50 via-orange-50/40 to-rose-50/30",
           topMode === "roadmap" &&
-            "overflow-x-hidden overflow-y-visible bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
+            "overflow-x-hidden overflow-y-auto bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
           topMode === "backlog" &&
             "overflow-hidden bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
         )}
@@ -5754,20 +5775,6 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             logo home button + UserChip and hosts the summary-chip portal
             target (hidden) so TimelineGrid mounts still resolve. Adds the
             metric blocks + donut breakdowns above the planner surface. */}
-        {/* Page-level right-edge white separator. The body-row already has
-            its own 18px separator column, but it only spans the height of
-            that row — this fixed element extends the same white strip up
-            past the hero so the strip runs from the very top to the very
-            bottom of the page. */}
-        <div
-          className="pointer-events-none fixed inset-y-0 right-5 z-40 w-[18px]"
-          aria-hidden
-        >
-          <div
-            className="pointer-events-none absolute inset-y-0 left-[15px] w-[6px] -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.10)]"
-            aria-hidden
-          />
-        </div>
         <RoadmapHealthHero
           initiatives={initiatives}
           roadmaps={roadmaps}
@@ -5810,10 +5817,15 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         />
         <div
           className={cn(
-            "mx-auto flex w-full max-w-[2550px] flex-row gap-1.5 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100",
+            "mx-auto flex w-full max-w-[2550px] flex-row gap-1.5 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 pr-3",
             topMode === "backlog"
               ? "min-h-0 min-w-0 flex-1 items-stretch overflow-x-hidden overflow-y-hidden"
               : "flex-1 min-h-0 overflow-y-visible",
+            // For roadmap mode, lock the body row to viewport-200px so
+            // the Gantt + middle initiative panel keep a useful height
+            // even when the dashboard hero is fully expanded — the page
+            // scrolls instead of the panels shrinking.
+            topMode === "roadmap" && "min-h-[calc(100vh-200px)]",
             topMode !== "backlog" && (isModeRailExpanded ? "overflow-x-visible" : "overflow-x-hidden"),
           )}
         >
@@ -5835,10 +5847,10 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 isResizingPanel && "select-none",
               )}
               style={{
-                // Trailing column hosts the slim white right-edge separator
-                // (matches backlog + users panels). 18px gives the timeline
-                // panel most of the row while still showing the white line.
-                gridTemplateColumns: leftRailLockedClosed ? "auto minmax(0, 1fr) 18px" : "auto 20px minmax(0, 1fr) 18px",
+                // Trailing 18px column removed — the body-row separator
+                // is no longer rendered, so the timeline can extend to
+                // the panel's right edge without leaving an empty gap.
+                gridTemplateColumns: leftRailLockedClosed ? "auto minmax(0, 1fr)" : "auto 20px minmax(0, 1fr)",
               }}
             >
               <div
@@ -6531,16 +6543,8 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 onSprintModeChange={handleSprintModeChange}
               />
               </div>
-              {/* Slim 18px right-edge separator with a white center line — same
-                  visual treatment as backlog + users panels for consistency.
-                  Replaces the 24px shared rightEdgeSeparator on the roadmap
-                  branch so the timeline panel keeps the extra width. */}
-              <div
-                className="pointer-events-none relative flex h-full min-h-0 w-[18px] shrink-0 items-center justify-center self-stretch"
-                aria-hidden
-              >
-                <div className="pointer-events-none absolute inset-y-0 left-[15px] z-30 w-[6px] -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.10)]" aria-hidden />
-              </div>
+              {/* Body-row right-edge separator removed — the page-level
+                  fixed separator (in <main> above) handles this now. */}
             </div>
           ) : topMode === "dashboard" ? (
             null
