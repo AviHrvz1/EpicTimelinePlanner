@@ -3116,7 +3116,7 @@ export function TimelineGrid({
     "px-3 py-2.5 text-left text-[13px] font-semibold uppercase tracking-wide text-slate-600";
   const estimatePanelBodyRowClass =
     "group transition hover:bg-[#c5ebff]";
-  const estimatePanelCellClass = "px-3 py-3";
+  const estimatePanelCellClass = "px-3 py-3 overflow-hidden align-middle";
   const toggleEstimateEpicExpanded = (epicId: string) =>
     setExpandedEstimateEpicIds((prev) => {
       const next = new Set(prev);
@@ -3167,17 +3167,17 @@ export function TimelineGrid({
       <table className={estimatePanelTableClass}>
         <thead>
           <tr>
-            <th className={cn(estimatePanelHeadCellClass, "w-[20%] min-w-0")}>Epic</th>
-            <th className={cn(estimatePanelHeadCellClass, "w-[16%] min-w-0")}>Initiative</th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[22%] min-w-0")}>Epic</th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[18%] min-w-0")}>Initiative</th>
             <th className={cn(estimatePanelHeadCellClass, "w-[9%]")}>Sprint</th>
-            <th className={cn(estimatePanelHeadCellClass, "w-[9%]")}>Team</th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[12%]")}>Team</th>
             <th className={cn(estimatePanelHeadCellClass, "w-[10%]")}>Assignee</th>
             <th className={cn(estimatePanelHeadCellClass, "w-[5.5rem] text-center")}>
               {showEstimatedColumns ? "Est days" : "Target Est"}
             </th>
             {showEstimatedColumns ? (
               <>
-                <th className={cn(estimatePanelHeadCellClass, "w-[5.5rem] text-center")}>Σ Child Est</th>
+                <th className={cn(estimatePanelHeadCellClass, "w-[4.25rem] text-center")}>Σ Child Est</th>
                 <th className={cn(estimatePanelHeadCellClass, "w-[6.5rem] text-center")}>Est Mix</th>
               </>
             ) : null}
@@ -3201,7 +3201,7 @@ export function TimelineGrid({
                   )}
                 >
                   <td className={estimatePanelCellClass}>
-                    <div className="inline-flex min-w-0 items-center gap-1.5">
+                    <div className="flex min-w-0 items-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => toggleEstimateEpicExpanded(row.epic.id)}
@@ -3213,9 +3213,10 @@ export function TimelineGrid({
                       <button
                         type="button"
                         onClick={() => onOpenEpic(row.epic.id)}
-                        className="inline-flex min-w-0 max-w-full items-center gap-2 rounded px-1 py-0.5 text-left text-[13px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-950"
+                        title={row.epic.title}
+                        className="flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-0.5 text-left text-[13px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-950"
                       >
-                        <span className="truncate">{row.epic.title}</span>
+                        <span className="block min-w-0 flex-1 truncate">{row.epic.title}</span>
                       </button>
                     </div>
                   </td>
@@ -3223,19 +3224,20 @@ export function TimelineGrid({
                     <button
                       type="button"
                       onClick={() => onOpenInitiative(row.initiative.id)}
-                      className="inline-flex max-w-full min-w-0 items-center rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-950 hover:bg-white/70 hover:text-blue-950"
+                      title={row.initiative.title}
+                      className="flex w-full min-w-0 items-center rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-950 hover:bg-white/70 hover:text-blue-950"
                     >
-                      <span className="truncate">{row.initiative.title}</span>
+                      <span className="block min-w-0 flex-1 truncate">{row.initiative.title}</span>
                     </button>
                   </td>
                   <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
-                    <span className="inline-flex min-w-0 items-center gap-1.5">
+                    <span className="flex min-w-0 items-center gap-1.5">
                       <Flag className="size-3.5 shrink-0 text-rose-500" strokeWidth={2.1} aria-hidden />
                       <span className="truncate">{estimatePanelEpicSprintLabel(row.epic)}</span>
                     </span>
                   </td>
                   <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
-                    <span className="inline-flex min-w-0 items-center gap-1.5">
+                    <span className="flex min-w-0 items-center gap-1.5">
                       <TeamAvatar
                         slug={row.epic.team ?? null}
                         sizePx={16}
@@ -3248,7 +3250,7 @@ export function TimelineGrid({
                     {(() => {
                       const resolved = resolveAssigneeAvatar(row.epic.assignee, workspaceDirectoryUsers);
                       return (
-                        <span className="inline-flex min-w-0 items-center gap-1.5">
+                        <span className="flex min-w-0 items-center gap-1.5">
                           <UserAvatar name={resolved.name} image={resolved.image} size={18} className="ring-0" />
                           <span className="truncate">{estimatePanelAssigneeLabel(row.epic.assignee)}</span>
                         </span>
@@ -3310,20 +3312,20 @@ export function TimelineGrid({
                             />
                             {/* horizontal branch */}
                             <span className="absolute left-8 top-1/2 h-px w-3.5 -translate-y-px bg-indigo-300" />
-                            <span className="inline-flex min-w-0 items-center gap-1.5">
+                            <span className="flex min-w-0 items-center gap-1.5">
                               <UserStoryIcon className="size-3.5 shrink-0 text-slate-400" />
                               <span className="truncate text-[14px] font-medium text-slate-950">{story.title}</span>
                             </span>
                           </td>
                           <td className={cn(estimatePanelCellClass, "text-[13px] text-slate-400")}>—</td>
                           <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-600")}>
-                            <span className="inline-flex min-w-0 items-center gap-1.5">
+                            <span className="flex min-w-0 items-center gap-1.5">
                               <Flag className="size-3.5 shrink-0 text-rose-500" strokeWidth={2.1} aria-hidden />
                               <span className="truncate">{estimatePanelStorySprintLabel(story)}</span>
                             </span>
                           </td>
                           <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-600")}>
-                            <span className="inline-flex min-w-0 items-center gap-1.5">
+                            <span className="flex min-w-0 items-center gap-1.5">
                               <TeamAvatar
                                 slug={row.epic.team ?? null}
                                 sizePx={16}
@@ -3336,7 +3338,7 @@ export function TimelineGrid({
                             {(() => {
                               const resolved = resolveAssigneeAvatar(story.assignee, workspaceDirectoryUsers);
                               return (
-                                <span className="inline-flex min-w-0 items-center gap-1.5">
+                                <span className="flex min-w-0 items-center gap-1.5">
                                   <UserAvatar name={resolved.name} image={resolved.image} size={18} className="ring-0" />
                                   <span className="truncate">{estimatePanelAssigneeLabel(story.assignee)}</span>
                                 </span>
@@ -3392,9 +3394,9 @@ export function TimelineGrid({
       <table className={estimatePanelTableClass}>
         <thead>
           <tr>
-            <th className={cn(estimatePanelHeadCellClass, "w-[28%] min-w-0")}>Epic</th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[30%] min-w-0")}>Epic</th>
             <th className={cn(estimatePanelHeadCellClass, "w-[12%]")}>Sprint</th>
-            <th className={cn(estimatePanelHeadCellClass, "w-[11%]")}>Team</th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[14%]")}>Team</th>
             <th className={cn(estimatePanelHeadCellClass, "w-[12%]")}>Assignee</th>
             <th className={cn(estimatePanelHeadCellClass, "min-w-0")}>Parent initiative</th>
           </tr>
@@ -3419,7 +3421,7 @@ export function TimelineGrid({
                     )}
                   >
                     <td className={estimatePanelCellClass}>
-                      <div className="inline-flex min-w-0 items-center gap-1.5">
+                      <div className="flex min-w-0 items-center gap-1.5">
                         <button
                           type="button"
                           onClick={() => toggleEstimateEpicExpanded(row.epic.id)}
@@ -3431,20 +3433,21 @@ export function TimelineGrid({
                         <button
                           type="button"
                           onClick={() => onOpenEpic(row.epic.id)}
-                          className="inline-flex min-w-0 max-w-full rounded px-1 py-0.5 text-left text-[14px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-950"
+                          title={row.epic.title}
+                          className="flex min-w-0 flex-1 rounded px-1 py-0.5 text-left text-[14px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-950"
                         >
-                          <span className="truncate">{row.epic.title}</span>
+                          <span className="block min-w-0 flex-1 truncate">{row.epic.title}</span>
                         </button>
                       </div>
                     </td>
                     <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
-                      <span className="inline-flex min-w-0 items-center gap-1.5">
+                      <span className="flex min-w-0 items-center gap-1.5">
                         <Flag className="size-3.5 shrink-0 text-rose-500" strokeWidth={2.1} aria-hidden />
                         <span className="truncate">{estimatePanelEpicSprintLabel(row.epic)}</span>
                       </span>
                     </td>
                     <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
-                      <span className="inline-flex min-w-0 items-center gap-1.5">
+                      <span className="flex min-w-0 items-center gap-1.5">
                         <TeamAvatar
                           slug={row.epic.team ?? null}
                           sizePx={16}
@@ -3457,7 +3460,7 @@ export function TimelineGrid({
                       {(() => {
                         const resolved = resolveAssigneeAvatar(row.epic.assignee, workspaceDirectoryUsers);
                         return (
-                          <span className="inline-flex min-w-0 items-center gap-1.5">
+                          <span className="flex min-w-0 items-center gap-1.5">
                             <UserAvatar name={resolved.name} image={resolved.image} size={18} className="ring-0" />
                             <span className="truncate">{estimatePanelAssigneeLabel(row.epic.assignee)}</span>
                           </span>
@@ -3498,19 +3501,19 @@ export function TimelineGrid({
                             <td className={cn(estimatePanelCellClass, "relative pl-14")}>
                               <span className="absolute left-8 top-0 w-px bg-indigo-300" style={{ height: isLast ? "50%" : "100%" }} />
                               <span className="absolute left-8 top-1/2 h-px w-3.5 -translate-y-px bg-indigo-300" />
-                              <span className="inline-flex min-w-0 items-center gap-1.5">
+                              <span className="flex min-w-0 items-center gap-1.5">
                                 <UserStoryIcon className="size-3.5 shrink-0 text-slate-400" />
                                 <span className="truncate text-[14px] font-medium text-slate-950">{story.title}</span>
                               </span>
                             </td>
                             <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-600")}>
-                              <span className="inline-flex min-w-0 items-center gap-1.5">
+                              <span className="flex min-w-0 items-center gap-1.5">
                                 <Flag className="size-3.5 shrink-0 text-rose-500" strokeWidth={2.1} aria-hidden />
                                 <span className="truncate">{estimatePanelStorySprintLabel(story)}</span>
                               </span>
                             </td>
                             <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-600")}>
-                              <span className="inline-flex min-w-0 items-center gap-1.5">
+                              <span className="flex min-w-0 items-center gap-1.5">
                                 <TeamAvatar
                                   slug={row.epic.team ?? null}
                                   sizePx={16}
@@ -3523,7 +3526,7 @@ export function TimelineGrid({
                               {(() => {
                                 const resolved = resolveAssigneeAvatar(story.assignee, workspaceDirectoryUsers);
                                 return (
-                                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                                  <span className="flex min-w-0 items-center gap-1.5">
                                     <UserAvatar name={resolved.name} image={resolved.image} size={18} className="ring-0" />
                                     <span className="truncate">{estimatePanelAssigneeLabel(story.assignee)}</span>
                                   </span>
@@ -3556,7 +3559,7 @@ export function TimelineGrid({
           <tr>
             <th className={cn(narrowHead, "w-[28%] min-w-0")}>User story</th>
             <th className={cn(narrowHead, "w-[12%]")}>Sprint</th>
-            <th className={cn(narrowHead, "w-[11%]")}>Team</th>
+            <th className={cn(narrowHead, "w-[14%]")}>Team</th>
             <th className={cn(narrowHead, "w-[12%]")}>Assignee</th>
             <th className={cn(narrowHead, "min-w-0")}>Parent epic</th>
           </tr>
@@ -3592,13 +3595,13 @@ export function TimelineGrid({
                   </button>
                 </td>
                 <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
-                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <span className="flex min-w-0 items-center gap-1.5">
                     <Flag className="size-3.5 shrink-0 text-rose-500" strokeWidth={2.1} aria-hidden />
                     <span className="truncate">{estimatePanelStorySprintLabel(row.story)}</span>
                   </span>
                 </td>
                 <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-950")}>
-                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <span className="flex min-w-0 items-center gap-1.5">
                     <TeamAvatar
                       slug={row.epic.team ?? null}
                       sizePx={16}
@@ -3611,7 +3614,7 @@ export function TimelineGrid({
                   {(() => {
                     const resolved = resolveAssigneeAvatar(row.story.assignee, workspaceDirectoryUsers);
                     return (
-                      <span className="inline-flex min-w-0 items-center gap-1.5">
+                      <span className="flex min-w-0 items-center gap-1.5">
                         <UserAvatar name={resolved.name} image={resolved.image} size={18} className="ring-0" />
                         <span className="truncate">{estimatePanelAssigneeLabel(row.story.assignee)}</span>
                       </span>
