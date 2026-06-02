@@ -963,7 +963,7 @@ const statusBadgeBase =
  *  vertical padding + 1pt smaller font; same color treatment is layered
  *  on top by the caller via `cn(epicBadgeBase, chipColorClasses)`. */
 const epicBadgeBase =
-  "inline-flex items-center rounded px-2 py-[3px] text-[12px] font-semibold leading-none tracking-[0.01em]";
+  "inline-flex items-center rounded px-1.5 py-px text-[10.5px] font-semibold leading-tight tracking-[0.01em]";
 
 /** Left-panel initiative/epic cards: track grows to fill the row; summary stays on the same line (nowrap). */
 const leftPanelProgressTrackClass =
@@ -1273,7 +1273,7 @@ function DraggableInitiativeCard({
 }) {
   return (
     <div
-      className="rounded-xl border border-slate-200/90 bg-white p-3 shadow-sm ring-1 ring-black/5"
+      className="rounded-md border border-slate-200/90 bg-white p-3"
       style={{
         borderLeftColor: initiative.color,
         borderLeftWidth: 4,
@@ -1825,7 +1825,7 @@ function InitiativeTreeCard({
     <div
       ref={setDropRef}
       className={cn(
-        "rounded-xl border border-slate-200/90 p-3 font-sans antialiased shadow-sm ring-1 ring-black/5",
+        "rounded-md border border-slate-200/90 p-3 font-sans antialiased",
         isBacklogDropOver && "ring-2 ring-slate-300",
       )}
       style={{
@@ -2183,7 +2183,7 @@ function SprintEpicCard({
         setDropRef(node);
       }}
       className={cn(
-        "group relative rounded-xl border border-slate-200/90 bg-white p-3 font-sans antialiased shadow-sm ring-1 ring-black/5 transition-colors hover:bg-sky-50/70",
+        "group relative rounded-md border border-slate-200/90 bg-white p-3 font-sans antialiased transition-colors hover:bg-sky-50/70",
         isDragging && "opacity-60",
         isBacklogDropOver && "ring-2 ring-slate-300",
       )}
@@ -2238,7 +2238,7 @@ function SprintEpicCard({
           >
             <div className="flex w-full min-w-0 items-center gap-0">
               <div className="flex min-w-0 flex-1 items-center gap-0 pl-0">
-                <p className="min-w-0 truncate text-[16px] font-normal leading-6 tracking-tight text-slate-900">
+                <p className="min-w-0 truncate text-[14px] font-normal leading-5 tracking-tight text-slate-900">
                   {epic.title}
                 </p>
               </div>

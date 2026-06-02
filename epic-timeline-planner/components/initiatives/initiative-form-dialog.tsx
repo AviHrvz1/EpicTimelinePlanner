@@ -149,7 +149,9 @@ function InitiativeColorPicker({
       >
         <span
           className="inline-block size-4 shrink-0 rounded-md ring-1 ring-slate-300"
-          style={{ backgroundColor: normalized }}
+          // Same softening the Gantt bars apply, so the swatch in the
+          // picker matches what the bar will actually look like.
+          style={{ backgroundColor: `color-mix(in srgb, ${normalized} 78%, white)` }}
           aria-hidden
         />
         <span className="flex-1 truncate font-medium text-slate-700">{matched ? matched.label : "Custom"}</span>
@@ -178,7 +180,7 @@ function InitiativeColorPicker({
               >
                 <span
                   className="inline-block size-4 shrink-0 rounded-md ring-1 ring-slate-300"
-                  style={{ backgroundColor: c.hex }}
+                  style={{ backgroundColor: `color-mix(in srgb, ${c.hex} 78%, white)` }}
                   aria-hidden
                 />
                 <span className="flex-1 truncate font-medium">{c.label}</span>

@@ -85,9 +85,9 @@ export function TimelineBarDragPreview({
         lightBg ? "text-slate-900" : "text-white",
       )}
       style={{
-        backgroundColor: color,
+        backgroundColor: `color-mix(in srgb, ${color} 78%, white)`,
         backgroundImage: `linear-gradient(to right, transparent 0%, transparent ${Math.max(0, safeProgress - 0.5)}%, rgba(255,255,255,0.35) ${Math.min(100, safeProgress + 0.5)}%, rgba(255,255,255,0.35) 100%)`,
-        borderColor: color,
+        borderColor: `color-mix(in srgb, ${color} 78%, white)`,
       }}
     >
       <span className={cn("relative z-10 flex min-w-0 flex-1 items-center gap-1.5 px-3 text-left antialiased", lightBg ? "" : "[text-shadow:0_1px_1px_rgba(0,0,0,0.22)]")}>
@@ -197,14 +197,17 @@ export function InitiativeTimelineBar({
           isResizing && "cursor-ew-resize",
         )}
         style={{
-          backgroundColor: color,
+          // Soften the raw initiative color with 22% white so the bar reads
+          // as a polished pastel instead of a saturated swatch — same
+          // identity, much less candy-bright.
+          backgroundColor: `color-mix(in srgb, ${color} 78%, white)`,
           // Bar itself is the progress meter — solid color on the left, a
           // white-tinted (lighter) version of the same color on the right,
           // with a 2% soft transition for a polished look.
           backgroundImage: showProgress
             ? `linear-gradient(to right, transparent 0%, transparent ${Math.max(0, safeProgress - 0.5)}%, rgba(255,255,255,0.35) ${Math.min(100, safeProgress + 0.5)}%, rgba(255,255,255,0.35) 100%)`
             : undefined,
-          borderColor: showProgress ? color : undefined,
+          borderColor: showProgress ? `color-mix(in srgb, ${color} 78%, white)` : undefined,
         }}
       >
         {emphasizeFlash ? (
@@ -391,11 +394,14 @@ export function EpicPlanTimelineBar({
           isResizing && "cursor-ew-resize",
         )}
         style={{
-          backgroundColor: color,
+          // Soften the raw initiative color with 22% white so the bar reads
+          // as a polished pastel instead of a saturated swatch — same
+          // identity, much less candy-bright.
+          backgroundColor: `color-mix(in srgb, ${color} 78%, white)`,
           backgroundImage: showProgress
             ? `linear-gradient(to right, transparent 0%, transparent ${Math.max(0, safeProgress - 0.5)}%, rgba(255,255,255,0.35) ${Math.min(100, safeProgress + 0.5)}%, rgba(255,255,255,0.35) 100%)`
             : undefined,
-          borderColor: showProgress ? color : undefined,
+          borderColor: showProgress ? `color-mix(in srgb, ${color} 78%, white)` : undefined,
         }}
       >
         {emphasizeFlash ? (
