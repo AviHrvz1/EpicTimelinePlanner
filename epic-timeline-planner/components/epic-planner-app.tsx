@@ -1393,6 +1393,15 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   const [roadmapBarModeCtrl, setRoadmapBarModeCtrl] = useState<"epics" | "initiatives">("epics");
   /** Same mirror for the calendar header's sprint-chip row. */
   const [showYearSprintChipsCtrl, setShowYearSprintChipsCtrl] = useState(false);
+  /** Command bus: when the hero's Epic Estimates donut legend is clicked
+   *  we bump the key so TimelineGrid's useEffect fires
+   *  openEstEpicsPanel(tab). Stays null until the first click. */
+  const [openEstPanelCmd, setOpenEstPanelCmd] = useState<
+    { tab: "estimated" | "unestimated"; key: number } | null
+  >(null);
+  const handleOpenEstPanel = useCallback((tab: "estimated" | "unestimated") => {
+    setOpenEstPanelCmd((prev) => ({ tab, key: (prev?.key ?? 0) + 1 }));
+  }, []);
   /**
    * Tracks which filter lane the planner most recently activated — team,
    * health verdict, or execution status. Year-view (all-quarters) Gantt
@@ -5757,6 +5766,11 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           onShowTeamChipsChange={handleShowGanttTeamChipsChange}
           showSprintChips={showYearSprintChipsCtrl}
           onShowSprintChipsChange={setShowYearSprintChipsCtrl}
+          healthFilter={healthFilter}
+          onHealthFilterChange={handleHealthFilterChange}
+          statusFilter={ganttStatusFilter}
+          onStatusFilterChange={handlePanelStatusFilterDerivedChange}
+          onOpenEpicEstimatePanel={handleOpenEstPanel}
           summaryBarRef={setSummaryBarEl}
           onYearChange={async (nextYear) => {
             // Mirror the TimelineGrid onYearChange below — keep in sync.
@@ -6076,6 +6090,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 onShowYearSprintChipsChange={setShowYearSprintChipsCtrl}
                 roadmapBarModeExternal={roadmapBarModeCtrl}
                 onRoadmapBarModeChange={setRoadmapBarModeCtrl}
+                openEstPanelCmd={openEstPanelCmd}
                 lastPickedLabelLane={lastPickedLabelLane}
                 initialInsightsScopeEpicId={insightsScopeEpicId}
                 initialInsightsScopeInitId={insightsScopeInitId}

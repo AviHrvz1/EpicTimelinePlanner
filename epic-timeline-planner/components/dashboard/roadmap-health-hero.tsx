@@ -1,9 +1,10 @@
 "use client";
 
-import { Fragment, useMemo, type CSSProperties } from "react";
+import { Fragment, useMemo, useState, type CSSProperties } from "react";
 import {
   Bell,
   BookOpen,
+  ChevronDown,
   Flag,
   Folder,
   HeartPulse,
@@ -20,6 +21,40 @@ import { computeProgress, type HealthStatus } from "@/lib/progress";
 import { globalSprintFromMonthLane, sprintEndDate, sprintStartDate } from "@/lib/year-sprint";
 import type { InitiativeItem, RoadmapItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+type StoryExecStatus = "todo" | "inProgress" | "review" | "done";
+
+/** Bi-directional map for the Health Distribution legend ↔ middle-panel
+ *  HealthFilterMenu wiring. Labels match the strings in the donut slices. */
+const HEALTH_LABEL_TO_STATUS: Record<string, HealthStatus> = {
+  "On Track": "onTrack",
+  "Done": "done",
+  "Watch": "watch",
+  "At Risk": "atRisk",
+  "Overdue": "overdue",
+};
+const HEALTH_STATUS_TO_LABEL: Record<HealthStatus, string> = {
+  onTrack: "On Track",
+  done: "Done",
+  watch: "Watch",
+  atRisk: "At Risk",
+  overdue: "Overdue",
+};
+
+/** Same bi-directional map for Work Progress legend ↔ middle-panel
+ *  Statuses dropdown. Labels match the donut slices in this file. */
+const STATUS_LABEL_TO_VALUE: Record<string, StoryExecStatus> = {
+  "In progress": "inProgress",
+  "Done": "done",
+  "To do": "todo",
+  "Review / testing": "review",
+};
+const STATUS_VALUE_TO_LABEL: Record<StoryExecStatus, string> = {
+  inProgress: "In progress",
+  done: "Done",
+  todo: "To do",
+  review: "Review / testing",
+};
 
 /**
  * Roadmap Health hero — replaces the legacy top bar.
@@ -56,6 +91,11 @@ export function RoadmapHealthHero({
   onShowTeamChipsChange,
   showSprintChips = false,
   onShowSprintChipsChange,
+  healthFilter,
+  onHealthFilterChange,
+  statusFilter,
+  onStatusFilterChange,
+  onOpenEpicEstimatePanel,
 }: {
   initiatives: readonly InitiativeItem[];
   roadmaps: RoadmapItem[];
@@ -85,12 +125,26 @@ export function RoadmapHealthHero({
   /** Calendar header sprint-chip row — Sprints stat block toggles it. */
   showSprintChips?: boolean;
   onShowSprintChipsChange?: (next: boolean) => void;
+  /** Health verdict filter set — Health Distribution legend rows act as
+   *  toggles into this set so clicking "On Track" / "Done" / etc. mirrors
+   *  the middle-panel HealthFilterMenu. */
+  healthFilter?: Set<HealthStatus>;
+  onHealthFilterChange?: (next: Set<HealthStatus>) => void;
+  /** Story execution status filter set — Work Progress legend rows act
+   *  as toggles into this set so clicking "In progress" / "Done" / etc.
+   *  mirrors the middle-panel Statuses dropdown. */
+  statusFilter?: Set<StoryExecStatus>;
+  onStatusFilterChange?: (next: Set<StoryExecStatus>) => void;
+  /** Click handler for the Epic Estimates donut legend — opens the same
+   *  popover the Gantt "Epic Est." chip opens, pre-scoped to the picked tab. */
+  onOpenEpicEstimatePanel?: (tab: "estimated" | "unestimated") => void;
 }) {
   const stats = useMemo(() => computeRoadmapStats(initiatives, selectedYear, progressBasis), [
     initiatives,
     selectedYear,
     progressBasis,
   ]);
+  const [isPanelExpanded, setIsPanelExpanded] = useState(true);
 
   return (
     <div className="relative shrink-0 border-b border-slate-200 bg-white">
@@ -101,6 +155,23 @@ export function RoadmapHealthHero({
       <div className="flex w-full items-start gap-5 pl-6 pr-6 py-3">
         <div className="min-w-0 shrink-0">
           <h1 className="inline-flex items-center gap-2 text-[22px] font-semibold leading-tight tracking-tight text-slate-900">
+            <button
+              type="button"
+              onClick={() => setIsPanelExpanded((v) => !v)}
+              title={isPanelExpanded ? "Collapse Roadmap Health" : "Expand Roadmap Health"}
+              aria-label={isPanelExpanded ? "Collapse Roadmap Health" : "Expand Roadmap Health"}
+              aria-expanded={isPanelExpanded}
+              className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+            >
+              <ChevronDown
+                className={cn(
+                  "size-5 transition-transform duration-200",
+                  isPanelExpanded ? "rotate-0" : "-rotate-90",
+                )}
+                strokeWidth={2.2}
+                aria-hidden
+              />
+            </button>
             <span className="inline-flex size-8 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600">
               <ShieldCheck className="size-[18px]" aria-hidden />
             </span>
@@ -153,8 +224,17 @@ export function RoadmapHealthHero({
 
       {/* Row 2 — tall bordered hero card. Left padding matches row 1
           (pl-6) so the card's left edge aligns with the Roadmap Health
-          shield icon above it. */}
-      <div className="overflow-x-auto pl-6 pr-6 pb-5 pt-1">
+          shield icon above it. Collapsible via the chevron in the H1. */}
+      <div
+        className={cn(
+          "overflow-hidden transition-[max-height,opacity,padding] duration-300 ease-out",
+          isPanelExpanded
+            ? "max-h-[1200px] opacity-100 pb-5 pt-1"
+            : "max-h-0 opacity-0 pb-0 pt-0",
+        )}
+        aria-hidden={!isPanelExpanded}
+      >
+      <div className="overflow-x-auto pl-6 pr-6">
         <div className="flex w-full min-w-min flex-wrap items-center justify-end gap-x-5 gap-y-4 rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-sm">
           <StatBlock
             icon={<Zap className="size-7 text-blue-600" strokeWidth={1.9} aria-hidden />}
@@ -216,13 +296,31 @@ export function RoadmapHealthHero({
               { label: "To do", value: stats.workProgress.todo, color: "#cbd5e1" },
               { label: "Review / testing", value: stats.workProgress.review, color: "#8b5cf6" },
             ]}
+            onSliceClick={
+              onStatusFilterChange
+                ? (label) => {
+                    const value = STATUS_LABEL_TO_VALUE[label];
+                    if (!value) return;
+                    const next = new Set(statusFilter ?? []);
+                    if (next.has(value)) next.delete(value);
+                    else next.add(value);
+                    onStatusFilterChange(next);
+                  }
+                : undefined
+            }
+            activeLabels={
+              statusFilter && statusFilter.size > 0
+                ? new Set(
+                    Array.from(statusFilter).map((v) => STATUS_VALUE_TO_LABEL[v]).filter(Boolean) as string[],
+                  )
+                : undefined
+            }
           />
           <Divider />
           <DonutCard
             title="Health Distribution (all epics)"
-            centerCount={null}
-            centerLabel=""
-            sideTotal={{ count: stats.healthDistribution.total, label: "Total" }}
+            centerCount={stats.healthDistribution.total}
+            centerLabel="Total"
             slices={[
               { label: "On Track", value: stats.healthDistribution.onTrack, color: "#10b981" },
               { label: "Done", value: stats.healthDistribution.done, color: "#3b82f6" },
@@ -230,6 +328,25 @@ export function RoadmapHealthHero({
               { label: "At Risk", value: stats.healthDistribution.atRisk, color: "#fb923c" },
               { label: "Overdue", value: stats.healthDistribution.overdue, color: "#ef4444" },
             ]}
+            onSliceClick={
+              onHealthFilterChange
+                ? (label) => {
+                    const status = HEALTH_LABEL_TO_STATUS[label];
+                    if (!status) return;
+                    const next = new Set(healthFilter ?? []);
+                    if (next.has(status)) next.delete(status);
+                    else next.add(status);
+                    onHealthFilterChange(next);
+                  }
+                : undefined
+            }
+            activeLabels={
+              healthFilter && healthFilter.size > 0
+                ? new Set(
+                    Array.from(healthFilter).map((s) => HEALTH_STATUS_TO_LABEL[s]).filter(Boolean) as string[],
+                  )
+                : undefined
+            }
           />
           <Divider />
           <DonutCard
@@ -240,8 +357,14 @@ export function RoadmapHealthHero({
               { label: "Estimated", value: stats.epicEstimates.estimated, color: "#6366f1" },
               { label: "Unestimated", value: stats.epicEstimates.unestimated, color: "#cbd5e1" },
             ]}
+            onSliceClick={
+              onOpenEpicEstimatePanel
+                ? (label) => onOpenEpicEstimatePanel(label === "Estimated" ? "estimated" : "unestimated")
+                : undefined
+            }
           />
         </div>
+      </div>
       </div>
     </div>
   );
@@ -384,6 +507,8 @@ function DonutCard({
   centerLabel,
   slices,
   sideTotal,
+  onSliceClick,
+  activeLabels,
 }: {
   title: string;
   /** When provided, rendered in the donut's center. Pass `null` to skip
@@ -396,6 +521,12 @@ function DonutCard({
    *  legend (Health Distribution uses this since multiple verdicts
    *  share the donut and a side label is cleaner). */
   sideTotal?: { count: number; label: string };
+  /** When provided, each legend row becomes a toggle button that fires
+   *  with the slice label on click. Used by Health Distribution to
+   *  drive the middle-panel health verdict filter. */
+  onSliceClick?: (label: string) => void;
+  /** Labels currently selected — rendered with a pressed visual. */
+  activeLabels?: Set<string>;
 }) {
   const total = slices.reduce((sum, s) => sum + s.value, 0);
   return (
@@ -410,11 +541,54 @@ function DonutCard({
           centerCount={centerCount}
           centerLabel={centerLabel}
         />
-        <ul className="grid grid-cols-[auto_minmax(2rem,auto)_minmax(2.75rem,auto)] items-center gap-x-4 gap-y-1.5 text-[13px] leading-tight">
+        <ul
+          className={cn(
+            "items-center gap-x-4 gap-y-1.5 text-[13px] leading-tight",
+            onSliceClick
+              ? "flex flex-col items-stretch"
+              : "grid grid-cols-[auto_minmax(2rem,auto)_minmax(2.75rem,auto)]",
+          )}
+        >
           {slices
             .filter((s) => s.value > 0)
             .map((slice) => {
               const pct = total > 0 ? Math.round((slice.value / total) * 100) : 0;
+              const active = activeLabels?.has(slice.label) ?? false;
+              if (onSliceClick) {
+                return (
+                  <li key={slice.label}>
+                    <button
+                      type="button"
+                      onClick={() => onSliceClick(slice.label)}
+                      aria-pressed={active}
+                      className={cn(
+                        "grid w-full grid-cols-[auto_minmax(2rem,auto)_minmax(2.75rem,auto)] items-center gap-x-4 rounded-md px-1.5 py-0.5 text-left transition outline-none",
+                        "focus-visible:ring-2 focus-visible:ring-indigo-300",
+                        active
+                          ? "bg-indigo-50 ring-1 ring-indigo-200/80"
+                          : "ring-1 ring-transparent hover:bg-slate-50",
+                      )}
+                    >
+                      <span className="flex items-center gap-2 whitespace-nowrap">
+                        <span
+                          className="inline-block size-2 shrink-0 rounded-full"
+                          style={{ background: slice.color }}
+                          aria-hidden
+                        />
+                        <span className={active ? "font-semibold text-indigo-900" : "text-slate-700"}>
+                          {slice.label}
+                        </span>
+                      </span>
+                      <span className={cn("text-left font-semibold tabular-nums", active ? "text-indigo-900" : "text-slate-900")}>
+                        {slice.value}
+                      </span>
+                      <span className={cn("text-left text-[12px] tabular-nums", active ? "text-indigo-700" : "text-slate-500")}>
+                        ({pct}%)
+                      </span>
+                    </button>
+                  </li>
+                );
+              }
               return (
                 <Fragment key={slice.label}>
                   <span className="flex items-center gap-2 whitespace-nowrap">
@@ -435,7 +609,7 @@ function DonutCard({
               );
             })}
           {total === 0 ? (
-            <li className="col-span-3 text-slate-400">No data</li>
+            <li className={onSliceClick ? "text-slate-400" : "col-span-3 text-slate-400"}>No data</li>
           ) : null}
         </ul>
         {sideTotal ? (

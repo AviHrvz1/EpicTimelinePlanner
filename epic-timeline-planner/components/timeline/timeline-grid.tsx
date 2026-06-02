@@ -1698,6 +1698,10 @@ type TimelineGridProps = {
    *  toolbar's "Initiatives / Epics" pill still works standalone. */
   roadmapBarModeExternal?: "epics" | "initiatives";
   onRoadmapBarModeChange?: (next: "epics" | "initiatives") => void;
+  /** Imperative "open the Epic Estimate Coverage panel" command from the
+   *  parent (the dashboard hero donut). TimelineGrid watches the key —
+   *  whenever it bumps, openEstEpicsPanel(tab) fires. Null = idle. */
+  openEstPanelCmd?: { tab: "estimated" | "unestimated"; key: number } | null;
   /** Tracks which filter the planner most recently activated (team / health
    *  / status). Year-roadmap bars use this to render exactly one label per
    *  bar — the latest pick wins, instead of falling back to a static
@@ -1980,6 +1984,7 @@ export function TimelineGrid({
   onShowYearSprintChipsChange,
   roadmapBarModeExternal,
   onRoadmapBarModeChange,
+  openEstPanelCmd = null,
   lastPickedLabelLane = null,
   initialInsightsScopeEpicId,
   initialInsightsScopeInitId,
@@ -2505,6 +2510,15 @@ export function TimelineGrid({
     }
     setEstEpicsPanelOpen(true);
   }, [estEpicsPanelOpen]);
+
+  // Imperative open command from the dashboard hero donut. Fires whenever
+  // the parent bumps the key; tab tells us which sub-view to land on.
+  const openEstPanelCmdKey = openEstPanelCmd?.key;
+  useEffect(() => {
+    if (!openEstPanelCmd) return;
+    openEstEpicsPanel(openEstPanelCmd.tab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openEstPanelCmdKey]);
 
   useLayoutEffect(() => {
     if (!estEpicsPanelOpen) {
