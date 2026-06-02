@@ -81,7 +81,7 @@ export function TimelineBarDragPreview({
   return (
     <div
       className={cn(
-        "relative z-10 flex h-8 w-full min-w-0 cursor-grabbing items-center overflow-hidden rounded-md border text-[13px] font-medium tracking-[0.01em] shadow-lg ring-1 ring-black/15",
+        "relative z-10 flex h-8 w-full min-w-0 cursor-grabbing items-center overflow-hidden rounded-sm border text-[13px] font-medium tracking-[0.01em] shadow-lg ring-1 ring-black/15",
         lightBg ? "text-slate-900" : "text-white",
       )}
       style={{
@@ -188,7 +188,7 @@ export function InitiativeTimelineBar({
       ) : null}
       <div
         className={cn(
-          "relative z-10 flex h-[30px] w-full min-w-0 items-center overflow-hidden rounded-md text-[13px] font-medium tracking-[0.01em]",
+          "relative z-10 flex h-[30px] w-full min-w-0 items-center overflow-hidden rounded-sm text-[13px] font-medium tracking-[0.01em]",
           lightBg ? "text-slate-900" : "text-white",
           emphasizeFlash
             ? "ring-1 ring-white/20"
@@ -381,7 +381,7 @@ export function EpicPlanTimelineBar({
       ) : null}
       <div
         className={cn(
-          "relative z-10 flex w-full min-w-0 cursor-grab items-center overflow-hidden rounded-md font-medium tracking-[0.01em] active:cursor-grabbing",
+          "relative z-10 flex w-full min-w-0 cursor-grab items-center overflow-hidden rounded-sm font-medium tracking-[0.01em] active:cursor-grabbing",
           lightBg ? "text-slate-900" : "text-white",
           compact ? "h-[28px] text-[13px]" : "h-[30px] text-[13px]",
           emphasizeFlash
