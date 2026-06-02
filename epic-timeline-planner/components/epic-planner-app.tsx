@@ -1416,6 +1416,24 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     setGanttTeamFilter(next);
     if (next.size > 0) setLastPickedLabelLane("team");
   }, []);
+  /**
+   * Sync the right-panel timeline to the panel's quarter chip:
+   *   - 1 quarter selected → focus on that quarter (single-quarter Gantt view).
+   *   - 0 or 2+ quarters → back to the full-year Gantt (quarter filter still
+   *     drops bars whose start quarter isn't in the Set; only the columns
+   *     come back).
+   * Independent of any manual focus the planner did via a quarter card —
+   * this effect only fires when `ganttQuarterFilter` changes, so manually
+   * focused quarters stay focused until the planner touches the filter.
+   */
+  useEffect(() => {
+    if (ganttQuarterFilter.size === 1) {
+      const [only] = ganttQuarterFilter;
+      setFocusedQuarterLabel(only);
+    } else {
+      setFocusedQuarterLabel(null);
+    }
+  }, [ganttQuarterFilter]);
   // Wrap the toolbar's team-chip toggle so manually flipping it ON also
   // claims the "team" lane (otherwise picking Team then turning the chip
   // toggle off and back on would leave a stale health/status lane wins).
