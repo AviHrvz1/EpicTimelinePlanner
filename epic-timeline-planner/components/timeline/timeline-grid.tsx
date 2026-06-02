@@ -1706,6 +1706,12 @@ type TimelineGridProps = {
    *  internal (so the toolbar toggle still works in standalone uses). */
   showGanttTeamChipsExternal?: boolean;
   onShowGanttTeamChipsChange?: (next: boolean) => void;
+  /** Tracks which filter the planner most recently activated (team / health
+   *  / status). Year-roadmap bars use this to render exactly one label per
+   *  bar — the latest pick wins, instead of falling back to a static
+   *  priority order. Null = planner hasn't picked anything → status pill
+   *  is the default. */
+  lastPickedLabelLane?: "team" | "health" | "status" | null;
   /** Pre-selected epic in the insights scope picker (from URL on first load). */
   initialInsightsScopeEpicId?: string | null;
   /** Pre-selected initiative in the insights scope picker (from URL on first load). */
@@ -2616,6 +2622,7 @@ export function TimelineGrid({
   ganttTeamFilterExternal,
   showGanttTeamChipsExternal,
   onShowGanttTeamChipsChange,
+  lastPickedLabelLane = null,
   initialInsightsScopeEpicId,
   initialInsightsScopeInitId,
   onInsightsScopeChange,
@@ -5978,9 +5985,26 @@ export function TimelineGrid({
                             progressPercent={initHealth.progressPercent}
                             progressLabel={initiativeTooltip}
                             showProgress={showRoadmapProgress}
-                            healthStatus={showRoadmapProgress && initHasData ? initHealth.status : null}
+                            // Year view: last-picked lane wins so the bar carries
+                            // exactly one label. When the planner hasn't picked
+                            // anything yet, the health pill is the default since
+                            // initiatives don't have an execution-status pill of
+                            // their own.
+                            healthStatus={
+                              showRoadmapProgress &&
+                              initHasData &&
+                              lastPickedLabelLane !== "team"
+                                ? initHealth.status
+                                : null
+                            }
                             healthTooltip={initiativeTooltip}
-                            teamAssignmentChip={showGanttTeamChips && row.initiative.team ? epicDeliveryTeamAssignmentChip(row.initiative.team) : null}
+                            teamAssignmentChip={
+                              showGanttTeamChips &&
+                              row.initiative.team &&
+                              lastPickedLabelLane === "team"
+                                ? epicDeliveryTeamAssignmentChip(row.initiative.team)
+                                : null
+                            }
                             onClick={() => onOpenInitiative(row.initiative.id)}
                             onDelete={onUnscheduleInitiative ? () => onUnscheduleInitiative(row.initiative.id) : undefined}
                             onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("initiative", row.initiative.id)}
@@ -6129,9 +6153,27 @@ export function TimelineGrid({
                               emphasizeFlash={emphasizeFlash}
                               emphasizeTick={emphasizeTick}
                               showProgress={showRoadmapProgress}
-                              healthStatus={showRoadmapProgress && epicHasData && healthFilter.size > 0 ? epicHealth.status : null}
+                              // Year (all-quarters) view: AT MOST ONE label per
+                              // bar — narrow widths can't carry both a team chip
+                              // and a status/health pill without crowding. Last
+                              // lane the planner activated wins, so clicking
+                              // Health after Team flips the bars from team
+                              // chips to health pills (and vice versa).
+                              healthStatus={
+                                lastPickedLabelLane === "health" &&
+                                showRoadmapProgress &&
+                                epicHasData
+                                  ? epicHealth.status
+                                  : null
+                              }
                               healthTooltip={epicHealthTooltip}
-                              epicStatus={showRoadmapProgress && healthFilter.size === 0 ? epicLiveStatus : null}
+                              epicStatus={
+                                showRoadmapProgress &&
+                                lastPickedLabelLane !== "team" &&
+                                lastPickedLabelLane !== "health"
+                                  ? epicLiveStatus
+                                  : null
+                              }
                               // Overdue is a HEALTH-VERDICT signal — it lives next
                               // to On Track / At Risk / Watch in the popover taxonomy.
                               // Hiding it from the status-pill mode keeps the two
@@ -6143,7 +6185,13 @@ export function TimelineGrid({
                               onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                               onClick={() => onOpenEpic(row.epic.id)}
                               onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", row.epic.id)}
-                              teamAssignmentChip={showGanttTeamChips && row.epic.team ? epicDeliveryTeamAssignmentChip(row.epic.team) : null}
+                              teamAssignmentChip={
+                                showGanttTeamChips &&
+                                row.epic.team &&
+                                lastPickedLabelLane === "team"
+                                  ? epicDeliveryTeamAssignmentChip(row.epic.team)
+                                  : null
+                              }
                             />
                             {onResizeEpicPlanRange ? (
                               <>

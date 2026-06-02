@@ -1387,9 +1387,48 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
    * chips visible, they probably want them to stay.
    */
   const [showGanttTeamChipsCtrl, setShowGanttTeamChipsCtrl] = useState(false);
+  /**
+   * Tracks which filter lane the planner most recently activated — team,
+   * health verdict, or execution status. Year-view (all-quarters) Gantt
+   * bars only have room for one label at a time, so this picks which one
+   * wins instead of falling back to a fixed priority order. Latest pick
+   * wins: clicking Health after Team flips the bar labels from team chips
+   * to health pills. Never auto-clears; only changes when the planner
+   * actively picks a different lane.
+   */
+  const [lastPickedLabelLane, setLastPickedLabelLane] = useState<
+    "team" | "health" | "status" | null
+  >(null);
   const handlePanelTeamFilterActiveChange = useCallback((active: boolean) => {
-    if (active) setShowGanttTeamChipsCtrl(true);
+    if (active) {
+      setShowGanttTeamChipsCtrl(true);
+      setLastPickedLabelLane("team");
+    }
   }, []);
+  const handlePanelStatusFilterDerivedChange = useCallback(
+    (next: Set<"todo" | "inProgress" | "review" | "done">) => {
+      setGanttStatusFilter(next);
+      if (next.size > 0) setLastPickedLabelLane("status");
+    },
+    [],
+  );
+  const handlePanelTeamFilterDerivedChange = useCallback((next: Set<string>) => {
+    setGanttTeamFilter(next);
+    if (next.size > 0) setLastPickedLabelLane("team");
+  }, []);
+  // Wrap the toolbar's team-chip toggle so manually flipping it ON also
+  // claims the "team" lane (otherwise picking Team then turning the chip
+  // toggle off and back on would leave a stale health/status lane wins).
+  const handleShowGanttTeamChipsChange = useCallback(
+    (next: boolean | ((prev: boolean) => boolean)) => {
+      setShowGanttTeamChipsCtrl((prev) => {
+        const resolved = typeof next === "function" ? next(prev) : next;
+        if (resolved && !prev) setLastPickedLabelLane("team");
+        return resolved;
+      });
+    },
+    [],
+  );
   /**
    * Picking a health verdict implies the planner wants to SEE the verdict
    * on the bars — but the status pill / percentage / HealthBadge row is
@@ -1403,6 +1442,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       setHealthFilter(next);
       if (next.size > 0) {
         setShowRoadmapProgress(true);
+        setLastPickedLabelLane("health");
       }
     },
     [],
@@ -5759,10 +5799,10 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                       healthFilter={healthFilter}
                       onHealthFilterChange={handleHealthFilterChange}
                       onUserPickedFilter={() => setShowRoadmapProgress(true)}
-                      onPanelStatusFilterDerivedChange={setGanttStatusFilter}
+                      onPanelStatusFilterDerivedChange={handlePanelStatusFilterDerivedChange}
                       onPanelQuarterFilterDerivedChange={setGanttQuarterFilter}
                       onPanelTeamFilterActiveChange={handlePanelTeamFilterActiveChange}
-                      onPanelTeamFilterDerivedChange={setGanttTeamFilter}
+                      onPanelTeamFilterDerivedChange={handlePanelTeamFilterDerivedChange}
                       storyProgressDetailsVisible={showRoadmapProgress}
                       useEpicPlanLeftPanel={initiativeListActiveMonth != null}
                       activeYearSprint={activeYearSprint}
@@ -5974,7 +6014,8 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 ganttQuarterFilterExternal={ganttQuarterFilter}
                 ganttTeamFilterExternal={ganttTeamFilter}
                 showGanttTeamChipsExternal={showGanttTeamChipsCtrl}
-                onShowGanttTeamChipsChange={setShowGanttTeamChipsCtrl}
+                onShowGanttTeamChipsChange={handleShowGanttTeamChipsChange}
+                lastPickedLabelLane={lastPickedLabelLane}
                 initialInsightsScopeEpicId={insightsScopeEpicId}
                 initialInsightsScopeInitId={insightsScopeInitId}
                 onInsightsScopeChange={handleInsightsScopePropChange}
