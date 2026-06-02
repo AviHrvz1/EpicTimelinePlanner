@@ -1,17 +1,17 @@
 "use client";
 
 import { Fragment, useMemo, type CSSProperties } from "react";
-import Image from "next/image";
 import {
   Bell,
+  BookOpen,
+  Flag,
   Folder,
+  HeartPulse,
   HelpCircle,
   Info,
-  Layers,
-  ScrollText,
   ShieldCheck,
-  Sparkles,
   Users,
+  Zap,
 } from "lucide-react";
 
 import { UserChip } from "@/components/auth/user-chip";
@@ -41,7 +41,6 @@ export function RoadmapHealthHero({
   selectedYear,
   progressBasis,
   onProgressBasisChange,
-  onResetView,
   summaryBarRef,
   onYearChange,
   onSelectRoadmap,
@@ -64,7 +63,6 @@ export function RoadmapHealthHero({
   selectedYear: number;
   progressBasis: "days" | "stories" | "epicEst";
   onProgressBasisChange: (next: "days" | "stories" | "epicEst") => void;
-  onResetView: () => void;
   /** Ref the legacy TimelineGrid uses as a portal target for summary chips. */
   summaryBarRef: (el: HTMLDivElement | null) => void;
   /** Subtitle-as-roadmap-picker callbacks. All optional; when omitted the
@@ -96,9 +94,11 @@ export function RoadmapHealthHero({
 
   return (
     <div className="relative shrink-0 border-b border-slate-200 bg-white">
-      {/* Row 1 — compact filter band */}
-      <div className="flex w-full items-center gap-5 pl-[3.75rem] pr-6 py-3">
-        <HomeLogoButton onClick={onResetView} />
+      {/* Row 1 — compact filter band. Title block stacks: H1 → roadmap
+          subtitle → "Health calculation" filter, all left-aligned at the
+          same x-position. Right cluster (Bell / Help / UserChip) stays
+          top-anchored to keep header height tight. */}
+      <div className="flex w-full items-start gap-5 pl-6 pr-6 py-3">
         <div className="min-w-0 shrink-0">
           <h1 className="inline-flex items-center gap-2 text-[22px] font-semibold leading-tight tracking-tight text-slate-900">
             <span className="inline-flex size-8 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600">
@@ -106,7 +106,7 @@ export function RoadmapHealthHero({
             </span>
             Roadmap Health
           </h1>
-          <div className="mt-1">
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5">
             <RoadmapSelector
               appearance="subtitle"
               roadmaps={roadmaps}
@@ -122,22 +122,24 @@ export function RoadmapHealthHero({
               onDeleteRoadmap={onDeleteRoadmap}
               extraSuffix={`${stats.epicsCount} epics in scope`}
             />
+            <span className="inline-block h-4 w-px shrink-0 bg-slate-300/80" aria-hidden />
+            <div className="flex items-center gap-2.5">
+              <span className="inline-flex h-[18px] items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.05em] leading-[18px] text-slate-500">
+                <HeartPulse className="size-[18px] shrink-0 text-rose-500" strokeWidth={2.2} aria-hidden />
+                <span className="inline-block translate-y-[1px]">Health calculation</span>
+                <Info className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+              </span>
+              <PillToggle
+                value={progressBasis}
+                onChange={(v) => onProgressBasisChange(v as "days" | "stories" | "epicEst")}
+                options={[
+                  { value: "epicEst", label: "Epic Days Est." },
+                  { value: "days", label: "Story Days Est." },
+                  { value: "stories", label: "Stories Completed" },
+                ]}
+              />
+            </div>
           </div>
-        </div>
-        <div className="ml-6 flex items-center gap-2.5">
-          <span className="inline-flex items-center gap-1 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-slate-500">
-            Health calculation
-            <Info className="size-3 text-slate-400" aria-hidden />
-          </span>
-          <PillToggle
-            value={progressBasis}
-            onChange={(v) => onProgressBasisChange(v as "days" | "stories" | "epicEst")}
-            options={[
-              { value: "epicEst", label: "Epic Days Est." },
-              { value: "days", label: "Story Days Est." },
-              { value: "stories", label: "Stories Completed" },
-            ]}
-          />
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <IconButton icon={Bell} label="Notifications" badge />
@@ -149,13 +151,13 @@ export function RoadmapHealthHero({
         <div ref={summaryBarRef} className="hidden" aria-hidden />
       </div>
 
-      {/* Row 2 — tall bordered hero card. Left padding matches the
-          legacy logo reserve (pl-[3.75rem]) so the card's left edge
-          aligns with the initiative middle-panel below it. */}
-      <div className="overflow-x-auto pl-[3.75rem] pr-6 pb-5 pt-1">
+      {/* Row 2 — tall bordered hero card. Left padding matches row 1
+          (pl-6) so the card's left edge aligns with the Roadmap Health
+          shield icon above it. */}
+      <div className="overflow-x-auto pl-6 pr-6 pb-5 pt-1">
         <div className="flex w-full min-w-min flex-wrap items-center justify-end gap-x-5 gap-y-4 rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-sm">
           <StatBlock
-            icon={<Layers className="size-7 text-indigo-500" aria-hidden />}
+            icon={<Zap className="size-7 text-blue-600" strokeWidth={1.9} aria-hidden />}
             value={stats.initiativesCount}
             label="Initiatives"
             onClick={onBarModeChange ? () => onBarModeChange("initiatives") : undefined}
@@ -173,7 +175,7 @@ export function RoadmapHealthHero({
           />
           <Divider />
           <StatBlock
-            icon={<ScrollText className="size-7 text-sky-500" aria-hidden />}
+            icon={<BookOpen className="size-7 text-sky-500" aria-hidden />}
             value={stats.storiesCount}
             label="Stories"
           />
@@ -188,7 +190,7 @@ export function RoadmapHealthHero({
           />
           <Divider />
           <StatBlock
-            icon={<Sparkles className="size-7 text-amber-500" aria-hidden />}
+            icon={<Flag className="size-7 text-amber-500" aria-hidden />}
             value={stats.sprintsCount}
             label="Sprints"
             onClick={onShowSprintChipsChange ? () => onShowSprintChipsChange(!showSprintChips) : undefined}
@@ -246,29 +248,6 @@ export function RoadmapHealthHero({
 }
 
 /* -------- Row-1 pieces -------- */
-
-function HomeLogoButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title="Back to all-quarters roadmap"
-      aria-label="Back to all-quarters roadmap"
-      className="group absolute left-1 top-3 inline-flex h-[50px] -translate-x-[5px] cursor-pointer items-start bg-white px-1 pb-[5px] pt-[4px] shadow-[6px_0_8px_-4px_rgba(15,23,42,0.10),0_6px_8px_-4px_rgba(15,23,42,0.22)] transition-transform duration-150 hover:scale-[1.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-    >
-      <Image
-        src="/downloads/Logo-simple.png"
-        alt="Bird Eye Viewer"
-        width={1024}
-        height={1024}
-        priority
-        quality={100}
-        sizes="44px"
-        className="block size-[44px] shrink-0 -translate-x-[3px] transition-transform duration-150 group-hover:rotate-[-4deg]"
-      />
-    </button>
-  );
-}
 
 function PillToggle<T extends string>({
   value,
@@ -359,14 +338,14 @@ function StatBlock({
     <Wrapper
       {...(interactive ? { type: "button", onClick, "aria-pressed": active, title } : {})}
       className={cn(
-        "flex shrink-0 items-center gap-3 rounded-lg text-left transition outline-none",
+        "flex shrink-0 items-start gap-3 rounded-lg text-left transition outline-none",
         interactive && "cursor-pointer px-2 py-1.5 -mx-2 -my-1.5",
         interactive && (active
           ? "bg-indigo-50 ring-1 ring-indigo-200/80"
           : "hover:bg-slate-50 ring-1 ring-transparent focus-visible:ring-indigo-300"),
       )}
     >
-      <span className="shrink-0">{icon}</span>
+      <span className="mt-[3px] shrink-0">{icon}</span>
       <div className="flex min-w-0 flex-col leading-tight">
         <span
           className={cn(
@@ -546,8 +525,10 @@ function DonutSvg({
                     y={y}
                     textAnchor="middle"
                     dominantBaseline="central"
-                    style={{ fontSize: "8px", fontWeight: 700 }}
-                    fill="#0f172a"
+                    style={{ fontSize: "8px", fontWeight: 700, paintOrder: "stroke" }}
+                    fill="#ffffff"
+                    stroke="rgba(15, 23, 42, 0.18)"
+                    strokeWidth="0.4"
                     aria-hidden
                   >
                     {pct}%

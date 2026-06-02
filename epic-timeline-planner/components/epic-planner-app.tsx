@@ -5657,9 +5657,80 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
 
   return (
     <DragContext onDragEnd={onDragEnd}>
+      {/* Fixed mode rail — anchored to the left edge of the viewport from
+          top to bottom. Hover expands from 58px → 244px with a logo and
+          labels. Lives outside <main> so it doesn't scroll with content. */}
+      <div
+        className="fixed inset-y-0 left-0 z-[60] w-[58px] overflow-visible"
+        onFocusCapture={() => setIsModeRailExpanded(true)}
+        onBlurCapture={(e) => {
+          const next = e.relatedTarget;
+          if (next instanceof Node && e.currentTarget.contains(next)) return;
+          setIsModeRailExpanded(false);
+        }}
+      >
+        <div
+          className={cn(
+            "absolute top-0 left-0 flex h-full min-h-0 flex-col overflow-hidden rounded-br-md border-r border-b border-slate-200/80 bg-white [clip-path:inset(0_-40px_-40px_0)] shadow-[2px_0_12px_-2px_rgba(15,23,42,0.14),0_4px_16px_-4px_rgba(15,23,42,0.10)] transition-[width,box-shadow] duration-200 ease-out",
+            isModeRailExpanded
+              ? "z-50 w-[244px] shadow-[0_12px_40px_-8px_rgba(15,23,42,0.22)] ring-1 ring-slate-200/70"
+              : "z-30 w-[58px]",
+          )}
+          onMouseLeave={() => setIsModeRailExpanded(false)}
+        >
+          {/* Logo as the first item in the rail — always visible, full
+              lockup appears when the rail expands so it reads as a
+              proper home nav target. */}
+          <button
+            type="button"
+            onClick={() => {
+              // Mirror the legacy in-hero HomeLogoButton — keep this list
+              // in sync with the onResetView prop passed to RoadmapHealthHero.
+              setTopMode("roadmap");
+              setFocusedQuarterLabel(null);
+              setActiveTimelineMonth(null);
+              setActiveYearSprint(null);
+              setActiveSprintTab("kanban");
+              setActiveMonthPlanTab("epic-gantt");
+              setActiveQuarterViewTab("gantt");
+              setSprintStoryBoardTeamId(null);
+              setIsModeRailExpanded(false);
+              router.replace("/");
+            }}
+            title="Bird Eye Viewer — back to roadmap"
+            aria-label="Back to roadmap"
+            className={cn(
+              "group flex shrink-0 items-center transition-[padding] duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400",
+              isModeRailExpanded ? "justify-start px-3 pt-3 pb-2" : "justify-center px-0 pt-3 pb-1",
+            )}
+          >
+            <img
+              src="/downloads/Logo-simple.png"
+              alt="Bird Eye Viewer"
+              className="block size-[40px] shrink-0 object-contain transition-transform duration-150 group-hover:scale-[1.06]"
+            />
+            <span
+              className={cn(
+                "ml-2 overflow-hidden whitespace-nowrap text-[15px] font-semibold leading-snug text-slate-800 transition-[max-width,opacity] duration-200 ease-out",
+                isModeRailExpanded ? "max-w-[180px] opacity-100" : "max-w-0 opacity-0",
+              )}
+              aria-hidden={!isModeRailExpanded}
+            >
+              Bird Eye Viewer
+            </span>
+          </button>
+          <div
+            className={cn(
+              "mx-2 shrink-0 border-t border-slate-200/70 transition-opacity duration-200",
+              isModeRailExpanded ? "opacity-100" : "opacity-60",
+            )}
+          />
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto py-2">{modeSwitchMenu}</div>
+        </div>
+      </div>
       <main
         className={cn(
-          "flex h-screen min-h-0 flex-col pb-8 pl-0 pr-5",
+          "flex h-screen min-h-0 flex-col pb-8 pl-[58px] pr-5",
           topMode === "users" && "overflow-x-hidden overflow-y-auto bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
           topMode === "demoBuilder" && "overflow-x-hidden overflow-y-auto bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
           topMode === "timeDebugger" && "overflow-x-hidden overflow-y-auto bg-gradient-to-br from-amber-50 via-orange-50/40 to-rose-50/30",
@@ -5707,18 +5778,6 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           onRemoveYearFromRoadmap={handleRemoveYearFromRoadmap}
           onGetRoadmapCounts={handleGetRoadmapCounts}
           onDeleteRoadmap={handleDeleteRoadmap}
-          onResetView={() => {
-            // Same reset shape as the legacy logo button — keep in sync.
-            setTopMode("roadmap");
-            setFocusedQuarterLabel(null);
-            setActiveTimelineMonth(null);
-            setActiveYearSprint(null);
-            setActiveSprintTab("kanban");
-            setActiveMonthPlanTab("epic-gantt");
-            setActiveQuarterViewTab("gantt");
-            setSprintStoryBoardTeamId(null);
-            router.replace("/");
-          }}
         />
         <div
           className={cn(
@@ -5729,45 +5788,6 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             topMode !== "backlog" && (isModeRailExpanded ? "overflow-x-visible" : "overflow-x-hidden"),
           )}
         >
-          <div
-            className="relative z-[60] h-full min-h-0 w-[58px] shrink-0 self-stretch overflow-visible"
-            onFocusCapture={() => setIsModeRailExpanded(true)}
-            onBlurCapture={(e) => {
-              const next = e.relatedTarget;
-              if (next instanceof Node && e.currentTarget.contains(next)) return;
-              setIsModeRailExpanded(false);
-            }}
-          >
-            <div
-              className={cn(
-                "absolute top-0 left-0 flex h-full min-h-0 flex-col overflow-hidden rounded-b-md border-x border-b border-slate-200/80 bg-white [clip-path:inset(0_-40px_-40px_-40px)] shadow-[2px_0_12px_-2px_rgba(15,23,42,0.14),0_4px_16px_-4px_rgba(15,23,42,0.10)] transition-[width,box-shadow] duration-200 ease-out",
-                isModeRailExpanded
-                  ? "z-50 w-[244px] shadow-[0_12px_40px_-8px_rgba(15,23,42,0.22)] ring-1 ring-slate-200/70"
-                  : "z-30 w-[58px]",
-              )}
-              onMouseLeave={() => setIsModeRailExpanded(false)}
-            >
-              <div
-                className={cn(
-                  "shrink-0 overflow-hidden border-slate-200/55 bg-white transition-[max-height,opacity,padding,border-width] duration-200 ease-out",
-                  isModeRailExpanded
-                    ? "max-h-[120px] border-b px-3 pt-[25px] pb-[9px] opacity-100"
-                    : "max-h-0 border-0 bg-transparent p-0 opacity-0",
-                )}
-                aria-hidden={!isModeRailExpanded}
-              >
-                <img
-                  src="/bird-eye-lockup-wide.png"
-                  alt="Bird Eye Viewer logo"
-                  className={cn(
-                    "block w-auto max-w-full rounded-md object-contain transition-opacity duration-200",
-                    isModeRailExpanded ? "h-[56px] opacity-100" : "h-0 opacity-0",
-                  )}
-                />
-              </div>
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto py-2">{modeSwitchMenu}</div>
-            </div>
-          </div>
           <div
             className={cn(
               "flex min-h-0 min-w-0 flex-1 flex-col gap-5",
