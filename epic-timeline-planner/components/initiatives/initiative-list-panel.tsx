@@ -489,7 +489,11 @@ function HealthFilterMenu({
     if (next.has(key)) next.delete(key);
     else next.add(key);
     onHealthFilterChange(next);
-    onAnyHealthPicked?.();
+    // Only fire the "user actively picked a filter" callback when the
+    // resulting Set has at least one verdict. Unchecking the last verdict
+    // must NOT count as a pick — otherwise the parent will keep the
+    // progress overlay on after the eraser / final uncheck.
+    if (next.size > 0) onAnyHealthPicked?.();
   };
   const clearVerdicts = () => {
     if (!onHealthFilterChange) return;
@@ -956,14 +960,14 @@ function storyStatusMeta(story: UserStoryItem, contextMonth: number | null): {
 
 /** Shared base for INITIATIVE-row status/tag chips in the middle panel. */
 const statusBadgeBase =
-  "inline-flex items-center rounded px-2.5 py-1 text-[13px] font-semibold leading-none tracking-[0.01em]";
+  "inline-flex items-center rounded-sm px-2.5 py-1 text-[13px] font-semibold leading-none tracking-[0.01em]";
 
 /** Slightly shorter variant used on EPIC-row chips so the visual weight
  *  reads as subordinate to the parent initiative's chip row. Smaller
  *  vertical padding + 1pt smaller font; same color treatment is layered
  *  on top by the caller via `cn(epicBadgeBase, chipColorClasses)`. */
 const epicBadgeBase =
-  "inline-flex items-center rounded px-1.5 py-px text-[10.5px] font-semibold leading-tight tracking-[0.01em]";
+  "inline-flex items-center rounded-sm px-1.5 py-px text-[10.5px] font-semibold leading-tight tracking-[0.01em]";
 
 /** Left-panel initiative/epic cards: track grows to fill the row; summary stays on the same line (nowrap). */
 const leftPanelProgressTrackClass =
@@ -1575,7 +1579,7 @@ function InitiativeTreeEpicRow({
                                 const resolved = resolveAssigneeAvatar(assigneeName, workspaceDirectoryUsers);
                                 return (
                                   <span
-                                    className="inline-flex max-w-[7.5rem] shrink-0 items-center gap-1 truncate border border-border/60 bg-background py-0.5 pl-0.5 pr-1 text-[12px] font-medium text-slate-600"
+                                    className="inline-flex max-w-[7.5rem] shrink-0 items-center gap-1 truncate rounded-sm border border-border/60 bg-background py-0.5 pl-0.5 pr-1 text-[10.5px] font-medium text-slate-600"
                                     title={assigneeName}
                                   >
                                     {resolved.image ? (
@@ -1588,7 +1592,7 @@ function InitiativeTreeEpicRow({
                                 );
                               })() : null}
                               {sprintLabel ? (
-                                <span className="max-w-[7rem] truncate border border-border/60 bg-background px-1.5 py-0.5 text-[12px] font-medium text-muted-foreground">
+                                <span className="max-w-[7rem] truncate rounded-sm border border-border/60 bg-background px-1.5 py-0.5 text-[10.5px] font-medium text-muted-foreground">
                                   {sprintLabel}
                                 </span>
                               ) : null}
@@ -2242,7 +2246,7 @@ function SprintEpicCard({
           >
             <div className="flex w-full min-w-0 items-center gap-0">
               <div className="flex min-w-0 flex-1 items-center gap-0 pl-0">
-                <p className="min-w-0 truncate text-[18px] font-medium leading-7 tracking-tight text-slate-900">
+                <p className="min-w-0 truncate text-[18px] font-normal leading-7 tracking-tight text-slate-900">
                   {epic.title}
                 </p>
               </div>
@@ -2362,7 +2366,7 @@ function SprintEpicCard({
                         );
                       })() : null}
                       {sprintLabel ? (
-                        <span className="max-w-[7rem] truncate border border-border/60 bg-background px-1.5 py-0.5 text-[12px] font-medium text-muted-foreground">
+                        <span className="max-w-[7rem] truncate rounded-sm border border-border/60 bg-background px-1.5 py-0.5 text-[10.5px] font-medium text-muted-foreground">
                           {sprintLabel}
                         </span>
                       ) : null}

@@ -1461,6 +1461,11 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       if (next.size > 0) {
         setShowRoadmapProgress(true);
         setLastPickedLabelLane("health");
+      } else {
+        // Clearing all health verdicts (or hitting the eraser, which calls
+        // this with an empty Set) also drops the auto-enabled progress
+        // overlay — no health pills, no progress fill, no % badge.
+        setShowRoadmapProgress(false);
       }
     },
     [],
