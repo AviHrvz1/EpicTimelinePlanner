@@ -5821,11 +5821,12 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             topMode === "backlog"
               ? "min-h-0 min-w-0 flex-1 items-stretch overflow-x-hidden overflow-y-hidden"
               : "flex-1 min-h-0 overflow-y-visible",
-            // For roadmap mode, lock the body row to viewport-200px so
-            // the Gantt + middle initiative panel keep a useful height
-            // even when the dashboard hero is fully expanded — the page
-            // scrolls instead of the panels shrinking.
-            topMode === "roadmap" && "min-h-[calc(100vh-200px)]",
+            // For roadmap mode, lock the body row to a full viewport
+            // height so the Gantt + middle initiative panel are as
+            // tall as possible. Combined with the hero stacked above,
+            // total content exceeds the viewport and the page scrolls
+            // down to reveal more of both panels.
+            topMode === "roadmap" && "min-h-[100vh]",
             topMode !== "backlog" && (isModeRailExpanded ? "overflow-x-visible" : "overflow-x-hidden"),
           )}
         >
