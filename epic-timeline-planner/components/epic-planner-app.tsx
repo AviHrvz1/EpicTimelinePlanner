@@ -5829,7 +5829,16 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                       storyProgressDetailsVisible={showRoadmapProgress}
                       useEpicPlanLeftPanel={initiativeListActiveMonth != null}
                       activeYearSprint={activeYearSprint}
-                      storyDragEnabled={isSprintModeActive && !isActiveSprintClosed}
+                      storyDragEnabled={
+                        isSprintModeActive &&
+                        !isActiveSprintClosed &&
+                        // Month and quarter capacity boards plan at the
+                        // EPIC level — story-level drag handles would be
+                        // misleading there since stories can't be assigned
+                        // to a team at those granularities.
+                        activeMonthPlanTab !== "month-capacity" &&
+                        activeQuarterViewTab !== "capacity"
+                      }
                       isSprintModeActive={isSprintModeActive}
                       isOnEpicGanttTab={activeMonthPlanTab === "epic-gantt"}
                       isCapacityPlanningMode={

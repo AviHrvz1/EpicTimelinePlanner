@@ -8332,7 +8332,7 @@ export function TimelineGrid({
                             "hover:brightness-[0.98]",
                           )}
                         >
-                          <span className={cn("inline-flex items-center gap-1.5 text-[15px] font-semibold leading-tight tracking-tight", tone?.qText ?? "text-slate-800")}>
+                          <span className={cn("inline-flex items-center gap-1.5 text-[17px] font-semibold leading-tight tracking-tight", tone?.qText ?? "text-slate-800")}>
                             <QuarterYearProgressIcon quarterLabel={fq.label} />
                             Quarter {fq.label.slice(1)}
                           </span>
@@ -8355,7 +8355,7 @@ export function TimelineGrid({
                                   onMonthPlanTabChange?.("epic-gantt");
                                 }}
                                 className={cn(
-                                  "relative flex w-full min-w-0 items-center justify-center px-1.5 py-3.5 text-center text-[13px] font-bold transition",
+                                  "relative flex w-full min-w-0 items-center justify-center px-1.5 py-3.5 text-center text-[14.5px] font-bold transition",
                                   !isLastMonthOverall && "border-r border-slate-200",
                                   activeMonth === month
                                     ? "bg-blue-50 text-blue-900"

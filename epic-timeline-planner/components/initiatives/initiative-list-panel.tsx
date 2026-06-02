@@ -2204,36 +2204,34 @@ function SprintEpicCard({
       }}
     >
       <div className="flex min-w-0 items-start gap-0.5">
-        <div className="flex shrink-0 flex-col items-center">
+        <button
+          type="button"
+          onClick={handleToggle}
+          className="inline-flex h-6 shrink-0 items-center rounded-sm text-slate-500 transition-colors hover:text-slate-700"
+          aria-label={isOpen ? "Collapse epic" : "Expand epic"}
+          aria-expanded={isOpen}
+        >
+          <ChevronRight
+            className={cn(
+              "size-4 shrink-0 transition-transform",
+              isOpen && "rotate-90",
+            )}
+          />
+        </button>
+        {(isCapacityMode ? !epicTeamId : (!isEpicScheduledOnGantt && epicPlanDragEnabled)) ? (
           <button
             type="button"
-            onClick={handleToggle}
-            className="inline-flex h-6 shrink-0 items-center rounded-sm text-slate-500 transition-colors hover:text-slate-700"
-            aria-label={isOpen ? "Collapse epic" : "Expand epic"}
-            aria-expanded={isOpen}
+            className="relative inline-flex h-6 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+            aria-label="Drag epic"
+            {...listeners}
+            {...attributes}
           >
-            <ChevronRight
-              className={cn(
-                "size-4 shrink-0 transition-transform",
-                isOpen && "rotate-90",
-              )}
-            />
+            <DragHandleIcon size="sm" />
+            {showDragHint ? (
+              <DragToGanttArrowIcon className="animate-epic-drag-hint-arrow pointer-events-none absolute left-0 top-1/2 size-7 text-indigo-500" />
+            ) : null}
           </button>
-          {(isCapacityMode ? !epicTeamId : (!isEpicScheduledOnGantt && epicPlanDragEnabled)) ? (
-            <button
-              type="button"
-              className="relative inline-flex h-6 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
-              aria-label="Drag epic"
-              {...listeners}
-              {...attributes}
-            >
-              <DragHandleIcon size="sm" />
-              {showDragHint ? (
-                <DragToGanttArrowIcon className="animate-epic-drag-hint-arrow pointer-events-none absolute left-0 top-1/2 size-7 text-indigo-500" />
-              ) : null}
-            </button>
-          ) : null}
-        </div>
+        ) : null}
         <span className="inline-flex h-6 shrink-0 items-center" aria-hidden>
           <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-3.5 [&_svg]:text-sky-500" />
         </span>
@@ -2336,7 +2334,7 @@ function SprintEpicCard({
                     ) : null}
                     <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
                       <UserStoryIcon />
-                      {hintStoryId === story.id ? (
+                      {hintStoryId === story.id && storyDragEnabled ? (
                         <DragToKanbanArrowIcon className="animate-epic-drag-hint-arrow pointer-events-none absolute left-0 top-1/2 size-7 text-indigo-500" />
                       ) : null}
                     </span>
@@ -3816,7 +3814,7 @@ export function InitiativeListPanel({
                 </div>
                 <div className="min-w-0 flex-1 space-y-2.5">
                   <div>
-                    <p className="text-lg font-bold tracking-tight text-slate-900">New initiative</p>
+                    <p className="text-lg font-normal tracking-tight text-slate-900">New initiative</p>
                     <p className="mt-1 text-[12px] leading-snug text-slate-600">
                       Starts in the backlog; schedule it on the roadmap when you are ready.
                     </p>
