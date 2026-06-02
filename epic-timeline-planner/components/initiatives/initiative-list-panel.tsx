@@ -16,6 +16,7 @@ import {
   Circle,
   Folder,
   GripVertical,
+  Info,
   ListFilter,
   ListTodo,
   PlayCircle,
@@ -324,7 +325,7 @@ function IconFilterSelect<T extends string>({
     >
       <summary
         className={cn(
-          "flex h-9 list-none items-center justify-between gap-2 rounded-lg bg-white px-2 text-[13px] outline-none ring-1 ring-slate-200 transition marker:content-none [&::-webkit-details-marker]:hidden",
+          "flex h-9 list-none items-center justify-between gap-1 rounded-lg bg-white px-1.5 text-[13px] outline-none ring-1 ring-slate-200 transition marker:content-none [&::-webkit-details-marker]:hidden",
           disabled ? "cursor-not-allowed opacity-70" : "hover:bg-slate-50 focus:ring-2 focus:ring-ring/40",
         )}
         aria-label={ariaLabel}
@@ -401,6 +402,296 @@ function IconFilterSelect<T extends string>({
           });
         })()}
       </div>
+    </details>
+  );
+}
+
+/**
+ * Compact icon button + popover that controls BOTH the health-verdict filter
+ * (the rose-tinted block of On Track / Watch / At Risk / Overdue / Done) and
+ * the calculation basis (Epic Days Est / Stories Days Est / Stories
+ * Completed) the verdicts are computed against. Sits next to the eraser so
+ * the planner picks the lane separately from the execution-status dropdown.
+ */
+function HealthFilterMenu({
+  healthFilter,
+  onHealthFilterChange,
+  progressBasis,
+  onProgressBasisChange,
+  onAnyHealthPicked,
+}: {
+  healthFilter: Set<HealthStatus> | undefined;
+  onHealthFilterChange: ((next: Set<HealthStatus>) => void) | undefined;
+  progressBasis: "days" | "stories" | "epicEst";
+  onProgressBasisChange: ((next: "days" | "stories" | "epicEst") => void) | undefined;
+  onAnyHealthPicked: (() => void) | undefined;
+}) {
+  const detailsRef = useRef<HTMLDetailsElement | null>(null);
+  const closeTimeoutRef = useRef<number | null>(null);
+  const activeCount = healthFilter?.size ?? 0;
+  const isActive = activeCount > 0;
+  const clearCloseTimeout = () => {
+    if (closeTimeoutRef.current != null) {
+      window.clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+  };
+  const closeMenuSoon = () => {
+    clearCloseTimeout();
+    closeTimeoutRef.current = window.setTimeout(() => {
+      detailsRef.current?.removeAttribute("open");
+      closeTimeoutRef.current = null;
+    }, 180);
+  };
+  // Single shared tooltip state — portalled to document.body so it can extend
+  // RIGHT of the popover without being clipped by the panel's overflow-x-hidden
+  // scroll container. Each info-icon mouseenter fills this in; mouseleave clears.
+  const [hoveredTip, setHoveredTip] = useState<{
+    tagline: string;
+    hint: string;
+    top: number;
+    left: number;
+  } | null>(null);
+  const showInfoTip = (event: React.MouseEvent, tagline: string, hint: string) => {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    setHoveredTip({
+      tagline,
+      hint,
+      top: rect.top + rect.height / 2,
+      left: rect.right + 8,
+    });
+  };
+  const hideInfoTip = () => setHoveredTip(null);
+  const toggleVerdict = (key: HealthStatus) => {
+    if (!onHealthFilterChange) return;
+    const next = new Set<HealthStatus>(healthFilter ?? new Set());
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    onHealthFilterChange(next);
+    onAnyHealthPicked?.();
+  };
+  const clearVerdicts = () => {
+    if (!onHealthFilterChange) return;
+    onHealthFilterChange(new Set());
+  };
+  const verdicts: Array<{ value: HealthStatus; label: string; icon: ReactNode; tagline: string; hint: string }> = [
+    {
+      value: "onTrack",
+      label: "On Track",
+      icon: <Check className="size-3.5 text-emerald-600" />,
+      tagline: "Pacing for the plan end date",
+      hint: "Progress is keeping up with the expected pace for today. The epic is on course to land by its plan end.",
+    },
+    {
+      value: "watch",
+      label: "Watch",
+      icon: <AlertTriangle className="size-3.5 text-amber-600" />,
+      tagline: "A little behind, worth a check-in",
+      hint: "Progress is slightly under the expected pace. The plan end is still reachable, but a quick review is wise.",
+    },
+    {
+      value: "atRisk",
+      label: "At Risk",
+      icon: <AlertTriangle className="size-3.5 text-rose-600" />,
+      tagline: "Meaningfully behind pace",
+      hint: "Progress is far enough behind that the plan end is likely to slip without a scope cut or a date extension.",
+    },
+    {
+      value: "overdue",
+      label: "Overdue",
+      icon: <AlertOctagon className="size-3.5 text-rose-700" />,
+      tagline: "Past the plan end, not finished",
+      hint: "Today is past the planned end date and the epic still has open stories. Replan the dates or push the remaining work to close.",
+    },
+    {
+      value: "done",
+      label: "Done",
+      icon: <CheckCheck className="size-3.5 text-emerald-600" />,
+      tagline: "All stories delivered",
+      hint: "Every story in this epic is completed. The work has shipped.",
+    },
+  ];
+  const bases: Array<{ value: "days" | "stories" | "epicEst"; label: string; icon: ReactNode; tagline: string; hint: string }> = [
+    {
+      value: "epicEst",
+      label: "Epic days estimate",
+      icon: <Folder className="size-3.5 text-violet-500" />,
+      tagline: "Size set at the epic level",
+      hint: "Each epic contributes the days estimate written on the epic itself. Best when you plan scope per epic and don't track per-story estimates.",
+    },
+    {
+      value: "days",
+      label: "Stories days estimate",
+      icon: <CalendarDays className="size-3.5 text-sky-500" />,
+      tagline: "Size summed from stories",
+      hint: "Each story contributes its days estimate, and the totals roll up to the epic. Best when story-level estimates are the source of truth.",
+    },
+    {
+      value: "stories",
+      label: "Stories completed",
+      icon: <CheckCircle2 className="size-3.5 text-emerald-600" />,
+      tagline: "Simple done ÷ total count",
+      hint: "Every story counts the same — progress is finished stories divided by total. Best when stories are similar in size or estimates are missing.",
+    },
+  ];
+  return (
+    <details
+      ref={detailsRef}
+      className="group relative"
+      onMouseEnter={clearCloseTimeout}
+      onMouseLeave={closeMenuSoon}
+      onBlur={(event) => {
+        clearCloseTimeout();
+        const next = event.relatedTarget as Node | null;
+        if (!next || !event.currentTarget.contains(next)) {
+          detailsRef.current?.removeAttribute("open");
+        }
+      }}
+    >
+      <summary
+        className={cn(
+          "flex h-9 w-9 list-none items-center justify-center rounded-lg bg-white text-slate-600 outline-none ring-1 ring-slate-200 transition marker:content-none [&::-webkit-details-marker]:hidden",
+          "hover:bg-slate-50 hover:text-slate-900 focus:ring-2 focus:ring-ring/40 cursor-pointer",
+          isActive && "bg-rose-50/70 text-rose-700 ring-rose-200",
+        )}
+        title="Health verdict & calculation basis"
+        aria-label="Open health verdict filter"
+        onKeyDown={(event) => {
+          if (event.key === "Escape") detailsRef.current?.removeAttribute("open");
+        }}
+      >
+        <span className="relative">
+          <Activity className="size-4" aria-hidden />
+          {isActive ? (
+            <span
+              className="absolute -top-1 -right-1 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-rose-600 px-1 text-[9px] font-semibold text-white ring-1 ring-white"
+              aria-hidden
+            >
+              {activeCount}
+            </span>
+          ) : null}
+        </span>
+      </summary>
+      <div className="absolute top-full right-0 z-50 mt-1 w-60 rounded-lg border border-slate-200 bg-white p-1.5 shadow-lg">
+        <div className="mb-1 px-1.5 pt-0.5">
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-500">
+            <ListFilter className="size-3 text-slate-500" aria-hidden />
+            Calculation Basis
+          </span>
+        </div>
+        <div className="space-y-0.5">
+          {bases.map((b) => {
+            const checked = progressBasis === b.value;
+            return (
+              <button
+                key={b.value}
+                type="button"
+                onClick={() => onProgressBasisChange?.(b.value)}
+                disabled={!onProgressBasisChange}
+                className={cn(
+                  "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-slate-700 hover:bg-slate-100",
+                  checked && "bg-slate-100 text-slate-900",
+                  !onProgressBasisChange && "cursor-not-allowed opacity-60 hover:bg-transparent",
+                )}
+              >
+                <span
+                  className={cn(
+                    "inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border",
+                    checked ? "border-slate-700 bg-slate-700" : "border-slate-300 bg-white",
+                  )}
+                  aria-hidden
+                >
+                  {checked ? <span className="block h-1.5 w-1.5 rounded-full bg-white" /> : null}
+                </span>
+                <span className="shrink-0">{b.icon}</span>
+                <span className="whitespace-nowrap">{b.label}</span>
+                <span
+                  className="ml-auto inline-flex shrink-0 cursor-help text-slate-400 hover:text-slate-600"
+                  aria-label={`${b.label}: ${b.tagline}. ${b.hint}`}
+                  onMouseEnter={(event) => showInfoTip(event, b.tagline, b.hint)}
+                  onMouseLeave={hideInfoTip}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <Info className="size-3.5" aria-hidden />
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="mx-1 mt-1.5 mb-1 flex items-center justify-between gap-2 border-t border-slate-200/80 px-1.5 pt-1.5 pb-1">
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-500">
+            <Activity className="size-3 text-emerald-600" aria-hidden />
+            Health Verdict
+          </span>
+          {isActive ? (
+            <button
+              type="button"
+              onClick={clearVerdicts}
+              className="text-[10px] font-medium text-slate-500 hover:text-slate-800"
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
+        <div className="rounded-md bg-rose-50/55 p-0.5">
+          {verdicts.map((v) => {
+            const checked = healthFilter?.has(v.value) ?? false;
+            return (
+              <button
+                key={v.value}
+                type="button"
+                onClick={() => toggleVerdict(v.value)}
+                className={cn(
+                  "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[13px] font-medium text-slate-700 hover:bg-white/80",
+                  checked && "bg-white text-slate-900 shadow-sm ring-1 ring-rose-200/60",
+                )}
+              >
+                <input
+                  type="checkbox"
+                  tabIndex={-1}
+                  readOnly
+                  checked={checked}
+                  className="size-3.5 rounded border-slate-300 text-slate-700"
+                />
+                <span className="shrink-0">{v.icon}</span>
+                <span className="whitespace-nowrap">{v.label}</span>
+                <span
+                  className="ml-auto inline-flex shrink-0 cursor-help text-slate-400 hover:text-slate-600"
+                  aria-label={`${v.label}: ${v.tagline}. ${v.hint}`}
+                  onMouseEnter={(event) => showInfoTip(event, v.tagline, v.hint)}
+                  onMouseLeave={hideInfoTip}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <Info className="size-3.5" aria-hidden />
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      {hoveredTip && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              role="tooltip"
+              style={{
+                position: "fixed",
+                top: hoveredTip.top,
+                left: hoveredTip.left,
+                transform: "translateY(-50%)",
+                zIndex: 9999,
+              }}
+              className={cn(LEFT_PANEL_TRUNCATION_TOOLTIP_CLASS, "w-60")}
+            >
+              <span className="block text-[12.5px] font-semibold tracking-tight text-slate-900">
+                {hoveredTip.tagline}
+              </span>
+              <span className="mt-0.5 block text-[12px] font-normal leading-snug text-slate-600">
+                {hoveredTip.hint}
+              </span>
+            </div>,
+            document.body,
+          )
+        : null}
     </details>
   );
 }
@@ -491,7 +782,7 @@ function TeamFilterAutocomplete({
     <div ref={containerRef} className="relative">
       <div
         className={cn(
-          "flex h-9 items-center gap-1.5 rounded-lg bg-white px-2 ring-1 ring-slate-200 transition",
+          "flex h-9 items-center gap-1 rounded-lg bg-white px-1.5 ring-1 ring-slate-200 transition",
           disabled ? "cursor-not-allowed opacity-70" : "hover:bg-slate-50",
           open && "ring-2 ring-ring/40",
         )}
@@ -943,6 +1234,11 @@ type InitiativeListPanelProps = {
    *  the parent can apply the same cut to the Gantt rows — picking
    *  `Mobile` in the panel filter hides non-Mobile bars too. */
   onPanelTeamFilterDerivedChange?: (next: Set<string>) => void;
+  /** Lets the planner pick which basis the health popover (in the panel
+   *  filter row) drives `computeProgress` with. Same values the toolbar
+   *  Health chip and the Insights surface use; lifted so changing it
+   *  here updates the bars and the Insights chips at the same time. */
+  onProgressBasisChange?: (next: "days" | "stories" | "epicEst") => void;
 };
 
 function DraggableInitiativeCard({
@@ -2171,6 +2467,7 @@ export function InitiativeListPanel({
   onPanelQuarterFilterDerivedChange,
   onPanelTeamFilterActiveChange,
   onPanelTeamFilterDerivedChange,
+  onProgressBasisChange,
 }: InitiativeListPanelProps) {
   const { active } = useDndContext();
   const isTimelineEpicDragActive = active != null && String(active.id).startsWith("timeline-epic:");
@@ -2287,11 +2584,11 @@ export function InitiativeListPanel({
   }, [inlineNewEpicOpen]);
 
   const quarterFilterOptions: IconFilterOption<"all" | "Q1" | "Q2" | "Q3" | "Q4">[] = [
-    { value: "all", label: "All Quarters", icon: <CalendarDays className="size-3.5 text-violet-400" /> },
-    { value: "Q1", label: "1st Quarter", icon: <QuarterProgressGlyph steps={1} /> },
-    { value: "Q2", label: "2nd Quarter", icon: <QuarterProgressGlyph steps={2} /> },
-    { value: "Q3", label: "3rd Quarter", icon: <QuarterProgressGlyph steps={3} /> },
-    { value: "Q4", label: "4th Quarter", icon: <QuarterProgressGlyph steps={4} /> },
+    { value: "all", label: "Quarters", icon: <CalendarDays className="size-3.5 text-violet-400" /> },
+    { value: "Q1", label: "Q1", icon: <QuarterProgressGlyph steps={1} /> },
+    { value: "Q2", label: "Q2", icon: <QuarterProgressGlyph steps={2} /> },
+    { value: "Q3", label: "Q3", icon: <QuarterProgressGlyph steps={3} /> },
+    { value: "Q4", label: "Q4", icon: <QuarterProgressGlyph steps={4} /> },
   ];
   const monthFilterOptions: IconFilterOption<"current">[] = [
     {
@@ -2357,25 +2654,20 @@ export function InitiativeListPanel({
     ];
   }, [workspaceDirectoryUsers, initiatives]);
   /**
-   * Unified status filter — execution statuses up top, health verdicts below
-   * a divider. Health values are prefixed `health:` so the toggle handler
-   * can route to the right state (`healthFilter` Set vs `panelStatusFilters`
-   * array) without colliding with the existing "Done" execution label.
+   * Execution-status filter only. Health verdicts moved to a dedicated
+   * popover button (HealthFilterMenu) next to the eraser, so the planner
+   * picks lanes separately and we don't have to muddle two unrelated
+   * concerns into one dropdown.
    */
-  type StatusOrHealthFilterValue =
+  type StatusFilterValue =
     | "all"
     | "Scheduled"
     | "Unscheduled"
     | "To Do"
     | "In Progress"
     | "Review / Testing"
-    | "Done"
-    | "health:onTrack"
-    | "health:watch"
-    | "health:atRisk"
-    | "health:overdue"
-    | "health:done";
-  const statusFilterOptions: IconFilterOption<StatusOrHealthFilterValue>[] = [
+    | "Done";
+  const statusFilterOptions: IconFilterOption<StatusFilterValue>[] = [
     { value: "all", label: "All Statuses", icon: <ListFilter className="size-3.5 text-emerald-400" /> },
     { value: "Scheduled", label: "Scheduled", icon: <CalendarDays className="size-3.5 text-slate-500" /> },
     { value: "Unscheduled", label: "Unscheduled", icon: <Circle className="size-3.5 text-slate-500" /> },
@@ -2383,89 +2675,14 @@ export function InitiativeListPanel({
     { value: "In Progress", label: "In Progress", icon: <PlayCircle className="size-3.5 text-slate-500" /> },
     { value: "Review / Testing", label: "Review / Testing", icon: <CheckCheck className="size-3.5 text-slate-500" /> },
     { value: "Done", label: "Done", icon: <CheckCircle2 className="size-3.5 text-slate-500" /> },
-    {
-      value: "health:onTrack",
-      label: "On Track",
-      icon: <Check className="size-3.5 text-emerald-600" />,
-      separatorBefore: true,
-      sectionLabel: "Health Verdict",
-      // Matches the toolbar's `Health` chip iconography so the planner
-      // visually links the dropdown section to the popover surface.
-      sectionIcon: <Activity className="size-3 text-emerald-600" aria-hidden />,
-      // Soft rose tint behind every row in this section so the planner
-      // sees at a glance which lane each option belongs to. Pairs with the
-      // section's AlertOctagon icon (the same iconography the popover's
-      // Overdue verdict uses).
-      sectionItemClassName: "bg-rose-50/55",
-    },
-    {
-      value: "health:watch",
-      label: "Watch",
-      icon: <AlertTriangle className="size-3.5 text-amber-600" />,
-    },
-    {
-      value: "health:atRisk",
-      label: "At Risk",
-      icon: <AlertTriangle className="size-3.5 text-rose-600" />,
-    },
-    {
-      value: "health:overdue",
-      label: "Overdue",
-      icon: <AlertOctagon className="size-3.5 text-rose-700" />,
-    },
-    {
-      value: "health:done",
-      label: "Done (Health)",
-      icon: <CheckCheck className="size-3.5 text-emerald-600" />,
-    },
   ];
-  // Merge both state sets into the single `values` array the dropdown expects.
-  // Health values get the `health:` prefix; status values use their raw label.
-  const mergedStatusFilterValues: StatusOrHealthFilterValue[] = (() => {
-    const out: StatusOrHealthFilterValue[] = [];
-    const hasStatusActive = !panelStatusFilters.includes("all") && panelStatusFilters.length > 0;
-    const hasHealthActive = healthFilter != null && healthFilter.size > 0;
-    if (!hasStatusActive && !hasHealthActive) return ["all"];
-    for (const v of panelStatusFilters) {
-      if (v !== "all") out.push(v as StatusOrHealthFilterValue);
-    }
-    if (healthFilter) {
-      for (const h of healthFilter) out.push(`health:${h}` as StatusOrHealthFilterValue);
-    }
-    return out;
-  })();
-  /**
-   * Status and Health Verdict are MUTUALLY EXCLUSIVE in this dropdown — the
-   * Gantt can't sensibly render both pill rows at once (one would always
-   * occlude the other), and asking the planner to mentally union them is
-   * worse than just picking a lane. Clicking a regular status clears the
-   * health Set; clicking a health verdict clears the status array.
-   */
-  const handleMergedStatusToggle = (value: StatusOrHealthFilterValue) => {
-    if (value === "all") {
-      setPanelStatusFilters(["all"]);
+  const handleStatusToggle = (value: StatusFilterValue) => {
+    // Picking any execution status drops the health filter — the Gantt can't
+    // render both pill rows at once, so we always commit to one lane.
+    if (value !== "all" && healthFilter && healthFilter.size > 0) {
       onHealthFilterChange?.(new Set());
-      return;
     }
-    if (value.startsWith("health:")) {
-      // Pick a health verdict → drop any execution-status filter so the bars
-      // swap from "status pill" mode to "health verdict pill" mode.
-      setPanelStatusFilters(["all"]);
-      if (!onHealthFilterChange) return;
-      const key = value.slice("health:".length) as HealthStatus;
-      const next = new Set<HealthStatus>(healthFilter ?? new Set());
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      onHealthFilterChange(next);
-      onUserPickedFilter?.();
-      return;
-    }
-    // Pick a regular status → drop the health filter so the bars swap to
-    // showing the execution-status pill instead of the health verdict.
-    onHealthFilterChange?.(new Set());
-    setPanelStatusFilters((prev) =>
-      toggleMultiFilter(prev, value as Exclude<StatusOrHealthFilterValue, `health:${string}`>, "all"),
-    );
+    setPanelStatusFilters((prev) => toggleMultiFilter(prev, value, "all"));
     onUserPickedFilter?.();
   };
   /**
@@ -3055,8 +3272,8 @@ export function InitiativeListPanel({
   }, [inlineNewEpicInitiativeId, inlineNewEpicTitle, onCreateEpicQuick]);
 
   return (
-    <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-indigo-200 bg-white pt-10 pb-4 pl-0 pr-4 shadow-xl ring-1 ring-black/8">
-      <div className="z-10 -mr-4 mb-4 flex shrink-0 items-center justify-between border-b border-slate-200 bg-white pr-4 pb-2">
+    <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-indigo-200 bg-white pt-10 pb-4 pl-0 pr-2 shadow-xl ring-1 ring-black/8">
+      <div className="z-10 -mr-2 mb-4 flex shrink-0 items-center justify-between border-b border-slate-200 bg-white pr-2 pb-2">
         <div className="min-w-0 pl-5">
           <h2 className="inline-flex items-center gap-2 text-[20px] font-semibold leading-tight tracking-[-0.02em] text-slate-800">
             {epicPlanPanelMode ? (
@@ -3113,7 +3330,7 @@ export function InitiativeListPanel({
           "min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white [direction:rtl] [scrollbar-gutter:stable] mr-1.5 shadow-[inset_-4px_0_8px_-4px_rgba(15,23,42,0.09)] [scrollbar-color:theme(colors.indigo.100)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gradient-to-b [&::-webkit-scrollbar-thumb]:from-sky-100 [&::-webkit-scrollbar-thumb]:via-indigo-100 [&::-webkit-scrollbar-thumb]:to-violet-100",
         )}
       >
-        <div className="min-h-0 bg-white ps-5 pe-3 [direction:ltr]">
+        <div className="min-h-0 bg-white ps-5 pe-2 [direction:ltr]">
       {epicPlanPanelMode ? (
         <div className="pt-1 pb-4">
           <div className="pb-5">
@@ -3166,7 +3383,7 @@ export function InitiativeListPanel({
               </div>
             ) : null}
           </div>
-          <div className="mt-4 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
+          <div className="mt-4 grid grid-cols-[minmax(0,6.5rem)_minmax(0,1fr)_minmax(0,1fr)_auto_auto] gap-1.5">
             {activeMonth != null ? (
               <IconFilterSelect
                 values={["current"]}
@@ -3195,11 +3412,24 @@ export function InitiativeListPanel({
               allValue="all"
             />
             <IconFilterSelect
-              values={mergedStatusFilterValues}
-              onToggle={handleMergedStatusToggle}
+              values={panelStatusFilters}
+              onToggle={handleStatusToggle}
               options={statusFilterOptions}
-              ariaLabel="Filter left panel by status or health verdict"
+              ariaLabel="Filter left panel by status"
               allValue="all"
+            />
+            <HealthFilterMenu
+              healthFilter={healthFilter}
+              onHealthFilterChange={onHealthFilterChange}
+              progressBasis={progressBasis}
+              onProgressBasisChange={onProgressBasisChange}
+              onAnyHealthPicked={() => {
+                // Picking any health verdict drops the execution-status
+                // filter — same mutual-exclusion contract the old unified
+                // dropdown enforced.
+                if (!panelStatusFilters.includes("all")) setPanelStatusFilters(["all"]);
+                onUserPickedFilter?.();
+              }}
             />
             <button
               type="button"
@@ -3471,7 +3701,7 @@ export function InitiativeListPanel({
               </div>
             ) : null}
           </div>
-          <div className="mt-4 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
+          <div className="mt-4 grid grid-cols-[minmax(0,6.5rem)_minmax(0,1fr)_minmax(0,1fr)_auto_auto] gap-1.5">
             <IconFilterSelect
               values={panelQuarterFilters}
               onToggle={(value) => setPanelQuarterFilters((prev) => toggleMultiFilter(prev, value, "all"))}
@@ -3488,11 +3718,21 @@ export function InitiativeListPanel({
               allValue="all"
             />
             <IconFilterSelect
-              values={mergedStatusFilterValues}
-              onToggle={handleMergedStatusToggle}
+              values={panelStatusFilters}
+              onToggle={handleStatusToggle}
               options={statusFilterOptions}
-              ariaLabel="Filter initiatives by status or health verdict"
+              ariaLabel="Filter initiatives by status"
               allValue="all"
+            />
+            <HealthFilterMenu
+              healthFilter={healthFilter}
+              onHealthFilterChange={onHealthFilterChange}
+              progressBasis={progressBasis}
+              onProgressBasisChange={onProgressBasisChange}
+              onAnyHealthPicked={() => {
+                if (!panelStatusFilters.includes("all")) setPanelStatusFilters(["all"]);
+                onUserPickedFilter?.();
+              }}
             />
             <button
               type="button"

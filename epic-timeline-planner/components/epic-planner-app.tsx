@@ -5754,6 +5754,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                       initiatives={initiatives}
                       activeMonth={initiativeListActiveMonth}
                       progressBasis={progressBasis}
+                      onProgressBasisChange={setProgressBasis}
                       planYear={selectedYear}
                       healthFilter={healthFilter}
                       onHealthFilterChange={handleHealthFilterChange}
