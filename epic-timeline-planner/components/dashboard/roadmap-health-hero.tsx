@@ -151,7 +151,7 @@ export function RoadmapHealthHero({
   const [isPanelExpanded, setIsPanelExpanded] = useState(true);
 
   return (
-    <div className="shrink-0 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 py-1.5 pl-2 pr-[20px]">
+    <div className="shrink-0 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 pt-1.5 pb-0 pl-2 pr-[20px]">
     <div className="relative rounded-lg border border-slate-200 bg-white overflow-hidden">
       {/* Row 1 — compact filter band. Title block stacks: H1 → roadmap
           subtitle → "Health calculation" filter, all left-aligned at the
