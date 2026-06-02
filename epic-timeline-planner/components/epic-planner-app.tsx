@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { fireApprovalConfetti } from "@/lib/approval-confetti";
 
 import { UserChip } from "@/components/auth/user-chip";
+import { RoadmapHealthHero } from "@/components/dashboard/roadmap-health-hero";
 import { EpicFormDialog } from "@/components/epics/epic-form-dialog";
 import { BacklogPlanningPanel } from "@/components/backlog/backlog-planning-panel";
 import { UsersWorkspacePanel } from "@/components/users/users-workspace-panel";
@@ -1387,6 +1388,11 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
    * chips visible, they probably want them to stay.
    */
   const [showGanttTeamChipsCtrl, setShowGanttTeamChipsCtrl] = useState(false);
+  /** Controlled mirror of the Gantt bar mode (initiatives vs epics) — lifted
+   *  so the hero's "Initiatives" / "Epics" stat blocks can flip it. */
+  const [roadmapBarModeCtrl, setRoadmapBarModeCtrl] = useState<"epics" | "initiatives">("epics");
+  /** Same mirror for the calendar header's sprint-chip row. */
+  const [showYearSprintChipsCtrl, setShowYearSprintChipsCtrl] = useState(false);
   /**
    * Tracks which filter lane the planner most recently activated — team,
    * health verdict, or execution status. Year-view (all-quarters) Gantt
@@ -5663,58 +5669,57 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             "overflow-hidden bg-gradient-to-br from-blue-50 via-violet-50 to-pink-50",
         )}
       >
-        {/* Global stats bar — full-bleed, chips portalled in from TimelineGrid.
-            UserChip lives at the LEFT edge so the signed-in user identity
-            is the first thing you see; summary chips sit on the right pushed
-            by ml-auto. */}
-        <div className="relative -mr-[5px] flex shrink-0 items-center gap-1 overflow-visible border-b border-slate-200 bg-white pl-[3.75rem] pr-6 py-3 shadow-sm sm:gap-1.5 md:gap-2">
-          {/* Bird-eye logo — clickable home button that resets the planner
-              to the full-year roadmap view (clears any drilled-in quarter or
-              month and any non-roadmap top mode). Wrapped in a white badge
-              with a hover lift so it reads as interactive. */}
-          <button
-            type="button"
-            onClick={() => {
-              // Reset every drill-in dimension so the planner lands on the
-              // all-quarters Gantt with the initiative middle panel open.
-              // Same shape as the roadmap-change reset above (search for
-              // setActiveQuarterViewTab("gantt")) — keep them in sync if
-              // either gains a new dimension.
-              setTopMode("roadmap");
-              setFocusedQuarterLabel(null);
-              setActiveTimelineMonth(null);
-              setActiveYearSprint(null);
-              setActiveSprintTab("kanban");
-              setActiveMonthPlanTab("epic-gantt");
-              setActiveQuarterViewTab("gantt");
-              setSprintStoryBoardTeamId(null);
-              router.replace("/");
-            }}
-            title="Back to all-quarters roadmap"
-            aria-label="Back to all-quarters roadmap"
-            className="group absolute left-1 top-1/2 inline-flex h-[59px] -translate-x-[5px] -translate-y-1/2 cursor-pointer items-start bg-white px-1 pb-[5px] pt-[4px] shadow-[6px_0_8px_-4px_rgba(15,23,42,0.10),0_6px_8px_-4px_rgba(15,23,42,0.22)] transition-transform duration-150 hover:scale-[1.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-          >
-            <Image
-              src="/downloads/Logo-simple.png"
-              alt="Bird Eye Viewer"
-              width={1024}
-              height={1024}
-              priority
-              quality={100}
-              sizes="44px"
-              className="block size-[50px] shrink-0 -translate-x-[3px] scale-[0.88] transition-transform duration-150 group-hover:rotate-[-4deg] group-hover:scale-[0.93]"
-            />
-          </button>
-          {/* Chip sits flush against the logo panel's right edge so the
-           *  flat left side of the user chip reads as a tab extending
-           *  from the logo. -ml-[3px] cancels the few pixels between the
-           *  bar's pl-[3.75rem] reserve and the logo card's actual right
-           *  edge (left-1 + -translate-x-[5px] + ~58px width). */}
-          <div className="-ml-[1px] mr-2 flex shrink-0 items-center pr-2 border-r border-slate-100">
-            <UserChip />
-          </div>
-          <div ref={setSummaryBarEl} className="ml-auto flex flex-wrap items-center justify-end gap-2 sm:gap-2.5 md:gap-3" />
-        </div>
+        {/* Roadmap Health hero — replaces the legacy top bar. Absorbs the
+            logo home button + UserChip and hosts the summary-chip portal
+            target (hidden) so TimelineGrid mounts still resolve. Adds the
+            metric blocks + donut breakdowns above the planner surface. */}
+        <RoadmapHealthHero
+          initiatives={initiatives}
+          roadmaps={roadmaps}
+          selectedRoadmap={selectedRoadmap}
+          selectedYear={selectedYear}
+          progressBasis={progressBasis}
+          onProgressBasisChange={setProgressBasis}
+          barMode={roadmapBarModeCtrl}
+          onBarModeChange={setRoadmapBarModeCtrl}
+          showTeamChips={showGanttTeamChipsCtrl}
+          onShowTeamChipsChange={handleShowGanttTeamChipsChange}
+          showSprintChips={showYearSprintChipsCtrl}
+          onShowSprintChipsChange={setShowYearSprintChipsCtrl}
+          summaryBarRef={setSummaryBarEl}
+          onYearChange={async (nextYear) => {
+            // Mirror the TimelineGrid onYearChange below — keep in sync.
+            if (nextYear === selectedYear) return;
+            setSelectedYear(nextYear);
+            await refresh(nextYear);
+            setFocusedQuarterLabel(null);
+            setActiveTimelineMonth(null);
+            setActiveYearSprint(null);
+            setActiveSprintTab("kanban");
+            setActiveMonthPlanTab("epic-gantt");
+            setActiveQuarterViewTab("gantt");
+            setSprintStoryBoardTeamId(null);
+          }}
+          onSelectRoadmap={handleSelectRoadmap}
+          onCreateRoadmap={handleCreateRoadmap}
+          onRenameRoadmap={handleRenameRoadmap}
+          onAddYearToRoadmap={handleAddYearToRoadmap}
+          onRemoveYearFromRoadmap={handleRemoveYearFromRoadmap}
+          onGetRoadmapCounts={handleGetRoadmapCounts}
+          onDeleteRoadmap={handleDeleteRoadmap}
+          onResetView={() => {
+            // Same reset shape as the legacy logo button — keep in sync.
+            setTopMode("roadmap");
+            setFocusedQuarterLabel(null);
+            setActiveTimelineMonth(null);
+            setActiveYearSprint(null);
+            setActiveSprintTab("kanban");
+            setActiveMonthPlanTab("epic-gantt");
+            setActiveQuarterViewTab("gantt");
+            setSprintStoryBoardTeamId(null);
+            router.replace("/");
+          }}
+        />
         <div
           className={cn(
             "mx-auto flex w-full max-w-[2550px] flex-row gap-1.5 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100",
@@ -6047,6 +6052,10 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 ganttTeamFilterExternal={ganttTeamFilter}
                 showGanttTeamChipsExternal={showGanttTeamChipsCtrl}
                 onShowGanttTeamChipsChange={handleShowGanttTeamChipsChange}
+                showYearSprintChipsExternal={showYearSprintChipsCtrl}
+                onShowYearSprintChipsChange={setShowYearSprintChipsCtrl}
+                roadmapBarModeExternal={roadmapBarModeCtrl}
+                onRoadmapBarModeChange={setRoadmapBarModeCtrl}
                 lastPickedLabelLane={lastPickedLabelLane}
                 initialInsightsScopeEpicId={insightsScopeEpicId}
                 initialInsightsScopeInitId={insightsScopeInitId}
