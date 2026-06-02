@@ -8318,7 +8318,7 @@ export function TimelineGrid({
                     const startMonth = fq.months[0];
                     const endMonth = fq.months[fq.months.length - 1];
                     return (
-                      <div className="relative z-[1] overflow-hidden rounded-md border border-slate-200 bg-white">
+                      <div className="relative z-[1] overflow-hidden rounded-md border border-slate-200 bg-white shadow-[0_4px_6px_-2px_rgba(15,23,42,0.08),0_2px_4px_-2px_rgba(15,23,42,0.05)]">
                         {/* Row 1: Single Q cell spanning the full width. */}
                         <button
                           type="button"
@@ -8967,7 +8967,7 @@ export function TimelineGrid({
                       Q4: { qBg: "bg-violet-50/55", qText: "text-violet-900", monthBg: "bg-violet-50/30", monthText: "text-violet-900", monthHover: "hover:bg-violet-50/80" },
                     };
                     return (
-                      <div className="relative z-[1] overflow-hidden rounded-md border border-slate-200 bg-white">
+                      <div className="relative z-[1] overflow-hidden rounded-md border border-slate-200 bg-white shadow-[0_4px_6px_-2px_rgba(15,23,42,0.08),0_2px_4px_-2px_rgba(15,23,42,0.05)]">
                         {/* Row 1: Quarter cells */}
                         <div className="grid min-w-0 border-b border-slate-200" style={yearQuarterHeaderGridStyle}>
                           {QUARTERS.map((quarter, qIdx) => {
@@ -9022,7 +9022,7 @@ export function TimelineGrid({
                                     onMonthPlanTabChange?.("epic-gantt");
                                   }}
                                   className={cn(
-                                    "relative flex w-full min-w-0 items-center justify-center px-1.5 py-3.5 text-center text-[13px] font-bold transition",
+                                    "relative flex w-full min-w-0 items-center justify-center px-1.5 py-5 text-center text-[13px] font-bold transition",
                                     !isLastMonthOverall && "border-r border-slate-200",
                                     tone?.monthBg ?? "bg-white",
                                     tone?.monthText ?? "text-slate-700",
