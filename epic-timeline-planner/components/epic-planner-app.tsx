@@ -5754,6 +5754,20 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             logo home button + UserChip and hosts the summary-chip portal
             target (hidden) so TimelineGrid mounts still resolve. Adds the
             metric blocks + donut breakdowns above the planner surface. */}
+        {/* Page-level right-edge white separator. The body-row already has
+            its own 18px separator column, but it only spans the height of
+            that row — this fixed element extends the same white strip up
+            past the hero so the strip runs from the very top to the very
+            bottom of the page. */}
+        <div
+          className="pointer-events-none fixed inset-y-0 right-5 z-40 w-[18px]"
+          aria-hidden
+        >
+          <div
+            className="pointer-events-none absolute inset-y-0 left-[15px] w-[6px] -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.10)]"
+            aria-hidden
+          />
+        </div>
         <RoadmapHealthHero
           initiatives={initiatives}
           roadmaps={roadmaps}
