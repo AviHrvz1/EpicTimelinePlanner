@@ -291,15 +291,18 @@ export function RoadmapSelector({
             "relative flex items-center",
             isSubtitle
               ? cn(
-                  "gap-1 rounded-md border bg-white px-2 py-1 shadow-sm transition",
+                  "gap-1 rounded-md border bg-gradient-to-r from-sky-50 via-indigo-50 to-violet-50 px-2 py-1 shadow-sm transition",
                   dropdownOpen
                     ? "border-indigo-400 ring-2 ring-indigo-200/60"
-                    : "border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/40",
+                    : "border-indigo-200/70 hover:border-indigo-300 hover:from-sky-100/70 hover:via-indigo-100/70 hover:to-violet-100/70",
                 )
               : null,
           )}
           onClick={isSubtitle ? () => { setDropdownOpen(true); inputRef.current?.focus(); } : undefined}
         >
+          {isSubtitle ? (
+            <MapIcon className="size-3.5 shrink-0 text-indigo-500" strokeWidth={2.1} aria-hidden />
+          ) : null}
           {(() => {
             const visibleText = dropdownOpen ? query : (selectedRoadmap?.name ?? "");
             const placeholder = roadmaps.length === 0 ? "Create roadmap…" : "Select…";
@@ -331,7 +334,7 @@ export function RoadmapSelector({
                   className={cn(
                     "cursor-pointer bg-transparent py-0 outline-none",
                     isSubtitle
-                      ? "h-5 pl-0 pr-0 text-[13px] font-medium text-slate-800 placeholder:text-slate-400 hover:text-indigo-700"
+                      ? "h-5 pl-0 pr-0 text-[13px] font-semibold text-indigo-900 placeholder:text-indigo-400 hover:text-indigo-700"
                       : "h-[28px] pl-1.5 pr-4 text-[12px] font-semibold text-indigo-900 placeholder:text-indigo-900/55",
                   )}
                   style={{ width: `${width}px` }}
@@ -641,19 +644,19 @@ export function RoadmapSelector({
       {years.length > 0 && (
         isSubtitle ? (
           <>
-            <div className="relative inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50/40 focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-200/60">
+            <div className="relative inline-flex items-center gap-1 rounded-md border border-indigo-200/70 bg-gradient-to-r from-sky-50 via-indigo-50 to-violet-50 px-2 py-1 shadow-sm transition hover:border-indigo-300 hover:from-sky-100/70 hover:via-indigo-100/70 hover:to-violet-100/70 focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-200/60">
               <select
                 value={year}
                 onChange={(e) => void onYearChange(Number(e.target.value))}
                 title="Switch year"
                 aria-label="Switch year"
-                className="appearance-none h-5 cursor-pointer bg-transparent py-0 pl-0 pr-3.5 text-[13px] font-medium tabular-nums text-slate-800 outline-none transition hover:text-indigo-700"
+                className="appearance-none h-5 cursor-pointer bg-transparent py-0 pl-0 pr-3.5 text-[13px] font-semibold tabular-nums text-indigo-900 outline-none transition hover:text-indigo-700"
               >
                 {years.map((y) => (
                   <option key={y} value={y} className="text-slate-900">{y}</option>
                 ))}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-1 top-1/2 size-3 -translate-y-1/2 text-slate-500" aria-hidden />
+              <ChevronDown className="pointer-events-none absolute right-1 top-1/2 size-3 -translate-y-1/2 text-indigo-500" aria-hidden />
             </div>
           </>
         ) : (

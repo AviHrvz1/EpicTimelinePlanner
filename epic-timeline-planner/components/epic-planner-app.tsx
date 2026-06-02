@@ -1396,10 +1396,11 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   /** Command bus: when the hero's Epic Estimates donut legend is clicked
    *  we bump the key so TimelineGrid's useEffect fires
    *  openEstEpicsPanel(tab). Stays null until the first click. */
+  type EstHeroTab = "estimated" | "unestimated" | "epicsNoDesc" | "storiesNoDesc";
   const [openEstPanelCmd, setOpenEstPanelCmd] = useState<
-    { tab: "estimated" | "unestimated"; key: number } | null
+    { tab: EstHeroTab; key: number } | null
   >(null);
-  const handleOpenEstPanel = useCallback((tab: "estimated" | "unestimated") => {
+  const handleOpenEstPanel = useCallback((tab: EstHeroTab) => {
     setOpenEstPanelCmd((prev) => ({ tab, key: (prev?.key ?? 0) + 1 }));
   }, []);
   /**

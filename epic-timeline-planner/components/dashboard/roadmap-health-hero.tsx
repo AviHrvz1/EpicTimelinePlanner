@@ -18,7 +18,9 @@ import {
 import { UserChip } from "@/components/auth/user-chip";
 import { RoadmapSelector } from "@/components/timeline/roadmap-selector";
 import { computeProgress, type HealthStatus } from "@/lib/progress";
+import { monthTeamLabelForId } from "@/lib/month-team-board";
 import { globalSprintFromMonthLane, sprintEndDate, sprintStartDate } from "@/lib/year-sprint";
+import { TeamAvatar } from "@/components/ui/team-avatar";
 import type { InitiativeItem, RoadmapItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -137,7 +139,9 @@ export function RoadmapHealthHero({
   onStatusFilterChange?: (next: Set<StoryExecStatus>) => void;
   /** Click handler for the Epic Estimates donut legend — opens the same
    *  popover the Gantt "Epic Est." chip opens, pre-scoped to the picked tab. */
-  onOpenEpicEstimatePanel?: (tab: "estimated" | "unestimated") => void;
+  onOpenEpicEstimatePanel?: (
+    tab: "estimated" | "unestimated" | "epicsNoDesc" | "storiesNoDesc",
+  ) => void;
 }) {
   const stats = useMemo(() => computeRoadmapStats(initiatives, selectedYear, progressBasis), [
     initiatives,
@@ -238,59 +242,55 @@ export function RoadmapHealthHero({
                 ]}
               />
             </div>
+            {/* Inline stats: Initiatives · Epics · Stories · Teams · Sprints,
+                pushed right next to the roadmap selector + Health calc. */}
+            <div className="ml-auto flex shrink-0 items-center gap-x-9">
+              <StatBlock
+                icon={<Zap className="size-7 text-blue-600" strokeWidth={1.9} aria-hidden />}
+                value={stats.initiativesCount}
+                label="Initiatives"
+                onClick={onBarModeChange ? () => onBarModeChange("initiatives") : undefined}
+                active={barMode === "initiatives"}
+                title="Show initiative bars on the Gantt"
+              />
+              <StatBlock
+                icon={<Folder className="size-7 text-violet-500" aria-hidden />}
+                value={stats.epicsCount}
+                label="Epics"
+                onClick={onBarModeChange ? () => onBarModeChange("epics") : undefined}
+                active={barMode === "epics"}
+                title="Show epic bars on the Gantt"
+              />
+              <StatBlock
+                icon={<BookOpen className="size-7 text-sky-500" aria-hidden />}
+                value={stats.storiesCount}
+                label="Stories"
+              />
+              <StatBlock
+                icon={<Users className="size-7 text-emerald-500" aria-hidden />}
+                value={stats.teamsCount}
+                label="Teams"
+                onClick={onShowTeamChipsChange ? () => onShowTeamChipsChange(!showTeamChips) : undefined}
+                active={showTeamChips}
+                title="Toggle team labels on the Gantt bars"
+              />
+              <StatBlock
+                icon={<Flag className="size-7 text-amber-500" aria-hidden />}
+                value={stats.sprintsCount}
+                label="Sprints"
+                onClick={onShowSprintChipsChange ? () => onShowSprintChipsChange(!showSprintChips) : undefined}
+                active={showSprintChips}
+                title="Toggle the sprint-chip row in the calendar header"
+              />
+            </div>
           </div>
           <div className="h-px w-full bg-slate-200/70" aria-hidden />
-          {/* Stat blocks + donuts — the original row 2 content. */}
-          <div className="flex w-full min-w-min flex-wrap items-center justify-end gap-x-5 gap-y-4">
-          <StatBlock
-            icon={<Zap className="size-7 text-blue-600" strokeWidth={1.9} aria-hidden />}
-            value={stats.initiativesCount}
-            label="Initiatives"
-            onClick={onBarModeChange ? () => onBarModeChange("initiatives") : undefined}
-            active={barMode === "initiatives"}
-            title="Show initiative bars on the Gantt"
-          />
-          <Divider />
-          <StatBlock
-            icon={<Folder className="size-7 text-violet-500" aria-hidden />}
-            value={stats.epicsCount}
-            label="Epics"
-            onClick={onBarModeChange ? () => onBarModeChange("epics") : undefined}
-            active={barMode === "epics"}
-            title="Show epic bars on the Gantt"
-          />
-          <Divider />
-          <StatBlock
-            icon={<BookOpen className="size-7 text-sky-500" aria-hidden />}
-            value={stats.storiesCount}
-            label="Stories"
-          />
-          <Divider />
-          <StatBlock
-            icon={<Users className="size-7 text-emerald-500" aria-hidden />}
-            value={stats.teamsCount}
-            label="Teams"
-            onClick={onShowTeamChipsChange ? () => onShowTeamChipsChange(!showTeamChips) : undefined}
-            active={showTeamChips}
-            title="Toggle team labels on the Gantt bars"
-          />
-          <Divider />
-          <StatBlock
-            icon={<Flag className="size-7 text-amber-500" aria-hidden />}
-            value={stats.sprintsCount}
-            label="Sprints"
-            onClick={onShowSprintChipsChange ? () => onShowSprintChipsChange(!showSprintChips) : undefined}
-            active={showSprintChips}
-            title="Toggle the sprint-chip row in the calendar header"
-          />
-          <Divider />
-          <StatBlock
-            icon={<ShieldCheck className="size-7 text-emerald-500" aria-hidden />}
-            value={stats.coveragePercent}
-            suffix="%"
-            label="Coverage"
-            subLabel={`(${stats.epicsScheduledCount}/${stats.epicsCount})`}
-          />
+          {/* Charts row — the original row 2 content, now without the
+              stats grid (stats moved up next to the roadmap selector).
+              justify-between spreads the four charts across the full
+              width of the panel with the dividers absorbing slack. */}
+          <div className="flex w-full min-w-min flex-nowrap items-center justify-between gap-x-6">
+          <TeamProgressCard rows={stats.teamProgress} />
           <Divider />
           <DonutCard
             title="Work Progress (all epics)"
@@ -366,6 +366,32 @@ export function RoadmapHealthHero({
             onSliceClick={
               onOpenEpicEstimatePanel
                 ? (label) => onOpenEpicEstimatePanel(label === "Estimated" ? "estimated" : "unestimated")
+                : undefined
+            }
+            extraLegendRows={
+              onOpenEpicEstimatePanel
+                ? [
+                    {
+                      label: "Stories w/o description",
+                      value: stats.storiesWithoutDescCount,
+                      pct: stats.storiesCount > 0
+                        ? Math.round((stats.storiesWithoutDescCount / stats.storiesCount) * 100)
+                        : 0,
+                      color: "#f59e0b",
+                      onClick: () => onOpenEpicEstimatePanel("storiesNoDesc"),
+                      title: "Open the Estimate Coverage panel · Stories without description tab",
+                    },
+                    {
+                      label: "Epics w/o description",
+                      value: stats.epicsWithoutDescCount,
+                      pct: stats.epicsCount > 0
+                        ? Math.round((stats.epicsWithoutDescCount / stats.epicsCount) * 100)
+                        : 0,
+                      color: "#ec4899",
+                      onClick: () => onOpenEpicEstimatePanel("epicsNoDesc"),
+                      title: "Open the Estimate Coverage panel · Epics without description tab",
+                    },
+                  ]
                 : undefined
             }
           />
@@ -475,22 +501,22 @@ function StatBlock({
           : "hover:bg-slate-50 ring-1 ring-transparent focus-visible:ring-indigo-300"),
       )}
     >
-      <span className="mt-[3px] shrink-0">{icon}</span>
+      <span className="mt-[2px] shrink-0 [&_svg]:size-6">{icon}</span>
       <div className="flex min-w-0 flex-col leading-tight">
         <span
           className={cn(
-            "text-[30px] font-semibold tabular-nums tracking-tight",
+            "text-[24px] font-semibold tabular-nums tracking-tight",
             active ? "text-indigo-900" : "text-slate-900",
           )}
         >
           {value}
           {suffix ? (
-            <span className="ml-0.5 text-[22px] font-semibold opacity-90">{suffix}</span>
+            <span className="ml-0.5 text-[18px] font-semibold opacity-90">{suffix}</span>
           ) : null}
         </span>
         <span
           className={cn(
-            "mt-0.5 text-[13px] font-medium leading-none",
+            "mt-0.5 text-[12px] font-medium leading-none",
             active ? "text-indigo-700" : "text-slate-500",
           )}
         >
@@ -505,7 +531,118 @@ function StatBlock({
 }
 
 function Divider() {
-  return <div className="mx-1 hidden h-16 w-px shrink-0 self-center bg-slate-200/80 sm:block" />;
+  return <div className="mx-0.5 hidden h-12 w-px shrink-0 self-center bg-slate-200/80 sm:block" />;
+}
+
+/** Compact "Team Progress (all epics)" card. Mirrors the insights chart
+ *  in spirit — one row per team with avatar, % done, est/left numbers,
+ *  and a horizontal progress bar — but trimmed to fit alongside the
+ *  three donut cards in the hero band. Rolls up across the entire
+ *  roadmap (all quarters) rather than the active month. */
+function TeamProgressCard({
+  rows,
+}: {
+  rows: Array<{
+    teamId: string;
+    label: string;
+    estTotal: number;
+    daysLeft: number;
+    doneDays: number;
+    donePct: number;
+    status: HealthStatus;
+  }>;
+}) {
+  return (
+    <div className="flex w-[640px] shrink-0 flex-col gap-2">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500">
+        Team Progress (all epics)
+      </span>
+      <div
+        className={cn(
+          "max-h-[135px] space-y-1 overflow-y-auto pr-1.5",
+          // Match the project's pastel scrollbar (initiative panel et al.)
+          "[scrollbar-color:theme(colors.indigo.100)_transparent]",
+          "[&::-webkit-scrollbar]:w-1.5",
+          "[&::-webkit-scrollbar-track]:bg-transparent",
+          "[&::-webkit-scrollbar-thumb]:rounded-full",
+          "[&::-webkit-scrollbar-thumb]:bg-gradient-to-b",
+          "[&::-webkit-scrollbar-thumb]:from-sky-100",
+          "[&::-webkit-scrollbar-thumb]:via-indigo-100",
+          "[&::-webkit-scrollbar-thumb]:to-violet-100",
+          "hover:[&::-webkit-scrollbar-thumb]:from-sky-200",
+          "hover:[&::-webkit-scrollbar-thumb]:via-indigo-200",
+          "hover:[&::-webkit-scrollbar-thumb]:to-violet-200",
+        )}
+        style={{ scrollbarWidth: "thin" }}
+      >
+        {rows.length === 0 ? (
+          <div className="text-[13px] text-slate-400">No data</div>
+        ) : (
+          rows.map((row) => {
+            const atRisk = row.status === "atRisk" || row.status === "overdue";
+            const watch = row.status === "watch";
+            const allDone = row.daysLeft === 0 && row.estTotal > 0;
+            return (
+              <div key={row.teamId} className="rounded-md px-1 py-0.5">
+                <div className="flex items-center gap-2">
+                  <TeamAvatar
+                    slug={row.teamId === "__unassigned__" ? null : row.teamId}
+                    sizePx={18}
+                    rounded="rounded-full"
+                    className={cn(
+                      "ring-1",
+                      atRisk
+                        ? "ring-amber-200/80"
+                        : allDone
+                          ? "ring-emerald-200/80"
+                          : "ring-violet-200/80",
+                    )}
+                    fallback={
+                      <span
+                        className={cn(
+                          "inline-flex size-[18px] shrink-0 items-center justify-center rounded-full text-[9px] font-bold ring-1",
+                          atRisk
+                            ? "bg-amber-100 text-amber-800 ring-amber-200/80"
+                            : allDone
+                              ? "bg-emerald-100 text-emerald-700 ring-emerald-200/80"
+                              : "bg-violet-100 text-violet-700 ring-violet-200/80",
+                        )}
+                      >
+                        {row.label.slice(0, 2).toUpperCase()}
+                      </span>
+                    }
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="inline-flex min-w-0 items-baseline gap-1">
+                        <span className="truncate text-[12px] font-semibold text-slate-800">{row.label}</span>
+                        <span className="shrink-0 text-[10.5px] font-semibold tabular-nums text-slate-500">{row.donePct}%</span>
+                      </span>
+                      <span className="shrink-0 text-[10.5px] tabular-nums text-slate-500">
+                        <span className="font-semibold text-slate-700">{row.estTotal}d</span>
+                        <span className="mx-1 text-slate-300">·</span>
+                        <span className={cn("font-semibold", atRisk || watch ? "text-amber-700" : "text-slate-700")}>{row.daysLeft}d</span>
+                        <span className="ml-0.5 text-slate-400">left</span>
+                      </span>
+                    </div>
+                    <div className="mt-0.5 relative h-1.5 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/50">
+                      <div
+                        className={cn(
+                          "absolute inset-y-0 left-0 rounded-full transition-all",
+                          atRisk ? "bg-amber-400" : allDone ? "bg-emerald-400" : "bg-indigo-400",
+                        )}
+                        style={{ width: `${row.donePct}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
 }
 
 function DonutCard({
@@ -516,6 +653,7 @@ function DonutCard({
   sideTotal,
   onSliceClick,
   activeLabels,
+  extraLegendRows,
 }: {
   title: string;
   /** When provided, rendered in the donut's center. Pass `null` to skip
@@ -534,6 +672,18 @@ function DonutCard({
   onSliceClick?: (label: string) => void;
   /** Labels currently selected — rendered with a pressed visual. */
   activeLabels?: Set<string>;
+  /** Extra legend rows rendered below the slice rows. Not part of the
+   *  donut data — used to surface adjacent metrics (e.g. epics /
+   *  stories without description) as click-throughs. Pct is pre-computed
+   *  by the caller (each extra row may have its own denominator). */
+  extraLegendRows?: Array<{
+    label: string;
+    value: number;
+    pct: number;
+    color: string;
+    onClick: () => void;
+    title?: string;
+  }>;
 }) {
   const total = slices.reduce((sum, s) => sum + s.value, 0);
   return (
@@ -541,7 +691,7 @@ function DonutCard({
       <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500">
         {title}
       </span>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-6">
         <DonutSvg
           total={total}
           slices={slices}
@@ -566,7 +716,7 @@ function DonutCard({
                       "focus-visible:ring-2 focus-visible:ring-indigo-300",
                       active
                         ? "bg-indigo-50 ring-1 ring-indigo-200/80"
-                        : "ring-1 ring-transparent hover:bg-slate-50",
+                        : "ring-1 ring-transparent hover:bg-gradient-to-r hover:from-sky-50 hover:via-indigo-50 hover:to-violet-50 hover:ring-indigo-200/70 hover:shadow-sm",
                     )}
                   >
                     <span className="flex items-center gap-2 whitespace-nowrap">
@@ -610,6 +760,34 @@ function DonutCard({
           {total === 0 ? (
             <li className="col-span-3 text-slate-400">No data</li>
           ) : null}
+          {extraLegendRows?.map((row) => (
+            <button
+              key={`extra-${row.label}`}
+              type="button"
+              onClick={row.onClick}
+              title={row.title ?? row.label}
+              className={cn(
+                "col-span-3 grid grid-cols-subgrid items-center gap-x-4 rounded-md px-1.5 py-0.5 text-left transition outline-none",
+                "ring-1 ring-transparent hover:bg-gradient-to-r hover:from-sky-50 hover:via-indigo-50 hover:to-violet-50 hover:ring-indigo-200/70 hover:shadow-sm",
+                "focus-visible:ring-2 focus-visible:ring-indigo-300",
+              )}
+            >
+              <span className="flex items-center gap-2 whitespace-nowrap">
+                <span
+                  className="inline-block size-2 shrink-0 rounded-full"
+                  style={{ background: row.color }}
+                  aria-hidden
+                />
+                <span className="text-slate-700">{row.label}</span>
+              </span>
+              <span className="text-left font-semibold tabular-nums text-slate-900">
+                {row.value}
+              </span>
+              <span className="text-left text-[12px] tabular-nums text-slate-500">
+                ({row.pct}%)
+              </span>
+            </button>
+          ))}
         </ul>
         {sideTotal ? (
           <div className="ml-2 flex flex-col items-start leading-tight">
@@ -650,7 +828,7 @@ function DonutSvg({
   let cumulative = 0;
   return (
     <div className="relative shrink-0">
-      <svg viewBox="-50 -50 100 100" className="size-[140px]" role="img" aria-label={`Total: ${total}`}>
+      <svg viewBox="-50 -50 100 100" className="size-[160px]" role="img" aria-label={`Total: ${total}`}>
         <circle cx="0" cy="0" r={radius} fill="none" stroke="#e2e8f0" strokeWidth={strokeWidth} />
         {total > 0
           ? slices.map((slice) => {
@@ -742,8 +920,30 @@ function computeRoadmapStats(
    *  vs not. `daysSum` is the total estimated days across the estimated epics —
    *  used as the donut center so planners see total estimated effort at a glance. */
   const epicEstimates = { estimated: 0, unestimated: 0, daysSum: 0 };
+  /** Description coverage — counts of epics / stories that don't have any
+   *  description text. Surfaces as click-throughs on the Epic Estimates
+   *  card legend. */
+  let epicsWithoutDescCount = 0;
+  let storiesWithoutDescCount = 0;
   const teamIds = new Set<string>();
   const sprintIds = new Set<number>();
+  /** Per-team aggregate for the Team Progress card. Sums story-level
+   *  estimatedDays / daysLeft across every epic owned by the team, and
+   *  rolls the worst per-epic health status up to the team. */
+  type TeamAcc = {
+    teamId: string;
+    estTotal: number;
+    daysLeft: number;
+    status: HealthStatus;
+  };
+  const teamAccs = new Map<string, TeamAcc>();
+  const STATUS_RANK_LOCAL: Record<HealthStatus, number> = {
+    done: 0,
+    onTrack: 0,
+    watch: 1,
+    atRisk: 2,
+    overdue: 3,
+  };
 
   for (const initiative of initiatives) {
     for (const epic of initiative.epics ?? []) {
@@ -758,9 +958,11 @@ function computeRoadmapStats(
       } else {
         epicEstimates.unestimated += 1;
       }
+      if (!(epic.description ?? "").trim()) epicsWithoutDescCount += 1;
       const team = (epic.team ?? "").trim();
       if (team) teamIds.add(team);
 
+      let epicHealth: HealthStatus | null = null;
       if (epic.planStartMonth != null && epic.planEndMonth != null) {
         const startSprint = globalSprintFromMonthLane(
           epic.planStartMonth,
@@ -783,11 +985,23 @@ function computeRoadmapStats(
         if (verdict != null) {
           healthDistribution[verdict] = (healthDistribution[verdict] ?? 0) + 1;
           healthDistribution.total += 1;
+          epicHealth = verdict;
         }
+      }
+
+      const teamKey = team || "__unassigned__";
+      let teamAcc = teamAccs.get(teamKey);
+      if (!teamAcc) {
+        teamAcc = { teamId: teamKey, estTotal: 0, daysLeft: 0, status: "onTrack" };
+        teamAccs.set(teamKey, teamAcc);
+      }
+      if (epicHealth && STATUS_RANK_LOCAL[epicHealth] > STATUS_RANK_LOCAL[teamAcc.status]) {
+        teamAcc.status = epicHealth;
       }
 
       for (const story of epic.userStories ?? []) {
         storiesCount += 1;
+        if (!(story.description ?? "").trim()) storiesWithoutDescCount += 1;
         if (story.sprint != null) sprintIds.add(story.sprint);
         switch (story.status) {
           case "inProgress":
@@ -803,12 +1017,42 @@ function computeRoadmapStats(
           default:
             workProgress.todo += 1;
         }
+        const est = Math.max(0, Number(story.estimatedDays ?? 0));
+        const left = Math.max(
+          0,
+          story.status === "done"
+            ? 0
+            : Number(story.daysLeft ?? story.estimatedDays ?? 0),
+        );
+        teamAcc.estTotal += est;
+        teamAcc.daysLeft += left;
       }
     }
   }
 
   const coveragePercent =
     epicsCount === 0 ? 0 : Math.round((epicsScheduledCount / epicsCount) * 100);
+
+  const teamProgress = Array.from(teamAccs.values())
+    .filter((t) => t.estTotal > 0)
+    .map((t) => {
+      const doneDays = Math.max(0, t.estTotal - t.daysLeft);
+      const donePct = t.estTotal > 0 ? Math.round((doneDays / t.estTotal) * 100) : 0;
+      const label =
+        t.teamId === "__unassigned__"
+          ? "Unassigned"
+          : monthTeamLabelForId(t.teamId) ?? t.teamId;
+      return {
+        teamId: t.teamId,
+        label,
+        estTotal: t.estTotal,
+        daysLeft: t.daysLeft,
+        doneDays,
+        donePct,
+        status: t.status,
+      };
+    })
+    .sort((a, b) => b.estTotal - a.estTotal);
 
   return {
     initiativesCount,
@@ -821,5 +1065,8 @@ function computeRoadmapStats(
     workProgress,
     healthDistribution,
     epicEstimates,
+    epicsWithoutDescCount,
+    storiesWithoutDescCount,
+    teamProgress,
   };
 }

@@ -1702,7 +1702,10 @@ type TimelineGridProps = {
   /** Imperative "open the Epic Estimate Coverage panel" command from the
    *  parent (the dashboard hero donut). TimelineGrid watches the key —
    *  whenever it bumps, openEstEpicsPanel(tab) fires. Null = idle. */
-  openEstPanelCmd?: { tab: "estimated" | "unestimated"; key: number } | null;
+  openEstPanelCmd?: {
+    tab: "estimated" | "unestimated" | "epicsNoDesc" | "storiesNoDesc";
+    key: number;
+  } | null;
   /** Tracks which filter the planner most recently activated (team / health
    *  / status). Year-roadmap bars use this to render exactly one label per
    *  bar — the latest pick wins, instead of falling back to a static
