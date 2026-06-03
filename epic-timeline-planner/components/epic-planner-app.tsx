@@ -5834,23 +5834,29 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             // tall enough that the page can scroll down to reveal more
             // of them rather than the panels compressing.
             (topMode === "roadmap" || topMode === "backlog" || topMode === "dashboard" || topMode === "users") && "min-h-[100vh]",
-            topMode !== "backlog" && (isModeRailExpanded ? "overflow-x-visible" : "overflow-x-hidden"),
+            topMode !== "backlog" && (isModeRailExpanded ? "overflow-x-visible" : "overflow-x-clip"),
           )}
         >
           <div
             className={cn(
               "flex min-h-0 min-w-0 flex-1 flex-col gap-5",
               topMode === "dashboard" && "pt-2",
+              // Unified-scroll: `overflow-x-clip` so the browser does NOT
+              // coerce `overflow-y: visible` to `auto`.
               topMode === "backlog"
-                ? "h-full min-h-0 overflow-x-hidden overflow-y-visible"
-                : "overflow-x-hidden overflow-y-visible",
+                ? "h-full min-h-0 overflow-x-clip overflow-y-visible"
+                : "overflow-x-clip overflow-y-visible",
             )}
           >
             {topMode === "roadmap" ? (
             <div
               ref={layoutRef}
               className={cn(
-                "grid min-h-0 flex-1 items-stretch",
+                // Unified-scroll: drop `min-h-0` so the grid grows with its
+                // content. `items-start` so each column ends at its own
+                // content bottom — the Gantt no longer gets stretched to
+                // match the taller initiative panel.
+                "grid flex-1 items-start",
                 leftRailLockedClosed ? "gap-x-0" : "gap-x-0",
                 isResizingPanel && "select-none",
               )}
@@ -5863,7 +5869,9 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             >
               <div
                 className={cn(
-                  "relative min-h-0 overflow-hidden rounded-xl bg-white/90 motion-reduce:transition-none mt-2 mb-2 ml-2 shadow-xl",
+                  // Unified-scroll: panel column grows with content; `overflow-x-clip`
+                  // (not -hidden) avoids the `overflow-y: visible` → `auto` coercion.
+                  "relative overflow-x-clip overflow-y-visible rounded-xl bg-white/90 motion-reduce:transition-none mt-2 mb-2 ml-2 shadow-xl",
                   !isResizingPanel && !suppressLeftPanelTransition && "transition-[width] duration-[320ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
                   leftRailLockedClosed && "min-w-0 border-0 p-0",
                 )}
@@ -5877,7 +5885,8 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               >
                 <div
                   className={cn(
-                    "flex h-full min-h-0 motion-reduce:transition-none",
+                    // Unified-scroll: panel rail grows with content; no h-full/min-h-0.
+                    "flex motion-reduce:transition-none",
                     !suppressLeftPanelTransition && "transition-transform duration-[320ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
                     isLeftPanelHidden && "pointer-events-none",
                   )}
@@ -5886,7 +5895,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                     transform: isLeftPanelHidden ? "translateX(-100%)" : "translateX(0)",
                   }}
                 >
-                  <div className="h-full min-h-0 min-w-0 shrink-0 overflow-hidden rounded-xl bg-white" style={{ width: panelWidth }}>
+                  <div className="min-w-0 shrink-0 overflow-x-clip overflow-y-visible rounded-xl bg-white" style={{ width: panelWidth }}>
                     <InitiativeListPanel
                       initiatives={initiatives}
                       activeMonth={initiativeListActiveMonth}
@@ -6078,7 +6087,9 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               )}
               <div
                 ref={planningRightSurfaceRef}
-                className="mt-2 mb-2 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-r-xl shadow-xl"
+                // Unified-scroll: Gantt column grows with content;
+                // `overflow-x-clip` to avoid coercing `overflow-y-visible`.
+                className="mt-2 mb-2 flex min-w-0 flex-col overflow-x-clip overflow-y-visible rounded-r-xl shadow-xl"
               >
                 {(() => {
                   // Closed-year snapshot strip — mounted above the timeline

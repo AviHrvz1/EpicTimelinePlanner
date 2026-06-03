@@ -269,7 +269,10 @@ function StripedGanttLaneScrollArea({
   id,
   columnCount,
   rowGapClass,
-  minHeightStyle = { minHeight: "max(100%, calc(100dvh - 26rem))" },
+  // Unified-scroll + responsive: the lane sizes to its actual rows.
+  // Callers can pass `minHeightStyle` to add a floor where it matters
+  // (e.g. drop targets in sparse views).
+  minHeightStyle,
   noScrollbar = false,
   children,
 }: {
@@ -285,8 +288,8 @@ function StripedGanttLaneScrollArea({
     <div
       id={id}
       className={cn(
-        "relative z-10 flex min-h-0 basis-0 flex-1 flex-col overflow-y-auto overscroll-contain",
-        noScrollbar && "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        // Unified-scroll: vertical scroll bubbles to the page scroller.
+        "relative z-10 flex min-h-0 basis-0 flex-1 flex-col overflow-y-visible",
       )}
     >
       <div className="relative isolate flex w-full flex-shrink-0 flex-col" style={minHeightStyle}>
@@ -5401,7 +5404,10 @@ export function TimelineGrid({
           <div
             className={cn(
               "relative isolate flex min-h-0 min-w-0 flex-1 flex-col bg-white pl-0 pr-0 pb-1 sm:pl-0 sm:pr-0 sm:pb-1",
-              !yearRoadmapHScroll && "overflow-x-hidden",
+              // Unified-scroll: `overflow-x-clip` (not -hidden) so the browser
+// does NOT coerce `overflow-y: visible` to `auto`, which would
+// resurrect an internal vertical scrollbar on the Gantt panel.
+!yearRoadmapHScroll && "overflow-x-clip",
               roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
             )}
           >
@@ -5409,14 +5415,22 @@ export function TimelineGrid({
             <div
               className={cn(
                 "relative flex min-h-0 w-full flex-1 flex-col",
-                !yearRoadmapHScroll && "overflow-x-hidden",
+                // Unified-scroll: `overflow-x-clip` (not -hidden) so the browser
+// does NOT coerce `overflow-y: visible` to `auto`, which would
+// resurrect an internal vertical scrollbar on the Gantt panel.
+!yearRoadmapHScroll && "overflow-x-clip",
               )}
             >
               <div
                 id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                 className={cn(
-                  "relative z-10 min-h-0 flex-1 space-y-0.5 overflow-y-auto",
-                  !yearRoadmapHScroll && "overflow-x-hidden",
+                  // Unified-scroll: vertical scroll bubbles up to the
+                  // page scroller (main element).
+                  "relative z-10 min-h-0 flex-1 space-y-0.5 overflow-y-visible",
+                  // Unified-scroll: `overflow-x-clip` (not -hidden) so the browser
+// does NOT coerce `overflow-y: visible` to `auto`, which would
+// resurrect an internal vertical scrollbar on the Gantt panel.
+!yearRoadmapHScroll && "overflow-x-clip",
                 )}
               >
               <GanttLaneSprintBackdrop columnCount={ganttLaneColumnCount} />
@@ -5515,26 +5529,9 @@ export function TimelineGrid({
                   </div>
                 </div>
               ))}
-              {/* Trailing empty rows extend the zebra pattern below the
-               *  last initiative so the unused area at the bottom of the
-               *  Gantt reads as part of the same striped grid (instead of
-               *  blank white space). 24 placeholders is enough to cover
-               *  any realistic viewport height; the scroll container
-               *  clips overflow. */}
-              {Array.from({ length: 24 }).map((_, padIdx) => {
-                const stripeIdx = ganttHealthFilteredYearInitiativeRows.length + padIdx;
-                return (
-                  <div
-                    key={`year-init-row-pad-${padIdx}`}
-                    aria-hidden
-                    className={cn(
-                      "relative min-w-0 z-10 py-1.5 border-b border-slate-200/50",
-                      stripeIdx % 2 === 1 && "bg-slate-100/55",
-                    )}
-                    style={{ minHeight: 52 }}
-                  />
-                );
-              })}
+              {/* Unified-scroll: phantom padding rows removed — the lane
+               *  now ends at the last initiative row and the page
+               *  scrollbar drives further vertical movement. */}
               </div>
             </div>
           </div>
@@ -5542,7 +5539,10 @@ export function TimelineGrid({
           <div
             className={cn(
               "relative isolate flex min-h-0 min-w-0 flex-1 flex-col bg-white pl-0 pr-0 pb-1 sm:pl-0 sm:pr-0 sm:pb-1",
-              !yearRoadmapHScroll && "overflow-x-hidden",
+              // Unified-scroll: `overflow-x-clip` (not -hidden) so the browser
+// does NOT coerce `overflow-y: visible` to `auto`, which would
+// resurrect an internal vertical scrollbar on the Gantt panel.
+!yearRoadmapHScroll && "overflow-x-clip",
               roadmapLaneTodayLeft != null && "pt-5 sm:pt-6",
             )}
           >
@@ -5550,14 +5550,22 @@ export function TimelineGrid({
             <div
               className={cn(
                 "relative flex min-h-0 w-full flex-1 flex-col",
-                !yearRoadmapHScroll && "overflow-x-hidden",
+                // Unified-scroll: `overflow-x-clip` (not -hidden) so the browser
+// does NOT coerce `overflow-y: visible` to `auto`, which would
+// resurrect an internal vertical scrollbar on the Gantt panel.
+!yearRoadmapHScroll && "overflow-x-clip",
               )}
             >
               <div
                 id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                 className={cn(
-                  "relative z-10 min-h-0 flex-1 space-y-0.5 overflow-y-auto",
-                  !yearRoadmapHScroll && "overflow-x-hidden",
+                  // Unified-scroll: vertical scroll bubbles up to the
+                  // page scroller (main element).
+                  "relative z-10 min-h-0 flex-1 space-y-0.5 overflow-y-visible",
+                  // Unified-scroll: `overflow-x-clip` (not -hidden) so the browser
+// does NOT coerce `overflow-y: visible` to `auto`, which would
+// resurrect an internal vertical scrollbar on the Gantt panel.
+!yearRoadmapHScroll && "overflow-x-clip",
                 )}
               >
               <GanttLaneSprintBackdrop columnCount={ganttLaneColumnCount} />
@@ -5724,23 +5732,9 @@ export function TimelineGrid({
                   </div>
                 </div>
               ))}
-              {/* Trailing empty rows extend the zebra pattern below the
-               *  last epic so the unused area at the bottom of the
-               *  Gantt reads as part of the same striped grid. */}
-              {Array.from({ length: 24 }).map((_, padIdx) => {
-                const stripeIdx = ganttHealthFilteredYearEpicRows.length + padIdx;
-                return (
-                  <div
-                    key={`year-epic-row-pad-${padIdx}`}
-                    aria-hidden
-                    className={cn(
-                      "relative min-w-0 z-10 py-1.5 border-b border-slate-200/50",
-                      stripeIdx % 2 === 1 && "bg-slate-100/55",
-                    )}
-                    style={{ minHeight: 52 }}
-                  />
-                );
-              })}
+              {/* Unified-scroll: phantom padding rows removed — the lane
+               *  now ends at the last epic row and the page scrollbar
+               *  drives further vertical movement. */}
               </div>
             </div>
           </div>
@@ -6198,7 +6192,7 @@ export function TimelineGrid({
   const chipsToolbarRow = (suppressInlineChips || summaryBarPortalElement)
     ? null
     : (
-        <div className="mt-0 mb-2 -ml-5 -mr-4 flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-1.5 px-5 py-0.5">
+        <div className="sticky top-0 z-40 mt-0 mb-2 -ml-5 -mr-4 flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-1.5 bg-white/90 px-5 py-0.5 backdrop-blur supports-[backdrop-filter]:bg-white/75">
           {sprintKanbanSummaryStats ? summarySprintChipsJsx : summaryYearChipsJsx}
         </div>
       );
@@ -6206,7 +6200,9 @@ export function TimelineGrid({
   const timelineHeaderRow = (
       <div
         className={cn(
-          "relative z-30 mt-2 mb-5 -ml-5 -mr-4 flex min-w-0 shrink-0 items-center gap-2 overflow-visible rounded-none border-y border-indigo-200 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 py-2 pl-5 pr-4 shadow-[inset_8px_0_10px_-4px_rgba(165,180,252,0.18),inset_-8px_0_10px_-4px_rgba(165,180,252,0.18)] ring-0",
+          // Unified-scroll: pin the breadcrumb row right under the chip toolbar so
+          // it stays in view while the Gantt scrolls underneath.
+          "sticky top-9 z-30 mt-2 mb-5 -ml-5 -mr-4 flex min-w-0 shrink-0 items-center gap-2 overflow-visible rounded-none border-y border-indigo-200 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 py-2 pl-5 pr-4 shadow-[inset_8px_0_10px_-4px_rgba(165,180,252,0.18),inset_-8px_0_10px_-4px_rgba(165,180,252,0.18)] ring-0",
           useRoadmapGanttChipTrack && "min-w-0",
         )}
       >
@@ -6730,7 +6726,9 @@ export function TimelineGrid({
         key={isInsightsSurfaceRender ? `insights-${activeMonth ?? "year"}-${focusedQuarterLabel ?? "all"}` : "planning-surface"}
         ref={timelineContentScrollRef}
         className={cn(
-          "flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain",
+          // Unified-scroll: planning surface grows tall and the page
+          // scrollbar handles vertical scrolling.
+          "flex min-h-0 flex-1 flex-col overflow-y-visible",
           showCapacityPlanningScrollbar
             ? "min-w-0 [scrollbar-gutter:stable] [scrollbar-width:thin]"
             : "planning-surface-scroll",
@@ -7300,7 +7298,6 @@ export function TimelineGrid({
                         columnCount={2}
                         rowGapClass="space-y-2"
                         noScrollbar
-                        minHeightStyle={{ minHeight: "72rem" }}
                       >
                         {roadmapBarMode === "initiatives" && ganttSearchAppliedMonthInitiativeRows.length === 0 ? (
                           <div className="h-0 shrink-0 overflow-hidden" aria-hidden />
@@ -7433,47 +7430,10 @@ export function TimelineGrid({
                             );
                           })
                         )}
-                        {/* Trailing empty rows extend the zebra pattern
-                         *  below the last month-view row — matches the
-                         *  year and single-quarter Gantt views. The
-                         *  stripe offset honors which mode is active so
-                         *  the alternating pattern stays continuous from
-                         *  the last real row. */}
-                        {(() => {
-                          const realCount =
-                            roadmapBarMode === "initiatives"
-                              ? ganttHealthFilteredMonthInitiativeRows.length
-                              : ganttHealthFilteredMonthEpicRows.length;
-                          if (realCount === 0) return null;
-                          // Day-level subdivisions used by every pad row's
-                          // backdrop so vertical day lines continue from
-                          // the last real row down to the bottom of the
-                          // scroll area (instead of stopping abruptly).
-                          const monthDaySubdivisions: readonly number[] = [
-                            15,
-                            Math.max(1, daysInMonth(currentYear, activeMonth) - 15),
-                          ];
-                          return Array.from({ length: 24 }).map((_, padIdx) => {
-                            const stripeIdx = realCount + padIdx;
-                            return (
-                              <div
-                                key={`m-row-pad-${padIdx}`}
-                                aria-hidden
-                                className={cn(
-                                  "relative border-b border-slate-200/50",
-                                  stripeIdx % 2 === 1 && "bg-slate-100/55",
-                                )}
-                                style={{ minHeight: 56 }}
-                              >
-                                <GanttLaneSprintBackdrop
-                                  columnCount={2}
-                                  className="gap-0"
-                                  daySubdivisions={monthDaySubdivisions}
-                                />
-                              </div>
-                            );
-                          });
-                        })()}
+                        {/* Unified-scroll: phantom padding rows removed —
+                         *  the month-view lane now ends at the last real
+                         *  row and the page scrollbar drives further
+                         *  vertical movement. */}
                       </StripedGanttLaneScrollArea>
                       {(roadmapBarMode === "initiatives" && ganttSearchAppliedMonthInitiativeRows.length === 0) ||
                       (roadmapBarMode !== "initiatives" && ganttSearchAppliedMonthEpicRows.length === 0) ? (
@@ -7819,7 +7779,8 @@ export function TimelineGrid({
                   "min-h-0 min-w-0 flex-1",
                   !panelHScroll &&
                     yearRoadmapHScroll &&
-                    "overflow-x-auto overflow-y-hidden [scrollbar-gutter:stable]",
+                    // Horizontal scroll only — vertical bubbles to the page.
+                    "overflow-x-auto overflow-y-visible [scrollbar-gutter:stable]",
                 )}
               >
                 <div
@@ -8021,8 +7982,7 @@ export function TimelineGrid({
                           id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                           columnCount={ganttLaneColumnCount}
                           rowGapClass="space-y-2"
-                          minHeightStyle={{ minHeight: "72rem" }}
-                        >
+                          >
                           <div className="h-0 shrink-0 overflow-hidden" aria-hidden />
                         </StripedGanttLaneScrollArea>
                         <div className="pointer-events-none absolute inset-0 z-[20] flex justify-center px-4 pt-[clamp(1.5rem,11vh,7rem)] sm:px-6 sm:pt-[clamp(2rem,14vh,9rem)]">
@@ -8041,7 +8001,6 @@ export function TimelineGrid({
                         id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                         columnCount={ganttLaneColumnCount}
                         rowGapClass="space-y-2"
-                        minHeightStyle={{ minHeight: "72rem" }}
                       >
                         {ganttHealthFilteredQuarterInitiativeRows.map((group, idx) => (
                           <div
@@ -8121,22 +8080,8 @@ export function TimelineGrid({
                             </div>
                           </div>
                         ))}
-                        {/* Trailing empty rows extend the zebra pattern
-                         *  below the last quarter initiative. */}
-                        {Array.from({ length: 24 }).map((_, padIdx) => {
-                          const stripeIdx = ganttHealthFilteredQuarterInitiativeRows.length + padIdx;
-                          return (
-                            <div
-                              key={`q-init-row-pad-${padIdx}`}
-                              aria-hidden
-                              className={cn(
-                                "relative min-w-0 z-10 py-2.5 border-b border-slate-200/50",
-                                stripeIdx % 2 === 1 && "bg-slate-100/55",
-                              )}
-                              style={{ minHeight: 60 }}
-                            />
-                          );
-                        })}
+                        {/* Unified-scroll: phantom quarter-initiative
+                         *  padding rows removed. */}
                       </StripedGanttLaneScrollArea>
                     )
                   ) : quarterRoadmapEpics.length === 0 ? (
@@ -8149,7 +8094,6 @@ export function TimelineGrid({
                         id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                         columnCount={ganttLaneColumnCount}
                         rowGapClass="space-y-0.5"
-                        minHeightStyle={{ minHeight: "72rem" }}
                       >
                         <div className="h-0 shrink-0 overflow-hidden" aria-hidden />
                       </StripedGanttLaneScrollArea>
@@ -8169,7 +8113,6 @@ export function TimelineGrid({
                       id={TIMELINE_GANTT_ROWS_CONTAINER_ID}
                       columnCount={ganttLaneColumnCount}
                       rowGapClass="space-y-0.5"
-                      minHeightStyle={{ minHeight: "72rem" }}
                     >
                       {ganttHealthFilteredQuarterEpicRows.map((group, idx) => (
                         <div
@@ -8304,22 +8247,8 @@ export function TimelineGrid({
                           </div>
                         </div>
                       ))}
-                      {/* Trailing empty rows extend the zebra pattern
-                       *  below the last quarter epic. */}
-                      {Array.from({ length: 24 }).map((_, padIdx) => {
-                        const stripeIdx = ganttHealthFilteredQuarterEpicRows.length + padIdx;
-                        return (
-                          <div
-                            key={`q-epic-row-pad-${padIdx}`}
-                            aria-hidden
-                            className={cn(
-                              "relative min-w-0 z-10 py-2.5 border-b border-slate-200/50",
-                              stripeIdx % 2 === 1 && "bg-slate-100/55",
-                            )}
-                            style={{ minHeight: 60 }}
-                          />
-                        );
-                      })}
+                      {/* Unified-scroll: phantom quarter-epic padding
+                       *  rows removed. */}
                     </StripedGanttLaneScrollArea>
                   )}
                   </div>
@@ -8337,7 +8266,9 @@ export function TimelineGrid({
           activeMonth == null &&
             quarterViewTab === "gantt" &&
             isFullYearGanttLayout &&
-            "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden",
+            // Unified-scroll: clip horizontally without forcing an inner
+            // vertical scrollbar.
+            "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip",
           hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]",
         )}
       >
@@ -8667,10 +8598,10 @@ export function TimelineGrid({
   );
 
   return (
-    <div className="relative flex h-full min-h-0 min-w-0 w-full flex-col overflow-x-hidden overflow-y-hidden rounded-xl border border-indigo-200 bg-card py-5 pl-5 pr-4 shadow-lg ring-1 ring-black/5">
+    <div className="relative flex min-h-0 min-w-0 w-full flex-col overflow-x-clip overflow-y-visible rounded-xl border border-indigo-200 bg-card py-5 pl-5 pr-4 shadow-lg ring-1 ring-black/5">
       <div ref={yearRoadmapMeasureRef} className="flex min-h-0 min-w-0 flex-1 flex-col">
         {panelHScroll ? (
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-auto overflow-y-hidden [scrollbar-gutter:stable]">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-auto overflow-y-visible [scrollbar-gutter:stable]">
             <div
               className="flex min-h-0 min-w-0 w-max min-w-full flex-1 flex-col"
               style={panelScrollMinWidthPx != null ? { minWidth: panelScrollMinWidthPx } : undefined}
