@@ -1918,7 +1918,9 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     let hydratedMonthPlanTab: MonthPlanSurfaceTab = "epic-gantt";
     if (hydratedMonth != null) {
       if (planTabRaw === "teamCapacity") {
-        hydratedMonthPlanTab = "month-capacity";
+        // Month-view Team Capacity is parked — redirect any persisted
+        // landing into Epic Gantt so users don't end up on a hidden tab.
+        hydratedMonthPlanTab = "epic-gantt";
       } else if (planTabRaw === "epic") {
         hydratedMonthPlanTab = "epic-gantt";
       } else if (planTabRaw === "monthInsights") {
@@ -6866,7 +6868,8 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           ) : null}
           </div>
         </div>
-        {dndDropInspector ? (
+        {/* Drop-debug popup is a dev-only aid. Hidden in production builds. */}
+        {dndDropInspector && process.env.NODE_ENV !== "production" ? (
           <div
             className="pointer-events-auto fixed bottom-4 right-4 z-[100] flex max-h-[min(420px,70vh)] w-[min(100vw-2rem,420px)] flex-col rounded-lg border border-amber-200/80 bg-amber-50/95 text-slate-900 shadow-xl ring-1 ring-amber-900/10 backdrop-blur-sm"
             role="dialog"

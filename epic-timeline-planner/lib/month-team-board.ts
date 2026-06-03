@@ -123,9 +123,17 @@ export function emptyMonthTeamBoard(): MonthTeamBoardPersisted {
   return { queues: {} };
 }
 
+/**
+ * Capacity boards: anchor each epic to the month the user explicitly
+ * placed it in (its `planStartMonth`). An epic whose plan range spans
+ * Apr–Jun shows up only in the April capacity board — not also in May
+ * and June — because the planner dragged it to April, not to all
+ * three months. If a card needs to appear in another month, the user
+ * drags it there explicitly.
+ */
 function epicSpansMonth(epic: EpicItem, month: number): boolean {
-  if (epic.planStartMonth == null || epic.planEndMonth == null) return false;
-  return epic.planStartMonth <= month && epic.planEndMonth >= month;
+  if (epic.planStartMonth == null) return false;
+  return epic.planStartMonth === month;
 }
 
 /**

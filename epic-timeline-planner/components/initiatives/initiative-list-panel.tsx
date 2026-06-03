@@ -909,10 +909,10 @@ function storyStatusMeta(story: UserStoryItem, contextMonth: number | null): {
         : story.sprint >= 3
           ? story.sprint
           : null;
-  // Compact label ("Spt-10") keeps story chips narrow in the middle panel.
-  // Non-breaking hyphen so the chip never wraps onto two lines.
+  // Full label ("Sprint 10") on story chips. Uses a non-breaking space
+  // so the chip never wraps onto two lines.
   const sprintLabel =
-    story.sprint == null ? null : resolved != null ? `Spt‑${resolved}` : `Spt‑${story.sprint}`;
+    story.sprint == null ? null : resolved != null ? `Sprint ${resolved}` : `Sprint ${story.sprint}`;
 
   if (story.sprint == null) {
     return {
@@ -927,7 +927,7 @@ function storyStatusMeta(story: UserStoryItem, contextMonth: number | null): {
       sprintLabel,
       statusLabel: "In progress",
       statusClassName:
-        "border border-blue-200/70 bg-blue-50/80 px-1.5 py-0.5 text-[10px] font-medium text-blue-800",
+        "border border-blue-200/70 bg-blue-50/80 px-1.5 py-0.5 text-[12px] font-medium text-blue-800",
       showStatusBadge: true,
     };
   }
@@ -936,7 +936,7 @@ function storyStatusMeta(story: UserStoryItem, contextMonth: number | null): {
       sprintLabel,
       statusLabel: "Review / Testing",
       statusClassName:
-        "border border-violet-200/70 bg-violet-50/80 px-1.5 py-0.5 text-[10px] font-medium text-violet-800",
+        "border border-violet-200/70 bg-violet-50/80 px-1.5 py-0.5 text-[12px] font-medium text-violet-800",
       showStatusBadge: true,
     };
   }
@@ -945,7 +945,7 @@ function storyStatusMeta(story: UserStoryItem, contextMonth: number | null): {
       sprintLabel,
       statusLabel: "Done",
       statusClassName:
-        "border border-emerald-200/70 bg-emerald-50/80 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800",
+        "border border-emerald-200/70 bg-emerald-50/80 px-1.5 py-0.5 text-[12px] font-medium text-emerald-800",
       showStatusBadge: true,
     };
   }
@@ -953,7 +953,7 @@ function storyStatusMeta(story: UserStoryItem, contextMonth: number | null): {
     sprintLabel,
     statusLabel: "To do",
     statusClassName:
-      "border border-amber-200/70 bg-amber-50/80 px-1.5 py-0.5 text-[10px] font-medium text-amber-900",
+      "border border-amber-200/70 bg-amber-50/80 px-1.5 py-0.5 text-[12px] font-medium text-amber-900",
     showStatusBadge: true,
   };
 }
@@ -1597,12 +1597,16 @@ function InitiativeTreeEpicRow({
                                 );
                               })() : null}
                               {sprintLabel ? (
-                                <span className="max-w-[7rem] truncate rounded-sm border border-border/60 bg-background px-1.5 py-0.5 text-[10.5px] font-medium text-muted-foreground">
+                                // `inline-flex items-center leading-none` so
+                                // the chip's box height is driven by font
+                                // size + padding only — matches the status
+                                // chip exactly on the same row.
+                                <span className="inline-flex max-w-[7rem] items-center truncate rounded-sm border border-border/60 bg-background px-1.5 py-0.5 text-[12px] font-medium leading-none text-muted-foreground">
                                   {sprintLabel}
                                 </span>
                               ) : null}
                               {showStatusBadge ? (
-                                <span className={cn("shrink-0 tabular-nums", statusClassName)}>{statusLabel}</span>
+                                <span className={cn("inline-flex shrink-0 items-center leading-none tabular-nums", statusClassName)}>{statusLabel}</span>
                               ) : null}
                             </div>
                           ) : null}
@@ -2275,25 +2279,29 @@ function SprintEpicCard({
                       ? "No stories yet"
                       : `${completion.total} user stor${completion.total === 1 ? "y" : "ies"}`}
                   </span>
+                  {/* Epic-view chips (team / quarter / status). Slightly
+                   *  larger than the `epicBadgeBase` default — when epics
+                   *  are the top-level rows in the middle panel they need
+                   *  to match the primary visual weight. */}
                   <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
                     {epicTeamChip ? (
-                      <span className={cn(epicTeamChip.className, epicBadgeBase, "max-w-[10rem] gap-1")}>
+                      <span className={cn(epicTeamChip.className, epicBadgeBase, "text-[12.5px] max-w-[10rem] gap-1")}>
                         <TeamAvatar slug={epicTeamChip.slug} sizePx={10} fallback={<Users className="size-2.5 shrink-0" aria-hidden />} />
                         {epicTeamChip.label}
                       </span>
                     ) : null}
                     {epicPlanStatus.label === "Unscheduled" ? (
-                      <span className={cn(epicBadgeBase, epicPlanStatus.className)}>
+                      <span className={cn(epicBadgeBase, "text-[12.5px]", epicPlanStatus.className)}>
                         {epicPlanStatus.label}
                       </span>
                     ) : (
                       quartersFromMonthRange(epic.planStartMonth, epic.planEndMonth).map((q) => (
-                        <span key={q} className={cn(epicBadgeBase, epicPlanStatus.className)}>
+                        <span key={q} className={cn(epicBadgeBase, "text-[12.5px]", epicPlanStatus.className)}>
                           {q}
                         </span>
                       ))
                     )}
-                    <span className={cn(epicBadgeBase, epicExecutionStatus.className)}>
+                    <span className={cn(epicBadgeBase, "text-[12.5px]", epicExecutionStatus.className)}>
                       {epicExecutionStatus.label}
                     </span>
                   </div>

@@ -6745,7 +6745,10 @@ export function TimelineGrid({
               isRailExpanded ? "w-56" : "w-[3.25rem]",
               activeSprint != null && (monthPlanTab === "sprint-kanban" || monthPlanTab === "sprint-status" || monthPlanTab === "sprint-capacity" || monthPlanTab === "sprint-retrospective")
                 ? "h-[180px]"
-                : "h-[108px]",
+                // Default month rail: 2 buttons now (Epic Plan + Insights).
+                // Was 108px when Team Capacity was the middle tab — kept a
+                // small breathing-room gap below the buttons.
+                : "h-[84px]",
             )}
             onMouseLeave={() => {
               console.log("[rail-nav] month rail mouseleave", {
@@ -6901,31 +6904,37 @@ export function TimelineGrid({
                     Epic Plan
                   </span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => onMonthPlanTabChange?.("month-capacity")}
-                  title="Team Capacity"
-                  onMouseEnter={() => setIsRailExpanded(true)}
-                  className={cn(
-                    "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
-              isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
-                    monthPlanTab === "month-capacity"
-                      ? planRailTabActiveClass
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
-                  )}
-                >
-                  <Thermometer className="size-4" aria-hidden />
-                  <span className="sr-only">Team Capacity</span>
-                  <span
-                    aria-hidden
+                {/* Month-view "Team Capacity" tab is parked — sprint and
+                  * quarter planning cover team-capacity needs. Wrapped in a
+                  * `false &&` so the code stays compiled and can be flipped
+                  * back on by changing this guard. */}
+                {false && (
+                  <button
+                    type="button"
+                    onClick={() => onMonthPlanTabChange?.("month-capacity")}
+                    title="Team Capacity"
+                    onMouseEnter={() => setIsRailExpanded(true)}
                     className={cn(
-                      railLabelBaseClass,
-                      isRailExpanded ? "max-w-[13rem] opacity-100" : "max-w-0 opacity-0",
+                      "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+                      isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
+                      monthPlanTab === "month-capacity"
+                        ? planRailTabActiveClass
+                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
                     )}
                   >
-                    Team Capacity
-                  </span>
-                </button>
+                    <Thermometer className="size-4" aria-hidden />
+                    <span className="sr-only">Team Capacity</span>
+                    <span
+                      aria-hidden
+                      className={cn(
+                        railLabelBaseClass,
+                        isRailExpanded ? "max-w-[13rem] opacity-100" : "max-w-0 opacity-0",
+                      )}
+                    >
+                      Team Capacity
+                    </span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => onMonthPlanTabChange?.("month-status")}
