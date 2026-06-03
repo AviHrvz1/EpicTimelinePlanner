@@ -6192,7 +6192,7 @@ export function TimelineGrid({
   const chipsToolbarRow = (suppressInlineChips || summaryBarPortalElement)
     ? null
     : (
-        <div className="sticky top-0 z-40 mt-0 mb-2 -ml-5 -mr-4 flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-1.5 bg-white/90 px-5 py-0.5 backdrop-blur supports-[backdrop-filter]:bg-white/75">
+        <div className="sticky top-0 z-40 mt-0 mb-4 -ml-5 -mr-4 flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-1.5 bg-white/90 px-5 py-0.5 backdrop-blur supports-[backdrop-filter]:bg-white/75">
           {sprintKanbanSummaryStats ? summarySprintChipsJsx : summaryYearChipsJsx}
         </div>
       );
