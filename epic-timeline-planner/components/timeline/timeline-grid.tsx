@@ -6178,6 +6178,18 @@ export function TimelineGrid({
     </div>
   );
 
+  /** Slim chips-only row rendered ABOVE the breadcrumb header so the
+   *  Health / Initiatives↔Epics / Teams / Sprints / Epic Est. controls
+   *  sit on their own line instead of cramped beside the breadcrumb
+   *  trail. */
+  const chipsToolbarRow = (suppressInlineChips || summaryBarPortalElement)
+    ? null
+    : (
+        <div className="mt-0 -ml-5 -mr-4 flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-1.5 px-5 py-0.5">
+          {sprintKanbanSummaryStats ? summarySprintChipsJsx : summaryYearChipsJsx}
+        </div>
+      );
+
   const timelineHeaderRow = (
       <div
         className={cn(
@@ -6524,7 +6536,8 @@ export function TimelineGrid({
                     this guard the chips show twice: once here on the
                     Roadmap chip-track row and once up in the global top
                     bar. */}
-                {(suppressInlineChips || summaryBarPortalElement) ? null : summaryYearChipsJsx}
+                {/* chipsToolbarRow above renders these now — suppress here. */}
+                {null}
                 {showGanttSearch ? ganttSearchJsx : null}
                 {periodCountdownScope ? (
                   <PeriodEndCountdown scope={periodCountdownScope} planYear={currentYear} index={periodCountdownIndex} />
@@ -6579,7 +6592,8 @@ export function TimelineGrid({
               ) : null}
               {sprintKanbanSummaryStats ? (
                 <>
-                  {!summaryBarPortalElement ? summarySprintChipsJsx : null}
+                  {/* chipsToolbarRow above renders these now — suppress here. */}
+                  {null}
                   {showSprintEndCountdown && activeYearSprintForMonthDrill != null ? (
                     <>
                       <SprintEndCountdown planYear={currentYear} yearSprint={activeYearSprintForMonthDrill} />
@@ -6667,7 +6681,8 @@ export function TimelineGrid({
                 </>
               ) : (
                 <>
-                  {(suppressInlineChips || summaryBarPortalElement) ? null : summaryYearChipsJsx}
+                  {/* chipsToolbarRow above renders these now — suppress here. */}
+                {null}
                   {/* Sprint-capacity / sprint-status / sprint-retrospective views still get the sprint clock in the breadcrumb area, even when sprintKanbanSummaryStats is null (kanban-only). */}
                   {showSprintEndCountdown && activeYearSprintForMonthDrill != null ? (
                     <>
@@ -8648,6 +8663,7 @@ export function TimelineGrid({
               style={panelScrollMinWidthPx != null ? { minWidth: panelScrollMinWidthPx } : undefined}
             >
               <div className="shrink-0 min-w-0">
+                {chipsToolbarRow}
                 {timelineHeaderRow}
               </div>
               {planningSurface}
@@ -8655,7 +8671,10 @@ export function TimelineGrid({
           </div>
         ) : (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <div className="shrink-0">{timelineHeaderRow}</div>
+            <div className="shrink-0">
+              {chipsToolbarRow}
+              {timelineHeaderRow}
+            </div>
             {planningSurface}
           </div>
         )}

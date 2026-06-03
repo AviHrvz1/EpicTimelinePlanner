@@ -1961,13 +1961,17 @@ function InitiativeTreeCard({
           </div>
 
           {isOpen ? (
-            <div className="mt-3 rounded-lg bg-white px-2 py-2 border-t border-border/80 pt-3 font-sans antialiased">
+            <div
+              className={cn(
+                "mt-3 rounded-lg bg-white px-2 py-2 font-sans antialiased",
+                // Only show the slim top divider once there's at least
+                // one epic — a freshly-created empty initiative now
+                // skips both "No epics yet." and its top border.
+                epics.length > 0 && "border-t border-border/80 pt-3",
+              )}
+            >
               <div className="ml-3 pl-2">
-                {epics.length === 0 ? (
-                  <p className="py-2 text-[12px] leading-relaxed text-muted-foreground">
-                    No epics yet.
-                  </p>
-                ) : (
+                {epics.length === 0 ? null : (
                   <div>
                     {epics.map((epic, epicIdx) => {
                       // Force-open when search matched a story inside this
@@ -2047,7 +2051,7 @@ function InitiativeTreeCard({
                     <Button
                       type="button"
                       size="sm"
-                      className="h-7 shrink-0 gap-1 bg-slate-800 px-2 text-[12px] font-semibold text-white shadow-sm hover:bg-slate-900 disabled:opacity-45"
+                      className="h-7 shrink-0 gap-1 bg-indigo-600 px-2 text-[12px] font-semibold text-white shadow-sm hover:bg-indigo-700 focus-visible:ring-2 focus-visible:ring-indigo-300 disabled:opacity-45"
                       disabled={isAddingEpic || epicTitle.trim().length === 0}
                       onClick={() => void handleAddEpic()}
                     >

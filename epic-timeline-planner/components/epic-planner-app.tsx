@@ -12,6 +12,7 @@ import { fireApprovalConfetti } from "@/lib/approval-confetti";
 
 import { UserChip } from "@/components/auth/user-chip";
 import { RoadmapHealthHero } from "@/components/dashboard/roadmap-health-hero";
+import { GanttDropDebugger } from "@/components/dev/gantt-drop-debugger";
 import { EpicFormDialog } from "@/components/epics/epic-form-dialog";
 import { BacklogPlanningPanel } from "@/components/backlog/backlog-planning-panel";
 import { UsersWorkspacePanel } from "@/components/users/users-workspace-panel";
@@ -5667,6 +5668,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
 
   return (
     <DragContext onDragEnd={onDragEnd}>
+      <GanttDropDebugger />
       {/* Fixed mode rail — anchored to the left edge of the viewport from
           top to bottom. Hover expands from 58px → 244px with a logo and
           labels. Lives outside <main> so it doesn't scroll with content. */}
@@ -6123,8 +6125,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 onInsightsScopeChange={handleInsightsScopePropChange}
                 onOpenInsights={handleOpenInsightsInApp}
                 summaryBadges={roadmapSummary}
-                summaryBarPortalElement={summaryBarEl}
-                suppressInlineChips
+                summaryBarPortalElement={null}
                 onSummaryStatusQuickFilterChange={setPanelStatusQuickFilter}
                 summaryStatusQuickFilter={panelStatusQuickFilter}
                 roadmaps={roadmaps}
