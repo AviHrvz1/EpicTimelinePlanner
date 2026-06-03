@@ -834,6 +834,9 @@ function DonutCard({
   }>;
 }) {
   const total = slices.reduce((sum, s) => sum + s.value, 0);
+  // Slice the mouse is currently hovering — used to mirror the legend
+  // row's hover/active visual when the cursor is on the SVG arc.
+  const [hoveredSlice, setHoveredSlice] = useState<string | null>(null);
   return (
     <div className="flex shrink-0 flex-col gap-2">
       <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500">
@@ -845,6 +848,9 @@ function DonutCard({
           slices={slices}
           centerCount={centerCount}
           centerLabel={centerLabel}
+          hoveredSlice={hoveredSlice}
+          onSliceHover={setHoveredSlice}
+          onSliceClick={onSliceClick}
         />
         <ul className="grid grid-cols-[auto_minmax(2rem,auto)_minmax(2.75rem,auto)] items-center gap-x-4 gap-y-1.5 text-[13px] leading-tight">
           {slices
@@ -853,18 +859,23 @@ function DonutCard({
               const pct = total > 0 ? Math.round((slice.value / total) * 100) : 0;
               const active = activeLabels?.has(slice.label) ?? false;
               if (onSliceClick) {
+                const isHovered = hoveredSlice === slice.label;
                 return (
                   <button
                     key={slice.label}
                     type="button"
                     onClick={() => onSliceClick(slice.label)}
+                    onMouseEnter={() => setHoveredSlice(slice.label)}
+                    onMouseLeave={() => setHoveredSlice(null)}
                     aria-pressed={active}
                     className={cn(
                       "col-span-3 grid grid-cols-subgrid items-center gap-x-4 rounded-md px-1.5 py-0.5 text-left transition outline-none",
                       "focus-visible:ring-2 focus-visible:ring-indigo-300",
                       active
                         ? "bg-indigo-50 ring-1 ring-indigo-200/80"
-                        : "ring-1 ring-transparent hover:bg-gradient-to-r hover:from-sky-50 hover:via-indigo-50 hover:to-violet-50 hover:ring-indigo-200/70 hover:shadow-sm",
+                        : isHovered
+                          ? "bg-gradient-to-r from-sky-50 via-indigo-50 to-violet-50 ring-1 ring-indigo-200/70 shadow-sm"
+                          : "ring-1 ring-transparent hover:bg-gradient-to-r hover:from-sky-50 hover:via-indigo-50 hover:to-violet-50 hover:ring-indigo-200/70 hover:shadow-sm",
                     )}
                   >
                     <span className="flex items-center gap-2 whitespace-nowrap">
@@ -958,11 +969,22 @@ function DonutSvg({
   slices,
   centerCount,
   centerLabel,
+  hoveredSlice,
+  onSliceHover,
+  onSliceClick,
 }: {
   total: number;
   slices: Array<{ label: string; value: number; color: string }>;
   centerCount: number | null;
   centerLabel: string;
+  /** Label of the slice the cursor is on (legend OR SVG arc). When set,
+   *  the matching arc dims its sibling arcs slightly and the legend row
+   *  gets the same hover treatment. */
+  hoveredSlice?: string | null;
+  onSliceHover?: (label: string | null) => void;
+  /** Same callback the legend rows use — clicking an arc behaves like
+   *  clicking its legend row. */
+  onSliceClick?: (label: string) => void;
 }) {
   const radius = 41;
   const inner = 23;
@@ -976,13 +998,16 @@ function DonutSvg({
   let cumulative = 0;
   return (
     <div className="relative shrink-0">
-      <svg viewBox="-50 -50 100 100" className="size-[160px]" role="img" aria-label={`Total: ${total}`}>
+      <svg viewBox="-54 -54 108 108" className="size-[160px]" role="img" aria-label={`Total: ${total}`}>
         <circle cx="0" cy="0" r={radius} fill="none" stroke="#e2e8f0" strokeWidth={strokeWidth} />
         {total > 0
           ? slices.map((slice) => {
               if (slice.value <= 0) return null;
               const fraction = slice.value / total;
               const dasharray = `${fraction * circumference} ${circumference}`;
+              const interactive = Boolean(onSliceHover || onSliceClick);
+              const isHovered = hoveredSlice === slice.label;
+              const isOtherHovered = hoveredSlice != null && !isHovered;
               const node = (
                 <circle
                   key={slice.label}
@@ -991,10 +1016,18 @@ function DonutSvg({
                   r={radius}
                   fill="none"
                   stroke={slice.color}
-                  strokeWidth={strokeWidth}
+                  strokeWidth={isHovered ? strokeWidth + 3 : strokeWidth}
                   strokeDasharray={dasharray}
                   strokeDashoffset={-cumulative * circumference}
                   transform="rotate(-90)"
+                  style={{
+                    cursor: interactive ? "pointer" : undefined,
+                    opacity: isOtherHovered ? 0.55 : 1,
+                    transition: "opacity 120ms ease, stroke-width 120ms ease",
+                  }}
+                  onMouseEnter={onSliceHover ? () => onSliceHover(slice.label) : undefined}
+                  onMouseLeave={onSliceHover ? () => onSliceHover(null) : undefined}
+                  onClick={onSliceClick ? () => onSliceClick(slice.label) : undefined}
                 />
               );
               cumulative += fraction;
