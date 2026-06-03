@@ -5920,7 +5920,10 @@ export function TimelineGrid({
 
   const summarySprintChipsJsx = sprintKanbanSummaryStats ? (
     <>
-      {onYearChange ? (
+      {/* Roadmap chip parked in sprint views too — the roadmap picker
+        * is reachable from the dashboard hero subtitle. Remove the
+        * `false && ` to bring it back. */}
+      {false && onYearChange ? (
         <RoadmapSelector
           roadmaps={roadmaps}
           selectedRoadmap={selectedRoadmap}
@@ -6194,7 +6197,7 @@ export function TimelineGrid({
   const chipsToolbarRow = (suppressInlineChips || summaryBarPortalElement)
     ? null
     : (
-        <div className="sticky top-0 z-40 -mt-2 mb-1 -ml-5 -mr-4 flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-3 bg-white/90 px-5 py-0 backdrop-blur supports-[backdrop-filter]:bg-white/75">
+        <div className="sticky top-0 z-40 -mt-2 mb-1 -ml-5 -mr-4 flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-5 bg-white/90 px-5 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-white/75">
           {sprintKanbanSummaryStats ? summarySprintChipsJsx : summaryYearChipsJsx}
         </div>
       );
