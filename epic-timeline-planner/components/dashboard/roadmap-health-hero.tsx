@@ -1079,7 +1079,12 @@ function DonutSvg({
           ? slices.map((slice) => {
               if (slice.value <= 0) return null;
               const fraction = slice.value / total;
-              const dasharray = `${fraction * circumference} ${circumference}`;
+              // Round to 3 decimals so server-side and client-side
+              // serializations match (prevents SSR hydration mismatch
+              // on this <circle>'s `stroke-dasharray` / `dashoffset`).
+              const dashOn = Math.round(fraction * circumference * 1000) / 1000;
+              const dashTotal = Math.round(circumference * 1000) / 1000;
+              const dasharray = `${dashOn} ${dashTotal}`;
               const interactive = Boolean(onSliceHover || onSliceClick);
               const isHovered = hoveredSlice === slice.label;
               const isOtherHovered = hoveredSlice != null && !isHovered;
@@ -1093,7 +1098,7 @@ function DonutSvg({
                   stroke={slice.color}
                   strokeWidth={isHovered ? strokeWidth + 3 : strokeWidth}
                   strokeDasharray={dasharray}
-                  strokeDashoffset={-cumulative * circumference}
+                  strokeDashoffset={Math.round(-cumulative * circumference * 1000) / 1000}
                   transform="rotate(-90)"
                   style={{
                     cursor: interactive ? "pointer" : undefined,
@@ -1121,9 +1126,13 @@ function DonutSvg({
                 running += fraction;
                 if (fraction < 0.08) return null;
                 // Convert mid-angle (rotated -90° so 0% = top) to x/y.
+                // Round to 3 decimals so server and client serialize
+                // identical numbers (React's `toString` precision can
+                // differ between Node and the browser, which triggers
+                // a hydration mismatch on this `<text>` element).
                 const angle = midFraction * 2 * Math.PI - Math.PI / 2;
-                const x = Math.cos(angle) * labelRadius;
-                const y = Math.sin(angle) * labelRadius;
+                const x = Math.round(Math.cos(angle) * labelRadius * 1000) / 1000;
+                const y = Math.round(Math.sin(angle) * labelRadius * 1000) / 1000;
                 const pct = Math.round(fraction * 100);
                 return (
                   <text

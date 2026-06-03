@@ -5871,7 +5871,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         />
         <div
           className={cn(
-            "mx-auto flex w-full max-w-[2550px] flex-row gap-1.5 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 pl-2",
+            "mx-auto flex w-full max-w-[2550px] flex-row gap-1.5 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 pl-1",
             // backlog + users need no right inset so their white panel
             // reaches the same x as the Roadmap Health hero (each panel
             // has its own internal margin that visually shifts them).
@@ -5924,7 +5924,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                   // Cap the panel column at the gantt panel's measured
                   // height (via `maxHeight` below) and scroll internally
                   // when its content exceeds that height.
-                  "relative overflow-x-clip overflow-y-auto rounded-xl bg-white/90 motion-reduce:transition-none mt-2 mb-2 ml-2 shadow-xl",
+                  "relative overflow-x-clip overflow-y-auto rounded-xl bg-white/90 motion-reduce:transition-none mt-2 mb-2 ml-1 shadow-xl",
                   // Match the page scrollbar's blue style so the
                   // internal scrollbar reads as part of the same UI.
                   "[scrollbar-color:theme(colors.blue.500)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-blue-500 hover:[&::-webkit-scrollbar-thumb]:bg-blue-600",
