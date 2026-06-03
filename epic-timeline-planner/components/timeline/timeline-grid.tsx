@@ -7163,14 +7163,14 @@ export function TimelineGrid({
                           onMonthPlanTabChange?.("sprint-kanban");
                           onEnterSprintStoryBoard?.(targetSprint, null);
                         }}
-                        className="flex w-full min-w-0 flex-col items-center justify-center gap-1.5 border-r border-slate-200 bg-sky-50 px-2 py-3 text-center transition hover:bg-sky-100/80"
+                        className="flex w-full min-w-0 flex-col items-center justify-center gap-0.5 border-r border-slate-200 bg-sky-50 px-2 py-1.5 text-center transition hover:bg-sky-200/70"
                       >
-                        <div className="flex flex-col items-center gap-0.5 pb-1">
-                          <span className="inline-flex items-center gap-1 text-[15px] font-semibold leading-tight text-sky-900">
-                            <Flag className="size-3.5 shrink-0 opacity-70" aria-hidden />
+                        <div className="flex flex-col items-center gap-0 pb-0.5">
+                          <span className="inline-flex items-center gap-1 text-[13px] font-semibold leading-tight text-sky-900">
+                            <Flag className="size-3 shrink-0 opacity-70" aria-hidden />
                             {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 1))}
                           </span>
-                          <span className="mt-0.5 max-w-full px-0.5 text-[13px] font-medium leading-tight text-slate-500">
+                          <span className="mt-0 max-w-full px-0.5 text-[11px] font-medium leading-tight text-slate-500">
                             ({sprintDateWeekdayRangeText(currentYear, activeMonth, 1)})
                           </span>
                         </div>
@@ -7178,7 +7178,7 @@ export function TimelineGrid({
                           {sprintDaysWithWeekday(currentYear, activeMonth, 1).map((dayLabel) => (
                             <span
                               key={dayLabel.key}
-                              className="flex min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-0.5 rounded bg-white/80 px-0.5 py-1.5 text-center ring-1 ring-slate-200/80"
+                              className="flex min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-0.5 border-l border-slate-200/80 bg-white/80 px-0.5 py-1.5 text-center first:border-l-0"
                             >
                               <span className="w-full truncate text-[12px] font-semibold leading-none text-slate-950">
                                 {dayLabel.weekday}
@@ -7201,14 +7201,14 @@ export function TimelineGrid({
                           onMonthPlanTabChange?.("sprint-kanban");
                           onEnterSprintStoryBoard?.(targetSprint, null);
                         }}
-                        className="flex w-full min-w-0 flex-col items-center justify-center gap-1.5 bg-indigo-50 px-2 py-3 text-center transition hover:bg-indigo-100/80"
+                        className="flex w-full min-w-0 flex-col items-center justify-center gap-0.5 bg-indigo-50 px-2 py-1.5 text-center transition hover:bg-indigo-200/70"
                       >
-                        <div className="flex flex-col items-center gap-0.5 pb-1">
-                          <span className="inline-flex items-center gap-1 text-[15px] font-semibold leading-tight text-indigo-900">
-                            <Flag className="size-3.5 shrink-0 opacity-70" aria-hidden />
+                        <div className="flex flex-col items-center gap-0 pb-0.5">
+                          <span className="inline-flex items-center gap-1 text-[13px] font-semibold leading-tight text-indigo-900">
+                            <Flag className="size-3 shrink-0 opacity-70" aria-hidden />
                             {sprintLabelQuarterOrMonth(globalSprintFromMonthLane(activeMonth, 2))}
                           </span>
-                          <span className="mt-0.5 max-w-full px-0.5 text-[13px] font-medium leading-tight text-slate-500">
+                          <span className="mt-0 max-w-full px-0.5 text-[11px] font-medium leading-tight text-slate-500">
                             ({sprintDateWeekdayRangeText(currentYear, activeMonth, 2)})
                           </span>
                         </div>
@@ -7216,7 +7216,7 @@ export function TimelineGrid({
                           {sprintDaysWithWeekday(currentYear, activeMonth, 2).map((dayLabel) => (
                             <span
                               key={dayLabel.key}
-                              className="flex min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-0.5 rounded bg-white/80 px-0.5 py-1.5 text-center ring-1 ring-slate-200/80"
+                              className="flex min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-0.5 border-l border-slate-200/80 bg-white/80 px-0.5 py-1.5 text-center first:border-l-0"
                             >
                               <span className="w-full truncate text-[12px] font-semibold leading-none text-slate-950">
                                 {dayLabel.weekday}
@@ -7815,10 +7815,10 @@ export function TimelineGrid({
                       realNow.getFullYear() === currentYear ? realNow.getMonth() + 1 : null;
                     const fq = focusedQuarter!;
                     const quarterCellTone: Record<string, { qBg: string; qText: string; monthBg: string; monthText: string; monthHover: string }> = {
-                      Q1: { qBg: "bg-blue-50/55", qText: "text-blue-900", monthBg: "bg-blue-50/30", monthText: "text-blue-900", monthHover: "hover:bg-blue-50/80" },
-                      Q2: { qBg: "bg-cyan-50/55", qText: "text-cyan-900", monthBg: "bg-cyan-50/30", monthText: "text-cyan-900", monthHover: "hover:bg-cyan-50/80" },
-                      Q3: { qBg: "bg-emerald-50/55", qText: "text-emerald-900", monthBg: "bg-emerald-50/30", monthText: "text-emerald-900", monthHover: "hover:bg-emerald-50/80" },
-                      Q4: { qBg: "bg-violet-50/55", qText: "text-violet-900", monthBg: "bg-violet-50/30", monthText: "text-violet-900", monthHover: "hover:bg-violet-50/80" },
+                      Q1: { qBg: "bg-blue-50/55", qText: "text-blue-900", monthBg: "bg-blue-50/30", monthText: "text-blue-900", monthHover: "hover:bg-blue-200/70" },
+                      Q2: { qBg: "bg-cyan-50/55", qText: "text-cyan-900", monthBg: "bg-cyan-50/30", monthText: "text-cyan-900", monthHover: "hover:bg-cyan-200/70" },
+                      Q3: { qBg: "bg-emerald-50/55", qText: "text-emerald-900", monthBg: "bg-emerald-50/30", monthText: "text-emerald-900", monthHover: "hover:bg-emerald-200/70" },
+                      Q4: { qBg: "bg-violet-50/55", qText: "text-violet-900", monthBg: "bg-violet-50/30", monthText: "text-violet-900", monthHover: "hover:bg-violet-200/70" },
                     };
                     const tone = quarterCellTone[fq.label];
                     const startMonth = fq.months[0];
@@ -7833,12 +7833,12 @@ export function TimelineGrid({
                             onFocusedQuarterChange(null);
                           }}
                           className={cn(
-                            "flex w-full min-w-0 flex-col items-center justify-center gap-0.5 border-b border-slate-200 py-5 text-center transition",
+                            "flex w-full min-w-0 flex-col items-center justify-center gap-0.5 border-b border-slate-200 py-2 text-center transition",
                             tone?.qBg ?? "bg-white",
-                            "hover:brightness-[0.98]",
+                            "hover:bg-slate-200/70",
                           )}
                         >
-                          <span className={cn("inline-flex items-center gap-1.5 text-[17px] font-semibold leading-tight tracking-tight", tone?.qText ?? "text-slate-800")}>
+                          <span className={cn("inline-flex items-center gap-1.5 text-[15px] font-semibold leading-tight tracking-tight", tone?.qText ?? "text-slate-800")}>
                             <QuarterYearProgressIcon quarterLabel={fq.label} />
                             Quarter {fq.label.slice(1)}
                           </span>
@@ -7861,7 +7861,7 @@ export function TimelineGrid({
                                   onMonthPlanTabChange?.("epic-gantt");
                                 }}
                                 className={cn(
-                                  "relative flex w-full min-w-0 items-center justify-center px-1.5 py-3.5 text-center text-[14.5px] font-bold transition",
+                                  "relative flex w-full min-w-0 items-center justify-center px-1.5 py-2 text-center text-[13.5px] font-bold transition",
                                   !isLastMonthOverall && "border-r border-slate-200",
                                   activeMonth === month
                                     ? "bg-blue-50 text-blue-900"
@@ -7923,7 +7923,7 @@ export function TimelineGrid({
                                         onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, lane), null);
                                       }}
                                       className={cn(
-                                        "flex w-full flex-col items-center justify-center gap-1.5 py-2 text-center transition",
+                                        "flex w-full flex-col items-center justify-center gap-0.5 py-1 text-center transition",
                                         lane === 1 && "border-r border-slate-200/70",
                                         sprintTone.bg,
                                         sprintTone.hover,
@@ -8467,10 +8467,10 @@ export function TimelineGrid({
                     // at a glance. Month cells inherit the same tint so the
                     // 3 months under each Q visually cluster.
                     const quarterCellTone: Record<string, { qBg: string; qText: string; monthBg: string; monthText: string; monthHover: string }> = {
-                      Q1: { qBg: "bg-blue-50/55", qText: "text-blue-900", monthBg: "bg-blue-50/30", monthText: "text-blue-900", monthHover: "hover:bg-blue-50/80" },
-                      Q2: { qBg: "bg-cyan-50/55", qText: "text-cyan-900", monthBg: "bg-cyan-50/30", monthText: "text-cyan-900", monthHover: "hover:bg-cyan-50/80" },
-                      Q3: { qBg: "bg-emerald-50/55", qText: "text-emerald-900", monthBg: "bg-emerald-50/30", monthText: "text-emerald-900", monthHover: "hover:bg-emerald-50/80" },
-                      Q4: { qBg: "bg-violet-50/55", qText: "text-violet-900", monthBg: "bg-violet-50/30", monthText: "text-violet-900", monthHover: "hover:bg-violet-50/80" },
+                      Q1: { qBg: "bg-blue-50/55", qText: "text-blue-900", monthBg: "bg-blue-50/30", monthText: "text-blue-900", monthHover: "hover:bg-blue-200/70" },
+                      Q2: { qBg: "bg-cyan-50/55", qText: "text-cyan-900", monthBg: "bg-cyan-50/30", monthText: "text-cyan-900", monthHover: "hover:bg-cyan-200/70" },
+                      Q3: { qBg: "bg-emerald-50/55", qText: "text-emerald-900", monthBg: "bg-emerald-50/30", monthText: "text-emerald-900", monthHover: "hover:bg-emerald-200/70" },
+                      Q4: { qBg: "bg-violet-50/55", qText: "text-violet-900", monthBg: "bg-violet-50/30", monthText: "text-violet-900", monthHover: "hover:bg-violet-200/70" },
                     };
                     return (
                       <div className="relative z-[1] overflow-hidden rounded-md border border-slate-200 bg-white shadow-[0_4px_6px_-2px_rgba(15,23,42,0.08),0_2px_4px_-2px_rgba(15,23,42,0.05)]">
@@ -8491,11 +8491,11 @@ export function TimelineGrid({
                                   onFocusedQuarterChange(focusedQuarterLabel === quarter.label ? null : quarter.label);
                                 }}
                                 className={cn(
-                                  "flex w-full min-w-0 flex-col items-center justify-center gap-0.5 py-5 text-center transition",
+                                  "flex w-full min-w-0 flex-col items-center justify-center gap-0.5 py-3 text-center transition",
                                   qIdx < QUARTERS.length - 1 && "border-r border-slate-200",
                                   isFocused
                                     ? quarterTone[quarter.label]?.active ?? "bg-primary/10 text-primary"
-                                    : cn(tone?.qBg ?? "bg-white", "hover:brightness-[0.98]"),
+                                    : cn(tone?.qBg ?? "bg-white", "hover:bg-slate-200/70"),
                                 )}
                                 style={{ gridColumn: `span ${quarter.months.length} / span ${quarter.months.length}` }}
                               >
@@ -8528,7 +8528,7 @@ export function TimelineGrid({
                                     onMonthPlanTabChange?.("epic-gantt");
                                   }}
                                   className={cn(
-                                    "relative flex w-full min-w-0 items-center justify-center px-1.5 py-5 text-center text-[13px] font-bold transition",
+                                    "relative flex w-full min-w-0 items-center justify-center px-1.5 py-3 text-center text-[13px] font-bold transition",
                                     !isLastMonthOverall && "border-r border-slate-200",
                                     tone?.monthBg ?? "bg-white",
                                     tone?.monthText ?? "text-slate-700",

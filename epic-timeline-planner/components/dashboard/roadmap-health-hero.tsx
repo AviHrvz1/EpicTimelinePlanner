@@ -2,15 +2,29 @@
 
 import { Fragment, useMemo, useState, type CSSProperties } from "react";
 import {
+  Activity,
+  AlertOctagon,
+  AlertTriangle,
   Bell,
   BookOpen,
+  Check,
+  CheckCheck,
+  CheckCircle2,
   ChevronDown,
+  CircleDashed,
+  FileWarning,
   Flag,
   Folder,
+  FolderOpen,
   HeartPulse,
   HelpCircle,
   Info,
+  ListTodo,
+  PlayCircle,
+  Ruler,
   ShieldCheck,
+  Sigma,
+  StickyNote,
   Users,
   Zap,
 } from "lucide-react";
@@ -241,7 +255,7 @@ export function RoadmapHealthHero({
         aria-hidden={!isPanelExpanded}
       >
       <div className="overflow-x-auto pl-6 pr-6">
-        <div className="flex w-full min-w-min flex-col gap-3 rounded-xl border border-slate-200 bg-white px-6 py-5 shadow-sm">
+        <div className="flex w-full min-w-min flex-col gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 shadow-sm">
           {/* In-card header: roadmap picker + Health calculation filter.
               Used to live in row 1 next to the H1; tucked inside the card
               so the title row stays compact. */}
@@ -320,12 +334,12 @@ export function RoadmapHealthHero({
               />
             </div>
           </div>
-          <div className="h-px w-full bg-slate-200/70" aria-hidden />
+          <div className="mt-2 h-px w-full bg-slate-200/70" aria-hidden />
           {/* Charts row — the original row 2 content, now without the
               stats grid (stats moved up next to the roadmap selector).
               justify-between spreads the four charts across the full
               width of the panel with the dividers absorbing slack. */}
-          <div className="flex w-full min-w-min flex-nowrap items-center justify-between gap-x-6">
+          <div className="mt-2 flex w-full min-w-min flex-nowrap items-center justify-between gap-x-6">
           <TeamProgressCard
             rows={stats.teamProgress}
             unitSuffix={progressBasis === "stories" ? "" : "d"}
@@ -334,6 +348,7 @@ export function RoadmapHealthHero({
           <Divider />
           <DonutCard
             title="Work Progress (all epics)"
+            titleIcon={<Activity className="size-3.5 text-blue-500" strokeWidth={2.1} aria-hidden />}
             centerCount={
               progressBasis === "stories"
                 ? stats.storiesCount
@@ -344,10 +359,10 @@ export function RoadmapHealthHero({
             }
             centerLabel={progressBasis === "stories" ? "Stories" : "Days"}
             slices={[
-              { label: "In progress", value: stats.workProgress.inProgress, color: "#3b82f6" },
-              { label: "Done", value: stats.workProgress.done, color: "#10b981" },
-              { label: "To do", value: stats.workProgress.todo, color: "#cbd5e1" },
-              { label: "Review / testing", value: stats.workProgress.review, color: "#8b5cf6" },
+              { label: "In progress", value: stats.workProgress.inProgress, color: "#3b82f6", icon: <PlayCircle className="size-3.5" strokeWidth={2} /> },
+              { label: "Done", value: stats.workProgress.done, color: "#10b981", icon: <CheckCircle2 className="size-3.5" strokeWidth={2} /> },
+              { label: "To do", value: stats.workProgress.todo, color: "#94a3b8", icon: <ListTodo className="size-3.5" strokeWidth={2} /> },
+              { label: "Review / testing", value: stats.workProgress.review, color: "#8b5cf6", icon: <CheckCheck className="size-3.5" strokeWidth={2} /> },
             ]}
             onSliceClick={
               onStatusFilterChange
@@ -372,14 +387,15 @@ export function RoadmapHealthHero({
           <Divider />
           <DonutCard
             title="Health Distribution (all epics)"
+            titleIcon={<HeartPulse className="size-3.5 text-rose-500" strokeWidth={2.1} aria-hidden />}
             centerCount={stats.healthDistribution.total}
             centerLabel="Total"
             slices={[
-              { label: "On Track", value: stats.healthDistribution.onTrack, color: "#10b981" },
-              { label: "Done", value: stats.healthDistribution.done, color: "#3b82f6" },
-              { label: "Watch", value: stats.healthDistribution.watch, color: "#f59e0b" },
-              { label: "At Risk", value: stats.healthDistribution.atRisk, color: "#fb923c" },
-              { label: "Overdue", value: stats.healthDistribution.overdue, color: "#ef4444" },
+              { label: "On Track", value: stats.healthDistribution.onTrack, color: "#10b981", icon: <Check className="size-3.5" strokeWidth={2.4} /> },
+              { label: "Done", value: stats.healthDistribution.done, color: "#3b82f6", icon: <CheckCheck className="size-3.5" strokeWidth={2} /> },
+              { label: "Watch", value: stats.healthDistribution.watch, color: "#f59e0b", icon: <AlertTriangle className="size-3.5" strokeWidth={2} /> },
+              { label: "At Risk", value: stats.healthDistribution.atRisk, color: "#fb923c", icon: <AlertTriangle className="size-3.5" strokeWidth={2} /> },
+              { label: "Overdue", value: stats.healthDistribution.overdue, color: "#ef4444", icon: <AlertOctagon className="size-3.5" strokeWidth={2} /> },
             ]}
             onSliceClick={
               onHealthFilterChange
@@ -408,6 +424,7 @@ export function RoadmapHealthHero({
                 ? "Epic Estimates (all epics)"
                 : "Story Estimates (all stories)"
             }
+            titleIcon={<Sigma className="size-3.5 text-indigo-500" strokeWidth={2.1} aria-hidden />}
             centerCount={
               progressBasis === "epicEst"
                 ? stats.epicEstimates.daysSum
@@ -415,8 +432,8 @@ export function RoadmapHealthHero({
             }
             centerLabel={progressBasis === "epicEst" ? "Total Days" : "Stories"}
             slices={[
-              { label: "Estimated", value: stats.epicEstimates.estimated, color: "#6366f1" },
-              { label: "Unestimated", value: stats.epicEstimates.unestimated, color: "#cbd5e1" },
+              { label: "Estimated", value: stats.epicEstimates.estimated, color: "#6366f1", icon: <Ruler className="size-3.5" strokeWidth={2} /> },
+              { label: "Unestimated", value: stats.epicEstimates.unestimated, color: "#94a3b8", icon: <CircleDashed className="size-3.5" strokeWidth={2} /> },
             ]}
             onSliceClick={
               onOpenEpicEstimatePanel
@@ -433,6 +450,7 @@ export function RoadmapHealthHero({
                         ? Math.round((stats.storiesWithoutDescCount / stats.storiesCount) * 100)
                         : 0,
                       color: "#f59e0b",
+                      icon: <StickyNote className="size-3.5" strokeWidth={2} />,
                       onClick: () => onOpenEpicEstimatePanel("storiesNoDesc"),
                       title: "Open the Estimate Coverage panel · Stories without description tab",
                     },
@@ -443,6 +461,7 @@ export function RoadmapHealthHero({
                         ? Math.round((stats.epicsWithoutDescCount / stats.epicsCount) * 100)
                         : 0,
                       color: "#ec4899",
+                      icon: <FileWarning className="size-3.5" strokeWidth={2} />,
                       onClick: () => onOpenEpicEstimatePanel("epicsNoDesc"),
                       title: "Open the Estimate Coverage panel · Epics without description tab",
                     },
@@ -568,22 +587,22 @@ function StatBlock({
           : "hover:bg-slate-50 ring-1 ring-transparent focus-visible:ring-indigo-300"),
       )}
     >
-      <span className="mt-[2px] shrink-0 [&_svg]:size-6">{icon}</span>
+      <span className="mt-[2px] shrink-0 [&_svg]:size-[18px]">{icon}</span>
       <div className="flex min-w-0 flex-col leading-tight">
         <span
           className={cn(
-            "text-[24px] font-semibold tabular-nums tracking-tight",
+            "text-[17px] font-semibold tabular-nums tracking-tight",
             active ? "text-indigo-900" : "text-slate-900",
           )}
         >
           {value}
           {suffix ? (
-            <span className="ml-0.5 text-[18px] font-semibold opacity-90">{suffix}</span>
+            <span className="ml-0.5 text-[13px] font-semibold opacity-90">{suffix}</span>
           ) : null}
         </span>
         <span
           className={cn(
-            "mt-0.5 text-[12px] font-medium leading-none",
+            "mt-0.5 text-[10.5px] font-medium leading-none",
             active ? "text-indigo-700" : "text-slate-500",
           )}
         >
@@ -691,12 +710,13 @@ function TeamProgressCard({
 }) {
   return (
     <div className="flex w-[640px] shrink-0 flex-col gap-2">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500">
+      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500">
+        <Users className="size-3.5 shrink-0 text-emerald-500" aria-hidden />
         Team Progress (all epics)
       </span>
       <div
         className={cn(
-          "max-h-[135px] space-y-1 overflow-y-auto pr-1.5",
+          "max-h-[110px] space-y-0.5 overflow-y-auto pr-1.5",
           // Match the project's pastel scrollbar (initiative panel et al.)
           "[scrollbar-color:theme(colors.indigo.100)_transparent]",
           "[&::-webkit-scrollbar]:w-1.5",
@@ -795,6 +815,7 @@ function TeamProgressCard({
 
 function DonutCard({
   title,
+  titleIcon,
   centerCount,
   centerLabel,
   slices,
@@ -804,12 +825,15 @@ function DonutCard({
   extraLegendRows,
 }: {
   title: string;
+  /** Optional icon rendered next to the card title — same family of
+   *  Lucide icons used elsewhere in the planner. */
+  titleIcon?: React.ReactNode;
   /** When provided, rendered in the donut's center. Pass `null` to skip
    *  the centered total (useful when the donut already shows multiple
    *  colors and a side total reads better). */
   centerCount: number | null;
   centerLabel: string;
-  slices: Array<{ label: string; value: number; color: string }>;
+  slices: Array<{ label: string; value: number; color: string; icon?: React.ReactNode }>;
   /** When provided, rendered as a large number to the right of the
    *  legend (Health Distribution uses this since multiple verdicts
    *  share the donut and a side label is cleaner). */
@@ -829,6 +853,7 @@ function DonutCard({
     value: number;
     pct: number;
     color: string;
+    icon?: React.ReactNode;
     onClick: () => void;
     title?: string;
   }>;
@@ -839,7 +864,8 @@ function DonutCard({
   const [hoveredSlice, setHoveredSlice] = useState<string | null>(null);
   return (
     <div className="flex shrink-0 flex-col gap-2">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500">
+      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500">
+        {titleIcon ? <span className="inline-flex shrink-0 text-slate-500" aria-hidden>{titleIcon}</span> : null}
         {title}
       </span>
       <div className="flex items-center gap-6">
@@ -879,11 +905,17 @@ function DonutCard({
                     )}
                   >
                     <span className="flex items-center gap-2 whitespace-nowrap">
-                      <span
-                        className="inline-block size-2 shrink-0 rounded-full"
-                        style={{ background: slice.color }}
-                        aria-hidden
-                      />
+                      {slice.icon ? (
+                        <span className="inline-flex shrink-0" style={{ color: slice.color }} aria-hidden>
+                          {slice.icon}
+                        </span>
+                      ) : (
+                        <span
+                          className="inline-block size-2 shrink-0 rounded-full"
+                          style={{ background: slice.color }}
+                          aria-hidden
+                        />
+                      )}
                       <span className={active ? "font-semibold text-indigo-900" : "text-slate-700"}>
                         {slice.label}
                       </span>
@@ -900,11 +932,17 @@ function DonutCard({
               return (
                 <Fragment key={slice.label}>
                   <span className="flex items-center gap-2 whitespace-nowrap">
-                    <span
-                      className="inline-block size-2 shrink-0 rounded-full"
-                      style={{ background: slice.color }}
-                      aria-hidden
-                    />
+                    {slice.icon ? (
+                      <span className="inline-flex shrink-0" style={{ color: slice.color }} aria-hidden>
+                        {slice.icon}
+                      </span>
+                    ) : (
+                      <span
+                        className="inline-block size-2 shrink-0 rounded-full"
+                        style={{ background: slice.color }}
+                        aria-hidden
+                      />
+                    )}
                     <span className="text-slate-700">{slice.label}</span>
                   </span>
                   <span className="text-left font-semibold tabular-nums text-slate-900">
@@ -932,11 +970,17 @@ function DonutCard({
               )}
             >
               <span className="flex items-center gap-2 whitespace-nowrap">
-                <span
-                  className="inline-block size-2 shrink-0 rounded-full"
-                  style={{ background: row.color }}
-                  aria-hidden
-                />
+                {row.icon ? (
+                  <span className="inline-flex shrink-0" style={{ color: row.color }} aria-hidden>
+                    {row.icon}
+                  </span>
+                ) : (
+                  <span
+                    className="inline-block size-2 shrink-0 rounded-full"
+                    style={{ background: row.color }}
+                    aria-hidden
+                  />
+                )}
                 <span className="text-slate-700">{row.label}</span>
               </span>
               <span className="text-left font-semibold tabular-nums text-slate-900">
@@ -974,7 +1018,7 @@ function DonutSvg({
   onSliceClick,
 }: {
   total: number;
-  slices: Array<{ label: string; value: number; color: string }>;
+  slices: Array<{ label: string; value: number; color: string; icon?: React.ReactNode }>;
   centerCount: number | null;
   centerLabel: string;
   /** Label of the slice the cursor is on (legend OR SVG arc). When set,
@@ -998,7 +1042,7 @@ function DonutSvg({
   let cumulative = 0;
   return (
     <div className="relative shrink-0">
-      <svg viewBox="-54 -54 108 108" className="size-[160px]" role="img" aria-label={`Total: ${total}`}>
+      <svg viewBox="-54 -54 108 108" className="size-[130px]" role="img" aria-label={`Total: ${total}`}>
         <circle cx="0" cy="0" r={radius} fill="none" stroke="#e2e8f0" strokeWidth={strokeWidth} />
         {total > 0
           ? slices.map((slice) => {
@@ -1072,10 +1116,10 @@ function DonutSvg({
       </svg>
       {centerCount != null ? (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-[28px] font-semibold leading-none tabular-nums text-slate-900">
+          <span className="text-[20px] font-semibold leading-none tabular-nums text-slate-900">
             {centerCount}
           </span>
-          <span className="mt-1 text-[12px] font-medium leading-none text-slate-500">
+          <span className="mt-0.5 text-[10.5px] font-medium leading-none text-slate-500">
             {centerLabel}
           </span>
         </div>
