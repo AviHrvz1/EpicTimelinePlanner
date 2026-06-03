@@ -727,10 +727,19 @@ function deriveEpicStatusKey(epic: EpicItem): UserStoryItem["status"] | null {
       counts[s.status] += 1;
     }
   }
-  if (counts.done === stories.length) return "done";
+  // Roll-up priority (most active state wins, then "done" once nothing
+  // is in flight). This is what the Work Progress donut's filter chip
+  // uses, so picking "Done" surfaces every epic whose work is finished
+  // (all stories done OR a mix of done + review with at least one done
+  // — i.e. shipped + still being signed off), "Review / Testing"
+  // surfaces epics fully sitting in QA, and "In Progress" surfaces any
+  // epic with active work.
   if (counts.inProgress > 0) return "inProgress";
-  if (counts.review + counts.done === stories.length) return "review";
-  if (counts.review > 0 || counts.done > 0) return "inProgress";
+  if (counts.done === stories.length) return "done";
+  if (counts.done > 0 && counts.todo === 0) return "done";
+  if (counts.review === stories.length) return "review";
+  if (counts.review > 0 && counts.todo === 0) return "review";
+  if (counts.done > 0 || counts.review > 0) return "inProgress";
   return "todo";
 }
 
@@ -4816,6 +4825,10 @@ export function TimelineGrid({
   const epicMatchesGanttStatusFilter = useCallback(
     (epic: EpicItem): boolean => {
       if (!ganttStatusFilter || ganttStatusFilter.size === 0) return true;
+      // Match the epic by its ROLLED-UP status (one verdict per epic) so
+      // clicking a single Work Progress slice doesn't return every epic
+      // that happens to contain one story in that bucket. The roll-up
+      // logic in deriveEpicStatusKey takes story-mix into account.
       const s = deriveEpicStatusKey(epic);
       return s != null && ganttStatusFilter.has(s);
     },
@@ -6185,7 +6198,7 @@ export function TimelineGrid({
   const chipsToolbarRow = (suppressInlineChips || summaryBarPortalElement)
     ? null
     : (
-        <div className="mt-0 -ml-5 -mr-4 flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-1.5 px-5 py-0.5">
+        <div className="mt-0 mb-2 -ml-5 -mr-4 flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-1.5 px-5 py-0.5">
           {sprintKanbanSummaryStats ? summarySprintChipsJsx : summaryYearChipsJsx}
         </div>
       );
@@ -6551,7 +6564,7 @@ export function TimelineGrid({
                 hasBreadcrumbs ? "flex-1" : "w-full",
               )}
             >
-              {(suppressInlineChips || summaryBarPortalElement) ? null : summaryYearChipsJsx}
+              {/* chipsToolbarRow above renders these now — suppress here. */}
               {showGanttSearch ? ganttSearchJsx : null}
               {periodCountdownScope ? (
                 <PeriodEndCountdown scope={periodCountdownScope} planYear={currentYear} index={periodCountdownIndex} />

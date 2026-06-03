@@ -142,7 +142,7 @@ export function UserChip() {
       {menuOpen && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-[1000] mt-1.5 min-w-[220px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-xl"
+          className="absolute right-0 top-full z-[9999] mt-1.5 min-w-[220px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-xl"
         >
           <div className="px-3 py-2 border-b border-slate-100">
             <p className="truncate text-[12px] font-semibold text-slate-800">{displayName}</p>

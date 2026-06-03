@@ -12,7 +12,6 @@ import { fireApprovalConfetti } from "@/lib/approval-confetti";
 
 import { UserChip } from "@/components/auth/user-chip";
 import { RoadmapHealthHero } from "@/components/dashboard/roadmap-health-hero";
-import { GanttDropDebugger } from "@/components/dev/gantt-drop-debugger";
 import { EpicFormDialog } from "@/components/epics/epic-form-dialog";
 import { BacklogPlanningPanel } from "@/components/backlog/backlog-planning-panel";
 import { UsersWorkspacePanel } from "@/components/users/users-workspace-panel";
@@ -1425,7 +1424,16 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   const handlePanelStatusFilterDerivedChange = useCallback(
     (next: Set<"todo" | "inProgress" | "review" | "done">) => {
       setGanttStatusFilter(next);
-      if (next.size > 0) setLastPickedLabelLane("status");
+      if (next.size > 0) {
+        // Picking a status verdict implies the planner wants to SEE the
+        // status pills on bars. The pills are gated on `showRoadmapProgress`
+        // (same gate as the health pills), so flip it on alongside the
+        // lane assignment. Without this, clicking In Progress / Done on
+        // the Work Progress donut filtered the bars but never painted
+        // the labels.
+        setShowRoadmapProgress(true);
+        setLastPickedLabelLane("status");
+      }
     },
     [],
   );
@@ -5668,7 +5676,6 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
 
   return (
     <DragContext onDragEnd={onDragEnd}>
-      <GanttDropDebugger />
       {/* Fixed mode rail — anchored to the left edge of the viewport from
           top to bottom. Hover expands from 58px → 244px with a logo and
           labels. Lives outside <main> so it doesn't scroll with content. */}
@@ -6104,7 +6111,15 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 zoom={1}
                 currentYear={selectedYear}
                 showRoadmapProgress={showRoadmapProgress}
-                onShowRoadmapProgressChange={setShowRoadmapProgress}
+                onShowRoadmapProgressChange={(next) => {
+                  setShowRoadmapProgress(next);
+                  // Clicking Health (turning the overlay ON) implies the
+                  // planner wants the health verdict labels on bars — not
+                  // whichever lane was last picked. Without this, bars
+                  // still showed status pills (In Progress / Review) on
+                  // the first Health click.
+                  if (next) setLastPickedLabelLane("health");
+                }}
                 progressBasis={progressBasis}
                 onProgressBasisChange={setProgressBasis}
                 healthFilterExternal={healthFilter}

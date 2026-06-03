@@ -19,6 +19,7 @@ import path from "node:path";
 import { StoryStatus } from "@/lib/generated/prisma";
 import { db } from "@/lib/db";
 import { captureEpicDailySnapshot } from "@/lib/epic-daily-snapshots";
+import { workingDaysBetween } from "@/lib/progress";
 import { collectAndUploadDemoAvatars } from "@/lib/demo-builder/avatars";
 import {
   DEMO_EPIC_DESCRIPTIONS,
@@ -205,12 +206,16 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
   // so initiatives stack vertically without overlap regardless of how
   // tightly the epics packed.
   let previousInitiativeBottomRow = 0;
-  // Epics whose health curve was overridden to "watch" or "atRisk" — kept
-  // here so a post-cleanup pass can re-mark their stories with the right
-  // open/review mix to land the verdict. Without this final pass the
-  // closed-sprint cleanup + current-sprint diversify steps would wipe
-  // the slow-burn snapshots and push the epic back to On Track / Done.
-  const overrideEpicsByCurve: Record<"watch" | "atRisk", string[]> = { watch: [], atRisk: [] };
+  // Epics whose health curve was overridden to "watch", "atRisk", or
+  // "overdue" — kept here so a post-cleanup pass can re-mark their stories
+  // with the right open/review mix to land the verdict. Without this final
+  // pass the closed-sprint cleanup + current-sprint diversify steps would
+  // wipe the slow-burn snapshots and push the epic back to On Track / Done.
+  const overrideEpicsByCurve: Record<"watch" | "atRisk" | "overdue", string[]> = {
+    watch: [],
+    atRisk: [],
+    overdue: [],
+  };
   for (let initIdx = 0; initIdx < DEMO_INITIATIVES.length; initIdx++) {
     const seed = DEMO_INITIATIVES[initIdx]!;
     const startMonth = seed.startMonth;
@@ -342,10 +347,19 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
       for (let s = sprintStart; s <= sprintEnd; s++) sprintRange.push(s);
       const storyTitles = DEMO_STORY_TEMPLATES_BY_TEAM[teamSlug];
       // Force every story under this epic to a slow burn curve when the
-      // epic was designated as Watch or At Risk (see pickDemoEpicHealthOverride).
+      // epic was designated as Watch, At Risk, or Overdue (see
+      // pickDemoEpicHealthOverride). Overdue epics use the same "atRisk"
+      // story curve since the snapshot generator only knows about
+      // DemoStoryCurve — the overdue verdict comes from `now > planEnd`
+      // plus < 100% progress, which we force in the final pass below.
       const epicHealthOverride = pickDemoEpicHealthOverride(initIdx, teamIdx);
+      const epicHealthCurve =
+        epicHealthOverride === "overdue"
+          ? "atRisk"
+          : epicHealthOverride;
       if (epicHealthOverride === "atRisk") overrideEpicsByCurve.atRisk.push(epic.id);
       else if (epicHealthOverride === "watch") overrideEpicsByCurve.watch.push(epic.id);
+      else if (epicHealthOverride === "overdue") overrideEpicsByCurve.overdue.push(epic.id);
 
       // Build the snapshot+story rows in-memory first, then bulk-insert.
       const storiesData: Array<{
@@ -402,7 +416,7 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
           estimatedDays: story.estimatedDays,
           today,
           planYear,
-          curve: epicHealthOverride ?? pickDemoStoryCurve(created.id),
+          curve: epicHealthCurve ?? pickDemoStoryCurve(created.id),
           assignee: story.assignee,
         });
         if (snapshots.length > 0) {
@@ -427,12 +441,17 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
         }
       }
 
-      // Epic-level estimate intentionally diverges from the sum of child
-      // story estimates so the "Epic Days Est." vs "Story Days Est." health
-      // bases produce visibly different verdict counts. Mix of under- and
-      // over-estimates (0.45×–1.85×) deterministic per epic.
+      // Epic-level estimate stays close to the sum of child-story estimates
+      // (±10 %) so the new health formula (remainingEffort = epicEst −
+      // storyDaysBurned) lets most "natural" epics read On Track when their
+      // child stories are burning down on pace. Large over-estimates
+      // amplified deltaDays under the new formula and pushed too many epics
+      // into At Risk; this tighter band keeps the diversification subtle
+      // without flipping verdicts. Only the explicit watch/atRisk
+      // override epics (pickDemoEpicHealthOverride) plus a couple of
+      // overdue-by-deadline plants below produce the non-onTrack mix.
       const sumOriginal = storiesData.reduce((acc, s) => acc + s.estimatedDays, 0);
-      const ESTIMATE_DIVERGENCE_FACTORS = [0.45, 0.6, 0.75, 0.9, 1.0, 1.2, 1.45, 1.65, 1.85];
+      const ESTIMATE_DIVERGENCE_FACTORS = [0.92, 0.96, 1.0, 1.04, 1.08];
       const divergenceIdx = (initIdx * 7 + teamIdx * 13) % ESTIMATE_DIVERGENCE_FACTORS.length;
       const epicOriginalEstimate = Math.max(1, Math.round(sumOriginal * ESTIMATE_DIVERGENCE_FACTORS[divergenceIdx]!));
       await db.epic.update({
@@ -831,6 +850,116 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
   };
   await forceEpicHealth(overrideEpicsByCurve.atRisk, 0.6);
   await forceEpicHealth(overrideEpicsByCurve.watch, 0.3);
+  // Overdue picks already have planEnd in the past — forcing 50% of their
+  // stories to remain `todo` keeps progressPercent below 100, so progress.ts
+  // hits the (now > end && progress < 100) branch and lands the verdict
+  // on Overdue.
+  await forceEpicHealth(overrideEpicsByCurve.overdue, 0.5);
+
+  // ── Bump originalEstimateDays on watch + atRisk epics so the new
+  //    burndown formula lands the verdict. The basic flow:
+  //
+  //      deltaDays = (epicEst − storyDaysBurned) − epicEst × ratio
+  //                = epicEst × elapsedRatio − storyDaysBurned
+  //
+  //    Solving for epicEst given a target deltaDays and the epic's
+  //    elapsedRatio (= 1 − daysRemaining / totalWorkingDays):
+  //
+  //      epicEst ≥ (target + storyDaysBurned) / elapsedRatio
+  //
+  //    Picks above land at the start of their window (elapsedRatio
+  //    ~0.05-0.10), so without an estimate bump deltaDays stays near
+  //    zero and the verdict collapses back to On Track even when 60 %
+  //    of stories are still todo.
+  const bumpEpicEstForVerdict = async (
+    epicIds: string[],
+    targetDeltaDays: number,
+  ) => {
+    console.log("[demo-builder] bumpEpicEstForVerdict START", {
+      target: targetDeltaDays,
+      epicCount: epicIds.length,
+    });
+    for (const epicId of epicIds) {
+      const epic = await db.epic.findUnique({
+        where: { id: epicId },
+        select: {
+          title: true,
+          originalEstimateDays: true,
+          planStartMonth: true,
+          planEndMonth: true,
+          planSprint: true,
+          planEndSprint: true,
+          planYear: true,
+          userStories: { select: { estimatedDays: true, daysLeft: true, status: true } },
+        },
+      });
+      if (!epic) {
+        console.log("[demo-builder] bump skip: epic not found", { epicId });
+        continue;
+      }
+      if (epic.planStartMonth == null || epic.planEndMonth == null) {
+        console.log("[demo-builder] bump skip: epic not scheduled", { epicId, title: epic.title });
+        continue;
+      }
+      const startSprint = globalSprintFromMonthLane(
+        epic.planStartMonth,
+        epic.planSprint === 2 ? 2 : 1,
+      );
+      const endSprint = globalSprintFromMonthLane(
+        epic.planEndMonth,
+        epic.planEndSprint === 1 ? 1 : 2,
+      );
+      const planYearForEpic = epic.planYear ?? planYear;
+      const start = sprintStartDate(planYearForEpic, startSprint);
+      const end = sprintEndDate(planYearForEpic, endSprint);
+      const totalWorkingDays = workingDaysBetween(start, end);
+      const daysRemaining = workingDaysBetween(today, end);
+      const ratio = totalWorkingDays > 0
+        ? Math.min(1, Math.max(0, daysRemaining / totalWorkingDays))
+        : 0;
+      // We want elapsedRatio large enough that bumping epicEst meaningfully
+      // moves deltaDays. If the epic just started (elapsedRatio < 0.05),
+      // fall back to a fixed 0.05 floor so the bump still produces a
+      // useful estimate; we don't hide picks just because the window
+      // happens to begin "now".
+      const elapsedRatio = Math.max(0.05, 1 - ratio);
+      let totalStoryDays = 0;
+      let openStoryDays = 0;
+      for (const s of epic.userStories) {
+        if (s.estimatedDays == null) continue;
+        totalStoryDays += s.estimatedDays;
+        const terminal = s.status === StoryStatus.review || s.status === StoryStatus.done;
+        if (!terminal) openStoryDays += s.daysLeft ?? s.estimatedDays;
+      }
+      const storyDaysBurned = Math.max(0, totalStoryDays - openStoryDays);
+      const requiredEst = Math.ceil(
+        (targetDeltaDays + storyDaysBurned) / elapsedRatio,
+      );
+      const currentEst = epic.originalEstimateDays ?? 0;
+      const finalEst = Math.max(requiredEst, currentEst);
+      // Always update (even if currentEst >= requiredEst) so the log line
+      // shows up for every pick and we don't silently skip.
+      await db.epic.update({
+        where: { id: epicId },
+        data: { originalEstimateDays: finalEst },
+      });
+      console.log("[demo-builder] bump epicEst", {
+        epicId,
+        title: epic.title,
+        target: targetDeltaDays,
+        elapsedRatio: Number(elapsedRatio.toFixed(3)),
+        storyDaysBurned,
+        currentEst,
+        requiredEst,
+        finalEst,
+      });
+    }
+    console.log("[demo-builder] bumpEpicEstForVerdict DONE", { target: targetDeltaDays });
+  };
+  // Target deltaDays = 8 → comfortably in At Risk band (≥ 4).
+  await bumpEpicEstForVerdict(overrideEpicsByCurve.atRisk, 8);
+  // Target deltaDays = 2.5 → middle of Watch band (1 < δ < 4).
+  await bumpEpicEstForVerdict(overrideEpicsByCurve.watch, 2.5);
 
   return {
     initiatives: DEMO_INITIATIVES.length,

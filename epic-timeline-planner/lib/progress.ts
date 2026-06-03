@@ -158,8 +158,16 @@ export function computeProgress(input: ProgressInputs): ProgressResult {
       }
       totalEffort = epicEst;
       if (totalStoryDays > 0) {
-        const ratio = Math.min(1, Math.max(0, currentOpenStoryDays / totalStoryDays));
-        remainingEffort = epicEst * ratio;
+        // Burn the epic budget down by the actual story-days already
+        // completed. Previously we scaled the open/total story ratio
+        // back up by epicEst — that hid the risk created when epicEst
+        // exceeded the story-days sum (e.g. planner bumped epic est to
+        // reflect newly discovered scope). With this formula, a bigger
+        // epicEst with the same story progress correctly leaves more
+        // work outstanding, so the deltaDays comparison vs the ideal
+        // burndown can flip the verdict to watch / atRisk.
+        const storyDaysBurned = Math.max(0, totalStoryDays - currentOpenStoryDays);
+        remainingEffort = Math.max(0, epicEst - storyDaysBurned);
       } else {
         // No estimated stories yet → fall back to the time-elapsed burn so
         // the verdict isn't stuck at "all done" the moment the period
@@ -219,6 +227,11 @@ export function computeProgress(input: ProgressInputs): ProgressResult {
   const ratio = totalWorkingDays > 0
     ? Math.min(1, Math.max(0, daysRemaining / totalWorkingDays))
     : 0;
+  // Ideal burndown: linear from totalEffort at `start` → 0 at `end`. We
+  // intentionally don't cap totalEffort by totalWorkingDays — a team of
+  // N can burn ~N days of effort per working day, so a 60-day epic in a
+  // 22-day window may be perfectly feasible. The verdict comes from the
+  // actual burn vs the ideal line at this point in time.
   const idealRemaining = totalEffort > 0 && totalWorkingDays > 0
     ? totalEffort * ratio
     : daysRemaining; // legacy fallback when there's no measurable window/effort

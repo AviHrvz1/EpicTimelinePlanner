@@ -57,13 +57,33 @@ export function pickDemoStoryCurve(seed: string): DemoStoryCurve {
  *       initIdx 1 / teamIdx 2  → "Payments platform v2" epic at months 4–5
  *       initIdx 3 / teamIdx 1  → "Analytics data warehouse" epic at month 5
  */
+/** Health verdicts we explicitly seed in the demo data so the popover and
+ *  Insights chart show a realistic mix instead of "everything On Track".
+ *  Most epics are intentionally left to read On Track; a handful here are
+ *  forced into the other buckets. */
+export type DemoEpicVerdictOverride = "atRisk" | "watch" | "overdue";
+
 export function pickDemoEpicHealthOverride(
   initIdx: number,
   teamIdx: number,
-): DemoStoryCurve | null {
+): DemoEpicVerdictOverride | null {
   const key = `${initIdx}/${teamIdx}`;
-  if (key === "0/3" || key === "2/2" || key === "4/0") return "atRisk";
-  if (key === "1/2" || key === "3/1") return "watch";
+  // Today is June 2026 — picks must reference epics whose planEnd is
+  // chosen accordingly:
+  //   - atRisk / watch → window must STRADDLE today (or be in the future)
+  //     so the deltaDays comparison vs the ideal line decides the verdict
+  //   - overdue → window must END before today so the (now > end &&
+  //     progress < 100) short-circuit in progress.ts fires
+  //
+  // Layout reference (start + epicLayout span per team idx 0..4):
+  //   Init 0 "Onboarding revamp"      start=1 → months 1, 2-3, 4, 5, 6
+  //   Init 1 "Payments platform v2"   start=2 → months 2, 3, 4-5, 6, 7
+  //   Init 2 "Mobile app redesign"    start=3 → months 3, 4, 5, 6-8, 9
+  //   Init 3 "Analytics data warehouse" start=4 → months 4, 5, 6, 7, 8
+  //   Init 4 "Growth experiments Q2"  start=5 → months 5, 6-7, 8, 9, 10
+  if (key === "0/4" || key === "2/3" || key === "4/1") return "atRisk";
+  if (key === "1/3" || key === "3/2") return "watch";
+  if (key === "0/0" || key === "1/1") return "overdue";
   return null;
 }
 
