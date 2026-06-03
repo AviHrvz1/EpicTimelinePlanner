@@ -4470,12 +4470,11 @@ export function TimelineGrid({
         },
       });
     }
+    // Month breadcrumb stays as a non-clickable label — month drill-down
+    // is parked. Drop the `onClick` to disable; restore it (with the
+    // setActiveSprint + epic-gantt switch) to bring drill-down back.
     breadcrumbItems.push({
       label: MONTHS[activeMonth - 1],
-      onClick: () => {
-        setActiveSprint(null);
-        onMonthPlanTabChange?.("epic-gantt");
-      },
     });
     const isSprintSurface =
       monthPlanTab === "sprint-kanban" ||
@@ -7812,104 +7811,83 @@ export function TimelineGrid({
                     const todayMonth =
                       realNow.getFullYear() === currentYear ? realNow.getMonth() + 1 : null;
                     const fq = focusedQuarter!;
-                    const quarterCellTone: Record<string, { qBg: string; qText: string; monthBg: string; monthText: string; monthHover: string }> = {
-                      Q1: { qBg: "bg-blue-50/55", qText: "text-blue-900", monthBg: "bg-blue-50/30", monthText: "text-blue-900", monthHover: "hover:bg-blue-200/70" },
-                      Q2: { qBg: "bg-cyan-50/55", qText: "text-cyan-900", monthBg: "bg-cyan-50/30", monthText: "text-cyan-900", monthHover: "hover:bg-cyan-200/70" },
-                      Q3: { qBg: "bg-emerald-50/55", qText: "text-emerald-900", monthBg: "bg-emerald-50/30", monthText: "text-emerald-900", monthHover: "hover:bg-emerald-200/70" },
-                      Q4: { qBg: "bg-violet-50/55", qText: "text-violet-900", monthBg: "bg-violet-50/30", monthText: "text-violet-900", monthHover: "hover:bg-violet-200/70" },
-                    };
-                    const tone = quarterCellTone[fq.label];
                     const startMonth = fq.months[0];
                     const endMonth = fq.months[fq.months.length - 1];
+                    // Polished single-quarter card. Soft gradient header
+                    // for the quarter, clean white month labels, and one
+                    // tile per sprint with a tinted flag badge.
+                    type SprintTone = {
+                      cardBg: string;
+                      ring: string;
+                      title: string;
+                      badgeBg: string;
+                      badgeIcon: string;
+                    };
+                    const sprintTints: SprintTone[] = [
+                      { cardBg: "bg-gradient-to-br from-sky-50/90 to-blue-100/60", ring: "ring-sky-200/70", title: "text-sky-700", badgeBg: "bg-sky-100", badgeIcon: "text-sky-600" },
+                      { cardBg: "bg-gradient-to-br from-violet-50/90 to-violet-100/60", ring: "ring-violet-200/70", title: "text-violet-700", badgeBg: "bg-violet-100", badgeIcon: "text-violet-600" },
+                      { cardBg: "bg-gradient-to-br from-emerald-50/90 to-emerald-100/60", ring: "ring-emerald-200/70", title: "text-emerald-700", badgeBg: "bg-emerald-100", badgeIcon: "text-emerald-600" },
+                      { cardBg: "bg-gradient-to-br from-amber-50/90 to-orange-100/60", ring: "ring-amber-200/70", title: "text-amber-700", badgeBg: "bg-amber-100", badgeIcon: "text-amber-600" },
+                      { cardBg: "bg-gradient-to-br from-rose-50/90 to-pink-100/60", ring: "ring-rose-200/70", title: "text-rose-700", badgeBg: "bg-rose-100", badgeIcon: "text-rose-600" },
+                      { cardBg: "bg-gradient-to-br from-indigo-50/90 to-violet-100/60", ring: "ring-indigo-200/70", title: "text-indigo-700", badgeBg: "bg-indigo-100", badgeIcon: "text-indigo-600" },
+                    ];
                     return (
-                      <div className="relative z-[1] overflow-hidden rounded-md border border-slate-200 bg-white shadow-[0_4px_6px_-2px_rgba(15,23,42,0.08),0_2px_4px_-2px_rgba(15,23,42,0.05)]">
-                        {/* Row 1: Single Q cell spanning the full width. */}
+                      <div className="relative z-[1] overflow-hidden rounded-md border border-slate-200 bg-white shadow-[0_4px_18px_-6px_rgba(15,23,42,0.10),0_2px_6px_-3px_rgba(15,23,42,0.06)]">
+                        {/* Row 1: Quarter title — soft blue/indigo gradient banner. */}
                         <button
                           type="button"
                           onClick={() => {
                             setFocusedMonth(null);
                             onFocusedQuarterChange(null);
                           }}
-                          className={cn(
-                            "flex w-full min-w-0 flex-col items-center justify-center gap-0.5 border-b border-slate-200 py-2 text-center transition",
-                            tone?.qBg ?? "bg-white",
-                            "hover:bg-slate-200/70",
-                          )}
+                          className="relative flex w-full min-w-0 items-center justify-center gap-1.5 overflow-hidden bg-gradient-to-r from-blue-50/80 via-indigo-50/70 to-blue-50/80 py-2 text-center transition hover:from-blue-100/80 hover:via-indigo-100/70 hover:to-blue-100/80"
                         >
-                          <span className={cn("inline-flex items-center gap-1.5 text-[15px] font-semibold leading-tight tracking-tight", tone?.qText ?? "text-slate-800")}>
-                            <QuarterYearProgressIcon quarterLabel={fq.label} />
+                          <BarChart3 className="size-[16px] text-indigo-700" strokeWidth={2.2} aria-hidden />
+                          <span className="text-[16px] font-semibold tracking-tight text-slate-800">
                             Quarter {fq.label.slice(1)}
                           </span>
                         </button>
-                        {/* Row 2: 3 month cells. */}
+                        {/* Row 2: Month labels — plain centered headers. */}
                         <div
-                          className="relative grid min-w-0"
+                          className="relative grid min-w-0 border-t border-slate-200/80"
                           style={{ gridTemplateColumns: `repeat(${visibleMonths.length}, minmax(0, 1fr))` }}
                         >
                           {visibleMonths.map((month, mIdx) => {
                             const isLastMonthOverall = mIdx === visibleMonths.length - 1;
+                            // Month drill-down from the single-quarter view
+                            // is parked — month labels are header-only.
                             return (
-                              <button
+                              <div
                                 key={`q-month-${month}`}
                                 ref={mIdx === visibleMonths.length - 1 ? setLastMonthPanelRef : undefined}
-                                type="button"
-                                onClick={() => {
-                                  if (isPostDragClickSuppressed()) return;
-                                  setFocusedMonth(month);
-                                  onMonthPlanTabChange?.("epic-gantt");
-                                }}
                                 className={cn(
-                                  "relative flex w-full min-w-0 items-center justify-center px-1.5 py-2 text-center text-[13.5px] font-bold transition",
-                                  !isLastMonthOverall && "border-r border-slate-200",
-                                  activeMonth === month
-                                    ? "bg-blue-50 text-blue-900"
-                                    : cn(tone?.monthBg ?? "bg-white", tone?.monthText ?? "text-slate-700", tone?.monthHover ?? "hover:bg-slate-50"),
+                                  "relative flex w-full min-w-0 items-center justify-center px-1.5 py-1.5 text-center text-[15px] font-semibold tracking-tight text-slate-800",
+                                  !isLastMonthOverall && "border-r border-slate-200/60",
                                 )}
                               >
                                 {FULL_MONTHS[month - 1]}
-                              </button>
+                              </div>
                             );
                           })}
                         </div>
-                        {/* Row 3: Sprint cells. */}
-                        {/* Sprint row is ALWAYS shown in the single-quarter
-                            view — it's the primary planning surface for the
-                            quarter, so hiding it behind the all-quarters
-                            sprint toggle would strand the planner. */}
+                        {/* Row 3: Sprint tile cards — one per sprint. */}
                         <div
-                          className="relative grid min-w-0 border-t border-slate-200"
+                          className="relative grid min-w-0 gap-3 border-t border-slate-200/80 bg-white px-3 pb-3 pt-2"
                           style={{ gridTemplateColumns: `repeat(${visibleMonths.length}, minmax(0, 1fr))` }}
                         >
                           {visibleMonths.map((month, mIdx) => {
-                            const isLastMonthOverall = mIdx === visibleMonths.length - 1;
                             return (
                               <div
                                 key={`q-sprint-month-${month}`}
-                                  className={cn(
-                                    "grid grid-cols-2",
-                                    !isLastMonthOverall && "border-r border-slate-200",
-                                  )}
-                                >
-                                  {([1, 2] as const).map((lane) => {
-                                    const lastDay = new Date(currentYear, month, 0).getDate();
-                                    const startDay = lane === 1 ? 1 : 16;
-                                    const endDay = lane === 1 ? 15 : lastDay;
-                                    // Per-sprint tint palette (6 distinct soft
-                                    // pastels). Keyed by position within the
-                                    // visible quarter so the pattern restarts
-                                    // each quarter and each chip reads as a
-                                    // distinct "phase" of the quarter.
-                                    const sprintTints: Array<{ bg: string; hover: string; text: string }> = [
-                                      { bg: "bg-sky-50/45", hover: "hover:bg-sky-50/85", text: "text-sky-800" },
-                                      { bg: "bg-indigo-50/45", hover: "hover:bg-indigo-50/85", text: "text-indigo-800" },
-                                      { bg: "bg-emerald-50/45", hover: "hover:bg-emerald-50/85", text: "text-emerald-800" },
-                                      { bg: "bg-amber-50/45", hover: "hover:bg-amber-50/85", text: "text-amber-800" },
-                                      { bg: "bg-rose-50/45", hover: "hover:bg-rose-50/85", text: "text-rose-800" },
-                                      { bg: "bg-violet-50/45", hover: "hover:bg-violet-50/85", text: "text-violet-800" },
-                                    ];
-                                    const sprintPosInQuarter = mIdx * 2 + (lane - 1);
-                                    const sprintTone = sprintTints[sprintPosInQuarter % sprintTints.length];
-                                    return (
+                                className="grid grid-cols-2 gap-3"
+                              >
+                                {([1, 2] as const).map((lane) => {
+                                  const lastDay = new Date(currentYear, month, 0).getDate();
+                                  const startDay = lane === 1 ? 1 : 16;
+                                  const endDay = lane === 1 ? 15 : lastDay;
+                                  const sprintPosInQuarter = mIdx * 2 + (lane - 1);
+                                  const sprintTone = sprintTints[sprintPosInQuarter % sprintTints.length];
+                                  return (
                                     <SprintPlanDropButton
                                       key={`q-s-${month}-${lane}`}
                                       month={month}
@@ -7921,31 +7899,38 @@ export function TimelineGrid({
                                         onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, lane), null);
                                       }}
                                       className={cn(
-                                        "flex w-full flex-col items-center justify-center gap-0.5 py-1 text-center transition",
-                                        lane === 1 && "border-r border-slate-200/70",
-                                        sprintTone.bg,
-                                        sprintTone.hover,
+                                        "flex w-full flex-col items-center justify-center gap-0 rounded-md px-3 py-0.5 text-center ring-1 transition hover:-translate-y-px hover:shadow-[0_6px_14px_-6px_rgba(15,23,42,0.18)]",
+                                        sprintTone.cardBg,
+                                        sprintTone.ring,
                                       )}
                                     >
-                                      <span className={cn("inline-flex items-center gap-1 leading-none", sprintTone.text)}>
-                                        <Flag className="size-3 opacity-70" aria-hidden />
-                                        <span className="text-[12px] font-semibold tabular-nums">
+                                      <span className="inline-flex items-center gap-1.5 leading-none">
+                                        <span
+                                          className={cn(
+                                            "inline-flex size-5 shrink-0 items-center justify-center rounded-full",
+                                            sprintTone.badgeBg,
+                                          )}
+                                          aria-hidden
+                                        >
+                                          <Flag className={cn("size-[11px]", sprintTone.badgeIcon)} strokeWidth={2.2} />
+                                        </span>
+                                        <span className={cn("text-[13.5px] font-semibold tracking-tight", sprintTone.title)}>
                                           Sprint {globalSprintFromMonthLane(month, lane)}
                                         </span>
                                       </span>
-                                      <span className="text-[10.5px] font-medium leading-none tabular-nums text-slate-500">
+                                      <span className="text-[11px] font-medium leading-none tabular-nums text-slate-500">
                                         {startDay}–{endDay} {MONTHS[month - 1]}
                                       </span>
                                     </SprintPlanDropButton>
-                                    );
-                                  })}
-                                </div>
-                              );
-                            })}
+                                  );
+                                })}
+                              </div>
+                            );
+                          })}
                             {roadmapLaneTodayLeft != null && todayMonth != null && visibleMonths.includes(todayMonth) ? (
                               <div
                                 className="pointer-events-none absolute inset-y-0 z-10 flex items-center"
-                                style={{ left: roadmapLaneTodayLeft, transform: "translate(-50%, 12px)" }}
+                                style={{ left: roadmapLaneTodayLeft, transform: "translate(-50%, 14px)" }}
                                 aria-hidden
                               >
                                 <span className="pointer-events-auto inline-flex items-center justify-center rounded bg-emerald-50/35 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 shadow-sm ring-1 ring-emerald-200/70">
@@ -8430,25 +8415,32 @@ export function TimelineGrid({
                     const realNow = new Date(clockNowMs());
                     const todayMonth =
                       realNow.getFullYear() === currentYear ? realNow.getMonth() + 1 : null;
-                    // Per-quarter tints — soft enough to keep the connected
-                    // calendar feel, distinct enough to scan "which Q is this"
-                    // at a glance. Month cells inherit the same tint so the
-                    // 3 months under each Q visually cluster.
-                    const quarterCellTone: Record<string, { qBg: string; qText: string; monthBg: string; monthText: string; monthHover: string }> = {
-                      Q1: { qBg: "bg-blue-50/55", qText: "text-blue-900", monthBg: "bg-blue-50/30", monthText: "text-blue-900", monthHover: "hover:bg-blue-200/70" },
-                      Q2: { qBg: "bg-cyan-50/55", qText: "text-cyan-900", monthBg: "bg-cyan-50/30", monthText: "text-cyan-900", monthHover: "hover:bg-cyan-200/70" },
-                      Q3: { qBg: "bg-emerald-50/55", qText: "text-emerald-900", monthBg: "bg-emerald-50/30", monthText: "text-emerald-900", monthHover: "hover:bg-emerald-200/70" },
-                      Q4: { qBg: "bg-violet-50/55", qText: "text-violet-900", monthBg: "bg-violet-50/30", monthText: "text-violet-900", monthHover: "hover:bg-violet-200/70" },
+                    // Polished all-quarters calendar — matches the
+                    // single-quarter card: blue/indigo gradient quarter
+                    // banner, clean month headers, pastel sprint tiles.
+                    type SprintTone = {
+                      cardBg: string;
+                      borderL: string;
+                      title: string;
+                      badgeBg: string;
+                      badgeIcon: string;
                     };
+                    const sprintTints: SprintTone[] = [
+                      { cardBg: "bg-gradient-to-br from-sky-50/90 to-blue-100/60", borderL: "border-sky-300", title: "text-sky-700", badgeBg: "bg-sky-100", badgeIcon: "text-sky-600" },
+                      { cardBg: "bg-gradient-to-br from-violet-50/90 to-violet-100/60", borderL: "border-violet-300", title: "text-violet-700", badgeBg: "bg-violet-100", badgeIcon: "text-violet-600" },
+                      { cardBg: "bg-gradient-to-br from-emerald-50/90 to-emerald-100/60", borderL: "border-emerald-300", title: "text-emerald-700", badgeBg: "bg-emerald-100", badgeIcon: "text-emerald-600" },
+                      { cardBg: "bg-gradient-to-br from-amber-50/90 to-orange-100/60", borderL: "border-amber-300", title: "text-amber-700", badgeBg: "bg-amber-100", badgeIcon: "text-amber-600" },
+                      { cardBg: "bg-gradient-to-br from-rose-50/90 to-pink-100/60", borderL: "border-rose-300", title: "text-rose-700", badgeBg: "bg-rose-100", badgeIcon: "text-rose-600" },
+                      { cardBg: "bg-gradient-to-br from-indigo-50/90 to-violet-100/60", borderL: "border-indigo-300", title: "text-indigo-700", badgeBg: "bg-indigo-100", badgeIcon: "text-indigo-600" },
+                    ];
                     return (
-                      <div className="relative z-[1] overflow-hidden rounded-md border border-slate-200 bg-white shadow-[0_4px_6px_-2px_rgba(15,23,42,0.08),0_2px_4px_-2px_rgba(15,23,42,0.05)]">
-                        {/* Row 1: Quarter cells */}
-                        <div className="grid min-w-0 border-b border-slate-200" style={yearQuarterHeaderGridStyle}>
+                      <div className="relative z-[1] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_4px_18px_-6px_rgba(15,23,42,0.10),0_2px_6px_-3px_rgba(15,23,42,0.06)]">
+                        {/* Row 1: Quarter banners — 4 cells, each spans its
+                            months. Uniform blue/indigo gradient matches the
+                            single-quarter polish. Active quarter darkens. */}
+                        <div className="grid min-w-0" style={yearQuarterHeaderGridStyle}>
                           {QUARTERS.map((quarter, qIdx) => {
-                            const startMonth = quarter.months[0];
-                            const endMonth = quarter.months[quarter.months.length - 1];
                             const isFocused = focusedQuarterLabel === quarter.label;
-                            const tone = quarterCellTone[quarter.label];
                             return (
                               <button
                                 key={quarter.label}
@@ -8459,31 +8451,28 @@ export function TimelineGrid({
                                   onFocusedQuarterChange(focusedQuarterLabel === quarter.label ? null : quarter.label);
                                 }}
                                 className={cn(
-                                  "flex w-full min-w-0 flex-col items-center justify-center gap-0.5 py-3 text-center transition",
-                                  qIdx < QUARTERS.length - 1 && "border-r border-slate-200",
+                                  "relative flex w-full min-w-0 items-center justify-center gap-1.5 overflow-hidden py-3 text-center transition",
+                                  qIdx < QUARTERS.length - 1 && "border-r border-slate-200/80",
                                   isFocused
-                                    ? quarterTone[quarter.label]?.active ?? "bg-primary/10 text-primary"
-                                    : cn(tone?.qBg ?? "bg-white", "hover:bg-slate-200/70"),
+                                    ? "bg-gradient-to-r from-indigo-100/80 via-indigo-100/60 to-indigo-100/80 hover:from-indigo-200/70 hover:via-indigo-200/50 hover:to-indigo-200/70"
+                                    : "bg-gradient-to-r from-blue-50/80 via-indigo-50/70 to-blue-50/80 hover:from-blue-100/80 hover:via-indigo-100/70 hover:to-blue-100/80",
                                 )}
                                 style={{ gridColumn: `span ${quarter.months.length} / span ${quarter.months.length}` }}
                               >
-                                <span className={cn("inline-flex items-center gap-1.5 text-[15px] font-semibold leading-tight tracking-tight", isFocused ? undefined : tone?.qText ?? "text-slate-800")}>
-                                  <QuarterYearProgressIcon quarterLabel={quarter.label} />
+                                <BarChart3 className="size-[15px] text-indigo-700" strokeWidth={2.2} aria-hidden />
+                                <span className="text-[14px] font-semibold tracking-tight text-slate-800">
                                   Quarter {quarter.label.slice(1)}
                                 </span>
                               </button>
                             );
                           })}
                         </div>
-                        {/* Row 2: Month cells. The "Today" pill is rendered
-                            once as an absolute overlay anchored to the same
-                            CSS percentage as the vertical today line below,
-                            so the pill sits dead-center on the line instead
-                            of floating in the middle of whichever month cell
-                            happens to contain today. */}
-                        <div className="relative grid min-w-0" style={yearQuarterHeaderGridStyle}>
+                        {/* Row 2: Month labels — plain centered headers. The
+                            "Today" pill is rendered once as an absolute overlay
+                            anchored to the same CSS percentage as the
+                            vertical today line below. */}
+                        <div className="relative grid min-w-0 border-t border-slate-200/80" style={yearQuarterHeaderGridStyle}>
                           {QUARTERS.flatMap((quarter) => {
-                            const tone = quarterCellTone[quarter.label];
                             return quarter.months.map((month, mIdxInQ, allMonthsInQ) => {
                               const isLastMonthOverall = quarter.label === "Q4" && mIdxInQ === allMonthsInQ.length - 1;
                               return (
@@ -8496,11 +8485,8 @@ export function TimelineGrid({
                                     onMonthPlanTabChange?.("epic-gantt");
                                   }}
                                   className={cn(
-                                    "relative flex w-full min-w-0 items-center justify-center px-1.5 py-3 text-center text-[13px] font-bold transition",
-                                    !isLastMonthOverall && "border-r border-slate-200",
-                                    tone?.monthBg ?? "bg-white",
-                                    tone?.monthText ?? "text-slate-700",
-                                    tone?.monthHover ?? "hover:bg-slate-50",
+                                    "relative flex w-full min-w-0 items-center justify-center px-1.5 py-3.5 text-center text-[12.5px] font-semibold tracking-tight text-slate-700 transition hover:bg-slate-50",
+                                    !isLastMonthOverall && "border-r border-slate-200/60",
                                   )}
                                 >
                                   {MONTHS[month - 1]}
@@ -8520,50 +8506,60 @@ export function TimelineGrid({
                             </div>
                           ) : null}
                         </div>
-                        {/* Row 3: Sprint cells — connected grid inside the
-                            calendar container, matching the month row's
-                            visual language (shared borders, per-quarter tint,
-                            no gaps). Each cell stays a SprintPlanDropButton
-                            so drag-an-epic-onto-sprint and click-to-open
-                            still work. */}
+                        {/* Row 3: Sprint tile cards — same pastel pattern as
+                            single-quarter, scaled down to fit the all-quarters
+                            grid (no flag badge — just a colored dot + Sprint
+                            number; the date range would overflow at this
+                            density). */}
                         {showYearSprintChips ? (
-                          <div className="relative grid min-w-0 border-t border-slate-200" style={yearQuarterHeaderGridStyle}>
+                          <div className="relative grid min-w-0 border-t border-slate-200/80 bg-white" style={yearQuarterHeaderGridStyle}>
                             {QUARTERS.flatMap((quarter) => {
-                              const tone = quarterCellTone[quarter.label];
-                              return quarter.months.map((month, mIdxInQ, allMonthsInQ) => {
-                                const isLastMonthOverall = quarter.label === "Q4" && mIdxInQ === allMonthsInQ.length - 1;
+                              const quarterMonthsCount = quarter.months.length;
+                              const quarterFirstMonthIdx = (quarter.months[0] - 1);
+                              void quarterMonthsCount; void quarterFirstMonthIdx;
+                              return quarter.months.map((month, mIdxInQ) => {
+                                const monthIdxInYear = month - 1;
                                 return (
                                   <div
                                     key={`sprint-month-${month}`}
-                                    className={cn(
-                                      "grid grid-cols-2",
-                                      !isLastMonthOverall && "border-r border-slate-200",
-                                    )}
+                                    className="grid grid-cols-2"
                                   >
-                                    {([1, 2] as const).map((lane) => (
-                                      <SprintPlanDropButton
-                                        key={`s-${month}-${lane}`}
-                                        month={month}
-                                        lane={lane}
-                                        title={sprintLabelYearRoadmap(globalSprintFromMonthLane(month, lane))}
-                                        onClick={() => {
-                                          if (isPostDragClickSuppressed()) return;
-                                          setFocusedMonth(month);
-                                          onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, lane), null);
-                                        }}
-                                        className={cn(
-                                          "flex h-6 w-full items-center justify-center text-center transition",
-                                          lane === 1 && "border-r border-slate-200/70",
-                                          tone?.monthBg ?? "bg-white",
-                                          tone?.monthHover ?? "hover:bg-slate-50",
-                                        )}
-                                      >
-                                        <span className={cn("inline-flex items-baseline gap-[1px] text-[10.5px] font-semibold leading-none tabular-nums", tone?.monthText ?? "text-slate-700")}>
-                                          <span>S</span>
-                                          <span>{globalSprintFromMonthLane(month, lane)}</span>
-                                        </span>
-                                      </SprintPlanDropButton>
-                                    ))}
+                                    {([1, 2] as const).map((lane) => {
+                                      // Per-month tint — both sprints in the
+                                      // same month share the same color.
+                                      const sprintTone = sprintTints[monthIdxInYear % sprintTints.length];
+                                      void mIdxInQ;
+                                      return (
+                                        <SprintPlanDropButton
+                                          key={`s-${month}-${lane}`}
+                                          month={month}
+                                          lane={lane}
+                                          title={sprintLabelYearRoadmap(globalSprintFromMonthLane(month, lane))}
+                                          onClick={() => {
+                                            if (isPostDragClickSuppressed()) return;
+                                            setFocusedMonth(month);
+                                            onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, lane), null);
+                                          }}
+                                          className={cn(
+                                            "flex w-full items-center justify-center gap-1 border-l-2 px-1 py-1 text-center transition hover:-translate-y-px",
+                                            sprintTone.borderL,
+                                          )}
+                                        >
+                                          <span
+                                            className={cn(
+                                              "inline-flex size-3 shrink-0 items-center justify-center rounded-full",
+                                              sprintTone.badgeBg,
+                                            )}
+                                            aria-hidden
+                                          >
+                                            <Flag className={cn("size-[8px]", sprintTone.badgeIcon)} strokeWidth={2.4} />
+                                          </span>
+                                          <span className={cn("text-[11px] font-semibold leading-none tabular-nums tracking-tight", sprintTone.title)}>
+                                            S{globalSprintFromMonthLane(month, lane)}
+                                          </span>
+                                        </SprintPlanDropButton>
+                                      );
+                                    })}
                                   </div>
                                 );
                               });
@@ -8574,7 +8570,7 @@ export function TimelineGrid({
                                 style={{ left: roadmapLaneTodayLeft, transform: "translate(-50%, -2px)" }}
                                 aria-hidden
                               >
-                                <span className="pointer-events-auto inline-flex items-center justify-center rounded bg-emerald-50/35 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 shadow-sm ring-1 ring-emerald-200/70">
+                                <span className="pointer-events-auto inline-flex items-center justify-center rounded bg-emerald-50/95 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 shadow-sm ring-1 ring-emerald-200/70">
                                   Today
                                 </span>
                               </div>

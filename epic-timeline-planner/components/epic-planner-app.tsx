@@ -1893,15 +1893,15 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     if (quarterTabRaw === "gantt" || quarterTabRaw === "capacity" || quarterTabRaw === "insights") {
       setActiveQuarterViewTab(quarterTabRaw);
     }
-    const monthRaw = params.get("month");
+    // Month view is parked — ignore any `?month=...` in the URL so
+    // bookmarked / shared month links can't land the user on month
+    // view. Sprint deep-links (`?sprint=...`) still work via the
+    // sprint-mode block below; they don't require a month hydration.
+    // To revive month-via-URL: restore the original parse block.
+    const monthRaw = null;
     let hydratedMonth: number | null = null;
-    if (monthRaw) {
-      const month = Number(monthRaw);
-      if (Number.isFinite(month) && month >= 1 && month <= 12) {
-        hydratedMonth = month;
-        setActiveTimelineMonth(month);
-      }
-    }
+    void monthRaw;
+    void hydratedMonth;
     const sprintRaw = params.get("sprint");
     if (sprintRaw != null) {
       const n = Number(sprintRaw);
