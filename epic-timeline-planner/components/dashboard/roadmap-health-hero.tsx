@@ -737,7 +737,7 @@ function TeamProgressCard({
       </span>
       <div
         className={cn(
-          "max-h-[110px] space-y-0.5 overflow-y-auto pr-1.5",
+          "max-h-[130px] space-y-0.5 overflow-y-auto pr-1.5",
           // Match the project's pastel scrollbar (initiative panel et al.)
           "[scrollbar-color:theme(colors.indigo.100)_transparent]",
           "[&::-webkit-scrollbar]:w-1.5",
