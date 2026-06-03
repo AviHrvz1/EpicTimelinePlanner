@@ -1380,9 +1380,14 @@ function InitiativeTreeEpicRow({
 }) {
   const epicTeamId = normalizedEpicTeamId(epic);
   const epicTeamChip = epicTeamId ? epicDeliveryTeamAssignmentChip(epicTeamId) : null;
-  const isEpicScheduledOnGantt = planContextMonth != null
-    ? epicIsOnPlanForMonth(epic, planContextMonth)
-    : epic.planStartMonth != null && epic.planEndMonth != null;
+  // Treat the epic as "already on the Gantt" whenever it has ANY
+  // plan range set (or a planSprint). The previous version only
+  // counted plans that covered the currently-focused month, so an
+  // epic scheduled for April still showed a drag handle in the May
+  // view — confusing now that the middle panel shows every epic.
+  const isEpicScheduledOnGantt =
+    epic.planSprint != null
+    || (epic.planStartMonth != null && epic.planEndMonth != null);
   const epicDragData = {
     kind: "epic-plan-compact",
     title: epic.title,
@@ -2116,9 +2121,14 @@ function SprintEpicCard({
   const isTimelineEpicDragActive = active != null && String(active.id).startsWith("timeline-epic:");
   const epicTeamId = normalizedEpicTeamId(epic);
   const epicTeamChip = epicTeamId ? epicDeliveryTeamAssignmentChip(epicTeamId) : null;
-  const isEpicScheduledOnGantt = planContextMonth != null
-    ? epicIsOnPlanForMonth(epic, planContextMonth)
-    : epic.planStartMonth != null && epic.planEndMonth != null;
+  // Treat the epic as "already on the Gantt" whenever it has ANY
+  // plan range set (or a planSprint). The previous version only
+  // counted plans that covered the currently-focused month, so an
+  // epic scheduled for April still showed a drag handle in the May
+  // view — confusing now that the middle panel shows every epic.
+  const isEpicScheduledOnGantt =
+    epic.planSprint != null
+    || (epic.planStartMonth != null && epic.planEndMonth != null);
   const epicDragData = {
     kind: "epic-plan-compact",
     title: epic.title,
@@ -2211,7 +2221,10 @@ function SprintEpicCard({
         <button
           type="button"
           onClick={handleToggle}
-          className="inline-flex h-6 shrink-0 items-center rounded-sm text-slate-500 transition-colors hover:text-slate-700"
+          // `h-7` matches the epic title's `leading-7` so the chevron,
+          // drag handle, and epic icon all sit on the same baseline as
+          // the title's first line under `items-start`.
+          className="inline-flex h-7 shrink-0 items-center rounded-sm text-slate-500 transition-colors hover:text-slate-700"
           aria-label={isOpen ? "Collapse epic" : "Expand epic"}
           aria-expanded={isOpen}
         >
@@ -2225,7 +2238,7 @@ function SprintEpicCard({
         {(isCapacityMode ? !epicTeamId : (!isEpicScheduledOnGantt && epicPlanDragEnabled)) ? (
           <button
             type="button"
-            className="relative inline-flex h-6 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+            className="relative inline-flex h-7 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
             aria-label="Drag epic"
             {...listeners}
             {...attributes}
@@ -2236,7 +2249,7 @@ function SprintEpicCard({
             ) : null}
           </button>
         ) : null}
-        <span className="inline-flex h-6 shrink-0 items-center" aria-hidden>
+        <span className="inline-flex h-7 shrink-0 items-center" aria-hidden>
           <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-3.5 [&_svg]:text-sky-500" />
         </span>
         <div className="min-w-0 flex-1 text-left">
@@ -2940,59 +2953,23 @@ export function InitiativeListPanel({
   }, [monthEpicTeamFilterId, onSprintBoardTeamFilterSync]);
 
   const monthAssignedEpics = useMemo(() => {
-    if (epicPanelQuarterMonths != null && epicPanelQuarterMonths.length > 0) {
-      const byEpicId = new Map<string, { epic: EpicItem; initiative: InitiativeItem }>();
-      for (const initiative of initiatives) {
-        const initiativeIsInQuarterScope =
-          initiative.status === "scheduled" &&
-          initiative.startMonth != null &&
-          initiative.endMonth != null &&
-          epicPanelQuarterMonths.some((month) => initiative.startMonth! <= month && initiative.endMonth! >= month);
-        const initiativeHasPlannedEpicInQuarter = (initiative.epics ?? []).some((epic) =>
-          epicPanelQuarterMonths.some((month) => epicIsOnPlanForMonth(epic, month)),
-        );
-        for (const epic of initiative.epics ?? []) {
-          const isPlannedInQuarterScope = epicPanelQuarterMonths.some((month) => epicIsOnPlanForMonth(epic, month));
-          const isUnscheduled =
-            epic.planSprint == null && epic.planStartMonth == null && epic.planEndMonth == null;
-          const includeUnscheduled = isUnscheduled && (initiativeIsInQuarterScope || initiativeHasPlannedEpicInQuarter);
-          if (!isPlannedInQuarterScope && !includeUnscheduled) continue;
-          byEpicId.set(epic.id, { epic, initiative });
-        }
-      }
-      return [...byEpicId.values()].sort((a, b) => {
-        const byInit = a.initiative.title.localeCompare(b.initiative.title);
-        if (byInit !== 0) return byInit;
-        return a.epic.title.localeCompare(b.epic.title);
-      });
-    }
-    if (epicListScopeMonth == null) return [];
+    // Middle panel's Epics list: include EVERY epic from every
+    // initiative, regardless of whether it is planned for the focused
+    // month or quarter. The user-controlled filters above the list
+    // (Teams / Statuses / Quarters / Health) still narrow the list —
+    // but absent any user filter, every epic is visible.
     const rows: Array<{ epic: EpicItem; initiative: InitiativeItem }> = [];
     for (const initiative of initiatives) {
-      const initiativeIsInMonthScope =
-        initiative.status === "scheduled" &&
-        initiative.startMonth != null &&
-        initiative.endMonth != null &&
-        initiative.startMonth <= epicListScopeMonth &&
-        initiative.endMonth >= epicListScopeMonth;
-      const initiativeHasPlannedEpicInMonth = (initiative.epics ?? []).some((epic) =>
-        epicIsOnPlanForMonth(epic, epicListScopeMonth),
-      );
       for (const epic of initiative.epics ?? []) {
-        const isPlannedInMonth = epicIsOnPlanForMonth(epic, epicListScopeMonth);
-        const isUnscheduled =
-          epic.planSprint == null && epic.planStartMonth == null && epic.planEndMonth == null;
-        const includeUnscheduled = isUnscheduled && (initiativeIsInMonthScope || initiativeHasPlannedEpicInMonth);
-        if (!isPlannedInMonth && !includeUnscheduled) continue;
         rows.push({ epic, initiative });
       }
     }
-    return [...rows].sort((a, b) => {
+    return rows.sort((a, b) => {
       const byInit = a.initiative.title.localeCompare(b.initiative.title);
       if (byInit !== 0) return byInit;
       return a.epic.title.localeCompare(b.epic.title);
     });
-  }, [initiatives, epicListScopeMonth, epicPanelQuarterMonths]);
+  }, [initiatives]);
   /** Month list scope: all epics for the month, or only those on the selected team when viewing that team’s sprint board. */
   const monthPanelEpics = useMemo(() => {
     if (!monthEpicTeamFilterId) return monthAssignedEpics;
@@ -3457,27 +3434,18 @@ export function InitiativeListPanel({
               ariaLabel="Filter left panel by status"
               allValue="all"
             />
-            {activeMonth != null ? (
-              <IconFilterSelect
-                values={["current"]}
-                onToggle={() => {}}
-                options={monthFilterOptions}
-                ariaLabel={isSprintModeActive ? "Month filter (active sprint month)" : "Month filter (locked to selected month)"}
-                allValue="current"
-                // Sprint surfaces keep the month chip interactive (no greyed-out look); other month-scoped views stay locked.
-                disabled={!isSprintModeActive}
-              />
-            ) : (
-              <IconFilterSelect
-                values={panelQuarterFilters}
-                onToggle={handleQuarterPick}
-                options={quarterFilterOptions}
-                ariaLabel="Filter left panel by quarter"
-                allValue="all"
-                disabled={panelQuarterFilterLocked}
-                appearance="radio"
-              />
-            )}
+            {/* The quarter filter stays interactive in every view (year,
+              * quarter, and month). It is never auto-locked to whatever
+              * the user just navigated into — they pick freely. */}
+            <IconFilterSelect
+              values={panelQuarterFilters}
+              onToggle={handleQuarterPick}
+              options={quarterFilterOptions}
+              ariaLabel="Filter left panel by quarter"
+              allValue="all"
+              disabled={panelQuarterFilterLocked}
+              appearance="radio"
+            />
             <HealthFilterMenu
               healthFilter={healthFilter}
               onHealthFilterChange={onHealthFilterChange}

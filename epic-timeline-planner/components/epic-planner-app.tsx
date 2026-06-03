@@ -2271,6 +2271,22 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     );
   }, [topMode]);
 
+  // Track the gantt panel's measured height so the initiative panel
+  // (middle column) can be capped at the same height — once it would
+  // otherwise grow past the gantt, it scrolls internally instead of
+  // extending past the right column's bottom edge.
+  const [ganttPanelHeight, setGanttPanelHeight] = useState<number | null>(null);
+  useEffect(() => {
+    const el = planningRightSurfaceRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => {
+      const next = entries[0]?.contentRect.height ?? null;
+      setGanttPanelHeight((prev) => (prev != null && next != null && Math.abs(prev - next) < 1 ? prev : next));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [topMode]);
+
   // Backlog Workspace shows initiatives across all roadmaps; refetch with roadmapId=all
   // when entering it. Uses `slim=1` so the response excludes the heavy snapshots /
   // comments / history trees the backlog table doesn't display — keeps the payload
@@ -3577,10 +3593,29 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
 
   async function createEpicQuick(initiativeId: string, title: string) {
     console.log("[create-epic] POST", { initiativeId, title, caller: new Error().stack?.split("\n").slice(1, 4).join(" | ") });
+    // Month view: stamp the focused month (single month placement).
+    // Quarter view (no focused month): stamp the full quarter range so
+    // the epic shows up in every month-scoped list inside that
+    // quarter — e.g. an epic created in Q2 view stays visible when
+    // the user later navigates into April / May / June.
+    const epicFocusedQuarter = focusedQuarterLabel
+      ? QUARTERS.find((q) => q.label === focusedQuarterLabel)
+      : null;
+    const planStartMonth = activeTimelineMonth
+      ?? epicFocusedQuarter?.months[0]
+      ?? null;
+    const planEndMonth = activeTimelineMonth
+      ?? epicFocusedQuarter?.months[epicFocusedQuarter.months.length - 1]
+      ?? null;
     const response = await fetch(`/api/initiatives/${initiativeId}/epics`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({
+        title,
+        ...(planStartMonth != null && planEndMonth != null
+          ? { planStartMonth, planEndMonth }
+          : {}),
+      }),
     });
     if (!response.ok) {
       console.log("[create-epic] POST failed", { initiativeId, status: response.status });
@@ -3618,6 +3653,18 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       roadmapMatch && roadmapMatch.years.length > 0
         ? (roadmapMatch.years.includes(selectedYear) ? selectedYear : roadmapMatch.years[0])
         : selectedYear;
+    // Month view: stamp the focused month. Quarter view (no focused
+    // month): stamp the full quarter range so the initiative stays
+    // visible in every month-scoped list inside that quarter.
+    const focusedQuarter = focusedQuarterLabel
+      ? QUARTERS.find((q) => q.label === focusedQuarterLabel)
+      : null;
+    const quarterStartMonth = activeTimelineMonth
+      ?? focusedQuarter?.months[0]
+      ?? null;
+    const quarterEndMonth = activeTimelineMonth
+      ?? focusedQuarter?.months[focusedQuarter.months.length - 1]
+      ?? null;
     const response = await fetch("/api/initiatives", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -3625,6 +3672,9 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         title,
         year: yearForInitiative,
         roadmapId: finalRoadmapId,
+        ...(quarterStartMonth != null && quarterEndMonth != null
+          ? { startMonth: quarterStartMonth, endMonth: quarterEndMonth }
+          : {}),
       }),
     });
     if (!response.ok) {
@@ -5869,9 +5919,19 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             >
               <div
                 className={cn(
-                  // Unified-scroll: panel column grows with content; `overflow-x-clip`
-                  // (not -hidden) avoids the `overflow-y: visible` → `auto` coercion.
-                  "relative overflow-x-clip overflow-y-visible rounded-xl bg-white/90 motion-reduce:transition-none mt-2 mb-2 ml-2 shadow-xl",
+                  // Cap the panel column at the gantt panel's measured
+                  // height (via `maxHeight` below) and scroll internally
+                  // when its content exceeds that height.
+                  "relative overflow-x-clip overflow-y-auto rounded-xl bg-white/90 motion-reduce:transition-none mt-2 mb-2 ml-2 shadow-xl",
+                  // Match the page scrollbar's blue style so the
+                  // internal scrollbar reads as part of the same UI.
+                  "[scrollbar-color:theme(colors.blue.500)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-blue-500 hover:[&::-webkit-scrollbar-thumb]:bg-blue-600",
+                  // Render the scrollbar on the LEFT edge of the panel.
+                  // The `rtl` direction puts the scrollbar on the
+                  // logical-end side which becomes the visual left edge
+                  // for an LTR app; the inner wrapper flips back to
+                  // `ltr` so its content still reads left-to-right.
+                  "[direction:rtl]",
                   !isResizingPanel && !suppressLeftPanelTransition && "transition-[width] duration-[320ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
                   leftRailLockedClosed && "min-w-0 border-0 p-0",
                 )}
@@ -5881,6 +5941,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                     : isLeftPanelHidden
                       ? "2.75rem"
                       : `${panelWidth}px`,
+                  maxHeight: ganttPanelHeight != null ? `${ganttPanelHeight}px` : undefined,
                 }}
               >
                 <div
@@ -5895,7 +5956,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                     transform: isLeftPanelHidden ? "translateX(-100%)" : "translateX(0)",
                   }}
                 >
-                  <div className="min-w-0 shrink-0 overflow-x-clip overflow-y-visible rounded-xl bg-white" style={{ width: panelWidth }}>
+                  <div className="min-w-0 shrink-0 overflow-x-clip overflow-y-visible rounded-xl bg-white [direction:ltr]" style={{ width: panelWidth }}>
                     <InitiativeListPanel
                       initiatives={initiatives}
                       activeMonth={initiativeListActiveMonth}
@@ -5988,7 +6049,11 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                           ? setSprintStoryBoardTeamId
                           : undefined
                       }
-                      panelQuarterQuickFilter={focusedQuarterLabel as "Q1" | "Q2" | "Q3" | "Q4" | null}
+                      // Don't auto-set the panel's quarter filter when
+                      // the user navigates into a different quarter or
+                      // month view — the chip stays on "All" and stays
+                      // interactive so the user can pick freely.
+                      panelQuarterQuickFilter={null}
                       panelQuarterFilterLocked={false}
                       onInitiativeAccordionChange={handleInitiativeAccordionChange}
                       onEpicAccordionChange={(epicId, isOpen) => {
