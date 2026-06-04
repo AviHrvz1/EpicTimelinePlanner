@@ -6209,7 +6209,7 @@ export function TimelineGrid({
   const chipsToolbarRow = (suppressInlineChips || summaryBarPortalElement)
     ? null
     : (
-        <div className="-mt-2 mb-1 -ml-5 -mr-4 flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-5 bg-white px-5 py-1.5">
+        <div className="-mt-2 mb-1 flex w-full min-w-0 shrink-0 flex-wrap items-center justify-end gap-5 bg-white px-5 py-1.5">
           {sprintKanbanSummaryStats ? summarySprintChipsJsx : summaryYearChipsJsx}
         </div>
       );
@@ -6217,7 +6217,11 @@ export function TimelineGrid({
   const timelineHeaderRow = (
       <div
         className={cn(
-          "relative z-30 mt-2 mb-5 -ml-5 -mr-4 flex min-w-0 shrink-0 items-center gap-2 overflow-visible rounded-none border-y border-indigo-200 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 py-2 pl-5 pr-4 shadow-[inset_8px_0_10px_-4px_rgba(165,180,252,0.18),inset_-8px_0_10px_-4px_rgba(165,180,252,0.18)] ring-0",
+          // Breadcrumb row spans full panel width. The panel root no
+          // longer has horizontal padding, so the bar naturally
+          // reaches both edges without negative-margin gymnastics.
+          // Content padding (`pl-5 pr-4`) is on the bar itself.
+          "relative z-30 mt-2 mb-5 w-full flex min-w-0 shrink-0 items-center gap-2 overflow-visible rounded-none border-y border-indigo-200 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 py-2 pl-5 pr-4 shadow-[inset_8px_0_10px_-4px_rgba(165,180,252,0.18),inset_-8px_0_10px_-4px_rgba(165,180,252,0.18)] ring-0",
           useRoadmapGanttChipTrack && "min-w-0",
         )}
       >
@@ -6749,7 +6753,9 @@ export function TimelineGrid({
           // scroll` (which hid the bar).
           // `overscroll-y-auto` lets the wheel scroll chain up to the
           // page once this inner area hits its top/bottom boundary.
-          "flex min-h-0 flex-1 flex-col max-h-[calc(100dvh-18rem)] overflow-y-auto overscroll-y-auto",
+          // `pl-5 pr-4` is on this surface (moved off the panel root
+          // so the breadcrumb row can span full panel width).
+          "flex min-h-0 flex-1 flex-col max-h-[calc(100dvh-18rem)] overflow-y-auto overscroll-y-auto pl-5 pr-4",
           // Pastel scrollbar matching the initiative panel's rail.
           "[scrollbar-gutter:stable] [scrollbar-width:thin] [scrollbar-color:theme(colors.indigo.100)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gradient-to-b [&::-webkit-scrollbar-thumb]:from-sky-100 [&::-webkit-scrollbar-thumb]:via-indigo-100 [&::-webkit-scrollbar-thumb]:to-violet-100 hover:[&::-webkit-scrollbar-thumb]:from-sky-200 hover:[&::-webkit-scrollbar-thumb]:via-indigo-200 hover:[&::-webkit-scrollbar-thumb]:to-violet-200",
           showCapacityPlanningScrollbar && "min-w-0",
@@ -8595,7 +8601,7 @@ export function TimelineGrid({
   );
 
   return (
-    <div className="relative flex h-full min-h-0 min-w-0 w-full flex-col overflow-x-clip overflow-y-hidden rounded-xl border border-indigo-200 bg-card py-5 pl-5 pr-4 shadow-lg ring-1 ring-black/5">
+    <div className="relative flex h-full min-h-0 min-w-0 w-full flex-col overflow-x-clip overflow-y-hidden rounded-xl border border-indigo-200 bg-card py-5 shadow-lg ring-1 ring-black/5">
       <div ref={yearRoadmapMeasureRef} className="flex min-h-0 min-w-0 flex-1 flex-col">
         {panelHScroll ? (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-auto overflow-y-hidden [scrollbar-gutter:stable]">
