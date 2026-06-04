@@ -293,7 +293,9 @@ function StripedGanttLaneScrollArea({
         // body row height; rows beyond that scroll inside this element.
         // Blue scrollbar styling matches the rest of the app's blue
         // scrollbar accent.
-        "relative z-10 flex min-h-0 basis-0 flex-1 flex-col overflow-y-auto overscroll-contain",
+        // `overscroll-auto` lets the wheel scroll chain up once this
+        // inner lane hits its top/bottom boundary.
+        "relative z-10 flex min-h-0 basis-0 flex-1 flex-col overflow-y-auto overscroll-auto",
         // Force a visible scrollbar (macOS auto-hide otherwise leaves
         // it invisible until the user starts scrolling). `scrollbar-
         // width: thin` keeps Firefox happy; the webkit rules give
@@ -6745,7 +6747,9 @@ export function TimelineGrid({
           // that scrolls inside this element with a visible blue
           // scrollbar. Replaces the old flex-1 + `planning-surface-
           // scroll` (which hid the bar).
-          "flex min-h-0 flex-1 flex-col max-h-[calc(100dvh-18rem)] overflow-y-auto overscroll-y-contain",
+          // `overscroll-y-auto` lets the wheel scroll chain up to the
+          // page once this inner area hits its top/bottom boundary.
+          "flex min-h-0 flex-1 flex-col max-h-[calc(100dvh-18rem)] overflow-y-auto overscroll-y-auto",
           // Pastel scrollbar matching the initiative panel's rail.
           "[scrollbar-gutter:stable] [scrollbar-width:thin] [scrollbar-color:theme(colors.indigo.100)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gradient-to-b [&::-webkit-scrollbar-thumb]:from-sky-100 [&::-webkit-scrollbar-thumb]:via-indigo-100 [&::-webkit-scrollbar-thumb]:to-violet-100 hover:[&::-webkit-scrollbar-thumb]:from-sky-200 hover:[&::-webkit-scrollbar-thumb]:via-indigo-200 hover:[&::-webkit-scrollbar-thumb]:to-violet-200",
           showCapacityPlanningScrollbar && "min-w-0",

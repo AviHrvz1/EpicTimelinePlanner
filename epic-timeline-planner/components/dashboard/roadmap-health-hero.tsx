@@ -348,7 +348,11 @@ export function RoadmapHealthHero({
               stats grid (stats moved up next to the roadmap selector).
               justify-between spreads the four charts across the full
               width of the panel with the dividers absorbing slack. */}
-          <div className="mt-2 flex w-full min-w-min flex-nowrap items-center justify-between gap-x-6">
+          {/* Responsive layout: cards stay on a single row and shrink
+            * to their min widths. Once total content exceeds the
+            * container, a horizontal scrollbar lets the user pan the
+            * full row instead of cards getting clipped. */}
+          <div className="mt-2 flex w-full min-w-0 flex-nowrap items-center justify-between gap-x-6 overflow-x-auto [scrollbar-width:thin] [scrollbar-color:theme(colors.indigo.100)_transparent] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gradient-to-r [&::-webkit-scrollbar-thumb]:from-sky-100 [&::-webkit-scrollbar-thumb]:via-indigo-100 [&::-webkit-scrollbar-thumb]:to-violet-100">
           <TeamProgressCard
             rows={stats.teamProgress}
             unitSuffix={progressBasis === "stories" ? "" : "d"}
@@ -730,7 +734,7 @@ function TeamProgressCard({
   }>;
 }) {
   return (
-    <div className="flex w-[640px] shrink-0 flex-col gap-2">
+    <div className="flex w-[640px] min-w-[360px] max-w-[640px] shrink flex-col gap-2 xl:w-[640px] xl:shrink-0">
       <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500">
         <Users className="size-3.5 shrink-0 text-emerald-500" aria-hidden />
         Team Progress (all epics)
