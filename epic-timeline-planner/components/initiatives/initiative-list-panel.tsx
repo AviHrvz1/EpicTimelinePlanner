@@ -3311,7 +3311,7 @@ export function InitiativeListPanel({
   }, [inlineNewEpicInitiativeId, inlineNewEpicTitle, onCreateEpicQuick]);
 
   return (
-    <aside className="flex min-h-0 flex-col overflow-x-clip overflow-y-visible rounded-xl border border-indigo-200 bg-white pt-10 pb-4 pl-0 pr-2 shadow-xl ring-1 ring-black/8">
+    <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-indigo-200 bg-white pt-10 pb-4 pl-0 pr-2 shadow-xl ring-1 ring-black/8">
       <div className="z-10 -mr-2 mb-4 flex shrink-0 items-center justify-between border-b border-slate-200 bg-white pr-2 pb-2">
         <div className="min-w-0 pl-5">
           <h2 className="inline-flex items-center gap-2 text-[20px] font-semibold leading-tight tracking-[-0.02em] text-slate-800">
@@ -3366,12 +3366,11 @@ export function InitiativeListPanel({
 
       <div
         className={cn(
-          // Unified-scroll: initiative rail grows tall like the Gantt;
-          // vertical scroll bubbles to the page. `overflow-x-clip`
-          // (NOT -hidden) — `overflow-x: hidden` paired with
-          // `overflow-y: visible` is coerced to `auto` by the browser,
-          // which resurrects an internal vertical scrollbar.
-          "min-h-0 flex-1 overflow-y-visible overflow-x-clip bg-white mr-1.5",
+          // Internal vertical scroll on the initiative list. `direction:
+          // rtl` puts the scrollbar on the LEFT edge for an LTR app;
+          // the inner div flips back to `ltr` so the cards still read
+          // normally. Pastel scrollbar matches the planner's accent.
+          "min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-white [direction:rtl] [scrollbar-gutter:stable] mr-1.5 shadow-[inset_-4px_0_8px_-4px_rgba(15,23,42,0.09)] [scrollbar-color:theme(colors.indigo.100)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gradient-to-b [&::-webkit-scrollbar-thumb]:from-sky-100 [&::-webkit-scrollbar-thumb]:via-indigo-100 [&::-webkit-scrollbar-thumb]:to-violet-100",
         )}
       >
         <div className="min-h-0 bg-white ps-5 pe-2 [direction:ltr]">

@@ -269,10 +269,11 @@ function StripedGanttLaneScrollArea({
   id,
   columnCount,
   rowGapClass,
-  // Unified-scroll + responsive: the lane sizes to its actual rows.
-  // Callers can pass `minHeightStyle` to add a floor where it matters
-  // (e.g. drop targets in sparse views).
-  minHeightStyle,
+  // Default min-height keeps the lane at least one viewport tall (minus
+  // the calendar chrome above) so the panel always feels "page-sized";
+  // content can grow taller, in which case the scroll-container below
+  // gives it an internal vertical scrollbar.
+  minHeightStyle = { minHeight: "max(100%, calc(100dvh - 26rem))" },
   noScrollbar = false,
   children,
 }: {
@@ -288,8 +289,17 @@ function StripedGanttLaneScrollArea({
     <div
       id={id}
       className={cn(
-        // Unified-scroll: vertical scroll bubbles to the page scroller.
-        "relative z-10 flex min-h-0 basis-0 flex-1 flex-col overflow-y-visible",
+        // Internal vertical scroll — the Gantt panel above caps at the
+        // body row height; rows beyond that scroll inside this element.
+        // Blue scrollbar styling matches the rest of the app's blue
+        // scrollbar accent.
+        "relative z-10 flex min-h-0 basis-0 flex-1 flex-col overflow-y-auto overscroll-contain",
+        // Force a visible scrollbar (macOS auto-hide otherwise leaves
+        // it invisible until the user starts scrolling). `scrollbar-
+        // width: thin` keeps Firefox happy; the webkit rules give
+        // Chrome/Safari an always-visible blue thumb.
+        "[scrollbar-width:thin] [scrollbar-color:#3b82f6_transparent] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-blue-500 hover:[&::-webkit-scrollbar-thumb]:bg-blue-600",
+        noScrollbar && "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
       )}
     >
       <div className="relative isolate flex w-full flex-shrink-0 flex-col" style={minHeightStyle}>
@@ -6197,7 +6207,7 @@ export function TimelineGrid({
   const chipsToolbarRow = (suppressInlineChips || summaryBarPortalElement)
     ? null
     : (
-        <div className="sticky top-0 z-40 -mt-2 mb-1 -ml-5 -mr-4 flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-5 bg-white/90 px-5 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-white/75">
+        <div className="-mt-2 mb-1 -ml-5 -mr-4 flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-5 bg-white px-5 py-1.5">
           {sprintKanbanSummaryStats ? summarySprintChipsJsx : summaryYearChipsJsx}
         </div>
       );
@@ -6205,9 +6215,7 @@ export function TimelineGrid({
   const timelineHeaderRow = (
       <div
         className={cn(
-          // Unified-scroll: pin the breadcrumb row right under the chip toolbar so
-          // it stays in view while the Gantt scrolls underneath.
-          "sticky top-9 z-30 mt-2 mb-5 -ml-5 -mr-4 flex min-w-0 shrink-0 items-center gap-2 overflow-visible rounded-none border-y border-indigo-200 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 py-2 pl-5 pr-4 shadow-[inset_8px_0_10px_-4px_rgba(165,180,252,0.18),inset_-8px_0_10px_-4px_rgba(165,180,252,0.18)] ring-0",
+          "relative z-30 mt-2 mb-5 -ml-5 -mr-4 flex min-w-0 shrink-0 items-center gap-2 overflow-visible rounded-none border-y border-indigo-200 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 py-2 pl-5 pr-4 shadow-[inset_8px_0_10px_-4px_rgba(165,180,252,0.18),inset_-8px_0_10px_-4px_rgba(165,180,252,0.18)] ring-0",
           useRoadmapGanttChipTrack && "min-w-0",
         )}
       >
@@ -6731,12 +6739,16 @@ export function TimelineGrid({
         key={isInsightsSurfaceRender ? `insights-${activeMonth ?? "year"}-${focusedQuarterLabel ?? "all"}` : "planning-surface"}
         ref={timelineContentScrollRef}
         className={cn(
-          // Unified-scroll: planning surface grows tall and the page
-          // scrollbar handles vertical scrolling.
-          "flex min-h-0 flex-1 flex-col overflow-y-visible",
-          showCapacityPlanningScrollbar
-            ? "min-w-0 [scrollbar-gutter:stable] [scrollbar-width:thin]"
-            : "planning-surface-scroll",
+          // Explicit-height internal scroll. `max-height: calc(100dvh
+          // - 18rem)` gives the planning surface a hard ceiling
+          // independent of the surrounding flex chain — content past
+          // that scrolls inside this element with a visible blue
+          // scrollbar. Replaces the old flex-1 + `planning-surface-
+          // scroll` (which hid the bar).
+          "flex min-h-0 flex-1 flex-col max-h-[calc(100dvh-18rem)] overflow-y-auto overscroll-y-contain",
+          // Pastel scrollbar matching the initiative panel's rail.
+          "[scrollbar-gutter:stable] [scrollbar-width:thin] [scrollbar-color:theme(colors.indigo.100)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gradient-to-b [&::-webkit-scrollbar-thumb]:from-sky-100 [&::-webkit-scrollbar-thumb]:via-indigo-100 [&::-webkit-scrollbar-thumb]:to-violet-100 hover:[&::-webkit-scrollbar-thumb]:from-sky-200 hover:[&::-webkit-scrollbar-thumb]:via-indigo-200 hover:[&::-webkit-scrollbar-thumb]:to-violet-200",
+          showCapacityPlanningScrollbar && "min-w-0",
         )}
       >
       {activeMonth ? (
@@ -7798,8 +7810,10 @@ export function TimelineGrid({
                   "min-h-0 min-w-0 flex-1",
                   !panelHScroll &&
                     yearRoadmapHScroll &&
-                    // Horizontal scroll only — vertical bubbles to the page.
-                    "overflow-x-auto overflow-y-visible [scrollbar-gutter:stable]",
+                    // Horizontal scroll only; vertical clips so the
+                    // inner scroll container (StripedGanttLaneScrollArea)
+                    // gets a definite height to overflow against.
+                    "overflow-x-auto overflow-y-hidden [scrollbar-gutter:stable]",
                 )}
               >
                 <div
@@ -8577,10 +8591,10 @@ export function TimelineGrid({
   );
 
   return (
-    <div className="relative flex min-h-0 min-w-0 w-full flex-col overflow-x-clip overflow-y-visible rounded-xl border border-indigo-200 bg-card py-5 pl-5 pr-4 shadow-lg ring-1 ring-black/5">
+    <div className="relative flex h-full min-h-0 min-w-0 w-full flex-col overflow-x-clip overflow-y-hidden rounded-xl border border-indigo-200 bg-card py-5 pl-5 pr-4 shadow-lg ring-1 ring-black/5">
       <div ref={yearRoadmapMeasureRef} className="flex min-h-0 min-w-0 flex-1 flex-col">
         {panelHScroll ? (
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-auto overflow-y-visible [scrollbar-gutter:stable]">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-auto overflow-y-hidden [scrollbar-gutter:stable]">
             <div
               className="flex min-h-0 min-w-0 w-max min-w-full flex-1 flex-col"
               style={panelScrollMinWidthPx != null ? { minWidth: panelScrollMinWidthPx } : undefined}

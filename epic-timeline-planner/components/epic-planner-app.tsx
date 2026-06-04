@@ -5880,12 +5880,13 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             topMode === "backlog"
               ? "min-h-0 min-w-0 flex-1 items-stretch overflow-x-visible overflow-y-visible"
               : "flex-1 min-h-0 overflow-y-visible",
-            // Lock the body row to a full viewport height for the modes
-            // that opt into page-level scrolling, so the inner panels
-            // (Gantt, backlog table, users directory, dashboard) stay
-            // tall enough that the page can scroll down to reveal more
-            // of them rather than the panels compressing.
-            (topMode === "roadmap" || topMode === "backlog" || topMode === "dashboard" || topMode === "users") && "min-h-[100vh]",
+            // Roadmap mode: body row uses `min-h-[calc(100vh-200px)]`
+            // so the panels keep a useful height even when the dashboard
+            // hero is expanded — the page-level blue scrollbar handles
+            // hero+body overflow, and the Gantt's inner scroll area
+            // shows its own scrollbar when rows exceed the panel height.
+            topMode === "roadmap" && "min-h-[calc(100vh-200px)]",
+            (topMode === "backlog" || topMode === "dashboard" || topMode === "users") && "min-h-[100vh]",
             topMode !== "backlog" && (isModeRailExpanded ? "overflow-x-visible" : "overflow-x-clip"),
           )}
         >
@@ -5901,14 +5902,13 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             )}
           >
             {topMode === "roadmap" ? (
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <div
               ref={layoutRef}
               className={cn(
-                // Unified-scroll: drop `min-h-0` so the grid grows with its
-                // content. `items-start` so each column ends at its own
-                // content bottom — the Gantt no longer gets stretched to
-                // match the taller initiative panel.
-                "grid flex-1 items-start",
+                // Grid: both columns set to h-[calc(100vh-200px)] so
+                // initiative + separator + Gantt all end at the same Y.
+                "grid shrink-0 items-stretch",
                 leftRailLockedClosed ? "gap-x-0" : "gap-x-0",
                 isResizingPanel && "select-none",
               )}
@@ -5921,19 +5921,10 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             >
               <div
                 className={cn(
-                  // Cap the panel column at the gantt panel's measured
-                  // height (via `maxHeight` below) and scroll internally
-                  // when its content exceeds that height.
-                  "relative overflow-x-clip overflow-y-auto rounded-xl bg-white/90 motion-reduce:transition-none mt-2 mb-2 ml-1 shadow-xl",
-                  // Match the page scrollbar's blue style so the
-                  // internal scrollbar reads as part of the same UI.
-                  "[scrollbar-color:theme(colors.blue.500)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-blue-500 hover:[&::-webkit-scrollbar-thumb]:bg-blue-600",
-                  // Render the scrollbar on the LEFT edge of the panel.
-                  // The `rtl` direction puts the scrollbar on the
-                  // logical-end side which becomes the visual left edge
-                  // for an LTR app; the inner wrapper flips back to
-                  // `ltr` so its content still reads left-to-right.
-                  "[direction:rtl]",
+                  // Fixed-height initiative column — matches the
+                  // Gantt column so initiative + separator + Gantt
+                  // all end at the same Y.
+                  "relative h-[calc(100vh-200px)] min-h-0 overflow-hidden rounded-xl bg-white/90 motion-reduce:transition-none mt-2 mb-2 ml-1 shadow-xl",
                   !isResizingPanel && !suppressLeftPanelTransition && "transition-[width] duration-[320ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
                   leftRailLockedClosed && "min-w-0 border-0 p-0",
                 )}
@@ -5943,13 +5934,11 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                     : isLeftPanelHidden
                       ? "2.75rem"
                       : `${panelWidth}px`,
-                  maxHeight: ganttPanelHeight != null ? `${ganttPanelHeight}px` : undefined,
                 }}
               >
                 <div
                   className={cn(
-                    // Unified-scroll: panel rail grows with content; no h-full/min-h-0.
-                    "flex motion-reduce:transition-none",
+                    "flex h-full min-h-0 motion-reduce:transition-none",
                     !suppressLeftPanelTransition && "transition-transform duration-[320ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
                     isLeftPanelHidden && "pointer-events-none",
                   )}
@@ -5958,7 +5947,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                     transform: isLeftPanelHidden ? "translateX(-100%)" : "translateX(0)",
                   }}
                 >
-                  <div className="min-w-0 shrink-0 overflow-x-clip overflow-y-visible rounded-xl bg-white [direction:ltr]" style={{ width: panelWidth }}>
+                  <div className="h-full min-h-0 min-w-0 shrink-0 overflow-hidden rounded-xl bg-white" style={{ width: panelWidth }}>
                     <InitiativeListPanel
                       initiatives={initiatives}
                       activeMonth={initiativeListActiveMonth}
@@ -6154,9 +6143,10 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               )}
               <div
                 ref={planningRightSurfaceRef}
-                // Unified-scroll: Gantt column grows with content;
-                // `overflow-x-clip` to avoid coercing `overflow-y-visible`.
-                className="mt-2 mb-2 flex min-w-0 flex-col overflow-x-clip overflow-y-visible rounded-r-xl shadow-xl"
+                // Fixed-height Gantt column matching the initiative
+                // column. Internal scrollbar comes from the planning
+                // surface inside.
+                className="mt-2 mb-2 flex h-[calc(100vh-200px)] min-h-0 min-w-0 flex-col overflow-hidden rounded-r-xl shadow-xl"
               >
                 {(() => {
                   // Closed-year snapshot strip — mounted above the timeline
@@ -6638,6 +6628,13 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               </div>
               {/* Body-row right-edge separator removed — the page-level
                   fixed separator (in <main> above) handles this now. */}
+            </div>
+            {/* Bottom panel — horizontal full-width white strip that
+              * starts where the initiative + separator + Gantt all end.
+              * `-ml-1 -mr-[16px]` cancel the body row's left/right
+              * insets so the strip reaches the mode rail on the left
+              * and the page edge on the right. */}
+            <div className="-ml-1 -mr-[16px] h-10 shrink-0 border-t border-slate-300 bg-white" />
             </div>
           ) : topMode === "dashboard" ? (
             null
