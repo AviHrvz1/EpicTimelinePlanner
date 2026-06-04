@@ -5876,7 +5876,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             // reaches the same x as the Roadmap Health hero (each panel
             // has its own internal margin that visually shifts them).
             // Hero alignment for the other modes stays at pr-[16px].
-            (topMode === "backlog" || topMode === "users") ? "pr-0" : "pr-[16px]",
+            (topMode === "backlog" || topMode === "users") ? "pr-0" : "pr-[6px]",
             topMode === "backlog"
               ? "min-h-0 min-w-0 flex-1 items-stretch overflow-x-visible overflow-y-visible"
               : "flex-1 min-h-0 overflow-y-visible",
@@ -5906,25 +5906,30 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             <div
               ref={layoutRef}
               className={cn(
-                // Grid: both columns set to h-[calc(100vh-200px)] so
-                // initiative + separator + Gantt all end at the same Y.
-                "grid shrink-0 items-stretch",
+                // Grid fills the body row (`flex-1 min-h-0`). The
+                // `grid-template-rows: minmax(0, 1fr)` forces the
+                // single row to consume the grid's full height, so
+                // `items-stretch` actually stretches both columns to
+                // the available space — which grows when the hero
+                // collapses and shrinks when it expands.
+                "grid min-h-0 flex-1 items-stretch",
                 leftRailLockedClosed ? "gap-x-0" : "gap-x-0",
                 isResizingPanel && "select-none",
               )}
               style={{
-                // Trailing 18px column removed — the body-row separator
-                // is no longer rendered, so the timeline can extend to
-                // the panel's right edge without leaving an empty gap.
                 gridTemplateColumns: leftRailLockedClosed ? "auto minmax(0, 1fr)" : "auto 20px minmax(0, 1fr)",
+                gridTemplateRows: "minmax(0, 1fr)",
               }}
             >
               <div
                 className={cn(
-                  // Fixed-height initiative column — matches the
-                  // Gantt column so initiative + separator + Gantt
-                  // all end at the same Y.
-                  "relative h-[calc(100vh-200px)] min-h-0 overflow-hidden rounded-xl bg-white/90 motion-reduce:transition-none mt-2 mb-2 ml-1 shadow-xl",
+                  // Initiative column fills the grid row track via
+                  // `h-full`. Combined with the grid's `1fr` row, it
+                  // stretches all the way down — the bottom panel
+                  // then sits flush at the page bottom regardless of
+                  // hero collapse state.
+                  // Top-only shadow (no bottom shadow per user request).
+                  "relative h-[calc(100%-16px)] min-h-0 overflow-hidden rounded-xl bg-white/90 motion-reduce:transition-none mt-2 mb-2 ml-1 shadow-[0_-6px_15px_-3px_rgba(0,0,0,0.10),0_-4px_6px_-4px_rgba(0,0,0,0.08)]",
                   !isResizingPanel && !suppressLeftPanelTransition && "transition-[width] duration-[320ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
                   leftRailLockedClosed && "min-w-0 border-0 p-0",
                 )}
@@ -6143,10 +6148,10 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               )}
               <div
                 ref={planningRightSurfaceRef}
-                // Fixed-height Gantt column matching the initiative
-                // column. Internal scrollbar comes from the planning
-                // surface inside.
-                className="mt-2 mb-2 flex h-[calc(100vh-200px)] min-h-0 min-w-0 flex-col overflow-hidden rounded-r-xl shadow-xl"
+                // Gantt column fills the grid row track. Matches the
+                // initiative column so both stretch all the way down.
+                // Top-only shadow (no bottom shadow per user request).
+                className="mt-2 mb-2 flex h-[calc(100%-16px)] min-h-0 min-w-0 flex-col overflow-hidden rounded-r-xl shadow-[0_-6px_15px_-3px_rgba(0,0,0,0.10),0_-4px_6px_-4px_rgba(0,0,0,0.08)]"
               >
                 {(() => {
                   // Closed-year snapshot strip — mounted above the timeline
@@ -6629,12 +6634,11 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               {/* Body-row right-edge separator removed — the page-level
                   fixed separator (in <main> above) handles this now. */}
             </div>
-            {/* Bottom panel — horizontal full-width white strip that
-              * starts where the initiative + separator + Gantt all end.
-              * `-ml-1 -mr-[16px]` cancel the body row's left/right
-              * insets so the strip reaches the mode rail on the left
-              * and the page edge on the right. */}
-            <div className="-ml-1 -mr-[16px] h-10 shrink-0 border-t border-slate-300 bg-white" />
+            {/* Bottom panel — horizontal full-width white strip pushed
+              * to the very bottom of main. `-mb-8` cancels main's
+              * `pb-8` so the strip kisses the viewport edge instead
+              * of leaving a 32px gradient gap below it. */}
+            <div className="-mb-8 -ml-1 -mr-[6px] h-10 shrink-0 border-t border-slate-300 bg-white shadow-[0_-4px_12px_-2px_rgba(15,23,42,0.10),0_-1px_3px_-1px_rgba(15,23,42,0.06)]" />
             </div>
           ) : topMode === "dashboard" ? (
             null

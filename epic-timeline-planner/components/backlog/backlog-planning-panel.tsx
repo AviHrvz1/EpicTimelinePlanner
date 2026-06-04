@@ -8817,7 +8817,7 @@ export function BacklogPlanningPanel({
       ) : null}
 
       <div className="relative z-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-b-xl border border-slate-200/60 bg-white shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
-        <div ref={tableScrollRef} className="min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto [scrollbar-gutter:stable]">
+        <div ref={tableScrollRef} className="min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto overscroll-y-auto [scrollbar-gutter:stable]">
         <div className="w-max min-w-full text-[15px] leading-snug text-slate-700">
         <>
         {showTableHeaderRow ? (

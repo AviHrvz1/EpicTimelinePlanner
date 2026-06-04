@@ -209,7 +209,7 @@ export function RoadmapHealthHero({
 
   return (
     <>
-    <div className="shrink-0 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 pt-1.5 pb-0 pl-2 pr-[16px]">
+    <div className="shrink-0 bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 pt-1.5 pb-0 pl-2 pr-[6px]">
     <div className="relative rounded-lg border border-indigo-200/70 bg-white overflow-hidden">
       {/* Row 1 — compact filter band. Title block stacks: H1 → roadmap
           subtitle → "Health calculation" filter, all left-aligned at the
