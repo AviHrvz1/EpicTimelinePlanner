@@ -18,6 +18,7 @@ import {
   FileWarning,
   Filter,
   Flag,
+  Funnel,
   Folder,
   Inbox,
   KanbanSquare,
@@ -1937,6 +1938,189 @@ type EstimateCoveragePanelTab =
   | "storiesNoDesc"
   | "unscheduledStories";
 
+/** Per-column filter popover for the Estimate Coverage tables.
+ *  Renders a small funnel icon next to a column header; clicking it
+ *  opens a popover with a search input and a checkbox list of all
+ *  distinct values in that column. Multi-select; selecting nothing
+ *  clears the filter for that column. */
+type CoverageFilterOption = { value: string; icon?: ReactNode };
+function CoverageColumnFilter({
+  filterKey,
+  label,
+  options,
+  selected,
+  onChange,
+  openKey,
+  setOpenKey,
+  query,
+  onQueryChange,
+}: {
+  filterKey: string;
+  label: string;
+  options: ReadonlyArray<CoverageFilterOption>;
+  selected: Set<string>;
+  onChange: (next: Set<string>) => void;
+  openKey: string | null;
+  setOpenKey: (next: string | null) => void;
+  query: string;
+  onQueryChange: (next: string) => void;
+}) {
+  const open = openKey === filterKey;
+  const containerRef = useRef<HTMLSpanElement | null>(null);
+  // Bounding rect of the column header (`<th>`) used to position the
+  // portaled popover. Tracked in state so a scroll or resize re-renders
+  // with up-to-date coords.
+  const [popoverRect, setPopoverRect] = useState<{ left: number; top: number; width: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!open) {
+      setPopoverRect(null);
+      return;
+    }
+    function update() {
+      const span = containerRef.current;
+      if (!span) return;
+      // Walk up to the closest <th> for the column-left anchor.
+      let anchor: HTMLElement | null = span;
+      while (anchor && anchor.tagName !== "TH") anchor = anchor.parentElement;
+      const target = anchor ?? span;
+      const r = target.getBoundingClientRect();
+      setPopoverRect({ left: r.left, top: r.bottom + 4, width: 320 });
+    }
+    update();
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: PointerEvent) {
+      if (!containerRef.current) return;
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (containerRef.current.contains(target)) return;
+      // The portaled popover lives outside containerRef; recognize
+      // clicks inside it via its data attribute.
+      const popoverEl = (target as HTMLElement).closest?.(`[data-coverage-filter-popover="${filterKey}"]`);
+      if (popoverEl) return;
+      setOpenKey(null);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpenKey(null);
+    }
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, setOpenKey, filterKey]);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((opt) => opt.value.toLowerCase().includes(q));
+  }, [options, query]);
+  return (
+    // No `relative` here — the popover anchors to the parent <th>
+    // (which carries `relative` via `estimatePanelHeadCellClass`),
+    // so it opens at the column's left edge rather than under the
+    // funnel button on the column's right.
+    <span ref={containerRef} className="inline-flex shrink-0">
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpenKey(open ? null : filterKey);
+        }}
+        title={`Filter ${label}`}
+        aria-label={`Filter ${label}`}
+        aria-expanded={open}
+        className={cn(
+          // Filter icon colors are visible on the coverage tables'
+          // white-background column header row.
+          "inline-flex size-5 items-center justify-center rounded transition",
+          selected.size > 0
+            ? "bg-amber-100 text-amber-700 ring-1 ring-amber-300 hover:bg-amber-200"
+            : "text-slate-400 hover:bg-slate-100 hover:text-slate-700",
+        )}
+      >
+        <Funnel className="size-3" strokeWidth={2.2} aria-hidden />
+      </button>
+      {open && popoverRect && typeof document !== "undefined" ? createPortal(
+        <div
+          // Portaled to <body> so the popup escapes the table wrapper's
+          // `overflow-x-auto` clipping. Fixed-position against the
+          // viewport using the column header's bounding rect.
+          ref={(node) => {
+            // Keep popover ref tracking inside containerRef for
+            // outside-click detection — set the rendered element as a
+            // child of the same ref-managed region by re-using the
+            // container ref's contains() check via a data attribute.
+            if (node) node.setAttribute("data-coverage-filter-popover", filterKey);
+          }}
+          data-coverage-filter-popover={filterKey}
+          style={{ position: "fixed", left: popoverRect.left, top: popoverRect.top, width: popoverRect.width }}
+          className="z-[1000] rounded-lg border border-slate-200 bg-white p-2 shadow-xl ring-1 ring-black/5"
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <input
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder={`Search ${label}…`}
+            autoFocus
+            className="mb-1.5 w-full rounded border border-slate-300 px-2 py-1 text-[13px] text-slate-800 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/70"
+          />
+          {(selected.size > 0 || query.length > 0) ? (
+            <button
+              type="button"
+              onClick={() => {
+                onChange(new Set());
+                onQueryChange("");
+              }}
+              className="mb-1.5 w-full rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[12px] font-medium text-slate-600 hover:bg-slate-100"
+            >
+              Clear filter{selected.size > 0 ? ` (${selected.size})` : ""}
+            </button>
+          ) : null}
+          <div className="max-h-64 space-y-0.5 overflow-y-auto pr-0.5">
+            {filtered.length === 0 ? (
+              <p className="px-1 py-0.5 text-[12px] text-slate-500">No matches</p>
+            ) : (
+              filtered.map((opt) => {
+                const v = opt.value;
+                const checked = selected.has(v);
+                return (
+                  <label
+                    key={v || "__empty__"}
+                    className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-[13px] text-slate-800 hover:bg-slate-100"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        const next = new Set(selected);
+                        if (checked) next.delete(v);
+                        else next.add(v);
+                        onChange(next);
+                      }}
+                      className="size-3.5 shrink-0"
+                    />
+                    {opt.icon ? <span className="inline-flex shrink-0 items-center">{opt.icon}</span> : null}
+                    <span className="min-w-0 truncate">{v || "(empty)"}</span>
+                  </label>
+                );
+              })
+            )}
+          </div>
+        </div>,
+        document.body,
+      ) : null}
+    </span>
+  );
+}
+
 export function TimelineGrid({
   initiatives,
   zoom,
@@ -2179,6 +2363,69 @@ export function TimelineGrid({
   const [estEpicsPanelPosition, setEstEpicsPanelPosition] = useState({ right: 0, top: 0 });
   const [expandedEstimateEpicIds, setExpandedEstimateEpicIds] = useState<Set<string>>(new Set());
   const [estimateCoveragePanelTab, setEstimateCoveragePanelTab] = useState<EstimateCoveragePanelTab>("unestimated");
+  // Per-tab per-column filter selections. Key shape: `${tab}.${col}`.
+  // Empty set = no filter (all values pass). Non-empty = row's value
+  // for that column must be in the set.
+  const [coverageColumnFilters, setCoverageColumnFilters] = useState<Record<string, Set<string>>>({});
+  const setCoverageColumnFilter = useCallback(
+    (tab: string, col: string, next: Set<string>) => {
+      setCoverageColumnFilters((prev) => ({ ...prev, [`${tab}.${col}`]: next }));
+    },
+    [],
+  );
+  const getCoverageColumnFilter = useCallback(
+    (tab: string, col: string): Set<string> =>
+      coverageColumnFilters[`${tab}.${col}`] ?? new Set<string>(),
+    [coverageColumnFilters],
+  );
+  // Per-tab per-column live search query — applies as a substring
+  // filter on the underlying rows as the user types, AND on the
+  // popover's option list. Separate from `coverageColumnFilters`
+  // (checkbox-selected values), and both apply together (AND).
+  const [coverageColumnQueries, setCoverageColumnQueries] = useState<Record<string, string>>({});
+  const setCoverageColumnQuery = useCallback((tab: string, col: string, next: string) => {
+    setCoverageColumnQueries((prev) => ({ ...prev, [`${tab}.${col}`]: next }));
+  }, []);
+  const getCoverageColumnQuery = useCallback(
+    (tab: string, col: string): string => coverageColumnQueries[`${tab}.${col}`] ?? "",
+    [coverageColumnQueries],
+  );
+  // Tracks which column header popover is open (only one at a time).
+  const [openCoverageFilterKey, setOpenCoverageFilterKey] = useState<string | null>(null);
+  /** True when any column on `tab` has a checkbox selection or a
+   *  typed query — used to show / enable the per-tab "Clear filters"
+   *  button at the panel header. */
+  const tabHasActiveFilters = useCallback(
+    (tab: string): boolean => {
+      const prefix = `${tab}.`;
+      for (const [key, val] of Object.entries(coverageColumnFilters)) {
+        if (key.startsWith(prefix) && val.size > 0) return true;
+      }
+      for (const [key, val] of Object.entries(coverageColumnQueries)) {
+        if (key.startsWith(prefix) && val.length > 0) return true;
+      }
+      return false;
+    },
+    [coverageColumnFilters, coverageColumnQueries],
+  );
+  /** Reset every column filter (checkbox + query) for the given tab. */
+  const clearTabFilters = useCallback((tab: string) => {
+    const prefix = `${tab}.`;
+    setCoverageColumnFilters((prev) => {
+      const next: typeof prev = {};
+      for (const [key, val] of Object.entries(prev)) {
+        if (!key.startsWith(prefix)) next[key] = val;
+      }
+      return next;
+    });
+    setCoverageColumnQueries((prev) => {
+      const next: typeof prev = {};
+      for (const [key, val] of Object.entries(prev)) {
+        if (!key.startsWith(prefix)) next[key] = val;
+      }
+      return next;
+    });
+  }, []);
   const prevEstPanelOpenRef = useRef(false);
   const prevEstScopeKeyRef = useRef<string | null>(null);
   const capacityTeamFilterRef = useRef<HTMLDivElement | null>(null);
@@ -3140,7 +3387,10 @@ export function TimelineGrid({
   const estimatePanelTableClass =
     "w-full table-fixed border-collapse text-[15px] text-slate-950";
   const estimatePanelHeadCellClass =
-    "px-3 py-2.5 text-left text-[13px] font-semibold uppercase tracking-wide text-slate-600";
+    // `relative` makes each <th> the positioning context for its
+    // CoverageColumnFilter popover, so it opens aligned to the
+    // column's left edge.
+    "relative px-3 py-2.5 text-left text-[13px] font-semibold uppercase tracking-wide text-slate-600";
   const estimatePanelBodyRowClass =
     "group transition hover:bg-[#c5ebff]";
   const estimatePanelCellClass = "px-3 py-3 overflow-hidden align-middle";
@@ -3182,29 +3432,160 @@ export function TimelineGrid({
     [scopedEpicsForEstimatePanel.estimated, scopedEpicsForEstimatePanel.unestimated],
   );
 
+  // Extract a column's display value for an epic-coverage row.
+  function getEpicCoverageColValue(
+    row: { epic: EpicItem; initiative: InitiativeItem },
+    col: string,
+  ): string {
+    switch (col) {
+      case "epic": return row.epic.title || "";
+      case "initiative": return row.initiative.title || "";
+      case "sprint": return estimatePanelEpicSprintLabel(row.epic) || "";
+      case "team": return row.epic.team || "";
+      case "assignee": return row.epic.assignee || "";
+      default: return "";
+    }
+  }
+  function getStoryCoverageColValue(
+    row: { story: UserStoryItem; epic: EpicItem; initiative: InitiativeItem },
+    col: string,
+  ): string {
+    switch (col) {
+      case "story": return row.story.title || "";
+      case "sprint": return row.story.sprint != null ? `Sprint ${row.story.sprint}` : "";
+      case "team": return row.story.team || row.epic.team || "";
+      case "assignee": return row.story.assignee || "";
+      case "epic": return row.epic.title || "";
+      default: return "";
+    }
+  }
+  function distinctSorted(values: string[]): string[] {
+    return Array.from(new Set(values)).filter((v) => v.length > 0).sort((a, b) => a.localeCompare(b));
+  }
+
   function renderEstimatePanelTable(
     rows: Array<{ epic: EpicItem; initiative: InitiativeItem }>,
     variant: "estimated" | "unestimated",
   ) {
     const showEstimatedColumns = variant === "estimated";
-    const displayRows = rows;
+    // Apply per-column filters before render.
+    const cols: readonly string[] = ["epic", "initiative", "sprint", "team", "assignee"];
+    const displayRows = rows.filter((row) => {
+      for (const col of cols) {
+        const v = getEpicCoverageColValue(row, col);
+        const sel = getCoverageColumnFilter(variant, col);
+        if (sel.size > 0 && !sel.has(v)) return false;
+        const q = getCoverageColumnQuery(variant, col).trim().toLowerCase();
+        if (q && !v.toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
     const emptyRowCount = Math.max(0, 6 - displayRows.length);
     const colCount = showEstimatedColumns ? 8 : 6;
+    // Build per-column options with icons (epics get a folder icon,
+    // initiatives a zap icon, sprint a flag, team an avatar, assignee
+    // an avatar).
+    function epicOpts(): CoverageFilterOption[] {
+      return distinctSorted(rows.map((r) => getEpicCoverageColValue(r, "epic"))).map((v) => ({
+        value: v,
+        icon: <Folder className="size-3.5 text-sky-500" strokeWidth={2} aria-hidden />,
+      }));
+    }
+    function initiativeOpts(): CoverageFilterOption[] {
+      return distinctSorted(rows.map((r) => getEpicCoverageColValue(r, "initiative"))).map((v) => ({
+        value: v,
+        icon: <Zap className="size-3.5 text-amber-500" strokeWidth={2} aria-hidden />,
+      }));
+    }
+    function sprintOpts(): CoverageFilterOption[] {
+      return distinctSorted(rows.map((r) => getEpicCoverageColValue(r, "sprint"))).map((v) => ({
+        value: v,
+        icon: <Flag className="size-3.5 text-rose-500" strokeWidth={2.1} aria-hidden />,
+      }));
+    }
+    function teamOpts(): CoverageFilterOption[] {
+      return distinctSorted(rows.map((r) => getEpicCoverageColValue(r, "team"))).map((v) => ({
+        value: v,
+        icon: (
+          <TeamAvatar
+            slug={v || null}
+            sizePx={16}
+            fallback={<Users className="size-3.5 text-slate-400" aria-hidden />}
+          />
+        ),
+      }));
+    }
+    function assigneeOpts(): CoverageFilterOption[] {
+      return distinctSorted(rows.map((r) => getEpicCoverageColValue(r, "assignee"))).map((v) => {
+        const resolved = resolveAssigneeAvatar(v, workspaceDirectoryUsers);
+        return {
+          value: v,
+          icon: <UserAvatar name={resolved.name} image={resolved.image} size={18} className="ring-0" />,
+        };
+      });
+    }
+    const optionsForCol: Record<string, CoverageFilterOption[]> = {
+      epic: epicOpts(),
+      initiative: initiativeOpts(),
+      sprint: sprintOpts(),
+      team: teamOpts(),
+      assignee: assigneeOpts(),
+    };
+    function filterIcon(col: string, label: string) {
+      return (
+        <CoverageColumnFilter
+          filterKey={`${variant}.${col}`}
+          label={label}
+          options={optionsForCol[col] ?? []}
+          selected={getCoverageColumnFilter(variant, col)}
+          onChange={(next) => setCoverageColumnFilter(variant, col, next)}
+          openKey={openCoverageFilterKey}
+          setOpenKey={setOpenCoverageFilterKey}
+          query={getCoverageColumnQuery(variant, col)}
+          onQueryChange={(next) => setCoverageColumnQuery(variant, col, next)}
+        />
+      );
+    }
     return (
       <table className={estimatePanelTableClass}>
         <thead>
           <tr>
-            <th className={cn(estimatePanelHeadCellClass, "w-[22%] min-w-0")}>Epic</th>
-            <th className={cn(estimatePanelHeadCellClass, "w-[18%] min-w-0")}>Initiative</th>
-            <th className={cn(estimatePanelHeadCellClass, "w-[9%]")}>Sprint</th>
-            <th className={cn(estimatePanelHeadCellClass, "w-[12%]")}>Team</th>
-            <th className={cn(estimatePanelHeadCellClass, "w-[10%]")}>Assignee</th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[22%] min-w-0")}>
+              <span className="inline-flex w-full items-center justify-between gap-1">
+                <span className="truncate">Epic</span>
+                {filterIcon("epic", "Epic")}
+              </span>
+            </th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[18%] min-w-0")}>
+              <span className="inline-flex w-full items-center justify-between gap-1">
+                <span className="truncate">Initiative</span>
+                {filterIcon("initiative", "Initiative")}
+              </span>
+            </th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[9%]")}>
+              <span className="inline-flex w-full items-center justify-between gap-1">
+                <span className="truncate">Sprint</span>
+                {filterIcon("sprint", "Sprint")}
+              </span>
+            </th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[12%]")}>
+              <span className="inline-flex w-full items-center justify-between gap-1">
+                <span className="truncate">Team</span>
+                {filterIcon("team", "Team")}
+              </span>
+            </th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[10%]")}>
+              <span className="inline-flex w-full items-center justify-between gap-1">
+                <span className="truncate">Assignee</span>
+                {filterIcon("assignee", "Assignee")}
+              </span>
+            </th>
             <th className={cn(estimatePanelHeadCellClass, "w-[5.5rem] text-center")}>
               {showEstimatedColumns ? "Est days" : "Target Est"}
             </th>
             {showEstimatedColumns ? (
               <>
-                <th className={cn(estimatePanelHeadCellClass, "w-[4.25rem] text-center")}>Σ Child Est</th>
+                <th className={cn(estimatePanelHeadCellClass, "w-[6rem] whitespace-nowrap text-center")}>Σ Child Est</th>
                 <th className={cn(estimatePanelHeadCellClass, "w-[6.5rem] text-center")}>Est Mix</th>
               </>
             ) : null}
@@ -3243,6 +3624,7 @@ export function TimelineGrid({
                         title={row.epic.title}
                         className="flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-0.5 text-left text-[13px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-950"
                       >
+                        <Folder className="size-3.5 shrink-0 text-sky-500" strokeWidth={2} aria-hidden />
                         <span className="block min-w-0 flex-1 truncate">{row.epic.title}</span>
                       </button>
                     </div>
@@ -3252,8 +3634,9 @@ export function TimelineGrid({
                       type="button"
                       onClick={() => onOpenInitiative(row.initiative.id)}
                       title={row.initiative.title}
-                      className="flex w-full min-w-0 items-center rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-950 hover:bg-white/70 hover:text-blue-950"
+                      className="flex w-full min-w-0 items-center gap-2 rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-950 hover:bg-white/70 hover:text-blue-950"
                     >
+                      <Zap className="size-3.5 shrink-0 text-amber-500" strokeWidth={2} aria-hidden />
                       <span className="block min-w-0 flex-1 truncate">{row.initiative.title}</span>
                     </button>
                   </td>
@@ -3417,26 +3800,111 @@ export function TimelineGrid({
 
   function renderEpicsWithoutDescriptionTable(rows: Array<{ epic: EpicItem; initiative: InitiativeItem }>) {
     const colCount = 5;
+    const tab = "epicsNoDesc";
+    const cols: readonly string[] = ["epic", "sprint", "team", "assignee", "initiative"];
+    const displayRows = rows.filter((row) => {
+      for (const col of cols) {
+        const v = getEpicCoverageColValue(row, col);
+        const sel = getCoverageColumnFilter(tab, col);
+        if (sel.size > 0 && !sel.has(v)) return false;
+        const q = getCoverageColumnQuery(tab, col).trim().toLowerCase();
+        if (q && !v.toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+    const optionsForCol: Record<string, CoverageFilterOption[]> = {
+      epic: distinctSorted(rows.map((r) => getEpicCoverageColValue(r, "epic"))).map((v) => ({
+        value: v,
+        icon: <Folder className="size-3.5 text-sky-500" strokeWidth={2} aria-hidden />,
+      })),
+      sprint: distinctSorted(rows.map((r) => getEpicCoverageColValue(r, "sprint"))).map((v) => ({
+        value: v,
+        icon: <Flag className="size-3.5 text-rose-500" strokeWidth={2.1} aria-hidden />,
+      })),
+      team: distinctSorted(rows.map((r) => getEpicCoverageColValue(r, "team"))).map((v) => ({
+        value: v,
+        icon: (
+          <TeamAvatar
+            slug={v || null}
+            sizePx={16}
+            fallback={<Users className="size-3.5 text-slate-400" aria-hidden />}
+          />
+        ),
+      })),
+      assignee: distinctSorted(rows.map((r) => getEpicCoverageColValue(r, "assignee"))).map((v) => {
+        const resolved = resolveAssigneeAvatar(v, workspaceDirectoryUsers);
+        return {
+          value: v,
+          icon: <UserAvatar name={resolved.name} image={resolved.image} size={18} className="ring-0" />,
+        };
+      }),
+      initiative: distinctSorted(rows.map((r) => getEpicCoverageColValue(r, "initiative"))).map((v) => ({
+        value: v,
+        icon: <Zap className="size-3.5 text-amber-500" strokeWidth={2} aria-hidden />,
+      })),
+    };
+    function filterIcon(col: string, label: string) {
+      return (
+        <CoverageColumnFilter
+          filterKey={`${tab}.${col}`}
+          label={label}
+          options={optionsForCol[col] ?? []}
+          selected={getCoverageColumnFilter(tab, col)}
+          onChange={(next) => setCoverageColumnFilter(tab, col, next)}
+          openKey={openCoverageFilterKey}
+          setOpenKey={setOpenCoverageFilterKey}
+          query={getCoverageColumnQuery(tab, col)}
+          onQueryChange={(next) => setCoverageColumnQuery(tab, col, next)}
+        />
+      );
+    }
     return (
       <table className={estimatePanelTableClass}>
         <thead>
           <tr>
-            <th className={cn(estimatePanelHeadCellClass, "w-[30%] min-w-0")}>Epic</th>
-            <th className={cn(estimatePanelHeadCellClass, "w-[12%]")}>Sprint</th>
-            <th className={cn(estimatePanelHeadCellClass, "w-[14%]")}>Team</th>
-            <th className={cn(estimatePanelHeadCellClass, "w-[12%]")}>Assignee</th>
-            <th className={cn(estimatePanelHeadCellClass, "min-w-0")}>Parent initiative</th>
+            {/* Column widths match the unestimated table so all
+              * coverage tabs render the same column geometry. */}
+            <th className={cn(estimatePanelHeadCellClass, "w-[22%] min-w-0")}>
+              <span className="inline-flex w-full items-center justify-between gap-1">
+                <span className="truncate">Epic</span>
+                {filterIcon("epic", "Epic")}
+              </span>
+            </th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[9%]")}>
+              <span className="inline-flex w-full items-center justify-between gap-1">
+                <span className="truncate">Sprint</span>
+                {filterIcon("sprint", "Sprint")}
+              </span>
+            </th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[12%]")}>
+              <span className="inline-flex w-full items-center justify-between gap-1">
+                <span className="truncate">Team</span>
+                {filterIcon("team", "Team")}
+              </span>
+            </th>
+            <th className={cn(estimatePanelHeadCellClass, "w-[10%]")}>
+              <span className="inline-flex w-full items-center justify-between gap-1">
+                <span className="truncate">Assignee</span>
+                {filterIcon("assignee", "Assignee")}
+              </span>
+            </th>
+            <th className={cn(estimatePanelHeadCellClass, "min-w-0")}>
+              <span className="inline-flex w-full items-center justify-between gap-1">
+                <span className="truncate">Parent initiative</span>
+                {filterIcon("initiative", "Parent initiative")}
+              </span>
+            </th>
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 ? (
+          {displayRows.length === 0 ? (
             <tr>
               <td className={cn(estimatePanelCellClass, "text-[14px] text-slate-500")} colSpan={colCount}>
-                All epics in this scope have a description.
+                {rows.length === 0 ? "All epics in this scope have a description." : "No matches for the current filters."}
               </td>
             </tr>
           ) : (
-            rows.map((row, rowIndex) => {
+            displayRows.map((row, rowIndex) => {
               const isExpanded = expandedEstimateEpicIds.has(row.epic.id);
               const stories = row.epic.userStories ?? [];
               return (
@@ -3461,8 +3929,9 @@ export function TimelineGrid({
                           type="button"
                           onClick={() => onOpenEpic(row.epic.id)}
                           title={row.epic.title}
-                          className="flex min-w-0 flex-1 rounded px-1 py-0.5 text-left text-[14px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-950"
+                          className="flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-0.5 text-left text-[14px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-950"
                         >
+                          <Folder className="size-3.5 shrink-0 text-sky-500" strokeWidth={2} aria-hidden />
                           <span className="block min-w-0 flex-1 truncate">{row.epic.title}</span>
                         </button>
                       </div>
@@ -3498,8 +3967,9 @@ export function TimelineGrid({
                       <button
                         type="button"
                         onClick={() => onOpenInitiative(row.initiative.id)}
-                        className="inline-flex max-w-full min-w-0 rounded px-1 py-0.5 text-left text-[14px] font-medium text-slate-950 hover:bg-white/70 hover:text-blue-950"
+                        className="inline-flex max-w-full min-w-0 items-center gap-2 rounded px-1 py-0.5 text-left text-[14px] font-medium text-slate-950 hover:bg-white/70 hover:text-blue-950"
                       >
+                        <Zap className="size-3.5 shrink-0 text-amber-500" strokeWidth={2} aria-hidden />
                         <span className="truncate">{row.initiative.title}</span>
                       </button>
                     </td>
@@ -3579,27 +4049,114 @@ export function TimelineGrid({
     rows: Array<{ story: UserStoryItem; epic: EpicItem; initiative: InitiativeItem }>,
     emptyMessage = "No user stories without a description in this scope.",
   ) {
-    const narrowHead = cn(estimatePanelHeadCellClass, "text-[10px]");
+    // Use the SAME head style as the other coverage tables so titles
+    // read at the same size everywhere.
+    const narrowHead = estimatePanelHeadCellClass;
+    const tab = "storiesNoDesc";
+    const cols: readonly string[] = ["story", "sprint", "team", "assignee", "epic"];
+    const displayRows = rows.filter((row) => {
+      for (const col of cols) {
+        const v = getStoryCoverageColValue(row, col);
+        const sel = getCoverageColumnFilter(tab, col);
+        if (sel.size > 0 && !sel.has(v)) return false;
+        const q = getCoverageColumnQuery(tab, col).trim().toLowerCase();
+        if (q && !v.toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+    const optionsForCol: Record<string, CoverageFilterOption[]> = {
+      story: distinctSorted(rows.map((r) => getStoryCoverageColValue(r, "story"))).map((v) => ({
+        value: v,
+        icon: <UserStoryIcon className="size-3.5 text-slate-500" aria-hidden />,
+      })),
+      sprint: distinctSorted(rows.map((r) => getStoryCoverageColValue(r, "sprint"))).map((v) => ({
+        value: v,
+        icon: <Flag className="size-3.5 text-rose-500" strokeWidth={2.1} aria-hidden />,
+      })),
+      team: distinctSorted(rows.map((r) => getStoryCoverageColValue(r, "team"))).map((v) => ({
+        value: v,
+        icon: (
+          <TeamAvatar
+            slug={v || null}
+            sizePx={16}
+            fallback={<Users className="size-3.5 text-slate-400" aria-hidden />}
+          />
+        ),
+      })),
+      assignee: distinctSorted(rows.map((r) => getStoryCoverageColValue(r, "assignee"))).map((v) => {
+        const resolved = resolveAssigneeAvatar(v, workspaceDirectoryUsers);
+        return {
+          value: v,
+          icon: <UserAvatar name={resolved.name} image={resolved.image} size={18} className="ring-0" />,
+        };
+      }),
+      epic: distinctSorted(rows.map((r) => getStoryCoverageColValue(r, "epic"))).map((v) => ({
+        value: v,
+        icon: <Folder className="size-3.5 text-sky-500" strokeWidth={2} aria-hidden />,
+      })),
+    };
+    function filterIcon(col: string, label: string) {
+      return (
+        <CoverageColumnFilter
+          filterKey={`${tab}.${col}`}
+          label={label}
+          options={optionsForCol[col] ?? []}
+          selected={getCoverageColumnFilter(tab, col)}
+          onChange={(next) => setCoverageColumnFilter(tab, col, next)}
+          openKey={openCoverageFilterKey}
+          setOpenKey={setOpenCoverageFilterKey}
+          query={getCoverageColumnQuery(tab, col)}
+          onQueryChange={(next) => setCoverageColumnQuery(tab, col, next)}
+        />
+      );
+    }
     return (
       <table className={estimatePanelTableClass}>
         <thead>
           <tr>
-            <th className={cn(narrowHead, "w-[28%] min-w-0")}>User story</th>
-            <th className={cn(narrowHead, "w-[12%]")}>Sprint</th>
-            <th className={cn(narrowHead, "w-[14%]")}>Team</th>
-            <th className={cn(narrowHead, "w-[12%]")}>Assignee</th>
-            <th className={cn(narrowHead, "min-w-0")}>Parent epic</th>
+            {/* Column widths match the unestimated table so all
+              * coverage tabs render the same column geometry. */}
+            <th className={cn(narrowHead, "w-[22%] min-w-0")}>
+              <span className="inline-flex w-full items-center justify-between gap-1">
+                <span className="truncate">User story</span>
+                {filterIcon("story", "User story")}
+              </span>
+            </th>
+            <th className={cn(narrowHead, "w-[9%]")}>
+              <span className="inline-flex w-full items-center justify-between gap-1">
+                <span className="truncate">Sprint</span>
+                {filterIcon("sprint", "Sprint")}
+              </span>
+            </th>
+            <th className={cn(narrowHead, "w-[12%]")}>
+              <span className="inline-flex w-full items-center justify-between gap-1">
+                <span className="truncate">Team</span>
+                {filterIcon("team", "Team")}
+              </span>
+            </th>
+            <th className={cn(narrowHead, "w-[10%]")}>
+              <span className="inline-flex w-full items-center justify-between gap-1">
+                <span className="truncate">Assignee</span>
+                {filterIcon("assignee", "Assignee")}
+              </span>
+            </th>
+            <th className={cn(narrowHead, "min-w-0")}>
+              <span className="inline-flex w-full items-center justify-between gap-1">
+                <span className="truncate">Parent epic</span>
+                {filterIcon("epic", "Parent epic")}
+              </span>
+            </th>
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 ? (
+          {displayRows.length === 0 ? (
             <tr>
               <td className={cn(estimatePanelCellClass, "text-[12px] text-slate-500")} colSpan={5}>
-                {emptyMessage}
+                {rows.length === 0 ? emptyMessage : "No matches for the current filters."}
               </td>
             </tr>
           ) : (
-            rows.map((row, rowIndex) => (
+            displayRows.map((row, rowIndex) => (
               <tr
                 key={row.story.id}
                 className={cn(
@@ -6279,7 +6836,7 @@ export function TimelineGrid({
                     >
                       <span className="inline-flex min-w-0 flex-wrap items-center gap-2">
                         {sprintFilterTeamIds.length === 0 ? (
-                          <span className="inline-flex items-center gap-1.5">
+                          <span className="inline-flex w-full items-center justify-between gap-1">
                             <Users className="size-3.5 shrink-0 text-slate-500" aria-hidden />
                             <span className="truncate">All Teams</span>
                           </span>
@@ -6465,7 +7022,7 @@ export function TimelineGrid({
                     >
                       <span className="inline-flex min-w-0 flex-wrap items-center gap-2">
                         {insightsTeamIds.length === 0 ? (
-                          <span className="inline-flex items-center gap-1.5">
+                          <span className="inline-flex w-full items-center justify-between gap-1">
                             <Users className="size-3.5 shrink-0 text-slate-500" aria-hidden />
                             <span className="truncate">All Teams</span>
                           </span>
@@ -7601,7 +8158,7 @@ export function TimelineGrid({
                           style={{ scrollbarWidth: "none" }}
                         >
                           {sprintFilterTeamIds.length === 0 ? (
-                            <span className="inline-flex items-center gap-1.5">
+                            <span className="inline-flex w-full items-center justify-between gap-1">
                               <Users className="size-3.5 shrink-0 text-slate-500" aria-hidden />
                               <span className="truncate">All Teams</span>
                             </span>
@@ -8757,6 +9314,17 @@ export function TimelineGrid({
                         <ClipboardList className="size-4 shrink-0 text-white/90" strokeWidth={2.2} />
                         <span className="truncate">Unestimated epics</span>
                       </p>
+                      {tabHasActiveFilters("unestimated") ? (
+                        <button
+                          type="button"
+                          onClick={() => clearTabFilters("unestimated")}
+                          title="Clear all column filters"
+                          className="inline-flex h-6 shrink-0 items-center gap-1 rounded bg-white/15 px-2 text-[11px] font-medium uppercase tracking-wide text-white ring-1 ring-white/30 transition hover:bg-white/25"
+                        >
+                          <X className="size-3.5" strokeWidth={2.2} aria-hidden />
+                          Clear filters
+                        </button>
+                      ) : null}
                       <span
                         className="inline-flex h-6 shrink-0 items-center gap-0.5 px-0.5"
                         role="group"
@@ -8793,6 +9361,17 @@ export function TimelineGrid({
                         <BarChart3 className="size-4 shrink-0 text-white/90" strokeWidth={2.2} />
                         <span className="truncate">Estimated epics</span>
                       </p>
+                      {tabHasActiveFilters("estimated") ? (
+                        <button
+                          type="button"
+                          onClick={() => clearTabFilters("estimated")}
+                          title="Clear all column filters"
+                          className="inline-flex h-6 shrink-0 items-center gap-1 rounded bg-white/15 px-2 text-[11px] font-medium uppercase tracking-wide text-white ring-1 ring-white/30 transition hover:bg-white/25"
+                        >
+                          <X className="size-3.5" strokeWidth={2.2} aria-hidden />
+                          Clear filters
+                        </button>
+                      ) : null}
                       <span
                         className="inline-flex h-6 shrink-0 items-center gap-0.5 px-0.5"
                         role="group"
@@ -8845,11 +9424,22 @@ export function TimelineGrid({
                   </section>
                 ) : estimateCoveragePanelTab === "epicsNoDesc" ? (
                   <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                    <div className="flex shrink-0 items-center gap-2 bg-[#0897d5] px-3 py-2.5">
+                    <div className="flex shrink-0 items-center justify-between gap-2 bg-[#0897d5] px-3 py-2.5">
                       <p className="inline-flex min-w-0 items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.02em] text-white">
                         <FileWarning className="size-4 shrink-0 text-white/90" strokeWidth={2.2} />
                         <span className="truncate">Epics without description</span>
                       </p>
+                      {tabHasActiveFilters("epicsNoDesc") ? (
+                        <button
+                          type="button"
+                          onClick={() => clearTabFilters("epicsNoDesc")}
+                          title="Clear all column filters"
+                          className="inline-flex h-6 shrink-0 items-center gap-1 rounded bg-white/15 px-2 text-[11px] font-medium uppercase tracking-wide text-white ring-1 ring-white/30 transition hover:bg-white/25"
+                        >
+                          <X className="size-3.5" strokeWidth={2.2} aria-hidden />
+                          Clear filters
+                        </button>
+                      ) : null}
                     </div>
                     <div className="overflow-x-auto bg-white">
                       {renderEpicsWithoutDescriptionTable(scopedEpicsWithoutDescription)}
@@ -8857,11 +9447,22 @@ export function TimelineGrid({
                   </section>
                 ) : (
                   <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                    <div className="flex shrink-0 items-center gap-2 bg-[#0897d5] px-3 py-2.5">
+                    <div className="flex shrink-0 items-center justify-between gap-2 bg-[#0897d5] px-3 py-2.5">
                       <p className="inline-flex min-w-0 items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.02em] text-white">
                         <FileWarning className="size-4 shrink-0 text-white/90" strokeWidth={2.2} />
                         <span className="truncate">User stories without description</span>
                       </p>
+                      {tabHasActiveFilters("storiesNoDesc") ? (
+                        <button
+                          type="button"
+                          onClick={() => clearTabFilters("storiesNoDesc")}
+                          title="Clear all column filters"
+                          className="inline-flex h-6 shrink-0 items-center gap-1 rounded bg-white/15 px-2 text-[11px] font-medium uppercase tracking-wide text-white ring-1 ring-white/30 transition hover:bg-white/25"
+                        >
+                          <X className="size-3.5" strokeWidth={2.2} aria-hidden />
+                          Clear filters
+                        </button>
+                      ) : null}
                     </div>
                     <div className="overflow-x-auto bg-white">
                       {renderStoriesWithoutDescriptionTable(scopedStoriesWithoutDescription)}
