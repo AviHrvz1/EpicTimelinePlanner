@@ -633,7 +633,7 @@ function DrilldownSortHeader({
 }
 
 function basisDisplayLabel(basis: ProgressBasis, scope: "epic" | "initiative"): string {
-  if (basis === "stories") return "% Stories Completed";
+  if (basis === "stories") return "% Stories Count";
   if (basis === "days") return "Σ Story Days Est.";
   return scope === "epic" ? "Epic Days Est." : "Σ Epic Days Est.";
 }
@@ -4557,12 +4557,12 @@ export function MonthAnalytics({
                     ? [
                         { value: "epicEst", label: "Epic Days Est.", icon: Folder },
                         { value: "days", label: "Σ Story Days Est.", icon: StickyNote },
-                        { value: "stories", label: "% Stories Completed", icon: CheckCircle2 },
+                        { value: "stories", label: "% Stories Count", icon: CheckCircle2 },
                       ]
                     : [
                         { value: "epicEst", label: "Σ Epic Days Est.", icon: Folder },
                         { value: "days", label: "Σ Story Days Est.", icon: StickyNote },
-                        { value: "stories", label: "% Stories Completed", icon: CheckCircle2 },
+                        { value: "stories", label: "% Stories Count", icon: CheckCircle2 },
                       ]
                 }
                 value={burndownBasis}
@@ -5921,12 +5921,12 @@ export function MonthAnalytics({
                         ? [
                             { value: "epicEst", label: "Epic Days Est.", icon: Folder },
                             { value: "days", label: "Σ Story Days Est.", icon: StickyNote },
-                            { value: "stories", label: "% Stories Completed", icon: CheckCircle2 },
+                            { value: "stories", label: "% Stories Count", icon: CheckCircle2 },
                           ]
                         : [
                             { value: "epicEst", label: "Σ Epic Days Est.", icon: Folder },
                             { value: "days", label: "Σ Story Days Est.", icon: StickyNote },
-                            { value: "stories", label: "% Stories Completed", icon: CheckCircle2 },
+                            { value: "stories", label: "% Stories Count", icon: CheckCircle2 },
                           ]
                     }
                     value={burnupBasis}

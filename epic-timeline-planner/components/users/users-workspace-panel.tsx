@@ -1514,6 +1514,23 @@ export function UsersWorkspacePanel() {
   /** Side-drawer (add / view) for first-class teams — mirrors `userPanel`. */
   const [teamPanel, setTeamPanel] = useState<TeamPanelState | null>(null);
   const [teamForm, setTeamForm] = useState<TeamFormState>(emptyTeamForm);
+
+  // Deep-link: when the Users workspace mounts with `?action=addTeam` in
+  // the URL (the dashboard's "Add Team" CTA on the empty Team Progress
+  // card sets this), pop open the Add Team slide-in immediately and
+  // scrub the param so reloads don't keep reopening it.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("action") !== "addTeam") return;
+    setTeamForm(emptyTeamForm);
+    setTeamPanel({ kind: "add" });
+    params.delete("action");
+    const nextSearch = params.toString();
+    const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash}`;
+    window.history.replaceState(window.history.state, "", nextUrl);
+  }, []);
+
   const [savingTeam, setSavingTeam] = useState(false);
   const [teamDrawerEntered, setTeamDrawerEntered] = useState(false);
   /** Crop / upload dialog source for the team logo — independent from the

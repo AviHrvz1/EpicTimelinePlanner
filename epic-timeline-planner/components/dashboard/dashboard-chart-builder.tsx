@@ -1151,7 +1151,7 @@ function SprintChartForm({
                   basis === "stories" ? "bg-white text-slate-800 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-slate-700",
                 )}
               >
-                % Stories Completed
+                % Stories Count
               </button>
             </div>
           </div>

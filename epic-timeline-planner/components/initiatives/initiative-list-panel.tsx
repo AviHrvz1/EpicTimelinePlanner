@@ -45,6 +45,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { HealthExplainerPopover } from "@/components/dashboard/health-explainer-popover";
 import { InitiativeCombobox } from "@/components/ui/initiative-combobox";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
@@ -451,6 +452,10 @@ function HealthFilterMenu({
   const closeTimeoutRef = useRef<number | null>(null);
   const activeCount = healthFilter?.size ?? 0;
   const isActive = activeCount > 0;
+  // Drives the HealthExplainerPopover — opened from the small Info icon next
+  // to the "Health Verdict" heading, so a planner can learn how each verdict
+  // is computed without leaving the filter menu.
+  const [healthExplainerOpen, setHealthExplainerOpen] = useState(false);
   const clearCloseTimeout = () => {
     if (closeTimeoutRef.current != null) {
       window.clearTimeout(closeTimeoutRef.current);
@@ -647,6 +652,19 @@ function HealthFilterMenu({
           <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-500">
             <Activity className="size-3 text-emerald-600" aria-hidden />
             Health Verdict
+            <button
+              type="button"
+              aria-label="How is health calculated?"
+              title="How is health calculated?"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setHealthExplainerOpen(true);
+              }}
+              className="inline-flex size-3.5 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            >
+              <Info className="size-3" aria-hidden />
+            </button>
           </span>
           {isActive ? (
             <button
@@ -717,6 +735,7 @@ function HealthFilterMenu({
             document.body,
           )
         : null}
+      <HealthExplainerPopover open={healthExplainerOpen} onClose={() => setHealthExplainerOpen(false)} />
     </details>
   );
 }

@@ -53,7 +53,7 @@ export function UserChip() {
     return (
       <div
         aria-busy
-        className="inline-flex size-9 shrink-0 animate-pulse rounded-full bg-slate-200 ring-1 ring-slate-200"
+        className="inline-flex size-8 shrink-0 animate-pulse rounded-full bg-slate-200 ring-1 ring-slate-200"
       />
     );
   }
@@ -111,15 +111,17 @@ export function UserChip() {
           <img
             src={effectiveImage}
             alt=""
-            // Match the visual diameter of the IconButton circles exactly:
-            // 36px box (size-9) + 1px slate-200 ring. `block` removes the
-            // default inline-baseline shift that pushes <img> below the row's
-            // optical center even under items-center.
-            className="block size-9 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+            // 32px box (size-8). The IconButton circles are size-9 (36px),
+            // but a filled photo reads visually larger than a small icon
+            // inside a mostly-white circle. Dropping one Tailwind step on
+            // the avatar lands its optical size in line with the bell/help
+            // chips next to it. `block` removes the default <img> inline-
+            // baseline shift that pushes it below the row center.
+            className="block size-8 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
           />
         ) : (
           <span
-            className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-[13px] font-bold text-white ring-1 ring-slate-200"
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white ring-1 ring-slate-200"
             style={{ background: avatarBg }}
             aria-hidden
           >

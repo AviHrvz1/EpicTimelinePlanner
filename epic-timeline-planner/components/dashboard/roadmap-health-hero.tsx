@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 
 import { UserChip } from "@/components/auth/user-chip";
+import { HealthExplainerPopover } from "@/components/dashboard/health-explainer-popover";
 import { RoadmapSelector } from "@/components/timeline/roadmap-selector";
 import { computeProgress, type HealthStatus } from "@/lib/progress";
 import { monthTeamLabelForId } from "@/lib/month-team-board";
@@ -164,6 +165,7 @@ export function RoadmapHealthHero({
     progressBasis,
   ]);
   const [isPanelExpanded, setIsPanelExpanded] = useState(true);
+  const [healthExplainerOpen, setHealthExplainerOpen] = useState(false);
   /** Human label for the active basis — folded into chart titles so the
    *  planner can see at a glance which Health calculation mode drove
    *  the verdicts on screen. */
@@ -172,7 +174,7 @@ export function RoadmapHealthHero({
       ? "Epic Days Est."
       : progressBasis === "days"
         ? "Story Days Est."
-        : "Stories Completed";
+        : "Stories Count";
   /** Selected team for the Team Progress drilldown. Null = no modal. */
   const [drilldownTeam, setDrilldownTeam] = useState<{
     teamId: string;
@@ -297,7 +299,7 @@ export function RoadmapHealthHero({
                 options={[
                   { value: "epicEst", label: "Epic Days Est." },
                   { value: "days", label: "Story Days Est." },
-                  { value: "stories", label: "Stories Completed" },
+                  { value: "stories", label: "Stories Count" },
                 ]}
               />
             </div>
@@ -408,6 +410,17 @@ export function RoadmapHealthHero({
           <DonutCard
             title={`Health Distribution · Epics (${basisLabel})`}
             titleIcon={<HeartPulse className="size-3.5 text-rose-500" strokeWidth={2.1} aria-hidden />}
+            titleAction={
+              <button
+                type="button"
+                aria-label="How is health calculated?"
+                title="How is health calculated?"
+                onClick={() => setHealthExplainerOpen(true)}
+                className="inline-flex size-4 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              >
+                <Info className="size-3.5" aria-hidden />
+              </button>
+            }
             centerCount={stats.healthDistribution.total}
             centerLabel="Epics"
             slices={[
@@ -510,6 +523,7 @@ export function RoadmapHealthHero({
         <TeamDrilldownTable rows={drilldownStories} />
       </InsightsDrilldownModal>
     ) : null}
+    <HealthExplainerPopover open={healthExplainerOpen} onClose={() => setHealthExplainerOpen(false)} />
     </>
   );
 }
@@ -758,7 +772,31 @@ function TeamProgressCard({
         style={{ scrollbarWidth: "thin" }}
       >
         {rows.length === 0 ? (
-          <div className="text-[13px] text-slate-400">No data</div>
+          <div className="rounded-md border border-dashed border-slate-200 bg-slate-50/50 px-3 py-2.5">
+            <p className="text-[12.5px] font-semibold text-slate-700">
+              No team has any epic to track yet.
+            </p>
+            <p className="mt-1 text-[11.5px] leading-snug text-slate-500">
+              <button
+                type="button"
+                onClick={() => {
+                  // Open the Users workspace with `?action=addTeam` so the
+                  // existing Add Team slide-in form (full version with logo,
+                  // lead, and member picker) opens immediately. We reuse the
+                  // existing popup rather than maintaining a parallel one.
+                  const url = new URL(window.location.href);
+                  url.searchParams.set("view", "users");
+                  url.searchParams.set("action", "addTeam");
+                  window.history.pushState({}, "", url.toString());
+                  window.dispatchEvent(new PopStateEvent("popstate"));
+                }}
+                className="font-semibold text-indigo-600 underline decoration-indigo-300 underline-offset-2 transition-colors hover:text-indigo-700 hover:decoration-indigo-500"
+              >
+                Create a team
+              </button>{" "}
+              so we can roll up its epics here.
+            </p>
+          </div>
         ) : (
           rows.map((row) => {
             const atRisk = row.status === "atRisk" || row.status === "overdue";
@@ -841,6 +879,7 @@ function TeamProgressCard({
 function DonutCard({
   title,
   titleIcon,
+  titleAction,
   centerCount,
   centerLabel,
   slices,
@@ -853,6 +892,9 @@ function DonutCard({
   /** Optional icon rendered next to the card title — same family of
    *  Lucide icons used elsewhere in the planner. */
   titleIcon?: React.ReactNode;
+  /** Optional interactive node rendered after the title text — e.g. an
+   *  Info icon button that opens an explainer popover. */
+  titleAction?: React.ReactNode;
   /** When provided, rendered in the donut's center. Pass `null` to skip
    *  the centered total (useful when the donut already shows multiple
    *  colors and a side total reads better). */
@@ -893,6 +935,7 @@ function DonutCard({
       <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500">
         {titleIcon ? <span className="inline-flex shrink-0 text-slate-500" aria-hidden>{titleIcon}</span> : null}
         {title}
+        {titleAction ?? null}
       </span>
       <div className="flex items-center gap-6">
         <DonutSvg
@@ -1369,3 +1412,4 @@ function computeRoadmapStats(
     teamProgress,
   };
 }
+

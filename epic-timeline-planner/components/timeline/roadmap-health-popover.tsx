@@ -7,6 +7,7 @@ import { Activity, AlertOctagon, AlertTriangle, Check, CheckCheck, CheckCircle2,
 import type { HealthStatus } from "@/lib/progress";
 import { cn } from "@/lib/utils";
 import { ToggleGroup } from "@/components/timeline/basis-toggle-group";
+import { HealthExplainerPopover } from "@/components/dashboard/health-explainer-popover";
 
 /** Re-export the canonical progress-basis type from `lib/progress` so the
  *  rest of the planner picks up the new `epicEst` variant. */
@@ -85,6 +86,9 @@ export function RoadmapHealthPopover({
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement | null>(null);
   const pickerInputRef = useRef<HTMLInputElement | null>(null);
+  // Opens the HealthExplainerPopover (the 7-slide carousel) from a small
+  // Info icon in the header next to the "Roadmap Health" title.
+  const [healthExplainerOpen, setHealthExplainerOpen] = useState(false);
 
   // Pool: only items matching the current bar mode AND, when any status
   // filter is active, only items whose status is in the filter set.
@@ -163,10 +167,11 @@ export function RoadmapHealthPopover({
     }
     const snapToAnchor = () => {
       if (userMovedRef.current) return;
-      const el = anchorRef.current;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      setPos({ left: r.left, top: r.bottom + 6 });
+      // Anchor to the top-left of the viewport rather than under the
+      // trigger button — gives the popover a predictable home that
+      // doesn't slide around when the toolbar layout shifts. The
+      // planner can still drag it wherever they want after open.
+      setPos({ left: 16, top: 16 });
     };
     snapToAnchor();
     window.addEventListener("scroll", snapToAnchor, true);
@@ -308,8 +313,22 @@ export function RoadmapHealthPopover({
             <Activity className="size-4 stroke-[2.5]" aria-hidden />
           </span>
           <div>
-            <div className="text-[15px] font-extrabold leading-tight tracking-tight">
+            <div className="inline-flex items-center gap-1.5 text-[15px] font-extrabold leading-tight tracking-tight">
               Roadmap Health
+              <button
+                data-popover-no-drag
+                type="button"
+                aria-label="How is health calculated?"
+                title="How is health calculated?"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setHealthExplainerOpen(true);
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+                className="inline-flex size-5 items-center justify-center rounded-full text-white/80 transition-colors hover:bg-white/15 hover:text-white"
+              >
+                <Info className="size-3.5" aria-hidden />
+              </button>
             </div>
             <div className="text-[11px] font-medium leading-tight text-white/80">
               {totalBars} {totalBars === 1 ? unitLabel : `${unitLabel}s`} in scope
@@ -359,12 +378,12 @@ export function RoadmapHealthPopover({
                   ? [
                       { value: "epicEst", label: "Σ Epic Days Est.", icon: Folder },
                       { value: "days", label: "Σ Story Days Est.", icon: StickyNote },
-                      { value: "stories", label: "% Stories Completed", icon: CheckCircle2 },
+                      { value: "stories", label: "% Stories Count", icon: CheckCircle2 },
                     ]
                   : [
                       { value: "epicEst", label: "Epic Days Est.", icon: Folder },
                       { value: "days", label: "Story Days Est.", icon: StickyNote },
-                      { value: "stories", label: "Stories Completed", icon: CheckCircle2 },
+                      { value: "stories", label: "Stories Count", icon: CheckCircle2 },
                     ]
               }
               value={progressBasis}
@@ -673,6 +692,7 @@ export function RoadmapHealthPopover({
           );
         })()}
       </div>
+      <HealthExplainerPopover open={healthExplainerOpen} onClose={() => setHealthExplainerOpen(false)} />
     </div>,
     document.body,
   );
@@ -761,7 +781,7 @@ function BasisHelpBody() {
     {
       icon: CheckCircle2,
       iconTint: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-      title: "Stories Completed",
+      title: "Stories Count",
       breakdown: [
         { label: "All views", body: <>% of child stories whose status is <em>Done</em>.</> },
       ],
