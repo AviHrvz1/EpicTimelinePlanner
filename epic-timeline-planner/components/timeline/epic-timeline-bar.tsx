@@ -26,7 +26,20 @@ function isLightColor(hex: string): boolean {
 }
 
 /** Portal tooltip that always renders above everything via fixed positioning. */
-function GanttBarTooltip({ label, anchorRef }: { label: string; anchorRef: React.RefObject<HTMLElement | null> }) {
+function GanttBarTooltip({
+  label,
+  anchorRef,
+  icon,
+  dateRange,
+}: {
+  label: string;
+  anchorRef: React.RefObject<HTMLElement | null>;
+  /** Emoji or icon glyph to show alongside the title. Renders the default folder
+   *  glyph (via EpicPlanBarIcon) when the value is null/undefined. */
+  icon?: string | null;
+  /** Pre-formatted start–end date range, e.g. "Mar 1 – Apr 15". Omit to skip. */
+  dateRange?: string | null;
+}) {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
 
   const show = useCallback(() => {
@@ -56,10 +69,45 @@ function GanttBarTooltip({ label, anchorRef }: { label: string; anchorRef: React
       style={{ left: pos.x, top: pos.y - 6, transform: "translate(-50%, -100%)" }}
       className="pointer-events-none fixed z-[99999] whitespace-nowrap rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium text-slate-700 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm"
     >
-      {label}
+      <div className="flex items-center gap-1.5">
+        <EpicPlanBarIcon icon={icon} className="mr-0 size-3.5 [&_svg]:size-3 [&_svg]:text-slate-500" />
+        <span className="font-semibold text-slate-800">{label}</span>
+      </div>
+      {dateRange ? (
+        <div className="mt-0.5 text-[11px] font-medium text-slate-500">{dateRange}</div>
+      ) : null}
     </div>,
     document.body,
   );
+}
+
+/** Formats a (year, month1, day) tuple as e.g. "Mar 1". Returns null for incomplete input. */
+function fmtMonthDay(year: number | null | undefined, month1: number | null | undefined, day: number | null | undefined): string | null {
+  if (year == null || month1 == null) return null;
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const m = monthNames[month1 - 1];
+  if (!m) return null;
+  if (day == null) return m;
+  return `${m} ${day}`;
+}
+
+/** Builds the "Mar 1 – Apr 15" line. Collapses to a single date when start==end. */
+export function buildGanttBarDateRange(
+  startYear: number | null | undefined,
+  startMonth: number | null | undefined,
+  startDay: number | null | undefined,
+  endYear: number | null | undefined,
+  endMonth: number | null | undefined,
+  endDay: number | null | undefined,
+): string | null {
+  const start = fmtMonthDay(startYear, startMonth, startDay);
+  const end = fmtMonthDay(endYear, endMonth, endDay);
+  if (!start && !end) return null;
+  if (start && end) {
+    if (start === end) return start;
+    return `${start} – ${end}`;
+  }
+  return start ?? end ?? null;
 }
 
 /** Fills DragOverlay bounds so the preview lines up with the real Gantt bar. */
@@ -135,11 +183,14 @@ type InitiativeTimelineBarProps = {
   /** Optional team-assignment pill rendered below the bar (same pattern as
    *  the epic bar) when the toolbar's Teams toggle is on. */
   teamAssignmentChip?: { label: string; className: string; slug: string | null } | null;
+  /** Pre-formatted "Mar 1 – Apr 15" range, shown on the hover tooltip. */
+  tooltipDateRange?: string | null;
 };
 
 export function InitiativeTimelineBar({
   id,
   title,
+  icon,
   color,
   progressPercent = 0,
   progressLabel,
@@ -155,6 +206,7 @@ export function InitiativeTimelineBar({
   healthStatus = null,
   healthTooltip,
   teamAssignmentChip = null,
+  tooltipDateRange = null,
 }: InitiativeTimelineBarProps) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
   const lightBg = isLightColor(color);
@@ -170,7 +222,7 @@ export function InitiativeTimelineBar({
       }}
       className="group/bar relative z-20 overflow-visible space-y-0"
     >
-      <GanttBarTooltip label={title} anchorRef={barRef} />
+      <GanttBarTooltip label={title} anchorRef={barRef} icon={icon} dateRange={tooltipDateRange} />
       {onDelete ? (
         <button
           type="button"
@@ -301,6 +353,9 @@ type EpicPlanTimelineBarProps = {
   /** True when today is past the epic's plan-end date AND `epicStatus` is
    *  not `done`. Renders an `Overdue` indicator next to the status pill. */
   isOverdue?: boolean;
+  /** Pre-formatted "Mar 1 – Apr 15" range, shown on the hover tooltip. Use
+   *  `buildGanttBarDateRange` from this module to format consistently. */
+  tooltipDateRange?: string | null;
 };
 
 /** Draggable epic plan bar (month / quarter timeline); uses `epicTimelineDraggableId`. */
@@ -326,6 +381,7 @@ export function EpicPlanTimelineBar({
   healthTooltip,
   epicStatus = null,
   isOverdue = false,
+  tooltipDateRange = null,
 }: EpicPlanTimelineBarProps) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
   const lightBg = isLightColor(color);
@@ -366,7 +422,7 @@ export function EpicPlanTimelineBar({
         position: isDragging ? "relative" : undefined,
       }}
     >
-      <GanttBarTooltip label={title} anchorRef={barRef} />
+      <GanttBarTooltip label={title} anchorRef={barRef} icon={icon} dateRange={tooltipDateRange} />
       {onUnschedule ? (
         <button
           type="button"

@@ -51,7 +51,9 @@ export function PriorityPill({ priority, className }: { priority: string; classN
   );
 }
 
-const POPOVER_Z = 8000;
+// 9800 sits above every dialog overlay (StoryDetailsDialog uses
+// `z-[9700]`, others use `z-[9500]`).
+const POPOVER_Z = 9800;
 const POPOVER_GAP = 6;
 const VIEW_MARGIN = 8;
 

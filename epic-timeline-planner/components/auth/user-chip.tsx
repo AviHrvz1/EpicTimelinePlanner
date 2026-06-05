@@ -53,7 +53,7 @@ export function UserChip() {
     return (
       <div
         aria-busy
-        className="inline-flex h-[32px] w-[32px] shrink-0 animate-pulse rounded-full bg-slate-200"
+        className="inline-flex size-9 shrink-0 animate-pulse rounded-full bg-slate-200 ring-1 ring-slate-200"
       />
     );
   }
@@ -97,25 +97,29 @@ export function UserChip() {
   }
 
   return (
-    <div ref={rootRef} className="relative shrink-0">
+    <div ref={rootRef} className="relative flex h-9 shrink-0 items-center">
       <button
         type="button"
         onClick={() => setMenuOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         title={displayName}
-        className="group inline-flex h-[36px] shrink-0 items-center gap-2 whitespace-nowrap rounded-full border-0 bg-transparent pl-1 pr-2 text-[12.5px] font-semibold leading-none tracking-wide text-slate-800 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+        className="group inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border-0 bg-transparent pl-0 pr-2 text-[12.5px] font-semibold leading-none tracking-wide text-slate-800 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
       >
         {effectiveImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={effectiveImage}
             alt=""
-            className="size-[32px] shrink-0 rounded-full object-cover"
+            // Match the visual diameter of the IconButton circles exactly:
+            // 36px box (size-9) + 1px slate-200 ring. `block` removes the
+            // default inline-baseline shift that pushes <img> below the row's
+            // optical center even under items-center.
+            className="block size-9 shrink-0 rounded-full object-cover ring-1 ring-slate-200"
           />
         ) : (
           <span
-            className="inline-flex size-[32px] shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-[13px] font-bold text-white ring-1 ring-slate-200"
             style={{ background: avatarBg }}
             aria-hidden
           >

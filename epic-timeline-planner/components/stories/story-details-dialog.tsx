@@ -8,7 +8,6 @@ import StarterKit from "@tiptap/starter-kit";
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Activity as ActivityIcon,
-  Bot,
   Bold,
   Check,
   CheckCheck,
@@ -17,6 +16,7 @@ import {
   ChevronRight,
   ClipboardList,
   FileText,
+  Flag,
   Heading2,
   Heading3,
   History,
@@ -39,7 +39,11 @@ import {
 import { StoryStatus } from "@/lib/generated/prisma";
 
 import { ActivityCommentComposer } from "@/components/ui/activity-comment-composer";
+import { ActivityHistoryList } from "@/components/ui/activity-history-list";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
+import { toggleMarkSmart } from "@/components/ui/editor-mark-toggles";
+import { InitiativeCombobox, type InitiativeComboboxOption } from "@/components/ui/initiative-combobox";
+import { LinkEditorPopover, applyLinkToEditor, readLinkContext } from "@/components/ui/link-editor-popover";
 import { PriorityPill, PriorityPopover, type Priority } from "@/components/ui/priority-picker";
 import { AssigneeFieldDecoration } from "@/components/ui/user-avatar";
 import { TeamIdCombobox, blurActiveField } from "@/components/ui/team-id-combobox";
@@ -60,10 +64,6 @@ import {
 } from "@/lib/use-planning-surface-rect";
 import { cn } from "@/lib/utils";
 import { sprintEndDate, YEAR_SPRINT_MAX } from "@/lib/year-sprint";
-
-function isSystemHistoryEntry(entry: string): boolean {
-  return entry.toLowerCase().startsWith("system auto-move:");
-}
 
 const STORY_DETAILS_INFO_TOOLTIP_CLASS =
   "pointer-events-none absolute left-1/2 top-0 z-[320] w-48 max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-[calc(100%+8px)] whitespace-normal rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium leading-snug text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100";
@@ -224,6 +224,9 @@ export function StoryDetailsDialog({
   const dragStartRef = useRef<{ pointerX: number; pointerY: number; startX: number; startY: number } | null>(null);
   const dialogShellRef = useRef<HTMLDivElement | null>(null);
   const splitLayoutRef = useRef<HTMLDivElement | null>(null);
+  const linkButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [linkEditorOpen, setLinkEditorOpen] = useState(false);
+  const [linkEditorCtx, setLinkEditorCtx] = useState<{ text: string; href: string }>({ text: "", href: "" });
   const descriptionEditor = useEditor({
     extensions: [
       StarterKit,
@@ -267,54 +270,21 @@ export function StoryDetailsDialog({
     }
     return null;
   }, [initiatives, epicId]);
-  const parentSelectTooltipText = useMemo(() => {
-    if (!selectedBreadcrumbMeta) return "";
-    return `${selectedBreadcrumbMeta.initiative.title} › ${selectedBreadcrumbMeta.epic.title}`;
-  }, [selectedBreadcrumbMeta]);
-
-  const parentSelectWrapRef = useRef<HTMLSpanElement | null>(null);
-  const [isParentSelectTruncated, setIsParentSelectTruncated] = useState(false);
-
-  useLayoutEffect(() => {
-    const wrap = parentSelectWrapRef.current;
-    const select = wrap?.querySelector("select");
-    if (!select || !epicId || !parentSelectTooltipText) {
-      setIsParentSelectTruncated(false);
-      return;
+  const parentEpicOptions = useMemo<InitiativeComboboxOption[]>(() => {
+    const opts: InitiativeComboboxOption[] = [];
+    for (const initiative of initiatives) {
+      for (const epic of initiative.epics ?? []) {
+        opts.push({
+          id: epic.id,
+          title: epic.title,
+          subtitle: initiative.title,
+          icon: <EpicPlanBarIcon icon={epic.icon} className="mr-0 size-4 text-slate-500" />,
+        });
+      }
     }
-    const selectedText = select.selectedOptions[0]?.text?.trim() ?? "";
-    if (!selectedText) {
-      setIsParentSelectTruncated(false);
-      return;
-    }
+    return opts;
+  }, [initiatives]);
 
-    const measure = () => {
-      const text = select.selectedOptions[0]?.text?.trim() ?? "";
-      if (!text) {
-        setIsParentSelectTruncated(false);
-        return;
-      }
-      if (select.scrollWidth > select.clientWidth + 1) {
-        setIsParentSelectTruncated(true);
-        return;
-      }
-      const ctx = document.createElement("canvas").getContext("2d");
-      if (!ctx) {
-        setIsParentSelectTruncated(text.length > 36);
-        return;
-      }
-      const cs = window.getComputedStyle(select);
-      ctx.font = `${cs.fontSize} ${cs.fontFamily}`;
-      const textW = ctx.measureText(text).width;
-      const padFudge = 36;
-      setIsParentSelectTruncated(textW > select.clientWidth - padFudge);
-    };
-
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(select);
-    return () => ro.disconnect();
-  }, [epicId, parentSelectTooltipText, open, detailsPanelWidthPx]);
   const existingLabelSuggestions = useMemo(() => {
     const set = new Set<string>();
     for (const initiative of initiatives) {
@@ -846,10 +816,10 @@ export function StoryDetailsDialog({
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-          <div className="min-h-0">
+          <div className="shrink-0">
             <div
               ref={splitLayoutRef}
-              className="grid min-h-0 items-stretch gap-0"
+              className="grid items-start gap-0"
               style={{ gridTemplateColumns: `minmax(0,1fr) 10px ${detailsPanelWidthPx}px` }}
             >
           <section className="flex min-h-0 flex-col gap-3 rounded-xl border-0 bg-white pt-3 pb-0 pl-[5px] pr-[10px]">
@@ -876,7 +846,7 @@ export function StoryDetailsDialog({
                   <button
                     type="button"
                     onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => descriptionEditor?.chain().focus().toggleBold().run()}
+                    onClick={() => toggleMarkSmart(descriptionEditor, "bold")}
                     className={cn(
                       "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
                       descriptionEditor?.isActive("bold") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
@@ -907,18 +877,13 @@ export function StoryDetailsDialog({
                     <Heading3 className="size-3.5" />
                   </button>
                   <button
+                    ref={linkButtonRef}
                     type="button"
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => {
-                      const prev = (descriptionEditor?.getAttributes("link").href as string | undefined) ?? "";
-                      const url = window.prompt("Link URL", prev || "https://");
-                      if (!descriptionEditor || url == null) return;
-                      const trimmed = url.trim();
-                      if (!trimmed) {
-                        descriptionEditor.chain().focus().extendMarkRange("link").unsetLink().run();
-                        return;
-                      }
-                      descriptionEditor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run();
+                      if (!descriptionEditor) return;
+                      setLinkEditorCtx(readLinkContext(descriptionEditor));
+                      setLinkEditorOpen(true);
                     }}
                     className={cn(
                       "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
@@ -927,10 +892,25 @@ export function StoryDetailsDialog({
                   >
                     <LinkIcon className="size-3.5" />
                   </button>
+                  <LinkEditorPopover
+                    anchorRef={linkButtonRef}
+                    open={linkEditorOpen}
+                    initialText={linkEditorCtx.text}
+                    initialHref={linkEditorCtx.href}
+                    onClose={() => setLinkEditorOpen(false)}
+                    onSave={(text, href) => {
+                      if (descriptionEditor) applyLinkToEditor(descriptionEditor, text, href);
+                      setLinkEditorOpen(false);
+                    }}
+                    onUnlink={() => {
+                      descriptionEditor?.chain().focus().extendMarkRange("link").unsetLink().run();
+                      setLinkEditorOpen(false);
+                    }}
+                  />
                   <button
                     type="button"
                     onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => descriptionEditor?.chain().focus().toggleItalic().run()}
+                    onClick={() => toggleMarkSmart(descriptionEditor, "italic")}
                     className={cn(
                       "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
                       descriptionEditor?.isActive("italic") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
@@ -941,7 +921,7 @@ export function StoryDetailsDialog({
                   <button
                     type="button"
                     onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => descriptionEditor?.chain().focus().toggleUnderline().run()}
+                    onClick={() => toggleMarkSmart(descriptionEditor, "underline")}
                     className={cn(
                       "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
                       descriptionEditor?.isActive("underline") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
@@ -1060,7 +1040,7 @@ export function StoryDetailsDialog({
                   suggestions={assigneeNameSuggestions}
                   directoryUsers={workspaceDirectoryUsers}
                   placeholder="Type or pick a name"
-                  className={cn("h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 shadow-sm pl-9 text-[14px] text-slate-800", assignee ? "pr-6" : "pr-1.5")}
+                  className={cn("h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 shadow-sm pl-7 text-[14px] text-slate-800", assignee ? "pr-6" : "pr-1.5")}
                 />
                 {assignee ? (
                   <button
@@ -1099,12 +1079,23 @@ export function StoryDetailsDialog({
             </label>
             <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-[15px] font-normal text-slate-700">Sprint</p>
-              <select value={sprint} onChange={(event) => setSprint(event.target.value)} className="h-7 w-full rounded-md border border-blue-300/80 bg-blue-50/35 px-1.5 text-[14px] font-medium text-slate-800">
-                <option value="">Not set</option>
-                {assignableSprints.map((n) => (
-                  <option key={n} value={String(n)}>{`Sprint ${n}`}</option>
-                ))}
-              </select>
+              {/* Native <select> can't render icons inside its options
+                * list (the browser owns that render), but we put a
+                * Flag icon overlay on the field so the selected value
+                * carries the same visual cue as elsewhere. */}
+              <div className="relative">
+                <Flag
+                  className="pointer-events-none absolute left-2 top-1/2 z-10 size-3.5 -translate-y-1/2 text-rose-500"
+                  strokeWidth={2.1}
+                  aria-hidden
+                />
+                <select value={sprint} onChange={(event) => setSprint(event.target.value)} className="h-7 w-full rounded-md border border-blue-300/80 bg-blue-50/35 pl-7 pr-1.5 text-[14px] font-medium text-slate-800">
+                  <option value="">Not set</option>
+                  {assignableSprints.map((n) => (
+                    <option key={n} value={String(n)}>{`Sprint ${n}`}</option>
+                  ))}
+                </select>
+              </div>
             </label>
             <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3 pt-0.5">
               <p className="text-[15px] font-normal text-slate-700">Est. Days</p>
@@ -1212,36 +1203,16 @@ export function StoryDetailsDialog({
             </div>
             <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
               <p className="text-[15px] font-normal text-slate-700">Parent</p>
-              <span ref={parentSelectWrapRef} className="group relative min-w-0">
-                <select
-                  value={epicId}
-                  title=""
-                  onChange={(event) => setEpicId(event.target.value)}
-                  className="h-7 w-full min-w-0 max-w-full truncate rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 shadow-sm px-1.5 text-[14px] text-slate-800 disabled:bg-muted/40"
+              <span className="group relative min-w-0">
+                <InitiativeCombobox
+                  valueId={epicId}
+                  onValueChange={setEpicId}
+                  options={parentEpicOptions}
                   disabled={Boolean(lockParentEpicId)}
-                >
-                  <option value="">Select epic</option>
-                  {initiatives.map((initiative) => (
-                    <optgroup key={initiative.id} label={initiative.title}>
-                      {(initiative.epics ?? []).map((epic) => (
-                        <option key={epic.id} value={epic.id}>
-                          {epic.title}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-                {isParentSelectTruncated && parentSelectTooltipText ? (
-                  <span
-                    role="tooltip"
-                    className={cn(
-                      STORY_DETAILS_INFO_TOOLTIP_CLASS,
-                      "w-max max-w-[min(22rem,calc(100vw-3rem))]",
-                    )}
-                  >
-                    {parentSelectTooltipText}
-                  </span>
-                ) : null}
+                  placeholder="Search or pick an epic"
+                  aria-label="Parent epic"
+                  className="h-7 w-full rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 text-[14px] text-slate-800 shadow-sm disabled:bg-muted/40"
+                />
               </span>
             </label>
             <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
@@ -1451,27 +1422,7 @@ export function StoryDetailsDialog({
                     />
                   </>
                 ) : (
-                  <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
-                    {story.history.length === 0 ? (
-                      <p className="text-sm text-slate-500">No history yet.</p>
-                    ) : (
-                      story.history.map((entry) => (
-                        <div key={entry.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
-                          <p className="inline-flex items-center gap-1.5 text-slate-800">
-                            {isSystemHistoryEntry(entry.entry) ? (
-                              <span className="inline-flex items-center rounded-md bg-sky-50 px-1 py-0.5 text-sky-700 ring-1 ring-sky-200">
-                                <Bot className="size-3.5" aria-hidden />
-                              </span>
-                            ) : null}
-                            <span>{entry.entry}</span>
-                          </p>
-                          <p className="mt-1 text-[12px] text-slate-500">
-                            {new Date(entry.createdAt).toLocaleString()}
-                          </p>
-                        </div>
-                      ))
-                    )}
-                  </div>
+                  <ActivityHistoryList entries={story.history} directoryUsers={workspaceDirectoryUsers} />
                 )}
               </div>
             ) : null}

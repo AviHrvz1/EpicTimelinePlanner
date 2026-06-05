@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { ACTIVE_RECORD, db } from "@/lib/db";
+import { getOptionalUser } from "@/lib/auth-helpers";
 import { captureEpicDailySnapshot } from "@/lib/epic-daily-snapshots";
 
 const epicTeamIdSchema = z.string().trim().min(1).max(64);
@@ -109,6 +110,8 @@ export async function PATCH(
       where: { id: nextInitiativeId },
       select: { year: true, startMonth: true, color: true, roadmapId: true },
     });
+    const sessionUser = await getOptionalUser(request);
+    const userName = sessionUser?.name ?? sessionUser?.email ?? null;
     const nextPlanStartMonth =
       patch.planStartMonth !== undefined
         ? patch.planStartMonth
@@ -140,7 +143,7 @@ export async function PATCH(
         planYear: nextPlanYear,
         planQuarter: nextPlanQuarter,
         ...(changes.length > 0
-          ? { history: { create: changes.map((entry) => ({ entry })) } }
+          ? { history: { create: changes.map((entry) => ({ entry, userName })) } }
           : {}),
       },
       include: {

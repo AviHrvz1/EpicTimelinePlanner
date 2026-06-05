@@ -36,7 +36,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
@@ -46,7 +46,10 @@ import { createPortal } from "react-dom";
 import { TimelineDatePopover } from "@/components/epics/timeline-date-popover";
 
 import { ActivityCommentComposer } from "@/components/ui/activity-comment-composer";
+import { ActivityHistoryList } from "@/components/ui/activity-history-list";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
+import { toggleMarkSmart } from "@/components/ui/editor-mark-toggles";
+import { LinkEditorPopover, applyLinkToEditor, readLinkContext } from "@/components/ui/link-editor-popover";
 import { PriorityPill, PriorityPopover, type Priority } from "@/components/ui/priority-picker";
 import { TeamAvatar } from "@/components/ui/team-avatar";
 import { AssigneeFieldDecoration, UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
@@ -258,6 +261,10 @@ export function EpicFormDialog({
   const epicPriorityTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [newLabel, setNewLabel] = useState("");
   const [labelsAutocompleteOpen, setLabelsAutocompleteOpen] = useState(false);
+  // Refs + state to portal the labels autocomplete dropdown so it
+  // escapes the dialog content's `overflow-y-auto` clipping.
+  const labelsFieldRef = useRef<HTMLDivElement | null>(null);
+  const [labelsAutocompleteRect, setLabelsAutocompleteRect] = useState<{ left: number; top: number; width: number } | null>(null);
   const [labelsAutocompleteIndex, setLabelsAutocompleteIndex] = useState(-1);
   const [isSaving, setIsSaving] = useState(false);
   const [isAddingComment, setIsAddingComment] = useState(false);
@@ -293,6 +300,9 @@ export function EpicFormDialog({
   const timelineEndAnchorRef = useRef<HTMLButtonElement | null>(null);
   const [startCalendarOpen, setStartCalendarOpen] = useState(false);
   const [endCalendarOpen, setEndCalendarOpen] = useState(false);
+  const linkButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [linkEditorOpen, setLinkEditorOpen] = useState(false);
+  const [linkEditorCtx, setLinkEditorCtx] = useState<{ text: string; href: string }>({ text: "", href: "" });
   const descriptionEditor = useEditor({
     extensions: [
       StarterKit,
@@ -670,6 +680,27 @@ export function EpicFormDialog({
   useEffect(() => {
     setLabelsAutocompleteIndex(-1);
   }, [newLabel, labelsDraft, filteredLabelSuggestions.length]);
+  // Track the labels-field bounding rect so the portaled dropdown
+  // anchors to it correctly while the dialog scrolls or resizes.
+  useLayoutEffect(() => {
+    if (!labelsAutocompleteOpen) {
+      setLabelsAutocompleteRect(null);
+      return;
+    }
+    function update() {
+      const el = labelsFieldRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setLabelsAutocompleteRect({ left: r.left, top: r.bottom + 4, width: r.width });
+    }
+    update();
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [labelsAutocompleteOpen]);
 
   const directoryExtraTeamIds = useMemo(() => {
     const ids = new Set<string>();
@@ -1225,15 +1256,30 @@ export function EpicFormDialog({
                   </h3>
                   <div className="flex flex-1 flex-col gap-2 rounded-xl bg-white p-3 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 transition-all hover:ring-indigo-300 hover:shadow-[0_2px_12px_-2px_rgba(99,102,241,0.18)]">
                     <div className="flex flex-wrap gap-1 rounded-md bg-[#0897d5] p-1">
-                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBold().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("bold") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Bold className="size-3.5" /></button>
-                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleItalic().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("italic") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Italic className="size-3.5" /></button>
-                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleUnderline().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("underline") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><UnderlineIcon className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => toggleMarkSmart(descriptionEditor, "bold")} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("bold") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Bold className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => toggleMarkSmart(descriptionEditor, "italic")} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("italic") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Italic className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => toggleMarkSmart(descriptionEditor, "underline")} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("underline") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><UnderlineIcon className="size-3.5" /></button>
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBulletList().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("bulletList") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><List className="size-3.5" /></button>
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleOrderedList().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("orderedList") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><ListOrdered className="size-3.5" /></button>
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBlockquote().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("blockquote") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Quote className="size-3.5" /></button>
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 2 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("heading", { level: 2 }) ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Heading2 className="size-3.5" /></button>
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 3 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("heading", { level: 3 }) ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Heading3 className="size-3.5" /></button>
-                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { const prev = (descriptionEditor?.getAttributes("link").href as string | undefined) ?? ""; const url = window.prompt("Link URL", prev || "https://"); if (!descriptionEditor || url == null) return; const trimmed = url.trim(); if (!trimmed) { descriptionEditor.chain().focus().extendMarkRange("link").unsetLink().run(); return; } descriptionEditor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run(); }} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("link") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><LinkIcon className="size-3.5" /></button>
+                      <button ref={linkButtonRef} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { if (!descriptionEditor) return; setLinkEditorCtx(readLinkContext(descriptionEditor)); setLinkEditorOpen(true); }} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("link") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><LinkIcon className="size-3.5" /></button>
+                      <LinkEditorPopover
+                        anchorRef={linkButtonRef}
+                        open={linkEditorOpen}
+                        initialText={linkEditorCtx.text}
+                        initialHref={linkEditorCtx.href}
+                        onClose={() => setLinkEditorOpen(false)}
+                        onSave={(text, href) => {
+                          if (descriptionEditor) applyLinkToEditor(descriptionEditor, text, href);
+                          setLinkEditorOpen(false);
+                        }}
+                        onUnlink={() => {
+                          descriptionEditor?.chain().focus().extendMarkRange("link").unsetLink().run();
+                          setLinkEditorOpen(false);
+                        }}
+                      />
                     </div>
                     <div className="min-h-[10rem] flex-1 rounded-md px-1 py-2">
                       <EditorContent
@@ -1358,7 +1404,18 @@ export function EpicFormDialog({
                   </div>
                 </label>
                 <label className="grid grid-cols-[9rem_minmax(0,1fr)] items-center gap-3">
-                  <p className="text-[15px] font-normal text-slate-700">Days Est</p>
+                  <div className="inline-flex items-center gap-1 whitespace-nowrap">
+                    <p className="text-[15px] font-normal text-slate-700">Days Est</p>
+                    <span className="group relative inline-flex items-center">
+                      <Info
+                        className="size-3.5 text-slate-400"
+                        aria-label="About epic-level original estimate"
+                      />
+                      <span role="tooltip" className={infoTooltipClass}>
+                        Original effort budget for this epic, in days. Captured up front so you can compare against the sum of child story estimates and spot scope drift.
+                      </span>
+                    </span>
+                  </div>
                   <input
                     type="number"
                     min={0}
@@ -1409,7 +1466,7 @@ export function EpicFormDialog({
                         aria-label="About sum of child days remaining"
                       />
                       <span role="tooltip" className={infoTooltipClass}>
-                        Sum of remaining days across child user stories. Completed (review/done) stories count as 0; open stories use `daysLeft` (or their estimate when unreported).
+                        Total remaining days across child user stories. Each open story contributes its reported days left, or its original estimate when no progress has been logged yet.
                       </span>
                     </span>
                   </div>
@@ -1563,7 +1620,7 @@ export function EpicFormDialog({
                 <label className="grid grid-cols-[9rem_minmax(0,1fr)] items-center gap-3">
                   <p className="text-[15px] font-normal text-slate-700">Labels</p>
                   <div className="relative z-30">
-                    <div className="flex min-h-6 flex-wrap items-center gap-1 rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 py-0.5 shadow-sm">
+                    <div ref={labelsFieldRef} className="flex min-h-6 flex-wrap items-center gap-1 rounded-md border border-slate-300 bg-white transition-colors hover:border-slate-400 px-1.5 py-0.5 shadow-sm">
                       <Tag className="size-3 shrink-0 text-slate-400" aria-hidden />
                       {labelsDraft.map((label) => (
                         <span key={label} className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-px text-[11px] font-medium text-slate-700">
@@ -1641,9 +1698,16 @@ export function EpicFormDialog({
                         </>
                       ) : null}
                     </div>
-                    {labelsAutocompleteOpen && filteredLabelSuggestions.length > 0 ? (
+                    {labelsAutocompleteOpen && filteredLabelSuggestions.length > 0 && labelsAutocompleteRect && typeof document !== "undefined" ? createPortal(
                       <ul
-                        className="absolute left-0 right-0 top-full z-[200] mt-1 max-h-44 overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg ring-1 ring-black/5"
+                        style={{
+                          position: "fixed",
+                          left: labelsAutocompleteRect.left,
+                          top: labelsAutocompleteRect.top,
+                          width: labelsAutocompleteRect.width,
+                          zIndex: 9800,
+                        }}
+                        className="max-h-44 overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg ring-1 ring-black/5"
                         role="listbox"
                       >
                         {filteredLabelSuggestions.map((item, i) => (
@@ -1666,7 +1730,8 @@ export function EpicFormDialog({
                             </button>
                           </li>
                         ))}
-                      </ul>
+                      </ul>,
+                      document.body,
                     ) : null}
                   </div>
                 </label>
@@ -2248,18 +2313,7 @@ export function EpicFormDialog({
                       />
                     </>
                   ) : (
-                    <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
-                      {(epic.history ?? []).length === 0 ? (
-                        <p className="text-sm text-slate-500">No history yet.</p>
-                      ) : (
-                        epic.history.map((entry) => (
-                          <div key={entry.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
-                            <p className="text-slate-800">{entry.entry}</p>
-                            <p className="mt-1 text-[12px] text-slate-500">{new Date(entry.createdAt).toLocaleString()}</p>
-                          </div>
-                        ))
-                      )}
-                    </div>
+                    <ActivityHistoryList entries={epic.history ?? []} directoryUsers={workspaceDirectoryUsers} />
                   )}
                 </div>
               ) : null}
@@ -2275,7 +2329,9 @@ export function EpicFormDialog({
       sprintAutocompletePosition != null
         ? createPortal(
             <div
-              className="fixed z-[220] max-h-40 overflow-y-auto rounded-md border border-slate-200 bg-white p-1 shadow-lg"
+              // `z-[9800]` keeps the sprint autocomplete above every
+              // dialog overlay (StoryDetailsDialog uses `z-[9700]`).
+              className="fixed z-[9800] max-h-40 overflow-y-auto rounded-md border border-slate-200 bg-white p-1 shadow-lg"
               style={{
                 left: sprintAutocompletePosition.left,
                 top: sprintAutocompletePosition.top,
@@ -2291,9 +2347,10 @@ export function EpicFormDialog({
                     setChildEditingValue(`Sprint ${sprintNo}`);
                     setIsSprintAutocompleteOpen(false);
                   }}
-                  className="block w-full rounded px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100"
+                  className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100"
                 >
-                  Sprint {sprintNo}
+                  <Flag className="size-3 shrink-0 text-rose-500" strokeWidth={2.1} aria-hidden />
+                  <span className="truncate">Sprint {sprintNo}</span>
                 </button>
               ))}
             </div>,

@@ -3,6 +3,7 @@ import { StoryStatus } from "@/lib/generated/prisma";
 import { z } from "zod";
 
 import { ACTIVE_RECORD, db } from "@/lib/db";
+import { getOptionalUser } from "@/lib/auth-helpers";
 import { captureStoryDailySnapshot } from "@/lib/story-daily-snapshots";
 import { YEAR_SPRINT_MAX, YEAR_SPRINT_MIN } from "@/lib/year-sprint";
 
@@ -76,6 +77,9 @@ export async function POST(
     createDaysLeft = createEstimatedDays;
   }
 
+  const sessionUser = await getOptionalUser(request);
+  const userName = sessionUser?.name ?? sessionUser?.email ?? null;
+
   const story = await db.userStory.create({
     data: {
       title: parsed.data.title,
@@ -95,6 +99,7 @@ export async function POST(
       history: {
         create: {
           entry: "Story created",
+          userName,
         },
       },
     },

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { db, ACTIVE_RECORD } from "@/lib/db";
+import { getOptionalUser } from "@/lib/auth-helpers";
 
 const DEFAULT_YEAR = new Date().getFullYear();
 const DEFAULT_ROADMAP_ID = "default-roadmap-0000-0000-000000000001";
@@ -113,6 +114,8 @@ export async function POST(request: NextRequest) {
   }
 
   const roadmapId = parsed.data.roadmapId ?? DEFAULT_ROADMAP_ID;
+  const sessionUser = await getOptionalUser(request);
+  const userName = sessionUser?.name ?? sessionUser?.email ?? null;
 
   const initiative = await db.initiative.create({
     data: {
@@ -126,7 +129,7 @@ export async function POST(request: NextRequest) {
       year: parsed.data.year ?? DEFAULT_YEAR,
       roadmapId,
       status: InitiativeStatus.backlog,
-      history: { create: { entry: "Initiative created" } },
+      history: { create: { entry: "Initiative created", userName } },
     },
   });
 

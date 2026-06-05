@@ -405,3 +405,88 @@
 .ProseMirror a:hover {
   color: rgb(29 78 216);
 }
+
+/**
+ * Tailwind preflight strips list/heading/blockquote defaults, so Tiptap
+ * commands like toggleBulletList / toggleHeading apply tags that render
+ * indistinguishably from a paragraph. These rules restore enough styling
+ * that the toolbar buttons have visible effect across every editor
+ * instance (initiative / epic / story description, sticky notes).
+ */
+.ProseMirror ul {
+  list-style: disc outside;
+  padding-left: 1.5rem;
+  margin: 0.25rem 0;
+}
+.ProseMirror ol {
+  list-style: decimal outside;
+  padding-left: 1.5rem;
+  margin: 0.25rem 0;
+}
+.ProseMirror li {
+  margin: 0.125rem 0;
+}
+.ProseMirror li > p {
+  margin: 0;
+}
+.ProseMirror blockquote {
+  border-left: 3px solid rgb(148 163 184);
+  padding-left: 0.75rem;
+  color: rgb(71 85 105);
+  font-style: italic;
+  margin: 0.5rem 0;
+}
+.ProseMirror h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0.75rem 0 0.25rem;
+  line-height: 1.25;
+}
+.ProseMirror h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0.5rem 0 0.25rem;
+  line-height: 1.3;
+}
+.ProseMirror h3 {
+  font-size: 1.075rem;
+  font-weight: 600;
+  margin: 0.5rem 0 0.25rem;
+  line-height: 1.3;
+}
+.ProseMirror h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0.25rem 0;
+}
+.ProseMirror p {
+  margin: 0.125rem 0;
+}
+.ProseMirror code {
+  background: rgb(241 245 249);
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.25rem;
+  font-size: 0.9em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.ProseMirror pre {
+  background: rgb(15 23 42);
+  color: rgb(241 245 249);
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+.ProseMirror pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  color: inherit;
+}
+.ProseMirror hr {
+  border: 0;
+  border-top: 1px solid rgb(226 232 240);
+  margin: 0.75rem 0;
+}

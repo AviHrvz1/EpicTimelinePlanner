@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
+import { getOptionalUser } from "@/lib/auth-helpers";
 import { captureEpicDailySnapshot } from "@/lib/epic-daily-snapshots";
 
 const epicTeamIdSchema = z.enum(["platform", "experience", "data", "mobile", "growth"]);
@@ -53,6 +54,8 @@ export async function POST(
   const planStartMonth = parsed.data.planStartMonth ?? null;
   const planEndMonth = parsed.data.planEndMonth ?? planStartMonth;
   const planQuarterSeed = planStartMonth ?? initiative.startMonth;
+  const sessionUser = await getOptionalUser(request);
+  const userName = sessionUser?.name ?? sessionUser?.email ?? null;
   const epic = await db.epic.create({
     data: {
       title: parsed.data.title,
@@ -71,7 +74,7 @@ export async function POST(
       planEndMonth,
       planEndSprint: 2,
       timelineRow: 0,
-      history: { create: { entry: "Epic created" } },
+      history: { create: { entry: "Epic created", userName } },
     },
   });
   // Phase C: capture an epic snapshot for day-1 so closed-period views can

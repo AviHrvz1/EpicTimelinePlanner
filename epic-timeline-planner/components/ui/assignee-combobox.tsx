@@ -60,7 +60,10 @@ type AssigneeComboboxProps = {
   optionIcon?: ReactNode;
 };
 
-const MENU_Z = 8000;
+// 9800 sits above every dialog overlay (StoryDetailsDialog uses
+// `z-[9700]`, others use `z-[9500]`), so this combobox dropdown is
+// visible regardless of which form opens it.
+const MENU_Z = 9800;
 /** ~max-h-52; menu flips above the field when there isn’t room below. */
 const MENU_MAX_PX = 208;
 const VIEW_MARGIN = 8;
@@ -118,7 +121,6 @@ export function AssigneeCombobox({
         top: "auto",
         bottom: window.innerHeight - r.top + FIELD_GAP,
         maxHeight: cap,
-        overflow: "hidden",
       });
     } else {
       setMenuStyle({
@@ -129,7 +131,6 @@ export function AssigneeCombobox({
         zIndex: MENU_Z,
         bottom: "auto",
         maxHeight: cap,
-        overflow: "hidden",
       });
     }
   }, []);
@@ -187,11 +188,14 @@ export function AssigneeCombobox({
       ? createPortal(
           <div
             ref={portalRef}
-            className="rounded-xl border border-slate-200/80 bg-white p-1 shadow-lg ring-1 ring-black/[0.04]"
+            // `overflow-y-auto` on the outer popover box guarantees a
+            // visible scrollbar regardless of how `max-h-full` on the
+            // <ul> resolves against the parent's `max-height`.
+            className="overflow-y-auto rounded-xl border border-slate-200/80 bg-white p-1 shadow-lg ring-1 ring-black/[0.04]"
             style={menuStyle}
           >
             <ul
-              className="max-h-full overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]"
+              className="overscroll-contain [-webkit-overflow-scrolling:touch]"
               role="listbox"
             >
               {filtered.map((s) => {

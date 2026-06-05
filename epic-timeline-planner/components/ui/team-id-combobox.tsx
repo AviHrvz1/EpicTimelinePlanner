@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 
+import { Pencil, X } from "lucide-react";
 import { MONTH_TEAM_COLUMNS } from "@/lib/month-team-board";
 import { normalizeWorkspaceUserTeam, teamLabelForWorkspaceUser } from "@/lib/workspace-users";
 import { TeamAvatar } from "@/components/ui/team-avatar";
@@ -18,7 +19,9 @@ import { cn } from "@/lib/utils";
 
 type TeamRow = { id: string; label: string };
 
-const MENU_Z = 8000;
+// 9800 sits above every dialog overlay (StoryDetailsDialog uses
+// `z-[9700]`, others use `z-[9500]`).
+const MENU_Z = 9800;
 
 function labelForTeamId(teamId: string): string {
   if (!teamId) return "";
@@ -75,6 +78,7 @@ export function TeamIdCombobox({
   const [focused, setFocused] = useState(false);
   const [draft, setDraft] = useState("");
   const [inlineNewTeamName, setInlineNewTeamName] = useState("");
+  const [inlineCreateExpanded, setInlineCreateExpanded] = useState(false);
   const inlineCreateInputRef = useRef<HTMLInputElement>(null);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
 
@@ -95,12 +99,12 @@ export function TeamIdCombobox({
   }, [extraTeamIds]);
 
   const filtered = useMemo(() => {
-    const q = displayValue.trim().toLowerCase();
+    const q = (open ? draft : displayValue).trim().toLowerCase();
     if (!q) return allRows;
     return allRows.filter(
       (r) => r.label.toLowerCase().includes(q) || (r.id && r.id.toLowerCase().includes(q)),
     );
-  }, [allRows, displayValue]);
+  }, [allRows, displayValue, open, draft]);
 
   const inlineNewSlug = useMemo(() => {
     if (!allowCustomTeam || inlineNewTeamName.trim().length < 2) return "";
@@ -113,8 +117,24 @@ export function TeamIdCombobox({
     !allRows.some((r) => r.id === inlineNewSlug);
 
   useEffect(() => {
-    if (!open) setInlineNewTeamName("");
+    if (!open) {
+      setInlineNewTeamName("");
+      setInlineCreateExpanded(false);
+    }
   }, [open]);
+
+  // After the inline create form expands, move focus into its input so the
+  // user can start typing immediately. Doing this in an effect (rather than
+  // relying on `autoFocus`) keeps focus inside the portal and prevents the
+  // brief "focus is on nothing" moment that the popup-close logic would
+  // otherwise treat as a click-outside.
+  useEffect(() => {
+    if (!open || !inlineCreateExpanded) return;
+    const id = window.setTimeout(() => {
+      inlineCreateInputRef.current?.focus();
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [open, inlineCreateExpanded]);
 
   const recalcMenu = useCallback(() => {
     const el = inputRef.current;
@@ -190,54 +210,111 @@ export function TeamIdCombobox({
             className="rounded-md border border-slate-200 bg-white py-1 shadow-lg"
             style={menuStyle}
           >
+            {/* Search input lives inside the popup since the field is
+              * read-only. Filters the option list as the user types. */}
+            <div className="px-1.5 pt-1 pb-1.5">
+              <input
+                type="text"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="Search teams…"
+                autoFocus
+                onMouseDown={(e) => e.stopPropagation()}
+                className="w-full rounded border border-slate-300 px-2 py-1 text-[13px] text-slate-800 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/70"
+              />
+            </div>
             <ul className="max-h-52 overflow-y-auto py-0.5" role="listbox">
               {allowCustomTeam ? (
                 <li key="__create_team__" className="border-b border-slate-100 px-2 py-2" role="presentation">
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                    Create new team
-                  </p>
-                  <div className="flex min-w-0 gap-1.5">
-                    <input
-                      ref={inlineCreateInputRef}
-                      type="text"
-                      value={inlineNewTeamName}
-                      onChange={(e) => setInlineNewTeamName(e.target.value)}
-                      placeholder="Team name"
-                      autoComplete="off"
-                      aria-label="New team name"
-                      className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[13px] font-medium text-slate-900 outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-200/80"
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          commitInlineNewTeam();
-                        }
-                      }}
-                    />
+                  {inlineCreateExpanded ? (
+                    <>
+                      <div className="mb-1.5 flex items-center justify-between gap-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                          Create new team
+                        </p>
+                        <button
+                          type="button"
+                          aria-label="Cancel new team"
+                          title="Cancel"
+                          onMouseDown={(ev) => {
+                            ev.preventDefault();
+                            ev.stopPropagation();
+                            skipNextBlurCloseRef.current = true;
+                            setInlineCreateExpanded(false);
+                            setInlineNewTeamName("");
+                            inputRef.current?.focus();
+                          }}
+                          className="inline-flex size-4 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                        >
+                          <X className="size-3" aria-hidden />
+                        </button>
+                      </div>
+                      <div className="flex min-w-0 gap-1.5">
+                        <input
+                          ref={inlineCreateInputRef}
+                          type="text"
+                          value={inlineNewTeamName}
+                          onChange={(e) => setInlineNewTeamName(e.target.value)}
+                          placeholder="Team name"
+                          autoComplete="off"
+                          aria-label="New team name"
+                          className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[13px] font-medium text-slate-900 outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-200/80"
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              commitInlineNewTeam();
+                            }
+                            if (e.key === "Escape") {
+                              e.preventDefault();
+                              setInlineCreateExpanded(false);
+                              setInlineNewTeamName("");
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          disabled={!canAddInlineNewTeam}
+                          className={cn(
+                            "shrink-0 rounded-md px-2.5 py-1.5 text-[12px] font-semibold transition",
+                            canAddInlineNewTeam
+                              ? "bg-violet-600 text-white hover:bg-violet-500"
+                              : "cursor-not-allowed bg-slate-100 text-slate-400",
+                          )}
+                          onMouseDown={(ev) => {
+                            ev.preventDefault();
+                            commitInlineNewTeam();
+                          }}
+                        >
+                          Add
+                        </button>
+                      </div>
+                      <p className="mt-1.5 text-[11px] leading-snug text-slate-500">
+                        {inlineNewSlug && !canAddInlineNewTeam ? (
+                          <span className="text-amber-700">That team already exists in the list.</span>
+                        ) : (
+                          <>At least 2 characters. Saves as a team id (e.g. &quot;Team Super&quot; → team-super).</>
+                        )}
+                      </p>
+                    </>
+                  ) : (
                     <button
                       type="button"
-                      disabled={!canAddInlineNewTeam}
-                      className={cn(
-                        "shrink-0 rounded-md px-2.5 py-1.5 text-[12px] font-semibold transition",
-                        canAddInlineNewTeam
-                          ? "bg-violet-600 text-white hover:bg-violet-500"
-                          : "cursor-not-allowed bg-slate-100 text-slate-400",
-                      )}
                       onMouseDown={(ev) => {
                         ev.preventDefault();
-                        commitInlineNewTeam();
+                        ev.stopPropagation();
+                        skipNextBlurCloseRef.current = true;
+                        setInlineCreateExpanded(true);
                       }}
+                      className="flex w-full items-center justify-between gap-2 rounded-md px-1 py-1 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
                     >
-                      Add
+                      <span className="inline-flex items-center gap-1.5">
+                        <Pencil className="size-3 text-slate-500" strokeWidth={2.2} aria-hidden />
+                        Add new team
+                      </span>
+                      <span className="text-[10px] text-slate-400">Edit</span>
                     </button>
-                  </div>
-                  <p className="mt-1.5 text-[11px] leading-snug text-slate-500">
-                    {inlineNewSlug && !canAddInlineNewTeam ? (
-                      <span className="text-amber-700">That team already exists in the list.</span>
-                    ) : (
-                      <>At least 2 characters. Saves as a team id (e.g. &quot;Team Super&quot; → team-super).</>
-                    )}
-                  </p>
+                  )}
                 </li>
               ) : null}
               {filtered.map((r) => (
@@ -282,20 +359,22 @@ export function TeamIdCombobox({
         ref={inputRef}
         id={inputIdProp}
         type="text"
-        value={displayValue}
+        value={labelForTeamId(teamId)}
+        readOnly
         disabled={disabled}
         placeholder={placeholder}
         autoComplete="off"
         aria-label={allowCustomTeam ? "Team" : "Delivery team"}
         aria-expanded={showMenu}
-        onChange={(e) => {
-          setDraft(e.target.value);
-          setFocused(true);
-          setOpen(true);
+        onMouseDown={(e) => {
+          e.preventDefault();
+          if (disabled) return;
+          setOpen((v) => !v);
+          if (!open) inputRef.current?.focus();
         }}
+        onChange={() => { /* readOnly — no-op */ }}
         onFocus={() => {
           setFocused(true);
-          setDraft(labelForTeamId(teamId));
           setOpen(true);
         }}
         onBlur={(e) => {

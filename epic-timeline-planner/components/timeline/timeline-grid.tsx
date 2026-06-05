@@ -50,7 +50,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
-import { EpicPlanTimelineBar, InitiativeTimelineBar } from "@/components/timeline/epic-timeline-bar";
+import { EpicPlanTimelineBar, InitiativeTimelineBar, buildGanttBarDateRange } from "@/components/timeline/epic-timeline-bar";
 import { RoadmapSelector } from "@/components/timeline/roadmap-selector";
 import { TeamAvatar } from "@/components/ui/team-avatar";
 import { UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
@@ -590,6 +590,14 @@ function GanttLaneRow({
               showProgress={showProgress}
               onClick={() => onOpenInitiative(initiative.id)}
               onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("initiative", initiative.id)}
+              tooltipDateRange={buildGanttBarDateRange(
+                initiative.year,
+                initiative.startMonth,
+                null,
+                initiative.year,
+                initiative.endMonth ?? initiative.startMonth,
+                null,
+              )}
             />
             {onResizeInitiativeRange ? (
               <>
@@ -1399,6 +1407,14 @@ function EpicGanttLaneRow({
             onClick={() => onOpenEpic(epic.id)}
             onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", epic.id)}
             teamAssignmentChip={teamAssignmentChip}
+            tooltipDateRange={buildGanttBarDateRange(
+              epic.planYear,
+              epic.planStartMonth,
+              epic.planStartDay,
+              epic.planYear,
+              epic.planEndMonth ?? epic.planStartMonth,
+              epic.planEndDay,
+            )}
           />
           {/* Left resize handle */}
           {onDayRangeChange && (epic.planStartMonth == null || month! <= epic.planStartMonth) ? (
@@ -1449,6 +1465,14 @@ function EpicGanttLaneRow({
             onClick={() => onOpenEpic(epic.id)}
             onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", epic.id)}
             teamAssignmentChip={teamAssignmentChip}
+            tooltipDateRange={buildGanttBarDateRange(
+              epic.planYear,
+              epic.planStartMonth,
+              epic.planStartDay,
+              epic.planYear,
+              epic.planEndMonth ?? epic.planStartMonth,
+              epic.planEndDay,
+            )}
           />
         </div>
       </div>
@@ -1543,6 +1567,14 @@ function MonthInitiativeGanttLaneRow({
             teamAssignmentChip={teamAssignmentChip}
             onClick={() => onOpenInitiative(initiative.id)}
             onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("initiative", initiative.id)}
+            tooltipDateRange={buildGanttBarDateRange(
+              initiative.year,
+              initiative.startMonth,
+              null,
+              initiative.year,
+              initiative.endMonth ?? initiative.startMonth,
+              null,
+            )}
           />
         </div>
       </div>

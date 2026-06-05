@@ -40,7 +40,10 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 
 import { ActivityCommentComposer } from "@/components/ui/activity-comment-composer";
+import { ActivityHistoryList } from "@/components/ui/activity-history-list";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
+import { toggleMarkSmart } from "@/components/ui/editor-mark-toggles";
+import { LinkEditorPopover, applyLinkToEditor, readLinkContext } from "@/components/ui/link-editor-popover";
 import { TeamAvatar } from "@/components/ui/team-avatar";
 import { AssigneeFieldDecoration, UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
 import { Button } from "@/components/ui/button";
@@ -323,6 +326,9 @@ export function InitiativeFormDialog({
   const dragStartRef = useRef<{ pointerX: number; pointerY: number; startX: number; startY: number } | null>(null);
   const dialogShellRef = useRef<HTMLDivElement | null>(null);
   const splitLayoutRef = useRef<HTMLDivElement | null>(null);
+  const linkButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [linkEditorOpen, setLinkEditorOpen] = useState(false);
+  const [linkEditorCtx, setLinkEditorCtx] = useState<{ text: string; href: string }>({ text: "", href: "" });
   const descriptionEditor = useEditor({
     extensions: [
       StarterKit,
@@ -1010,15 +1016,30 @@ export function InitiativeFormDialog({
                   </h3>
                   <div className="flex flex-1 flex-col gap-2 rounded-xl bg-white p-3 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.12)] ring-1 ring-slate-200 transition-all hover:ring-indigo-300 hover:shadow-[0_2px_12px_-2px_rgba(99,102,241,0.18)]">
                     <div className="flex shrink-0 flex-wrap gap-1 rounded-md bg-[#0897d5] p-1">
-                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBold().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("bold") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Bold className="size-3.5" /></button>
-                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleItalic().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("italic") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Italic className="size-3.5" /></button>
-                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleUnderline().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("underline") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><UnderlineIcon className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => toggleMarkSmart(descriptionEditor, "bold")} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("bold") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Bold className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => toggleMarkSmart(descriptionEditor, "italic")} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("italic") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Italic className="size-3.5" /></button>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => toggleMarkSmart(descriptionEditor, "underline")} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("underline") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><UnderlineIcon className="size-3.5" /></button>
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBulletList().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("bulletList") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><List className="size-3.5" /></button>
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleOrderedList().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("orderedList") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><ListOrdered className="size-3.5" /></button>
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleBlockquote().run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("blockquote") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Quote className="size-3.5" /></button>
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 2 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("heading", { level: 2 }) ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Heading2 className="size-3.5" /></button>
                       <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => descriptionEditor?.chain().focus().toggleHeading({ level: 3 }).run()} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("heading", { level: 3 }) ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><Heading3 className="size-3.5" /></button>
-                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { const prev = (descriptionEditor?.getAttributes("link").href as string | undefined) ?? ""; const url = window.prompt("Link URL", prev || "https://"); if (!descriptionEditor || url == null) return; const trimmed = url.trim(); if (!trimmed) { descriptionEditor.chain().focus().extendMarkRange("link").unsetLink().run(); return; } descriptionEditor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run(); }} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("link") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><LinkIcon className="size-3.5" /></button>
+                      <button ref={linkButtonRef} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { if (!descriptionEditor) return; setLinkEditorCtx(readLinkContext(descriptionEditor)); setLinkEditorOpen(true); }} className={cn("inline-flex h-7 w-7 items-center justify-center rounded border text-white", descriptionEditor?.isActive("link") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20")}><LinkIcon className="size-3.5" /></button>
+                      <LinkEditorPopover
+                        anchorRef={linkButtonRef}
+                        open={linkEditorOpen}
+                        initialText={linkEditorCtx.text}
+                        initialHref={linkEditorCtx.href}
+                        onClose={() => setLinkEditorOpen(false)}
+                        onSave={(text, href) => {
+                          if (descriptionEditor) applyLinkToEditor(descriptionEditor, text, href);
+                          setLinkEditorOpen(false);
+                        }}
+                        onUnlink={() => {
+                          descriptionEditor?.chain().focus().extendMarkRange("link").unsetLink().run();
+                          setLinkEditorOpen(false);
+                        }}
+                      />
                     </div>
                     <div className="min-h-[10rem] flex-1 rounded-md px-1 py-2">
                       <EditorContent
@@ -1760,14 +1781,7 @@ export function InitiativeFormDialog({
                       />
                     </>
                   ) : (
-                    <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
-                      {(initiative.history ?? []).length === 0 ? <p className="text-sm text-slate-500">No history yet.</p> : initiative.history.map((entry) => (
-                        <div key={entry.id} className="rounded-md bg-white p-2 text-sm ring-1 ring-slate-200">
-                          <p className="text-slate-800">{entry.entry}</p>
-                          <p className="mt-1 text-[12px] text-slate-500">{new Date(entry.createdAt).toLocaleString()}</p>
-                        </div>
-                      ))}
-                    </div>
+                    <ActivityHistoryList entries={initiative.history ?? []} directoryUsers={workspaceDirectoryUsers} />
                   )}
                 </div>
               ) : null}

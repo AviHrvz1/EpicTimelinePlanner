@@ -78,6 +78,10 @@ model InitiativeComment {
 model InitiativeHistory {
   id           String     @id @default(uuid())
   entry        String
+  /** Display name of the signed-in user who triggered the change. Nullable
+   *  because pre-existing entries pre-date this column, and because system
+   *  / automation events have no human author. UI shows "System" when null. */
+  userName     String?
   initiativeId String
   initiative   Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
   createdAt    DateTime   @default(now())
@@ -149,6 +153,9 @@ model EpicComment {
 model EpicHistory {
   id        String   @id @default(uuid())
   entry     String
+  /** Display name of the signed-in user who triggered the change. Nullable
+   *  for the same reasons as InitiativeHistory.userName. */
+  userName  String?
   epicId    String
   epic      Epic     @relation(fields: [epicId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
@@ -199,6 +206,9 @@ model StoryComment {
 model StoryHistory {
   id        String    @id @default(uuid())
   entry     String
+  /** Display name of the signed-in user who triggered the change. Nullable
+   *  for the same reasons as InitiativeHistory.userName. */
+  userName  String?
   storyId   String
   story     UserStory @relation(fields: [storyId], references: [id], onDelete: Cascade)
   createdAt DateTime  @default(now())

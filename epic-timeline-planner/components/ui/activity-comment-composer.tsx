@@ -6,8 +6,10 @@ import Underline from "@tiptap/extension-underline";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Bold, Heading2, Heading3, Italic, Link as LinkIcon, List, ListOrdered, Plus, Quote, Underline as UnderlineIcon } from "lucide-react";
+import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { LinkEditorPopover, applyLinkToEditor, readLinkContext } from "@/components/ui/link-editor-popover";
 import { cn } from "@/lib/utils";
 
 type ActivityCommentComposerProps = {
@@ -16,6 +18,9 @@ type ActivityCommentComposerProps = {
 };
 
 export function ActivityCommentComposer({ onSubmit, disabled }: ActivityCommentComposerProps) {
+  const linkButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [linkEditorOpen, setLinkEditorOpen] = useState(false);
+  const [linkEditorCtx, setLinkEditorCtx] = useState<{ text: string; href: string }>({ text: "", href: "" });
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -137,18 +142,13 @@ export function ActivityCommentComposer({ onSubmit, disabled }: ActivityCommentC
           <Heading3 className="size-3.5" />
         </button>
         <button
+          ref={linkButtonRef}
           type="button"
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => {
-            const prev = (editor?.getAttributes("link").href as string | undefined) ?? "";
-            const url = window.prompt("Link URL", prev || "https://");
-            if (!editor || url == null) return;
-            const trimmed = url.trim();
-            if (!trimmed) {
-              editor.chain().focus().extendMarkRange("link").unsetLink().run();
-              return;
-            }
-            editor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run();
+            if (!editor) return;
+            setLinkEditorCtx(readLinkContext(editor));
+            setLinkEditorOpen(true);
           }}
           className={cn(
             "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
@@ -157,6 +157,21 @@ export function ActivityCommentComposer({ onSubmit, disabled }: ActivityCommentC
         >
           <LinkIcon className="size-3.5" />
         </button>
+        <LinkEditorPopover
+          anchorRef={linkButtonRef}
+          open={linkEditorOpen}
+          initialText={linkEditorCtx.text}
+          initialHref={linkEditorCtx.href}
+          onClose={() => setLinkEditorOpen(false)}
+          onSave={(text, href) => {
+            if (editor) applyLinkToEditor(editor, text, href);
+            setLinkEditorOpen(false);
+          }}
+          onUnlink={() => {
+            editor?.chain().focus().extendMarkRange("link").unsetLink().run();
+            setLinkEditorOpen(false);
+          }}
+        />
       </div>
       <EditorContent editor={editor} className="flex min-h-0 flex-1 flex-col focus-within:outline-none [&_.ProseMirror]:min-h-0 [&_.ProseMirror]:flex-1 [&_.ProseMirror]:outline-none" />
       </div>

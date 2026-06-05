@@ -31,6 +31,7 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 
 import { BurndownChart } from "@/components/dashboard/charts/burndown-chart";
+import { LinkEditorPopover, applyLinkToEditor, readLinkContext } from "@/components/ui/link-editor-popover";
 import { TeamAvatar } from "@/components/ui/team-avatar";
 import { CfdChart } from "@/components/dashboard/charts/cfd-chart";
 import { StoryStatusChart } from "@/components/dashboard/charts/story-status-chart";
@@ -165,6 +166,9 @@ const CardComposer = forwardRef<
     trailing?: React.ReactNode;
   }
 >(function CardComposer({ placeholder, initialContent, onEmptyChange, trailing }, ref) {
+  const linkButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [linkEditorOpen, setLinkEditorOpen] = useState(false);
+  const [linkEditorCtx, setLinkEditorCtx] = useState<{ text: string; href: string }>({ text: "", href: "" });
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -252,14 +256,37 @@ const CardComposer = forwardRef<
         {tbBtn(!!editor?.isActive("blockquote"), () => editor?.chain().focus().toggleBlockquote().run(), <Quote className="size-3.5" />)}
         {tbBtn(!!editor?.isActive("heading", { level: 2 }), () => editor?.chain().focus().toggleHeading({ level: 2 }).run(), <Heading2 className="size-3.5" />)}
         {tbBtn(!!editor?.isActive("heading", { level: 3 }), () => editor?.chain().focus().toggleHeading({ level: 3 }).run(), <Heading3 className="size-3.5" />)}
-        {tbBtn(!!editor?.isActive("link"), () => {
-          const prev = (editor?.getAttributes("link").href as string | undefined) ?? "";
-          const url = window.prompt("Link URL", prev || "https://");
-          if (!editor || url == null) return;
-          const trimmed = url.trim();
-          if (!trimmed) { editor.chain().focus().extendMarkRange("link").unsetLink().run(); return; }
-          editor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run();
-        }, <LinkIcon className="size-3.5" />)}
+        <button
+          ref={linkButtonRef}
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            if (!editor) return;
+            setLinkEditorCtx(readLinkContext(editor));
+            setLinkEditorOpen(true);
+          }}
+          className={cn(
+            "inline-flex h-7 w-7 items-center justify-center rounded border text-white",
+            editor?.isActive("link") ? "border-white/40 bg-white/20" : "border-transparent hover:bg-white/20",
+          )}
+        >
+          <LinkIcon className="size-3.5" />
+        </button>
+        <LinkEditorPopover
+          anchorRef={linkButtonRef}
+          open={linkEditorOpen}
+          initialText={linkEditorCtx.text}
+          initialHref={linkEditorCtx.href}
+          onClose={() => setLinkEditorOpen(false)}
+          onSave={(text, href) => {
+            if (editor) applyLinkToEditor(editor, text, href);
+            setLinkEditorOpen(false);
+          }}
+          onUnlink={() => {
+            editor?.chain().focus().extendMarkRange("link").unsetLink().run();
+            setLinkEditorOpen(false);
+          }}
+        />
       </div>
       {/* Ruled notebook page — white background with periodic horizontal lines. 24px ruling matches editor line-height.
           Background offset matches the editor's top padding so each rule lands just under a text baseline. */}

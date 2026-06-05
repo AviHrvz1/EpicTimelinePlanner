@@ -20,6 +20,7 @@ export type StoryCommentItem = {
 export type StoryHistoryItem = {
   id: string;
   entry: string;
+  userName: string | null;
   storyId: string;
   createdAt: string | Date;
 };
@@ -84,6 +85,7 @@ export type EpicCommentItem = {
 export type EpicHistoryItem = {
   id: string;
   entry: string;
+  userName: string | null;
   epicId: string;
   createdAt: string | Date;
 };
@@ -99,6 +101,7 @@ export type InitiativeCommentItem = {
 export type InitiativeHistoryItem = {
   id: string;
   entry: string;
+  userName: string | null;
   initiativeId: string;
   createdAt: string | Date;
 };

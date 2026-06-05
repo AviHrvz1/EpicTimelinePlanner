@@ -19,8 +19,9 @@ import {
   Underline as UnderlineIcon,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { LinkEditorPopover, applyLinkToEditor, readLinkContext } from "@/components/ui/link-editor-popover";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -39,6 +40,9 @@ type Props = {
  */
 export function StickyNoteCard({ body, onSave, allowEdit = true }: Props) {
   const [editing, setEditing] = useState(false);
+  const linkButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [linkEditorOpen, setLinkEditorOpen] = useState(false);
+  const [linkEditorCtx, setLinkEditorCtx] = useState<{ text: string; href: string }>({ text: "", href: "" });
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -130,14 +134,37 @@ export function StickyNoteCard({ body, onSave, allowEdit = true }: Props) {
             {tbBtn(!!editor?.isActive("blockquote"), () => editor?.chain().focus().toggleBlockquote().run(), <Quote className="size-3" />)}
             {tbBtn(!!editor?.isActive("heading", { level: 2 }), () => editor?.chain().focus().toggleHeading({ level: 2 }).run(), <Heading2 className="size-3" />)}
             {tbBtn(!!editor?.isActive("heading", { level: 3 }), () => editor?.chain().focus().toggleHeading({ level: 3 }).run(), <Heading3 className="size-3" />)}
-            {tbBtn(!!editor?.isActive("link"), () => {
-              const prev = (editor?.getAttributes("link").href as string | undefined) ?? "";
-              const url = window.prompt("Link URL", prev || "https://");
-              if (!editor || url == null) return;
-              const trimmed = url.trim();
-              if (!trimmed) { editor.chain().focus().extendMarkRange("link").unsetLink().run(); return; }
-              editor.chain().focus().extendMarkRange("link").setLink({ href: trimmed }).run();
-            }, <LinkIcon className="size-3" />)}
+            <button
+              ref={linkButtonRef}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                if (!editor) return;
+                setLinkEditorCtx(readLinkContext(editor));
+                setLinkEditorOpen(true);
+              }}
+              className={cn(
+                "inline-flex h-6 w-6 items-center justify-center rounded border text-violet-900",
+                editor?.isActive("link") ? "border-violet-300/80 bg-violet-200/60" : "border-transparent hover:bg-violet-200/40",
+              )}
+            >
+              <LinkIcon className="size-3" />
+            </button>
+            <LinkEditorPopover
+              anchorRef={linkButtonRef}
+              open={linkEditorOpen}
+              initialText={linkEditorCtx.text}
+              initialHref={linkEditorCtx.href}
+              onClose={() => setLinkEditorOpen(false)}
+              onSave={(text, href) => {
+                if (editor) applyLinkToEditor(editor, text, href);
+                setLinkEditorOpen(false);
+              }}
+              onUnlink={() => {
+                editor?.chain().focus().extendMarkRange("link").unsetLink().run();
+                setLinkEditorOpen(false);
+              }}
+            />
           </div>
         </div>
       ) : null}

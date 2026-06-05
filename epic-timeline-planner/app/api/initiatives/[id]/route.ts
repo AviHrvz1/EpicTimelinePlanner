@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
+import { getOptionalUser } from "@/lib/auth-helpers";
 
 const updateInitiativeSchema = z.object({
   title: z.string().trim().min(2).max(120).optional(),
@@ -67,6 +68,9 @@ export async function PATCH(
   if (patch.team !== undefined && patch.team !== existing.team) changes.push("Team updated");
   if (patch.labels !== undefined && patch.labels !== existing.labels) changes.push("Labels updated");
 
+  const sessionUser = await getOptionalUser(request);
+  const userName = sessionUser?.name ?? sessionUser?.email ?? null;
+
   const initiative = await db.initiative.update({
     where: { id },
     data: {
@@ -81,7 +85,7 @@ export async function PATCH(
       ...(patch.team !== undefined ? { team: patch.team } : {}),
       ...(patch.labels !== undefined ? { labels: patch.labels } : {}),
       ...(changes.length > 0
-        ? { history: { create: changes.map((entry) => ({ entry })) } }
+        ? { history: { create: changes.map((entry) => ({ entry, userName })) } }
         : {}),
     },
     include: {

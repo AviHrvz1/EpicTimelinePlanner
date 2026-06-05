@@ -177,7 +177,7 @@ export function TimelineDatePopover({
       ref={popoverRef}
       role="dialog"
       aria-label="Pick a date"
-      className="fixed z-[1100] w-[264px] rounded-xl border border-slate-200 bg-white p-3 shadow-[0_24px_60px_-10px_rgba(15,23,42,0.35),0_8px_20px_-8px_rgba(15,23,42,0.25)]"
+      className="fixed z-[9800] w-[264px] rounded-xl border border-slate-200 bg-white p-3 shadow-[0_24px_60px_-10px_rgba(15,23,42,0.35),0_8px_20px_-8px_rgba(15,23,42,0.25)]"
       style={{ top: position.top, left: position.left }}
     >
       <div className="mb-1 flex items-center justify-between">

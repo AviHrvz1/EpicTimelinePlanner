@@ -76,7 +76,7 @@ import {
 } from "@/lib/month-team-board";
 import { collectQuarterEpics } from "@/lib/quarter-analytics";
 import { splitQuarterTotalAcrossMonths } from "@/lib/quarter-team-capacity";
-import { ALL_QUARTERS_TEAM_CAPACITY_LABEL, ALL_YEAR_PLAN_MONTHS, QUARTERS } from "@/lib/timeline";
+import { ALL_QUARTERS_TEAM_CAPACITY_LABEL, ALL_YEAR_PLAN_MONTHS, MONTHS, QUARTERS } from "@/lib/timeline";
 import { EpicItem, InitiativeItem, RoadmapItem, UserStoryItem } from "@/lib/types";
 import { normalizeWorkspaceUserTeam } from "@/lib/workspace-users";
 import { cn } from "@/lib/utils";
@@ -5175,7 +5175,15 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         if (rowsChanged) {
           await persistEpicTimelineRowPatches(before, placementNext);
         }
-        toast.success("Epic placed on the plan");
+        // Verbose placement toast: "Login flow scheduled for May 1–15 (Sprint 9)".
+        const epicTitle = updatedEpic?.title?.trim() || "Epic";
+        const monthName = MONTHS[month - 1] ?? `Month ${month}`;
+        const startDay = planSprint === 1 ? 1 : 16;
+        const endDay = planSprint === 1 ? 15 : new Date(selectedYear, month, 0).getDate();
+        const yearSprint = globalSprintFromMonthLane(month, planSprint);
+        toast.success(
+          `${epicTitle} scheduled for ${monthName} ${startDay}–${endDay} (Sprint ${yearSprint})`,
+        );
         flashGanttEpicEmphasis(epicId);
         record("epic:gantt-month-placed", { epicId, month, planSprint, laneIndex, rowsChanged, movedTimelineRow });
       } catch (err) {
