@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Database, Loader2, RefreshCcw, Sparkles } from "lucide-react";
+import { Database, Loader2, RefreshCcw, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,12 @@ import { Button } from "@/components/ui/button";
  */
 
 export function DemoBuilderPanel() {
-  const [busy, setBusy] = useState<"reset" | "refresh" | null>(null);
+  const [busy, setBusy] = useState<"reset" | "refresh" | "wipe" | null>(null);
+  // Two-step confirmation for the destructive "delete all data" action.
+  // `wipeConfirmOpen` shows the inline confirm card; `wipeConfirmText`
+  // requires the user to type the word "delete" before the button enables.
+  const [wipeConfirmOpen, setWipeConfirmOpen] = useState(false);
+  const [wipeConfirmText, setWipeConfirmText] = useState("");
 
   const runReset = async () => {
     if (busy) return;
@@ -67,6 +72,37 @@ export function DemoBuilderPanel() {
       toast.success(`Added ${body.added} snapshots up through ${body.through}`, { id: t });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Refresh failed", { id: t });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const runWipe = async () => {
+    if (busy) return;
+    setBusy("wipe");
+    const t = toast.loading("Wiping all app data…");
+    try {
+      const res = await fetch("/api/demo-builder/wipe-all", { method: "POST" });
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? `HTTP ${res.status}`);
+      const body = (await res.json()) as {
+        initiatives: number;
+        epics: number;
+        stories: number;
+        users: number;
+        teams: number;
+        dashboards: number;
+      };
+      toast.success(
+        `Wiped — ${body.initiatives} initiatives · ${body.epics} epics · ${body.stories} stories · ${body.users} users · ${body.teams} teams`,
+        { id: t },
+      );
+      setWipeConfirmOpen(false);
+      setWipeConfirmText("");
+      // Refetch every surface (initiatives, dashboards, roadmaps) by
+      // reloading. The workspace is now empty.
+      window.location.reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Wipe failed", { id: t });
     } finally {
       setBusy(null);
     }
@@ -140,6 +176,76 @@ export function DemoBuilderPanel() {
             {busy === "reset" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Database className="size-4" aria-hidden />}
             Reset &amp; seed demo
           </Button>
+        </section>
+
+        {/* Danger zone — irreversible destructive action. Type-to-confirm
+            so a stray click can't nuke the workspace. */}
+        <section className="rounded-2xl border border-rose-200 bg-rose-50/40 p-5 shadow-sm">
+          <div className="flex items-start gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-700 ring-1 ring-rose-200" aria-hidden>
+              <Trash2 className="size-4" strokeWidth={2.2} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-[14.5px] font-bold tracking-tight text-rose-900">Danger zone — Delete all data</h2>
+              <p className="mt-1 text-[12.5px] leading-snug text-rose-800/80">
+                Wipes every initiative, epic, story, snapshot, comment, history entry, dashboard, roadmap,
+                team, and workspace user. The workspace will be empty afterwards — no demo data is reseeded.
+                Auth tables (your login + session) are preserved.
+              </p>
+              {!wipeConfirmOpen ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setWipeConfirmOpen(true)}
+                  disabled={!!busy}
+                  className="mt-3 h-9 gap-2 border-rose-300 px-3 text-[13px] font-semibold text-rose-700 hover:bg-rose-100 hover:text-rose-900"
+                >
+                  <Trash2 className="size-3.5" aria-hidden />
+                  Delete all data…
+                </Button>
+              ) : (
+                <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-rose-200 bg-white p-3">
+                  <label htmlFor="demo-wipe-confirm" className="text-[12.5px] font-semibold text-rose-900">
+                    Type{" "}
+                    <code className="rounded bg-rose-100 px-1 py-0.5 font-mono text-[12px] text-rose-900">delete</code>{" "}
+                    to confirm:
+                  </label>
+                  <input
+                    id="demo-wipe-confirm"
+                    type="text"
+                    value={wipeConfirmText}
+                    onChange={(event) => setWipeConfirmText(event.target.value)}
+                    autoComplete="off"
+                    autoFocus
+                    disabled={!!busy}
+                    placeholder="delete"
+                    className="h-8 rounded-md border border-rose-300 bg-white px-2 text-[13px] text-rose-900 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-200"
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => void runWipe()}
+                    disabled={!!busy || wipeConfirmText.trim().toLowerCase() !== "delete"}
+                    className="h-8 gap-1.5 bg-rose-600 px-3 text-[12.5px] font-bold text-white shadow-sm hover:bg-rose-500 disabled:opacity-50"
+                  >
+                    {busy === "wipe" ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Trash2 className="size-3.5" aria-hidden />}
+                    {busy === "wipe" ? "Wiping…" : "Delete everything"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setWipeConfirmOpen(false);
+                      setWipeConfirmText("");
+                    }}
+                    disabled={!!busy}
+                    className="h-8 px-2 text-[12.5px] font-medium text-slate-600 hover:bg-slate-100"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
         </section>
       </div>
     </div>

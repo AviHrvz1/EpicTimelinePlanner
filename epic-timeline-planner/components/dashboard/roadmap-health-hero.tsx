@@ -1,8 +1,9 @@
 "use client";
 
-import { Fragment, useMemo, useState, type CSSProperties } from "react";
+import { Fragment, useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
   Activity,
+  CalendarOff,
   AlertOctagon,
   AlertTriangle,
   Bell,
@@ -12,6 +13,7 @@ import {
   CheckCircle2,
   ChevronDown,
   CircleDashed,
+  CircleDotDashed,
   FileWarning,
   Flag,
   Folder,
@@ -40,7 +42,14 @@ import { InsightsDrilldownModal } from "@/components/timeline/insights-drilldown
 import type { InitiativeItem, RoadmapItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-type StoryExecStatus = "todo" | "inProgress" | "review" | "done";
+// "backlogEpic" is a virtual status driven by EPIC placement, not
+// story state. Whenever an epic has no Gantt position
+// (planStartMonth == null), every one of its stories rolls up under
+// this bucket — overriding the story's own `status` field. The point
+// is to surface "work committed to but not yet placed" as a single
+// slice the planner can click to see what still needs scheduling.
+// Stories in scheduled epics fall back to normal status bucketing.
+type StoryExecStatus = "backlogEpic" | "todo" | "inProgress" | "review" | "done";
 
 /** Bi-directional map for the Health Distribution legend ↔ middle-panel
  *  HealthFilterMenu wiring. Labels match the strings in the donut slices. */
@@ -62,16 +71,18 @@ const HEALTH_STATUS_TO_LABEL: Record<HealthStatus, string> = {
 /** Same bi-directional map for Work Progress legend ↔ middle-panel
  *  Statuses dropdown. Labels match the donut slices in this file. */
 const STATUS_LABEL_TO_VALUE: Record<string, StoryExecStatus> = {
-  "In progress": "inProgress",
-  "Done": "done",
+  "Backlog epic": "backlogEpic",
   "To do": "todo",
+  "In progress": "inProgress",
   "Review / testing": "review",
+  "Done": "done",
 };
 const STATUS_VALUE_TO_LABEL: Record<StoryExecStatus, string> = {
-  inProgress: "In progress",
-  done: "Done",
+  backlogEpic: "Backlog epic",
   todo: "To do",
+  inProgress: "In progress",
   review: "Review / testing",
+  done: "Done",
 };
 
 /**
@@ -156,7 +167,7 @@ export function RoadmapHealthHero({
   /** Click handler for the Epic Estimates donut legend — opens the same
    *  popover the Gantt "Epic Est." chip opens, pre-scoped to the picked tab. */
   onOpenEpicEstimatePanel?: (
-    tab: "estimated" | "unestimated" | "epicsNoDesc" | "storiesNoDesc",
+    tab: "estimated" | "partiallyEstimated" | "unestimated" | "epicsNoDesc" | "storiesNoDesc",
   ) => void;
 }) {
   const stats = useMemo(() => computeRoadmapStats(initiatives, selectedYear, progressBasis), [
@@ -354,14 +365,15 @@ export function RoadmapHealthHero({
             * to their min widths. Once total content exceeds the
             * container, a horizontal scrollbar lets the user pan the
             * full row instead of cards getting clipped. */}
-          <div className="mt-2 flex w-full min-w-0 flex-nowrap items-center justify-between gap-x-6 overflow-x-auto [scrollbar-width:thin] [scrollbar-color:theme(colors.indigo.100)_transparent] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gradient-to-r [&::-webkit-scrollbar-thumb]:from-sky-100 [&::-webkit-scrollbar-thumb]:via-indigo-100 [&::-webkit-scrollbar-thumb]:to-violet-100">
+          <div className="mt-2 flex w-full min-w-0 flex-nowrap items-center justify-between gap-x-2 overflow-x-auto [scrollbar-width:thin] [scrollbar-color:theme(colors.indigo.100)_transparent] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gradient-to-r [&::-webkit-scrollbar-thumb]:from-sky-100 [&::-webkit-scrollbar-thumb]:via-indigo-100 [&::-webkit-scrollbar-thumb]:to-violet-100">
           <TeamProgressCard
             rows={stats.teamProgress}
             unitSuffix={progressBasis === "stories" ? "" : "d"}
             onRowClick={(teamId, label) => setDrilldownTeam({ teamId, label })}
+            panelClassName="bg-emerald-50/60 ring-emerald-100"
           />
-          <Divider />
           <DonutCard
+            panelClassName="bg-sky-50/60 ring-sky-100"
             title={
               progressBasis === "stories"
                 ? `Work Progress · Stories (${basisLabel})`
@@ -371,19 +383,24 @@ export function RoadmapHealthHero({
             centerCount={
               progressBasis === "stories"
                 ? stats.storiesCount
-                : stats.workProgress.inProgress +
-                  stats.workProgress.done +
+                : stats.workProgress.backlogEpic +
                   stats.workProgress.todo +
-                  stats.workProgress.review
+                  stats.workProgress.inProgress +
+                  stats.workProgress.review +
+                  stats.workProgress.done
             }
             centerLabel={progressBasis === "stories" ? "Stories" : "Days"}
             slices={(() => {
               const suffix = progressBasis === "stories" ? "stories" : "days";
+              // Workflow order: Backlog epic → To do → In progress →
+              // Review / testing → Done. Reads left-to-right as the
+              // natural lifecycle, from "not placed yet" to "shipped".
               return [
-                { label: "In progress", value: stats.workProgress.inProgress, color: "#3b82f6", icon: <PlayCircle className="size-3.5" strokeWidth={2} />, valueSuffix: suffix },
-                { label: "Done", value: stats.workProgress.done, color: "#10b981", icon: <CheckCircle2 className="size-3.5" strokeWidth={2} />, valueSuffix: suffix },
+                { label: "Backlog epic", value: stats.workProgress.backlogEpic, color: "#a3a3a3", icon: <CalendarOff className="size-3.5" strokeWidth={2} />, valueSuffix: suffix },
                 { label: "To do", value: stats.workProgress.todo, color: "#94a3b8", icon: <ListTodo className="size-3.5" strokeWidth={2} />, valueSuffix: suffix },
+                { label: "In progress", value: stats.workProgress.inProgress, color: "#3b82f6", icon: <PlayCircle className="size-3.5" strokeWidth={2} />, valueSuffix: suffix },
                 { label: "Review / testing", value: stats.workProgress.review, color: "#8b5cf6", icon: <CheckCheck className="size-3.5" strokeWidth={2} />, valueSuffix: suffix },
+                { label: "Done", value: stats.workProgress.done, color: "#10b981", icon: <CheckCircle2 className="size-3.5" strokeWidth={2} />, valueSuffix: suffix },
               ];
             })()}
             onSliceClick={
@@ -406,8 +423,8 @@ export function RoadmapHealthHero({
                 : undefined
             }
           />
-          <Divider />
           <DonutCard
+            panelClassName="bg-orange-50/60 ring-orange-100"
             title={`Health Distribution · Epics (${basisLabel})`}
             titleIcon={<HeartPulse className="size-3.5 text-rose-500" strokeWidth={2.1} aria-hidden />}
             titleAction={
@@ -424,8 +441,12 @@ export function RoadmapHealthHero({
             centerCount={stats.healthDistribution.total}
             centerLabel="Epics"
             slices={[
-              { label: "On Track", value: stats.healthDistribution.onTrack, color: "#10b981", icon: <Check className="size-3.5" strokeWidth={2.4} />, valueSuffix: "epics" },
+              // Severity ascending: best outcome (Done) → green
+              // (On Track) → amber (Watch) → orange (At Risk) → red
+              // (Overdue). Matches the visual intuition of a health
+              // gauge — green at the top, red at the bottom.
               { label: "Done", value: stats.healthDistribution.done, color: "#3b82f6", icon: <CheckCheck className="size-3.5" strokeWidth={2} />, valueSuffix: "epics" },
+              { label: "On Track", value: stats.healthDistribution.onTrack, color: "#10b981", icon: <Check className="size-3.5" strokeWidth={2.4} />, valueSuffix: "epics" },
               { label: "Watch", value: stats.healthDistribution.watch, color: "#f59e0b", icon: <AlertTriangle className="size-3.5" strokeWidth={2} />, valueSuffix: "epics" },
               { label: "At Risk", value: stats.healthDistribution.atRisk, color: "#fb923c", icon: <AlertTriangle className="size-3.5" strokeWidth={2} />, valueSuffix: "epics" },
               { label: "Overdue", value: stats.healthDistribution.overdue, color: "#ef4444", icon: <AlertOctagon className="size-3.5" strokeWidth={2} />, valueSuffix: "epics" },
@@ -450,8 +471,8 @@ export function RoadmapHealthHero({
                 : undefined
             }
           />
-          <Divider />
           <DonutCard
+            panelClassName="bg-violet-50/60 ring-violet-100"
             title={
               progressBasis === "epicEst"
                 ? `Epic Estimates · Epics (${basisLabel})`
@@ -466,14 +487,38 @@ export function RoadmapHealthHero({
             centerLabel={progressBasis === "epicEst" ? "Total Days" : "Stories"}
             slices={(() => {
               const unitSuffix = progressBasis === "epicEst" ? "epics" : "stories";
-              return [
+              // The 3-tier split (Estimated / Partially / Unestimated)
+              // is only meaningful for the epicEst basis — Days /
+              // Stories bases split at the STORY level where a story
+              // is either sized or it isn't. For epicEst, the
+              // Partially row always renders (even when the count is
+              // 0) so the legend doubles as a permanent shortcut into
+              // the Partially Estimated tab.
+              const slices = [
                 { label: "Estimated", value: stats.epicEstimates.estimated, color: "#6366f1", icon: <Ruler className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
-                { label: "Unestimated", value: stats.epicEstimates.unestimated, color: "#94a3b8", icon: <CircleDashed className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
               ];
+              if (progressBasis === "epicEst") {
+                slices.push({
+                  label: "Partially estimated",
+                  value: stats.epicEstimates.partiallyEstimated,
+                  color: "#f59e0b",
+                  icon: <CircleDotDashed className="size-3.5" strokeWidth={2} />,
+                  valueSuffix: unitSuffix,
+                });
+              }
+              slices.push({ label: "Unestimated", value: stats.epicEstimates.unestimated, color: "#94a3b8", icon: <CircleDashed className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix });
+              return slices;
             })()}
             onSliceClick={
               onOpenEpicEstimatePanel
-                ? (label) => onOpenEpicEstimatePanel(label === "Estimated" ? "estimated" : "unestimated")
+                ? (label) =>
+                    onOpenEpicEstimatePanel(
+                      label === "Estimated"
+                        ? "estimated"
+                        : label === "Partially estimated"
+                          ? "partiallyEstimated"
+                          : "unestimated",
+                    )
                 : undefined
             }
             extraLegendRows={
@@ -734,6 +779,7 @@ function TeamProgressCard({
   rows,
   unitSuffix = "d",
   onRowClick,
+  panelClassName,
 }: {
   unitSuffix?: string;
   onRowClick?: (teamId: string, label: string) => void;
@@ -746,16 +792,55 @@ function TeamProgressCard({
     donePct: number;
     status: HealthStatus;
   }>;
+  /** Tailwind classes added to the outer card wrapper so this card can sit
+   *  on a distinctly tinted background alongside the donut cards in the
+   *  dashboard hero. */
+  panelClassName?: string;
 }) {
+  // Tracks whether the workspace actually has any teams defined in the
+  // Users directory (via /api/teams). Drives whether to surface the
+  // "Create a team" CTA when the rollup is empty: we don't want to nag a
+  // planner who has already set up teams but just hasn't assigned any
+  // epics to them yet. Starts `null` (unknown) so the CTA stays hidden
+  // during the brief fetch window — better to show nothing than to
+  // flash the wrong empty state.
+  const [hasDefinedTeams, setHasDefinedTeams] = useState<boolean | null>(null);
+  useEffect(() => {
+    let canceled = false;
+    fetch("/api/teams")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((teams: unknown) => {
+        if (canceled) return;
+        setHasDefinedTeams(Array.isArray(teams) && teams.length > 0);
+      })
+      .catch(() => {
+        if (canceled) return;
+        // Assume teams exist on error so we don't accidentally surface
+        // the "Create a team" CTA to someone who already has them.
+        setHasDefinedTeams(true);
+      });
+    return () => {
+      canceled = true;
+    };
+  }, []);
   return (
-    <div className="flex w-[640px] min-w-[360px] max-w-[640px] shrink flex-col gap-2 xl:w-[640px] xl:shrink-0">
+    <div
+      className={cn(
+        "flex w-[520px] min-w-[520px] max-w-[520px] shrink-0 flex-col gap-2 rounded-2xl px-7 py-3 ring-1 ring-inset transition-shadow",
+        panelClassName ?? "bg-white ring-slate-200/70",
+      )}
+    >
       <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500">
         <Users className="size-3.5 shrink-0 text-emerald-500" aria-hidden />
         Team Progress (all epics)
       </span>
       <div
         className={cn(
-          "max-h-[130px] space-y-0.5 overflow-y-auto pr-1.5",
+          // Negative right margin extends the scroll region past the
+          // card's px-7 padding so the scrollbar sits a touch closer to
+          // the right edge of the visible panel rather than floating in
+          // the gutter.
+          "-mr-4 max-h-[130px] space-y-0.5 overflow-y-auto pr-1.5",
           // Match the project's pastel scrollbar (initiative panel et al.)
           "[scrollbar-color:theme(colors.indigo.100)_transparent]",
           "[&::-webkit-scrollbar]:w-1.5",
@@ -771,33 +856,64 @@ function TeamProgressCard({
         )}
         style={{ scrollbarWidth: "thin" }}
       >
-        {rows.length === 0 ? (
-          <div className="rounded-md border border-dashed border-slate-200 bg-slate-50/50 px-3 py-2.5">
-            <p className="text-[12.5px] font-semibold text-slate-700">
-              No team has any epic to track yet.
-            </p>
-            <p className="mt-1 text-[11.5px] leading-snug text-slate-500">
-              <button
-                type="button"
-                onClick={() => {
-                  // Open the Users workspace with `?action=addTeam` so the
-                  // existing Add Team slide-in form (full version with logo,
-                  // lead, and member picker) opens immediately. We reuse the
-                  // existing popup rather than maintaining a parallel one.
-                  const url = new URL(window.location.href);
-                  url.searchParams.set("view", "users");
-                  url.searchParams.set("action", "addTeam");
-                  window.history.pushState({}, "", url.toString());
-                  window.dispatchEvent(new PopStateEvent("popstate"));
-                }}
-                className="font-semibold text-indigo-600 underline decoration-indigo-300 underline-offset-2 transition-colors hover:text-indigo-700 hover:decoration-indigo-500"
-              >
-                Create a team
-              </button>{" "}
-              so we can roll up its epics here.
-            </p>
-          </div>
-        ) : (
+        {/* Empty-state handling. Two distinct cases:
+              1. No teams in the Users directory yet → show the "Create a
+                 team" CTA so the planner can set one up. Reasons for the
+                 rollup being empty in this case: either no rows at all
+                 (Σ Story est days / Epic est days bases with no estimates)
+                 or only the synthetic "__unassigned__" bucket exists
+                 (Stories Count basis with stories but no real team).
+              2. Teams exist but no real-team row has data yet → show a
+                 plain "No data" line. The planner already created teams;
+                 nagging them to create another would be wrong. */}
+        {(() => {
+          const isEmpty =
+            rows.length === 0 ||
+            (rows.length === 1 && rows[0].teamId === "__unassigned__");
+          if (!isEmpty) return null;
+          if (hasDefinedTeams === false) {
+            return (
+              <div className="rounded-md border border-dashed border-slate-200 bg-slate-50/50 px-3 py-2.5">
+                <p className="text-[12.5px] font-semibold text-slate-700">
+                  No team has any epic to track yet.
+                </p>
+                <p className="mt-1 text-[11.5px] leading-snug text-slate-500">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Open the Users workspace with `?action=addTeam` so
+                      // the existing Add Team slide-in form (logo, lead,
+                      // members) opens immediately.
+                      const url = new URL(window.location.href);
+                      url.searchParams.set("view", "users");
+                      url.searchParams.set("action", "addTeam");
+                      window.history.pushState({}, "", url.toString());
+                      window.dispatchEvent(new PopStateEvent("popstate"));
+                    }}
+                    className="font-semibold text-indigo-600 underline decoration-indigo-300 underline-offset-2 transition-colors hover:text-indigo-700 hover:decoration-indigo-500"
+                  >
+                    Create a team
+                  </button>{" "}
+                  so we can roll up its epics here.
+                </p>
+              </div>
+            );
+          }
+          // hasDefinedTeams === true (or still loading as null): show a
+          // friendly empty-state illustration instead of a bare line.
+          // A dashed emerald circle wraps the Users glyph so the panel
+          // doesn't read as broken when teams exist but no rollup has
+          // landed yet.
+          return (
+            <div className="flex min-h-[120px] flex-col items-center justify-center gap-2 py-3">
+              <div className="flex size-16 items-center justify-center rounded-full border-2 border-dashed border-emerald-300/70 bg-emerald-50/40">
+                <Users className="size-7 text-emerald-500/80" strokeWidth={1.8} aria-hidden />
+              </div>
+              <p className="text-[12.5px] font-medium text-slate-400">No data</p>
+            </div>
+          );
+        })()}
+        {!(rows.length === 0 || (rows.length === 1 && rows[0].teamId === "__unassigned__")) && (
           rows.map((row) => {
             const atRisk = row.status === "atRisk" || row.status === "overdue";
             const watch = row.status === "watch";
@@ -887,6 +1003,7 @@ function DonutCard({
   onSliceClick,
   activeLabels,
   extraLegendRows,
+  panelClassName,
 }: {
   title: string;
   /** Optional icon rendered next to the card title — same family of
@@ -895,6 +1012,10 @@ function DonutCard({
   /** Optional interactive node rendered after the title text — e.g. an
    *  Info icon button that opens an explainer popover. */
   titleAction?: React.ReactNode;
+  /** Tailwind classes added to the outer card wrapper so each chart in the
+   *  dashboard hero can sit on a distinctly tinted background panel
+   *  (emerald, sky, orange, violet…). When omitted the card renders flat. */
+  panelClassName?: string;
   /** When provided, rendered in the donut's center. Pass `null` to skip
    *  the centered total (useful when the donut already shows multiple
    *  colors and a side total reads better). */
@@ -931,7 +1052,12 @@ function DonutCard({
   // row's hover/active visual when the cursor is on the SVG arc.
   const [hoveredSlice, setHoveredSlice] = useState<string | null>(null);
   return (
-    <div className="flex shrink-0 flex-col gap-2">
+    <div
+      className={cn(
+        "flex w-[520px] min-w-[520px] max-w-[520px] shrink-0 flex-col gap-2 rounded-2xl px-7 py-3 ring-1 ring-inset transition-shadow",
+        panelClassName ?? "bg-white ring-slate-200/70",
+      )}
+    >
       <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500">
         {titleIcon ? <span className="inline-flex shrink-0 text-slate-500" aria-hidden>{titleIcon}</span> : null}
         {title}
@@ -947,7 +1073,14 @@ function DonutCard({
           onSliceHover={setHoveredSlice}
           onSliceClick={onSliceClick}
         />
-        <ul className="grid grid-cols-[auto_minmax(2rem,auto)_minmax(2.75rem,auto)] items-center gap-x-4 gap-y-1.5 text-[13px] leading-tight">
+        <ul
+          // Fixed minimum widths on each column so all three donut cards
+          // (Work Progress, Health Distribution, Epic Estimates) align to
+          // the same label / value / percent gutters even when individual
+          // labels are shorter. "Stories w/o description" sets the
+          // baseline width in Epic Estimates; this min matches it.
+          className="grid grid-cols-[minmax(11rem,auto)_minmax(4.25rem,auto)_minmax(2.75rem,auto)] items-center gap-x-4 gap-y-1.5 text-[13px] leading-tight"
+        >
           {slices.map((slice) => {
               const pct = total > 0 ? Math.round((slice.value / total) * 100) : 0;
               const active = activeLabels?.has(slice.label) ?? false;
@@ -1226,12 +1359,19 @@ function computeRoadmapStats(
   let epicsCount = 0;
   let epicsScheduledCount = 0;
   let storiesCount = 0;
-  const workProgress = { inProgress: 0, done: 0, todo: 0, review: 0 };
+  const workProgress = { backlogEpic: 0, todo: 0, inProgress: 0, review: 0, done: 0 };
   const healthDistribution = { onTrack: 0, done: 0, watch: 0, atRisk: 0, overdue: 0, total: 0 };
-  /** Epic Estimates coverage: how many epics have an `originalEstimateDays` set
-   *  vs not. `daysSum` is the total estimated days across the estimated epics —
-   *  used as the donut center so planners see total estimated effort at a glance. */
-  const epicEstimates = { estimated: 0, unestimated: 0, daysSum: 0 };
+  /** Epic Estimates coverage — 3-tier split when basis is "epicEst":
+   *    • estimated          = epic has originalEstimateDays AND every
+   *                           child story has estimatedDays (or no children).
+   *    • partiallyEstimated = epic has originalEstimateDays AND at least
+   *                           one child story is missing estimatedDays.
+   *    • unestimated        = epic has no originalEstimateDays at all.
+   *  For days/stories bases the split happens at the story level
+   *  (counts of stories estimated vs not) and partiallyEstimated stays 0.
+   *  `daysSum` is the total estimated days across estimated epics —
+   *  rendered in the donut center as total estimated effort. */
+  const epicEstimates = { estimated: 0, partiallyEstimated: 0, unestimated: 0, daysSum: 0 };
   /** Description coverage — counts of epics / stories that don't have any
    *  description text. Surfaces as click-throughs on the Epic Estimates
    *  card legend. */
@@ -1270,7 +1410,14 @@ function computeRoadmapStats(
       //    (handled in the per-story loop below for stories basis)
       if (progressBasis === "epicEst") {
         if (estDays > 0) {
-          epicEstimates.estimated += 1;
+          // Distinguish fully-estimated (all child stories sized) from
+          // partially-estimated (some child stories missing). Epics with
+          // no child stories at all count as fully estimated.
+          const stories = epic.userStories ?? [];
+          const fullyEstimated =
+            stories.length === 0 || stories.every((s) => Number(s.estimatedDays ?? 0) > 0);
+          if (fullyEstimated) epicEstimates.estimated += 1;
+          else epicEstimates.partiallyEstimated += 1;
           epicEstimates.daysSum += estDays;
         } else {
           epicEstimates.unestimated += 1;
@@ -1330,19 +1477,28 @@ function computeRoadmapStats(
         //  - stories: count of stories per status
         //  - days / epicEst: SUM of story estimatedDays per status
         const wpAdd = progressBasis === "stories" ? 1 : estDaysStory;
-        switch (story.status) {
-          case "inProgress":
-            workProgress.inProgress += wpAdd;
-            break;
-          case "done":
-            workProgress.done += wpAdd;
-            break;
-          case "review":
-            workProgress.review += wpAdd;
-            break;
-          case "todo":
-          default:
-            workProgress.todo += wpAdd;
+        // Backlog epic trumps the underlying story status — any
+        // story inside an epic that has no Gantt position (i.e. the
+        // whole epic is still in the backlog) rolls up under
+        // "Backlog epic". Once the epic is scheduled, normal status
+        // bucketing takes over.
+        if (epic.planStartMonth == null) {
+          workProgress.backlogEpic += wpAdd;
+        } else {
+          switch (story.status) {
+            case "inProgress":
+              workProgress.inProgress += wpAdd;
+              break;
+            case "done":
+              workProgress.done += wpAdd;
+              break;
+            case "review":
+              workProgress.review += wpAdd;
+              break;
+            case "todo":
+            default:
+              workProgress.todo += wpAdd;
+          }
         }
         // Epic Estimates donut, when basis is days/stories, splits at the
         // story level — count of stories estimated vs unestimated.

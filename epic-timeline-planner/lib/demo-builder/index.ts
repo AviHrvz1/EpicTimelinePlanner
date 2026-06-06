@@ -80,13 +80,41 @@ export interface ScenarioSeedResult {
   mutated: number;
 }
 
-export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
-  const planYear = currentPlanYear();
-  const today = new Date();
+/**
+ * Wipe ALL app data (initiatives, epics, stories, snapshots, comments,
+ * history, dashboards, roadmaps, teams, workspace users) and clean the
+ * uploaded-avatar folder. Auth tables (User/Account/Session/etc) are
+ * left untouched so the caller stays signed in.
+ *
+ * Used both by `resetAndSeedDemo` (wipe + reseed) and by the standalone
+ * "Delete all data" action on the Demo Builder page (wipe only). Kept
+ * here so the deletion order — leaf rows → parents → orphan-avatar
+ * files — only lives in one place.
+ */
+export interface WipeAllDataResult {
+  initiatives: number;
+  epics: number;
+  stories: number;
+  users: number;
+  teams: number;
+  dashboards: number;
+}
 
-  // 1. Wipe app data. Order matters for cascade safety even with onDelete:
-  //    delete leaf rows first, then parents. Auth tables (User/Account/etc)
-  //    are not touched so the user stays signed in.
+export async function wipeAllData(): Promise<WipeAllDataResult> {
+  // Capture pre-wipe counts so the caller can surface "deleted N stories"
+  // in a toast. Cheap query — single COUNT per table.
+  const [initiatives, epics, stories, users, teams, dashboards] = await Promise.all([
+    db.initiative.count(),
+    db.epic.count(),
+    db.userStory.count(),
+    db.workspaceUser.count(),
+    // Guarded: older DB snapshots may not have the Team table yet.
+    db.team.count().catch(() => 0),
+    db.dashboard.count().catch(() => 0),
+  ]);
+
+  // Order matters for cascade safety even with onDelete: delete leaf rows
+  // first, then parents. Auth tables (User/Account/etc) are NOT touched.
   await db.storyDailySnapshot.deleteMany({});
   await db.storyComment.deleteMany({});
   await db.storyHistory.deleteMany({});
@@ -99,21 +127,27 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
   await db.initiative.deleteMany({});
   await db.dashboardChart.deleteMany({});
   await db.dashboard.deleteMany({});
-  // Roadmap may not be present in all installs — guard with try/catch in case
-  // the table doesn't exist yet for an older DB snapshot.
-  try { await db.roadmap.deleteMany({}); } catch { /* ignore */ }
-  // Teams reference WorkspaceUser via leadId (onDelete: SetNull). Delete the
-  // Team rows first so we don't leave dangling references, then the users.
-  // Guarded in case an older DB snapshot predates the Team table.
-  try { await db.team.deleteMany({}); } catch { /* ignore */ }
+  try { await db.roadmap.deleteMany({}); } catch { /* table may not exist on older snapshots */ }
+  try { await db.team.deleteMany({}); } catch { /* table may not exist on older snapshots */ }
   await db.workspaceUser.deleteMany({});
 
-  // 2. Wipe previously-uploaded avatar files so disk doesn't accumulate
-  //    orphans across reseeds. Only touches `public/uploads/avatars/` and
-  //    only deletes files (not subdirectories) for safety.
+  // Wipe previously-uploaded avatar files so disk doesn't accumulate
+  // orphans. Only touches `public/uploads/avatars/` and only deletes
+  // files (not subdirectories).
   await wipeAvatarFolder();
 
-  // 3. Copy avatars from ~/Downloads/users + create workspace users.
+  return { initiatives, epics, stories, users, teams, dashboards };
+}
+
+export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
+  const planYear = currentPlanYear();
+  const today = new Date();
+
+  // 1. Wipe app data (centralised so the standalone wipe action stays
+  //    in sync with this seed flow).
+  await wipeAllData();
+
+  // 2. Copy avatars from ~/Downloads/users + create workspace users.
   //    Names are pulled per-team from `DEMO_USER_NAMES_BY_TEAM` so the
   //    first few Platform/Experience/Data users share first names with
   //    `defaultMembersForTeam()` — that lets `assigneeMatchRosterForSprintTeam`

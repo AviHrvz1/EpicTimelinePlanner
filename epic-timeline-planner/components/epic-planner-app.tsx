@@ -1370,7 +1370,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
    * / Done in the unified Statuses dropdown. Lifted here so the Gantt can
    * apply the same cut and only show matching bars.
    */
-  const [ganttStatusFilter, setGanttStatusFilter] = useState<Set<"todo" | "inProgress" | "review" | "done">>(
+  const [ganttStatusFilter, setGanttStatusFilter] = useState<Set<"backlogEpic" | "todo" | "inProgress" | "review" | "done">>(
     () => new Set(),
   );
   /** Same lift pattern as the status filter — emitted by the panel,
@@ -1396,7 +1396,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   /** Command bus: when the hero's Epic Estimates donut legend is clicked
    *  we bump the key so TimelineGrid's useEffect fires
    *  openEstEpicsPanel(tab). Stays null until the first click. */
-  type EstHeroTab = "estimated" | "unestimated" | "epicsNoDesc" | "storiesNoDesc";
+  type EstHeroTab = "estimated" | "partiallyEstimated" | "unestimated" | "epicsNoDesc" | "storiesNoDesc";
   const [openEstPanelCmd, setOpenEstPanelCmd] = useState<
     { tab: EstHeroTab; key: number } | null
   >(null);
@@ -1422,7 +1422,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     }
   }, []);
   const handlePanelStatusFilterDerivedChange = useCallback(
-    (next: Set<"todo" | "inProgress" | "review" | "done">) => {
+    (next: Set<"backlogEpic" | "todo" | "inProgress" | "review" | "done">) => {
       setGanttStatusFilter(next);
       if (next.size > 0) {
         // Picking a status verdict implies the planner wants to SEE the
@@ -6261,6 +6261,32 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 onYearTeamCapacityChange={updateYearTeamCapacity}
                 onMonthTeamCapacityEpicRemove={removeEpicFromMonthTeamCapacity}
                 onCapacityEpicOriginalEstimateChange={updateEpicOriginalEstimateFromCapacity}
+                onPatchEpic={async (epicId, patch) => {
+                  try {
+                    const response = await fetch(`/api/epics/${epicId}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(patch),
+                    });
+                    if (!response.ok) throw new Error("Failed to patch epic");
+                    await refresh();
+                  } catch {
+                    toast.error("Failed to update epic");
+                  }
+                }}
+                onPatchStory={async (storyId, patch) => {
+                  try {
+                    const response = await fetch(`/api/stories/${storyId}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(patch),
+                    });
+                    if (!response.ok) throw new Error("Failed to patch story");
+                    await refresh();
+                  } catch {
+                    toast.error("Failed to update story");
+                  }
+                }}
                 monthTeamBoardByKey={monthTeamBoardByKey}
                 sprintCapacityBoard={activeSprintCapacityBoard}
                 sprintCapacityColumnReorderEnabled={!isActiveSprintClosed}
