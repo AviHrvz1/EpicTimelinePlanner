@@ -5846,7 +5846,7 @@ export function MonthAnalytics({
                     className="h-full space-y-1 overflow-y-auto overflow-x-hidden pr-5 [&::-webkit-scrollbar]:hidden"
                     style={{ scrollbarWidth: "none" }}
                   >
-                  {loadRows.map((row) => {
+                  {loadRows.map((row, rowIdx) => {
                     const doneDays = Math.max(0, row.estTotal - row.daysLeft);
                     const donePct = row.estTotal > 0 ? Math.round((doneDays / row.estTotal) * 100) : 100;
                     const allDone = row.daysLeft === 0 && row.estTotal > 0;
@@ -5925,18 +5925,29 @@ export function MonthAnalytics({
                             </span>
                           )}
                           {(() => {
-                            // Tone object drives the bar fill, the clock-
-                            // chip color, and the circle stroke so a row's
-                            // health verdict reads consistently across the
-                            // three visuals. Matches the hero Team
-                            // Progress card.
-                            const tone = atRisk
-                              ? { bar: "bg-amber-400", chip: "bg-amber-50 text-amber-700 ring-amber-200/70", pct: "text-amber-700", stroke: "#f59e0b" }
-                              : allDone
-                                ? { bar: "bg-emerald-400", chip: "bg-emerald-50 text-emerald-700 ring-emerald-200/70", pct: "text-emerald-700", stroke: "#10b981" }
-                                : watch
-                                  ? { bar: "bg-amber-300", chip: "bg-amber-50 text-amber-700 ring-amber-200/70", pct: "text-amber-700", stroke: "#f59e0b" }
-                                  : { bar: "bg-indigo-400", chip: "bg-indigo-50 text-indigo-700 ring-indigo-200/70", pct: "text-indigo-600", stroke: "#6366f1" };
+                            // Per-team palette: clock-chip color +
+                            // circle stroke cycle through a 6-color
+                            // list keyed by row index so the rows read
+                            // as visually distinct. Matches the hero
+                            // Team Progress card.
+                            //
+                            // The bar fill + percentage text still
+                            // follow the health-aware tone (amber when
+                            // at-risk, emerald when done) so the
+                            // verdict signal isn't lost — only the
+                            // secondary chrome cycles per team.
+                            const TEAM_PALETTE = [
+                              { chip: "bg-amber-50 text-amber-700 ring-amber-200/70", stroke: "#f59e0b" },
+                              { chip: "bg-emerald-50 text-emerald-700 ring-emerald-200/70", stroke: "#10b981" },
+                              { chip: "bg-violet-50 text-violet-700 ring-violet-200/70", stroke: "#8b5cf6" },
+                              { chip: "bg-rose-50 text-rose-700 ring-rose-200/70", stroke: "#f43f5e" },
+                              { chip: "bg-sky-50 text-sky-700 ring-sky-200/70", stroke: "#0ea5e9" },
+                              { chip: "bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-200/70", stroke: "#d946ef" },
+                            ];
+                            const teamColor = TEAM_PALETTE[rowIdx % TEAM_PALETTE.length]!;
+                            const bar = atRisk ? "bg-amber-400" : allDone ? "bg-emerald-400" : watch ? "bg-amber-300" : "bg-indigo-400";
+                            const pct = atRisk || watch ? "text-amber-700" : allDone ? "text-emerald-700" : "text-indigo-600";
+                            const tone = { bar, pct, ...teamColor };
                             return (
                               <>
                                 <div className="min-w-0 flex-1">
