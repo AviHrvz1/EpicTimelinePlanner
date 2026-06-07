@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, AlertOctagon, AlertTriangle, CalendarDays, ChartNoAxesCombined, CheckCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Folder, Layers, ListTodo, PieChart as PieChartIcon, PlayCircle, User, UserRound, Users } from "lucide-react";
+import { Activity, AlertOctagon, AlertTriangle, CalendarDays, ChartNoAxesCombined, CheckCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clock, Folder, Layers, ListTodo, PieChart as PieChartIcon, PlayCircle, User, UserRound, Users } from "lucide-react";
 import { createPortal } from "react-dom";
 import { HealthBadge } from "@/components/timeline/health-badge";
 import { InsightsDrilldownModal } from "@/components/timeline/insights-drilldown-modal";
@@ -74,6 +74,42 @@ type StoryStatusPillValue =
   | "Review / Testing"
   | "Done"
   | "Unscheduled";
+
+/** Small circular progress indicator — same SVG ring used on the
+ *  RoadmapHealthHero + month-analytics Team Progress rows so the three
+ *  surfaces read with one visual vocabulary. */
+function CircleProgress({
+  percent,
+  color,
+}: {
+  percent: number;
+  color: string;
+}) {
+  const radius = 11;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.max(0, Math.min(100, percent));
+  const dashOffset = circumference * (1 - clamped / 100);
+  return (
+    <svg width={28} height={28} viewBox="0 0 28 28" aria-hidden>
+      <circle cx={14} cy={14} r={radius} fill="none" stroke="#e2e8f0" strokeWidth={2.4} />
+      <circle
+        cx={14}
+        cy={14}
+        r={radius}
+        fill="none"
+        stroke={color}
+        strokeWidth={2.4}
+        strokeDasharray={circumference}
+        strokeDashoffset={dashOffset}
+        strokeLinecap="round"
+        transform="rotate(-90 14 14)"
+      />
+      <text x={14} y={16} textAnchor="middle" fontSize={8} fontWeight={700} fill="#475569">
+        {Math.round(clamped)}%
+      </text>
+    </svg>
+  );
+}
 
 function StoryStatusPill({ status }: { status: StoryStatusPillValue }) {
   const meta = (() => {
@@ -1815,6 +1851,15 @@ export function SprintAnalytics({
                 });
             const sprintDaysTotal = analytics.workloadSprintCalendarDaysTotal;
             const loadUnit = metric === "storyCount" ? "" : "d";
+            // Sort by completion % descending so the best-performing
+            // teams / users bubble to the top and laggards sink. Rows
+            // with no estTotal collapse to 100% (nothing to track) so
+            // they don't outrank teams that are mid-burn.
+            loadRows.sort((a, b) => {
+              const pctA = a.estTotal > 0 ? (a.estTotal - a.daysLeft) / a.estTotal : 1;
+              const pctB = b.estTotal > 0 ? (b.estTotal - b.daysLeft) / b.estTotal : 1;
+              return pctB - pctA;
+            });
             if (loadRows.length === 0 && !sprintLoadDrilldownAssignee) return <div className="hidden lg:block lg:col-span-2" />;
             return (
               <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:h-full">
@@ -1990,7 +2035,7 @@ export function SprintAnalytics({
                       onScroll={() => updateArrowState(sprintLoadScrollRef, setCanScrollSprintLoadUp, setCanScrollSprintLoadDown)}
                       className="h-[clamp(14.75rem,30vh,19rem)] min-h-[14.75rem] overflow-y-auto overflow-x-hidden overscroll-contain space-y-1 pr-5 pb-4"
                     >
-                      {loadRows.map((row) => {
+                      {loadRows.map((row, rowIdx) => {
                         const doneDays = Math.max(0, row.estTotal - row.daysLeft);
                         const donePct = row.estTotal > 0 ? Math.round((doneDays / row.estTotal) * 100) : 100;
                         // Burndown-based verdict shared with Month Team Progress so
@@ -2070,40 +2115,77 @@ export function SprintAnalytics({
                                   {row.initials || <User className="size-3" />}
                                 </span>
                               )}
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="inline-flex min-w-0 items-baseline gap-1.5">
-                                    <span className="truncate text-[12.5px] font-semibold text-slate-800">{row.label}</span>
-                                    <span className="shrink-0 text-[10.5px] font-semibold tabular-nums text-slate-500">{donePct}%</span>
-                                  </span>
-                                  <div className="flex shrink-0 items-center gap-2">
+                              {(() => {
+                                // Per-row palette: chip + circle stroke
+                                // cycle through 6 colors keyed by row
+                                // index so the rows read as visually
+                                // distinct. Bar fill + % text keep the
+                                // health-aware tone (amber/emerald/
+                                // indigo) so the verdict signal stays.
+                                // Mirrors the same treatment on the
+                                // RoadmapHealthHero + month-analytics
+                                // Team Progress rows.
+                                const TEAM_PALETTE = [
+                                  { chip: "bg-amber-50 ring-amber-200/70", icon: "text-amber-500", stroke: "#f59e0b" },
+                                  { chip: "bg-emerald-50 ring-emerald-200/70", icon: "text-emerald-500", stroke: "#10b981" },
+                                  { chip: "bg-violet-50 ring-violet-200/70", icon: "text-violet-500", stroke: "#8b5cf6" },
+                                  { chip: "bg-rose-50 ring-rose-200/70", icon: "text-rose-500", stroke: "#f43f5e" },
+                                  { chip: "bg-sky-50 ring-sky-200/70", icon: "text-sky-500", stroke: "#0ea5e9" },
+                                  { chip: "bg-fuchsia-50 ring-fuchsia-200/70", icon: "text-fuchsia-500", stroke: "#d946ef" },
+                                ];
+                                const teamColor = TEAM_PALETTE[rowIdx % TEAM_PALETTE.length]!;
+                                const bar = atRisk ? "bg-amber-400" : allDone ? "bg-emerald-400" : watch ? "bg-amber-300" : "bg-indigo-400";
+                                const pctClass = atRisk || watch ? "text-amber-700" : allDone ? "text-emerald-700" : "text-indigo-600";
+                                return (
+                                  <>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-baseline gap-1.5">
+                                        <span className="truncate text-[12.5px] font-semibold text-slate-800">{row.label}</span>
+                                        <span className={cn("shrink-0 text-[10.5px] font-semibold tabular-nums", pctClass)}>{donePct}%</span>
+                                      </div>
+                                      <div className="mt-1 relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/50">
+                                        <div className={cn("absolute inset-y-0 left-0 rounded-full transition-all", bar)} style={{ width: `${donePct}%` }} />
+                                      </div>
+                                    </div>
+                                    {/* Health badge — sits between bar
+                                     *  and chip, the bar's natural
+                                     *  outcome (same as Team Progress). */}
                                     {metric === "daysLeft" ? (
-                                      <SprintLoadHealthBadge
-                                        status={verdict.status}
-                                        rowLabel={row.label}
-                                        atRiskStories={atRiskStories}
-                                        watchStories={watchStories}
-                                        overdueStories={overdueStories}
-                                        sprintLabel={sprintEnded ? "Sprint ended" : `${sprintDaysLeft}d left`}
-                                        onOpenStory={onOpenStory}
-                                      />
+                                      <span className="inline-flex shrink-0 items-center">
+                                        <SprintLoadHealthBadge
+                                          status={verdict.status}
+                                          rowLabel={row.label}
+                                          atRiskStories={atRiskStories}
+                                          watchStories={watchStories}
+                                          overdueStories={overdueStories}
+                                          sprintLabel={sprintEnded ? "Sprint ended" : `${sprintDaysLeft}d left`}
+                                          onOpenStory={onOpenStory}
+                                        />
+                                      </span>
                                     ) : null}
-                                    <span className="text-[9.5px] tabular-nums text-slate-600">
-                                      <span className="font-semibold text-slate-800">{row.estTotal}{loadUnit}</span>
-                                      <span className="ml-0.5 text-slate-400">{loadUnit === "d" ? "est" : "total"}</span>
-                                      <span className="mx-0.5 text-slate-300">·</span>
-                                      <span className="font-semibold text-slate-800">{doneDays}{loadUnit}</span>
-                                      <span className="ml-0.5 text-slate-400">done</span>
-                                      <span className="mx-0.5 text-slate-300">·</span>
-                                      <span className={cn("font-semibold", atRisk ? "text-amber-700" : watch ? "text-amber-700" : "text-slate-800")}>{row.daysLeft}{loadUnit}</span>
-                                      <span className="ml-0.5 text-slate-400">left</span>
+                                    {/* Three-segment chip keeping all
+                                     *  numbers (est, done, left)
+                                     *  visible inline. Dark-gray text,
+                                     *  tone-colored bg + icon, gap
+                                     *  around the dividers. */}
+                                    <span
+                                      className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1 text-slate-700", teamColor.chip)}
+                                      title={`${row.estTotal}${loadUnit} ${loadUnit === "d" ? "estimated" : "total"} · ${doneDays}${loadUnit} done · ${row.daysLeft}${loadUnit} left`}
+                                    >
+                                      <Clock className={cn("size-2.5", teamColor.icon)} strokeWidth={2.2} aria-hidden />
+                                      <span>{row.estTotal}{loadUnit}</span>
+                                      <span className="text-slate-400">est</span>
+                                      <span className="text-slate-300">·</span>
+                                      <span>{doneDays}{loadUnit}</span>
+                                      <span className="text-slate-400">done</span>
+                                      <span className="text-slate-300">·</span>
+                                      <span>{row.daysLeft}{loadUnit}</span>
+                                      <span className="text-slate-400">left</span>
                                     </span>
-                                  </div>
-                                </div>
-                                <div className="mt-1 relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/50">
-                                  <div className={cn("absolute inset-y-0 left-0 rounded-full transition-all", atRisk ? "bg-amber-400" : allDone ? "bg-emerald-400" : "bg-indigo-400")} style={{ width: `${donePct}%` }} />
-                                </div>
-                              </div>
+                                    <CircleProgress percent={donePct} color={teamColor.stroke} />
+                                  </>
+                                );
+                              })()}
                             </div>
                           </button>
                         );
