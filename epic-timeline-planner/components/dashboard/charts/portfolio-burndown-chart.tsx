@@ -65,6 +65,14 @@ type Props = {
    *  donut-card layout) and reclaims the bottom strip for chart area.
    *  Defaults to false (legend renders inline). */
   hideLegend?: boolean;
+  /** Where the KPI strip (Done X/Y · pace · ETA) lives.
+   *   - "floating" (default): the legacy floating chip pinned top-left
+   *     inside the chart area — matches the dashboard chart card layout.
+   *   - "side": the KPIs become rows in a right-column list, stacked
+   *     above the legend rows. Used by the Hero card so the dense
+   *     130px slot doesn't waste pixels on a top-left chrome that
+   *     overlaps the chart's first data points. */
+  kpiPlacement?: "floating" | "side";
 };
 
 function startOfDay(d: Date): Date {
@@ -181,6 +189,7 @@ export function PortfolioBurndownChart({
   progressBasis = "days",
   onSelectLaggards,
   hideLegend = false,
+  kpiPlacement = "floating",
 }: Props) {
   const { start, end } = useMemo(() => quarterBounds(year, quarter), [year, quarter]);
   const { startMonth, endMonth } = useMemo(() => quarterMonthRange(quarter), [quarter]);
@@ -475,67 +484,110 @@ export function PortfolioBurndownChart({
     (paceState === "behind" && topBehind.length > 0) ||
     (paceState === "ahead" && topAhead.length > 0);
 
+  // Render the pace KPI either as part of the floating chip (inline) or as
+  // a row in the side column. Both spellings share the same click target
+  // and the same anchor ref so the popover still tracks the chip across
+  // layouts.
+  const renderPaceCell = (variant: "inline" | "row") => {
+    if (paceState === "behind" && paceMagnitude != null) {
+      return (
+        <button
+          ref={paceButtonRef}
+          type="button"
+          disabled={!paceClickable}
+          onClick={() => setPopoverOpen((v) => !v)}
+          className={cn(
+            "inline-flex items-center gap-1 rounded text-amber-700 transition-colors",
+            paceClickable
+              ? variant === "inline"
+                ? "cursor-pointer hover:bg-amber-50 hover:text-amber-800 px-1 -mx-1"
+                : "cursor-pointer hover:bg-amber-50 hover:text-amber-800 px-1 -ml-1"
+              : "cursor-default",
+            variant === "row" && "justify-start text-left",
+          )}
+          title={paceClickable ? `Show top ${topBehind.length} epic${topBehind.length === 1 ? "" : "s"} behind plan` : undefined}
+        >
+          <span aria-hidden>⚠</span>
+          <span className="tabular-nums font-semibold">{paceMagnitude.toFixed(decimals)}{unitSuffix}</span>
+          <span className="text-amber-600">behind</span>
+        </button>
+      );
+    }
+    if (paceState === "ahead" && paceMagnitude != null) {
+      return (
+        <button
+          ref={paceButtonRef}
+          type="button"
+          disabled={!paceClickable}
+          onClick={() => setPopoverOpen((v) => !v)}
+          className={cn(
+            "inline-flex items-center gap-1 rounded text-emerald-700 transition-colors",
+            paceClickable
+              ? variant === "inline"
+                ? "cursor-pointer hover:bg-emerald-50 hover:text-emerald-800 px-1 -mx-1"
+                : "cursor-pointer hover:bg-emerald-50 hover:text-emerald-800 px-1 -ml-1"
+              : "cursor-default",
+            variant === "row" && "justify-start text-left",
+          )}
+          title={paceClickable ? `Show top ${topAhead.length} epic${topAhead.length === 1 ? "" : "s"} ahead of plan` : undefined}
+        >
+          <span aria-hidden>✓</span>
+          <span className="tabular-nums font-semibold">{paceMagnitude.toFixed(decimals)}{unitSuffix}</span>
+          <span className="text-emerald-600">ahead</span>
+        </button>
+      );
+    }
+    if (paceState === "onPace") {
+      return (
+        <span className="inline-flex items-center gap-1 text-emerald-700">
+          <span aria-hidden>✓</span>
+          <span>on pace</span>
+        </span>
+      );
+    }
+    return <span className="text-slate-400">pace —</span>;
+  };
+
+  // The side-column legend rows — used in side layout AND when the
+  // floating layout is told to hide its inline Recharts legend (Hero
+  // card path); kept identical so both layouts read the same.
+  const sideLegendRows: Array<{ label: string; color: string }> = [
+    { label: "Actual", color: "#2563eb" },
+    { label: "Forecast", color: "#0ea5e9" },
+    { label: "Ideal pace", color: "#f97316" },
+  ];
+
+  // The chart subtree itself — same JSX in both layouts. Extracted so the
+  // floating / side wrappers don't have to duplicate it.
+  // Recharts auto-hides its inline legend whenever the side column owns
+  // the legend rendering (kpiPlacement="side" implies hideLegend).
+  const inlineLegendHidden = hideLegend || kpiPlacement === "side";
+  // Floating layout uses a 36px top margin to clear the chip; side
+  // layout doesn't need that, so axes get more vertical room.
+  const chartTopMargin = kpiPlacement === "side" ? 8 : 36;
+
   return (
     <div className="relative h-full w-full">
-      {/* KPI strip — three numbers in one floating chip, top-left.
-       *  Mirrors the HealthBadge placement used in the per-epic burndown so
-       *  the visual language stays consistent across charts. */}
-      <div className="absolute left-3 top-1 z-10 flex items-center gap-2 rounded-md bg-white/85 px-2 py-1 text-[11px] font-medium text-slate-700 shadow-sm ring-1 ring-slate-200/80 backdrop-blur-sm">
-        <span>
-          Done <span className="tabular-nums font-semibold text-slate-900">{doneEpicCount}/{totalEpicCount}</span>{" "}
-          <span className="text-slate-500">epics</span>
-        </span>
-        <span className="text-slate-300">·</span>
-        {paceState === "behind" && paceMagnitude != null ? (
-          <button
-            ref={paceButtonRef}
-            type="button"
-            disabled={!paceClickable}
-            onClick={() => setPopoverOpen((v) => !v)}
-            className={cn(
-              "inline-flex items-center gap-1 rounded text-amber-700 transition-colors",
-              paceClickable
-                ? "cursor-pointer hover:bg-amber-50 hover:text-amber-800 px-1 -mx-1"
-                : "cursor-default",
-            )}
-            title={paceClickable ? `Show top ${topBehind.length} epic${topBehind.length === 1 ? "" : "s"} behind plan` : undefined}
-          >
-            <span aria-hidden>⚠</span>
-            <span className="tabular-nums font-semibold">{paceMagnitude.toFixed(decimals)}{unitSuffix}</span>
-            <span className="text-amber-600">behind</span>
-          </button>
-        ) : paceState === "ahead" && paceMagnitude != null ? (
-          <button
-            ref={paceButtonRef}
-            type="button"
-            disabled={!paceClickable}
-            onClick={() => setPopoverOpen((v) => !v)}
-            className={cn(
-              "inline-flex items-center gap-1 rounded text-emerald-700 transition-colors",
-              paceClickable
-                ? "cursor-pointer hover:bg-emerald-50 hover:text-emerald-800 px-1 -mx-1"
-                : "cursor-default",
-            )}
-            title={paceClickable ? `Show top ${topAhead.length} epic${topAhead.length === 1 ? "" : "s"} ahead of plan` : undefined}
-          >
-            <span aria-hidden>✓</span>
-            <span className="tabular-nums font-semibold">{paceMagnitude.toFixed(decimals)}{unitSuffix}</span>
-            <span className="text-emerald-600">ahead</span>
-          </button>
-        ) : paceState === "onPace" ? (
-          <span className="inline-flex items-center gap-1 text-emerald-700">
-            <span aria-hidden>✓</span>
-            <span>on pace</span>
+      {kpiPlacement === "floating" ? (
+        /* Floating KPI strip — three numbers in one chip pinned top-left,
+         *  mirroring the HealthBadge placement used in the per-epic
+         *  burndown so the visual language stays consistent across charts.
+         *  Used by the customizable Dashboard cards which give the chart
+         *  the full card width to breathe. */
+        <div className="absolute left-3 top-1 z-10 flex items-center gap-2 rounded-md bg-white/85 px-2 py-1 text-[11px] font-medium text-slate-700 shadow-sm ring-1 ring-slate-200/80 backdrop-blur-sm">
+          <span>
+            Done <span className="tabular-nums font-semibold text-slate-900">{doneEpicCount}/{totalEpicCount}</span>{" "}
+            <span className="text-slate-500">epics</span>
           </span>
-        ) : (
-          <span className="text-slate-400">pace —</span>
-        )}
-        <span className="text-slate-300">·</span>
-        <span className={etaDate == null ? "text-slate-400" : etaWithinPeriod ? "text-emerald-700" : "text-amber-700"}>
-          ETA <span className="tabular-nums font-semibold">{formatEta(etaDate)}</span>
-          {etaDate != null ? (etaWithinPeriod ? " ✓" : " ⚠") : ""}
-        </span>
-      </div>
+          <span className="text-slate-300">·</span>
+          {renderPaceCell("inline")}
+          <span className="text-slate-300">·</span>
+          <span className={etaDate == null ? "text-slate-400" : etaWithinPeriod ? "text-emerald-700" : "text-amber-700"}>
+            ETA <span className="tabular-nums font-semibold">{formatEta(etaDate)}</span>
+            {etaDate != null ? (etaWithinPeriod ? " ✓" : " ⚠") : ""}
+          </span>
+        </div>
+      ) : null}
 
       {/* Contributor popover — renders into document.body via a portal so
        *  the Hero row's `overflow-x-auto` (which also clips vertical
@@ -649,27 +701,33 @@ export function PortfolioBurndownChart({
         document.body,
         )
       ) : null}
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={rows} margin={{ top: 36, right: 56, left: 16, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-          <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} ticks={xAxisTicks} />
-          <YAxis
-            tick={{ fontSize: 10 }}
-            width={48}
-            allowDecimals={progressBasis !== "stories"}
-            label={{
-              value: basisYAxisLabel(progressBasis),
-              angle: -90,
-              position: "insideLeft",
-              offset: 0,
-              style: { fontSize: 11, fill: "#475569", fontWeight: 600 },
-            }}
-            domain={[0, Math.max(1, Math.ceil(startTotal * 1.12))]}
-          />
-          <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
-          {hideLegend ? null : (
-            <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
-          )}
+      {/* Chart + optional side column. In `floating` placement the chart
+       *  takes the full width and the floating chip overlays it. In
+       *  `side` placement, the chart takes the flex-1 left half and a
+       *  KPI + legend column sits on the right. */}
+      <div className="flex h-full w-full flex-row gap-3">
+        <div className={cn("relative h-full min-w-0", kpiPlacement === "side" ? "flex-1" : "w-full")}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={rows} margin={{ top: chartTopMargin, right: kpiPlacement === "side" ? 24 : 56, left: 16, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} ticks={xAxisTicks} />
+              <YAxis
+                tick={{ fontSize: 10 }}
+                width={48}
+                allowDecimals={progressBasis !== "stories"}
+                label={{
+                  value: basisYAxisLabel(progressBasis),
+                  angle: -90,
+                  position: "insideLeft",
+                  offset: 0,
+                  style: { fontSize: 11, fill: "#475569", fontWeight: 600 },
+                }}
+                domain={[0, Math.max(1, Math.ceil(startTotal * 1.12))]}
+              />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
+              {inlineLegendHidden ? null : (
+                <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
+              )}
           {todayLabel ? (
             <ReferenceLine
               x={todayLabel}
@@ -720,8 +778,42 @@ export function PortfolioBurndownChart({
             strokeWidth={2}
             label={{ value: `End ${endLabel}`, position: "top", fontSize: 10, fill: "#dc2626" }}
           />
-        </LineChart>
-      </ResponsiveContainer>
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        {/* Side column — only rendered in `side` placement. Stacks the
+         *  three KPIs (Done / pace / ETA) above the three legend rows
+         *  with a thin divider. Matches the donut cards' chart-plus-list
+         *  layout so the four hero widgets read with the same rhythm. */}
+        {kpiPlacement === "side" ? (
+          <aside className="flex w-[140px] shrink-0 flex-col justify-center gap-1.5 text-[11px] text-slate-700">
+            <div>
+              <span className="text-slate-500">Done</span>{" "}
+              <span className="tabular-nums font-semibold text-slate-900">
+                {doneEpicCount}/{totalEpicCount}
+              </span>{" "}
+              <span className="text-slate-500">epics</span>
+            </div>
+            {renderPaceCell("row")}
+            <div className={etaDate == null ? "text-slate-400" : etaWithinPeriod ? "text-emerald-700" : "text-amber-700"}>
+              <span className="text-slate-500">ETA</span>{" "}
+              <span className="tabular-nums font-semibold">{formatEta(etaDate)}</span>
+              {etaDate != null ? (etaWithinPeriod ? " ✓" : " ⚠") : ""}
+            </div>
+            <hr className="my-0.5 border-slate-200/80" />
+            {sideLegendRows.map((row) => (
+              <div key={row.label} className="inline-flex items-center gap-1.5">
+                <span
+                  className="inline-block size-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: row.color }}
+                  aria-hidden
+                />
+                <span className="truncate">{row.label}</span>
+              </div>
+            ))}
+          </aside>
+        ) : null}
+      </div>
     </div>
   );
 }
