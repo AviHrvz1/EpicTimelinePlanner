@@ -21,6 +21,7 @@ import {
   Funnel,
   Folder,
   Inbox,
+  Info,
   KanbanSquare,
   Lock,
   Pencil,
@@ -1654,14 +1655,19 @@ type TimelineGridProps = {
   ) => Promise<void>;
   /** Generic per-field user-story patch for inline-edit surfaces (the
    *  story rows inside an epic's accordion in the Epic Estimation
-   *  Coverage table). Team is intentionally omitted — stories inherit
-   *  team from their parent epic. Parent owns the fetch + refresh. */
+   *  Coverage table, and the Stories-without-description table). Team
+   *  is intentionally omitted — stories inherit team from their parent
+   *  epic. `epicId` re-parents the story to a different epic (used by
+   *  the Parent epic autocomplete on the Stories-without-description
+   *  table). Parent owns the fetch + refresh. */
   onPatchStory?: (
     storyId: string,
     patch: Partial<{
+      title: string;
       sprint: number | null;
       assignee: string | null;
       estimatedDays: number | null;
+      epicId: string;
     }>,
   ) => Promise<void>;
   /** Month plan team board queues (year:month keys) for capacity ordering and queue→team sync. */
@@ -2449,6 +2455,106 @@ function CoverageEditInput({
   );
 }
 
+/** Project-standard hover/focus tooltip for "what is this?" affordances
+ *  inside surfaces that have `overflow-hidden` parents (the Coverage
+ *  section header is one such surface — its panel-tinted rounded corners
+ *  rely on overflow-hidden). The tooltip portals to `document.body` and
+ *  positions itself with `fixed` so no ancestor stacking context or
+ *  overflow rule can clip it. Visual style matches the existing
+ *  HOVER_TOOLTIP_CLASS used by backlog row chips: indigo-on-white card,
+ *  shadow-md, rounded-lg, 12px slate-700 body, max-w 22rem. */
+function InfoTooltip({
+  ariaLabel,
+  children,
+}: {
+  ariaLabel: string;
+  children: ReactNode;
+}) {
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPos(null);
+      return;
+    }
+    const recompute = () => {
+      const el = triggerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      // Anchor the tooltip's right edge to the icon's right edge —
+      // when the icon is near the right of the viewport, the popup
+      // extends LEFT instead of overflowing off-screen.
+      setPos({ left: rect.right, top: rect.bottom + 6 });
+    };
+    recompute();
+    window.addEventListener("scroll", recompute, true);
+    window.addEventListener("resize", recompute);
+    return () => {
+      window.removeEventListener("scroll", recompute, true);
+      window.removeEventListener("resize", recompute);
+    };
+  }, [open]);
+
+  // Esc closes the tooltip — keyboard accessibility parity with the
+  // mouse-leave / blur teardown.
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label={ariaLabel}
+        aria-expanded={open}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onClick={(event) => {
+          // Toggle on click so touch users can pin the tooltip open
+          // without a mouse-leave hiding it.
+          event.preventDefault();
+          setOpen((v) => !v);
+        }}
+        className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-white/80 transition-colors hover:bg-white/15 hover:text-white focus-visible:bg-white/15 focus-visible:text-white focus-visible:outline-none"
+      >
+        <Info className="size-3.5" strokeWidth={2.2} aria-hidden />
+      </button>
+      {open && pos && typeof document !== "undefined"
+        ? createPortal(
+            <span
+              role="tooltip"
+              // Anchor the popup's right edge to the icon, then nudge
+              // it ~24px further right so a small slice of the card
+              // sits past the icon — visually disambiguates the tip
+              // from the title text on its left.
+              style={{
+                position: "fixed",
+                left: pos.left,
+                top: pos.top,
+                transform: "translateX(calc(-100% + 24px))",
+                zIndex: 9999,
+              }}
+              className="pointer-events-none w-max max-w-[22rem] whitespace-normal rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-3 py-2 text-[12px] font-medium leading-snug text-slate-700 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm tracking-normal normal-case"
+            >
+              {children}
+            </span>,
+            document.body,
+          )
+        : null}
+    </>
+  );
+}
+
 export function TimelineGrid({
   initiatives,
   zoom,
@@ -2689,7 +2795,7 @@ export function TimelineGrid({
   const [estEpicsPanelEntered, setEstEpicsPanelEntered] = useState(false);
   const skipEstEpicsPanelEnterRef = useRef(false);
   const estEpicsPanelCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [estEpicsPanelWidthPx, setEstEpicsPanelWidthPx] = useState(1080);
+  const [estEpicsPanelWidthPx, setEstEpicsPanelWidthPx] = useState(1240);
   const [estEpicsPanelPosition, setEstEpicsPanelPosition] = useState({ right: 0, top: 0 });
   const [expandedEstimateEpicIds, setExpandedEstimateEpicIds] = useState<Set<string>>(new Set());
   const [estimateCoveragePanelTab, setEstimateCoveragePanelTab] = useState<EstimateCoveragePanelTab>("unestimated");
@@ -2738,6 +2844,14 @@ export function TimelineGrid({
       | "assignee"
       | "originalEstimateDays";
     draft: string;
+    // When the edit was triggered from a story row in the Stories-
+    // without-description table, multiple rows may share the same
+    // parent epic. Without this tag, *every* such row matches
+    // `epicId + column` and renders the editor in parallel — causing
+    // a stack of duplicate popups. The triggering row writes its own
+    // storyId here and the conditional in that table gates on it so
+    // only the originating row renders the editor.
+    triggerStoryId?: string;
   };
   const [estimateEditCell, setEstimateEditCell] = useState<EpicCoverageEditCell | null>(null);
   const [estimateSavingCell, setEstimateSavingCell] = useState<string | null>(null);
@@ -2747,7 +2861,7 @@ export function TimelineGrid({
    *  from their parent epic. */
   type StoryCoverageEditCell = {
     storyId: string;
-    column: "sprint" | "assignee" | "estimatedDays";
+    column: "title" | "sprint" | "assignee" | "estimatedDays" | "epicId";
     draft: string;
   };
   const [storyEditCell, setStoryEditCell] = useState<StoryCoverageEditCell | null>(null);
@@ -3116,7 +3230,12 @@ export function TimelineGrid({
   }, [estEpicsPanelPosition.right, estEpicsPanelPosition.top, estEpicsPanelWidthPx]);
   useEffect(() => {
     if (!estEpicsPanelOpen) return;
-    const defaultWidth = Math.max(720, Math.min(window.innerWidth - 16, Math.round(window.innerWidth * 0.56)));
+    // Default panel width grew alongside the wider Epic + Initiative
+    // columns. Hard minimum bumped from 720 → 840 so the table never
+    // squishes those two columns past readable width; viewport ratio
+    // 0.56 → 0.64 so the panel takes a larger share of the screen on
+    // wider monitors where the extra room is most useful.
+    const defaultWidth = Math.max(840, Math.min(window.innerWidth - 16, Math.round(window.innerWidth * 0.64)));
     setEstEpicsPanelWidthPx(defaultWidth);
     setEstEpicsPanelPosition({ right: 0, top: 0 });
   }, [estEpicsPanelOpen]);
@@ -3891,9 +4010,39 @@ export function TimelineGrid({
     setStorySavingCell(`${storyId}.${column}`);
     try {
       let patch:
-        | Partial<{ sprint: number | null; assignee: string | null; estimatedDays: number | null }>
+        | Partial<{
+            title: string;
+            sprint: number | null;
+            assignee: string | null;
+            estimatedDays: number | null;
+            epicId: string;
+          }>
         | null = null;
       switch (column) {
+        case "title": {
+          if (!trimmed) return; // empty title silently rejected
+          patch = { title: trimmed };
+          break;
+        }
+        case "epicId": {
+          // Autocomplete shows epic titles; resolve to UUID via the
+          // initiatives tree. Case-insensitive exact match. If no
+          // match, silently reject — the planner can pick from the
+          // dropdown.
+          const lower = trimmed.toLowerCase();
+          let matchId: string | null = null;
+          outer: for (const initiative of initiatives) {
+            for (const epic of initiative.epics ?? []) {
+              if (epic.title.toLowerCase() === lower) {
+                matchId = epic.id;
+                break outer;
+              }
+            }
+          }
+          if (!matchId) return;
+          patch = { epicId: matchId };
+          break;
+        }
         case "sprint": {
           if (!trimmed) {
             patch = { sprint: null };
@@ -4282,13 +4431,13 @@ export function TimelineGrid({
       <table className={estimatePanelTableClass}>
         <thead>
           <tr>
-            <th className={cn(estimatePanelHeadCellClass, "w-[22%] min-w-0")}>
+            <th className={cn(estimatePanelHeadCellClass, "w-[28%] min-w-0")}>
               <span className="inline-flex w-full items-center justify-between gap-1">
                 <span className="truncate">Epic</span>
                 {filterIcon("epic", "Epic")}
               </span>
             </th>
-            <th className={cn(estimatePanelHeadCellClass, "w-[18%] min-w-0")}>
+            <th className={cn(estimatePanelHeadCellClass, "w-[22%] min-w-0")}>
               <span className="inline-flex w-full items-center justify-between gap-1">
                 <span className="truncate">Initiative</span>
                 {filterIcon("initiative", "Initiative")}
@@ -4312,7 +4461,7 @@ export function TimelineGrid({
                 {filterIcon("assignee", "Assignee")}
               </span>
             </th>
-            <th className={cn(estimatePanelHeadCellClass, "w-[4.5rem] text-center")}>
+            <th className={cn(estimatePanelHeadCellClass, "w-[6.5rem] text-center")}>
               Est days
             </th>
             {showEstimatedColumns ? (
@@ -4788,6 +4937,32 @@ export function TimelineGrid({
           ]),
         )
       : [];
+    // Team edit on a story row writes to the PARENT epic (a story
+    // doesn't own a `team` field — it's inherited). Available only
+    // when the parent supplies onPatchEpic. Option list mirrors the
+    // main coverage table: MONTH_TEAM_COLUMNS slugs + any custom team
+    // slugs already used by epics in this scope.
+    const canEditEpicTeam = Boolean(onPatchEpic);
+    const teamOptionSlugsForStoryRow = canEditEpicTeam
+      ? Array.from(
+          new Set(
+            ["", ...MONTH_TEAM_COLUMNS.map((c) => c.id), ...rows.map((r) => r.epic.team ?? "")].filter(
+              (s, i, arr) => arr.indexOf(s) === i,
+            ),
+          ),
+        )
+      : [];
+    // Parent-epic autocomplete options. Each option carries the epic
+    // title (for matching) plus a Folder icon and a "title · parent
+    // initiative" displayLabel so duplicates can be told apart.
+    const epicReassignOptions: CoverageEditOption[] = initiatives.flatMap((init) =>
+      (init.epics ?? []).map((epic) => ({
+        value: epic.title,
+        label: epic.title,
+        displayLabel: `${epic.title} · ${init.title}`,
+        icon: <Folder className="size-3.5 text-sky-500" strokeWidth={2} aria-hidden />,
+      })),
+    );
     return (
       <table className={estimatePanelTableClass}>
         <thead>
@@ -4844,31 +5019,70 @@ export function TimelineGrid({
                   rowIndex % 2 === 0 ? "bg-[#d8f2ff]" : "bg-white",
                 )}
               >
-                <td className={estimatePanelCellClass}>
-                  <button
-                    type="button"
-                    onClick={() => onOpenStory?.(row.story.id)}
-                    disabled={!onOpenStory}
-                    title={row.story.title}
-                    className={cn(
-                      "inline-flex max-w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-left text-[13px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-950",
-                      !onOpenStory && "cursor-default opacity-60 hover:bg-transparent hover:text-slate-900",
-                    )}
-                  >
-                    <UserStoryIcon className="size-3.5 shrink-0 text-slate-500" />
-                    <span className="truncate">{row.story.title}</span>
-                  </button>
+                <td className={cn(estimatePanelCellClass, "group/cell")}>
+                  {isStoryEditing(row.story.id, "title") ? (
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <UserStoryIcon className="size-3.5 shrink-0 text-slate-500" />
+                      <EditStoryFieldControls
+                        storyId={row.story.id}
+                        column="title"
+                        type="text"
+                        placeholder="Story title…"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => onOpenStory?.(row.story.id)}
+                        disabled={!onOpenStory}
+                        title={row.story.title}
+                        className={cn(
+                          "inline-flex min-w-0 flex-1 items-center gap-1.5 rounded px-1 py-0.5 text-left text-[13px] font-semibold text-slate-900 hover:bg-white/70 hover:text-blue-950",
+                          !onOpenStory && "cursor-default opacity-60 hover:bg-transparent hover:text-slate-900",
+                        )}
+                      >
+                        <UserStoryIcon className="size-3.5 shrink-0 text-slate-500" />
+                        <span className="truncate">{row.story.title}</span>
+                      </button>
+                      <EditStoryPencil
+                        storyId={row.story.id}
+                        column="title"
+                        initialDraft={row.story.title}
+                      />
+                    </div>
+                  )}
                 </td>
-                <td className={cn(estimatePanelCellClass, "text-left text-slate-600")}>
-                  <button
-                    type="button"
-                    onClick={() => onOpenEpic(row.epic.id)}
-                    title={row.epic.title}
-                    className="flex max-w-full min-w-0 items-center gap-2 rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-950 hover:bg-white/70 hover:text-blue-950"
-                  >
-                    <Folder className="size-3.5 shrink-0 text-sky-500" strokeWidth={2} aria-hidden />
-                    <span className="truncate">{row.epic.title}</span>
-                  </button>
+                <td className={cn(estimatePanelCellClass, "group/cell text-left text-slate-600")}>
+                  {isStoryEditing(row.story.id, "epicId") ? (
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <Folder className="size-3.5 shrink-0 text-sky-500" strokeWidth={2} aria-hidden />
+                      <EditStoryFieldControls
+                        storyId={row.story.id}
+                        column="epicId"
+                        type="text"
+                        placeholder="Pick parent epic…"
+                        iconOptions={epicReassignOptions}
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => onOpenEpic(row.epic.id)}
+                        title={row.epic.title}
+                        className="flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-0.5 text-left text-[13px] font-medium text-slate-950 hover:bg-white/70 hover:text-blue-950"
+                      >
+                        <Folder className="size-3.5 shrink-0 text-sky-500" strokeWidth={2} aria-hidden />
+                        <span className="truncate">{row.epic.title}</span>
+                      </button>
+                      <EditStoryPencil
+                        storyId={row.story.id}
+                        column="epicId"
+                        initialDraft={row.epic.title}
+                      />
+                    </div>
+                  )}
                 </td>
                 <td className={cn(estimatePanelCellClass, "group/cell text-[14px] text-slate-950")}>
                   {isStoryEditing(row.story.id, "sprint") ? (
@@ -4897,17 +5111,81 @@ export function TimelineGrid({
                   )}
                 </td>
                 <td className={cn(estimatePanelCellClass, "group/cell text-[14px] text-slate-950")}>
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                  {estimateEditCell
+                    && estimateEditCell.epicId === row.epic.id
+                    && estimateEditCell.column === "team"
+                    && estimateEditCell.triggerStoryId === row.story.id ? (
+                    <div className="flex min-w-0 items-center gap-1.5">
                       <TeamAvatar
-                        slug={row.epic.team ?? null}
+                        slug={null}
                         sizePx={16}
                         fallback={<Users className="size-3.5 shrink-0 text-slate-400" aria-hidden />}
                       />
-                      <span className="truncate">{estimatePanelTeamLabel(row.epic.team)}</span>
-                    </span>
-                    {canEditStorySharedRef ? <LockHint tip="Team is inherited from the parent epic" /> : null}
-                  </div>
+                      <CoverageEditInput
+                        draft={estimateEditCell.draft}
+                        saving={estimateSavingCell === `${row.epic.id}.team`}
+                        type="text"
+                        placeholder="Team slug…"
+                        allOptions={teamOptionSlugsForStoryRow
+                          .filter(Boolean)
+                          .map((slug) => ({
+                            value: slug,
+                            label: estimatePanelTeamLabel(slug),
+                            icon: (
+                              <TeamAvatar
+                                slug={slug}
+                                sizePx={16}
+                                fallback={<Users className="size-3.5 text-slate-400" aria-hidden />}
+                              />
+                            ),
+                          }))}
+                        onDraftChange={(next) => setEstimateEditCell({ ...estimateEditCell, draft: next })}
+                        onSubmit={async (value) => {
+                          if (!onPatchEpic) return;
+                          const trimmed = value.trim();
+                          setEstimateSavingCell(`${row.epic.id}.team`);
+                          try {
+                            await onPatchEpic(row.epic.id, { team: trimmed || null });
+                          } finally {
+                            setEstimateSavingCell(null);
+                            setEstimateEditCell(null);
+                          }
+                        }}
+                        onCancel={() => setEstimateEditCell(null)}
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                        <TeamAvatar
+                          slug={row.epic.team ?? null}
+                          sizePx={16}
+                          fallback={<Users className="size-3.5 shrink-0 text-slate-400" aria-hidden />}
+                        />
+                        <span className="truncate">{estimatePanelTeamLabel(row.epic.team)}</span>
+                      </span>
+                      {canEditEpicTeam ? (
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setEstimateEditCell({
+                              epicId: row.epic.id,
+                              column: "team",
+                              draft: row.epic.team ?? "",
+                              triggerStoryId: row.story.id,
+                            });
+                          }}
+                          aria-label="Edit team (updates parent epic)"
+                          title="Edit team — applies to the parent epic"
+                          className="ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded text-slate-400 opacity-0 transition-opacity group-hover/cell:opacity-100 hover:bg-slate-200/70 hover:text-slate-700"
+                        >
+                          <SquarePen className="size-3.5" strokeWidth={2.2} aria-hidden />
+                        </button>
+                      ) : null}
+                    </div>
+                  )}
                 </td>
                 <td className={cn(estimatePanelCellClass, "group/cell text-[14px] text-slate-950")}>
                   {isStoryEditing(row.story.id, "assignee") ? (
@@ -10161,7 +10439,11 @@ export function TimelineGrid({
                     <div className="flex shrink-0 items-center justify-between gap-2 bg-[#0897d5] px-3 py-2.5">
                       <p className="inline-flex min-w-0 items-center gap-1.5 text-[13px] font-semibold uppercase tracking-[0.02em] text-white">
                         <BarChart3 className="size-4 shrink-0 text-white/90" strokeWidth={2.2} />
-                        <span className="truncate">Partially estimated · epic sized but some stories aren&apos;t</span>
+                        <span className="truncate">Partially estimated</span>
+                        <InfoTooltip ariaLabel="What does 'Partially estimated' mean?">
+                          <span className="block font-semibold text-slate-900">Epic has a top-line estimate, but at least one child story is still unsized.</span>
+                          <span className="mt-1 block">Σ Child Est won&apos;t match Est days until every story is sized. Expand the epic row and fill in the 0d stories. The row then moves to Estimated.</span>
+                        </InfoTooltip>
                       </p>
                       {tabHasActiveFilters("partiallyEstimated") ? (
                         <button
