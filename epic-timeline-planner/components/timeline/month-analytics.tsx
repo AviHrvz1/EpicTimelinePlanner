@@ -16,12 +16,14 @@ import {
   Activity,
   AlertOctagon,
   AlertTriangle,
+  Calendar,
   CheckCheck,
   CheckCircle2,
   ChartNoAxesCombined,
   ChevronDown,
   ChevronUp,
   Circle,
+  Clock,
   Eraser,
   ExternalLink,
   Flag,
@@ -106,6 +108,44 @@ const CFD_FLOW_SEGMENTS = [
   { key: "inProgress" as const, label: "In progress", color: STATUS_COLORS["In progress"] },
   { key: "todo" as const, label: "To do", color: STATUS_COLORS["To do"] },
 ] as const;
+
+/** Small circular progress indicator — mirrors the one on the
+ *  RoadmapHealthHero's Team Progress card so the two surfaces read with
+ *  the same visual vocabulary. Renders a 28×28 SVG ring with the
+ *  rounded percentage at the center; stroke color follows the row's
+ *  health tone. */
+function CircleProgress({
+  percent,
+  color,
+}: {
+  percent: number;
+  color: string;
+}) {
+  const radius = 11;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.max(0, Math.min(100, percent));
+  const dashOffset = circumference * (1 - clamped / 100);
+  return (
+    <svg width={28} height={28} viewBox="0 0 28 28" aria-hidden>
+      <circle cx={14} cy={14} r={radius} fill="none" stroke="#e2e8f0" strokeWidth={2.4} />
+      <circle
+        cx={14}
+        cy={14}
+        r={radius}
+        fill="none"
+        stroke={color}
+        strokeWidth={2.4}
+        strokeDasharray={circumference}
+        strokeDashoffset={dashOffset}
+        strokeLinecap="round"
+        transform="rotate(-90 14 14)"
+      />
+      <text x={14} y={16} textAnchor="middle" fontSize={8} fontWeight={700} fill="#475569">
+        {Math.round(clamped)}%
+      </text>
+    </svg>
+  );
+}
 
 function WorkloadXAxisTick({
   x,
@@ -5884,49 +5924,63 @@ export function MonthAnalytics({
                               {row.initials || <User className="size-3" />}
                             </span>
                           )}
-                          <div className="min-w-0 flex-1">
-                            {/* Two-line layout, bar leads via a clear h-2
-                             *  pill but doesn't dominate the row. The over-
-                             *  capacity chip + est review / est left numbers
-                             *  sit inline on the same row as the name. */}
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="inline-flex min-w-0 items-baseline gap-1.5">
-                                <span className="truncate text-[12.5px] font-semibold text-slate-800">{row.label}</span>
-                                <span className="shrink-0 text-[10.5px] font-semibold tabular-nums text-slate-500">{donePct}%</span>
-                              </span>
-                              <div className="flex shrink-0 items-center gap-2">
-                                {teamHealth ? (
-                                  <TeamHealthBadgeWithList
-                                    status={teamHealth.status}
-                                    atRiskEpics={teamHealth.atRiskEpics}
-                                    watchEpics={teamHealth.watchEpics}
-                                    overdueEpics={teamHealth.overdueEpics}
-                                    teamLabel={row.label}
-                                    onOpenEpic={onOpenEpic}
-                                  />
-                                ) : null}
-                                <span className="text-[11px] tabular-nums text-slate-600">
-                                  <span className="font-semibold text-slate-800">{row.estTotal}d</span>
-                                  <span className="ml-0.5 text-slate-400">est</span>
-                                  <span className="mx-1 text-slate-300">·</span>
-                                  <span className="font-semibold text-slate-800">{doneDays}d</span>
-                                  <span className="ml-0.5 text-slate-400">review</span>
-                                  <span className="mx-1 text-slate-300">·</span>
-                                  <span className={cn("font-semibold", atRisk ? "text-amber-700" : watch ? "text-amber-700" : "text-slate-800")}>{row.daysLeft}d</span>
-                                  <span className="ml-0.5 text-slate-400">left</span>
+                          {(() => {
+                            // Tone object drives the bar fill, the clock-
+                            // chip color, and the circle stroke so a row's
+                            // health verdict reads consistently across the
+                            // three visuals. Matches the hero Team
+                            // Progress card.
+                            const tone = atRisk
+                              ? { bar: "bg-amber-400", chip: "bg-amber-50 text-amber-700 ring-amber-200/70", pct: "text-amber-700", stroke: "#f59e0b" }
+                              : allDone
+                                ? { bar: "bg-emerald-400", chip: "bg-emerald-50 text-emerald-700 ring-emerald-200/70", pct: "text-emerald-700", stroke: "#10b981" }
+                                : watch
+                                  ? { bar: "bg-amber-300", chip: "bg-amber-50 text-amber-700 ring-amber-200/70", pct: "text-amber-700", stroke: "#f59e0b" }
+                                  : { bar: "bg-indigo-400", chip: "bg-indigo-50 text-indigo-700 ring-indigo-200/70", pct: "text-indigo-600", stroke: "#6366f1" };
+                            return (
+                              <>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-baseline gap-1.5">
+                                    <span className="truncate text-[12.5px] font-semibold text-slate-800">{row.label}</span>
+                                    <span className={cn("shrink-0 text-[10.5px] font-semibold tabular-nums", tone.pct)}>{donePct}%</span>
+                                    {teamHealth ? (
+                                      <span className="ml-1 inline-flex shrink-0 items-center">
+                                        <TeamHealthBadgeWithList
+                                          status={teamHealth.status}
+                                          atRiskEpics={teamHealth.atRiskEpics}
+                                          watchEpics={teamHealth.watchEpics}
+                                          overdueEpics={teamHealth.overdueEpics}
+                                          teamLabel={row.label}
+                                          onOpenEpic={onOpenEpic}
+                                        />
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <div className="mt-1 relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/50">
+                                    <div
+                                      className={cn("absolute inset-y-0 left-0 rounded-full transition-all", tone.bar)}
+                                      style={{ width: `${donePct}%` }}
+                                    />
+                                  </div>
+                                </div>
+                                {/* Calendar chip — total estimate, neutral
+                                 *  slate; matches the hero card. */}
+                                <span
+                                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-slate-600 ring-1 ring-slate-200/70"
+                                  title={`${row.estTotal}d estimated total · ${doneDays}d in review`}
+                                >
+                                  <Calendar className="size-2.5" strokeWidth={2.2} aria-hidden />
+                                  {row.estTotal}d
                                 </span>
-                              </div>
-                            </div>
-                            <div className="mt-1 relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/50">
-                              <div
-                                className={cn(
-                                  "absolute inset-y-0 left-0 rounded-full transition-all",
-                                  atRisk ? "bg-amber-400" : allDone ? "bg-emerald-400" : "bg-indigo-400",
-                                )}
-                                style={{ width: `${donePct}%` }}
-                              />
-                            </div>
-                          </div>
+                                {/* Clock chip — days left, tinted by tone. */}
+                                <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1", tone.chip)}>
+                                  <Clock className="size-2.5" strokeWidth={2.2} aria-hidden />
+                                  {row.daysLeft}d left
+                                </span>
+                                <CircleProgress percent={donePct} color={tone.stroke} />
+                              </>
+                            );
+                          })()}
                         </div>
                       </button>
                     );
