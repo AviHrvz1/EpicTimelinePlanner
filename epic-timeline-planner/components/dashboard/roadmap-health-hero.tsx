@@ -1012,15 +1012,14 @@ function PortfolioBurndownHeroCard({
   return (
     <div
       className={cn(
-        // Tighter padding (py-2 + px-3) than the donut cards (px-7 py-3)
-        // because the burndown is a line chart, not a donut+legend —
-        // the donuts need the wider gutter to keep their long legend
-        // labels off the card edge, but the burndown's only edge-of-
-        // card text is the x-axis date ticks, which read fine at 12px
-        // from the rim. The reclaimed horizontal pixels go to the
-        // plot area so "End 30/6" doesn't get truncated and the
-        // y-axis caption has breathing room from the tick numbers.
-        "flex w-[520px] min-w-[520px] max-w-[520px] shrink-0 flex-col gap-1.5 rounded-2xl px-3 py-2 ring-1 ring-inset transition-shadow",
+        // Vertical chrome matches the donut + Team Progress cards
+        // exactly (py-3, gap-2) so the four hero widgets sit on the
+        // same baseline. Horizontal padding is tightened to px-3
+        // (donuts keep px-7) — the burndown is a line chart with
+        // no long legend labels to crash into the rim, and the
+        // reclaimed 32px goes to the plot area so the y-axis
+        // caption + "End 30/6" tail both have room.
+        "flex w-[520px] min-w-[520px] max-w-[520px] shrink-0 flex-col gap-2 rounded-2xl px-3 py-3 ring-1 ring-inset transition-shadow",
         "bg-sky-50/60 ring-sky-100",
       )}
     >
@@ -1037,10 +1036,10 @@ function PortfolioBurndownHeroCard({
        *  customizable Dashboard card where it renders with the
        *  floating chip.)
        *
-       *  Slot is now 150px (was 130) — the same total card footprint
-       *  as before since `py-2` replaces `py-3` and the chart's own
-       *  bottom-margin shrunk to 0. Net: visibly larger plot area. */}
-      <div className="h-[150px] w-full">
+       *  Slot height matches the Team Progress card's `max-h-[130px]`
+       *  rows area so the four hero widgets sit on a single
+       *  baseline. */}
+      <div className="h-[130px] w-full">
         <PortfolioBurndownChart
           initiatives={initiatives as InitiativeItem[]}
           year={year}
