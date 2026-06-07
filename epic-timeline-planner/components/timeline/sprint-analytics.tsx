@@ -85,26 +85,34 @@ function CircleProgress({
   percent: number;
   color: string;
 }) {
-  const radius = 11;
-  const circumference = 2 * Math.PI * radius;
+  // Slightly elliptical so 3-digit "100%" fits without clipping.
+  // Height stays the same as the original 28px circle; width grows
+  // to 34px and the ring is drawn as an ellipse (rx > ry). The arc
+  // math uses the Ramanujan approximation since the ellipse
+  // circumference doesn't have a closed-form expression.
+  const rx = 14;
+  const ry = 11;
+  const h = ((rx - ry) ** 2) / ((rx + ry) ** 2);
+  const circumference = Math.PI * (rx + ry) * (1 + (3 * h) / (10 + Math.sqrt(4 - 3 * h)));
   const clamped = Math.max(0, Math.min(100, percent));
   const dashOffset = circumference * (1 - clamped / 100);
   return (
-    <svg width={28} height={28} viewBox="0 0 28 28" aria-hidden>
-      <circle cx={14} cy={14} r={radius} fill="none" stroke="#e2e8f0" strokeWidth={2.4} />
-      <circle
-        cx={14}
+    <svg width={34} height={28} viewBox="0 0 34 28" aria-hidden>
+      <ellipse cx={17} cy={14} rx={rx} ry={ry} fill="none" stroke="#e2e8f0" strokeWidth={2.4} />
+      <ellipse
+        cx={17}
         cy={14}
-        r={radius}
+        rx={rx}
+        ry={ry}
         fill="none"
         stroke={color}
         strokeWidth={2.4}
         strokeDasharray={circumference}
         strokeDashoffset={dashOffset}
         strokeLinecap="round"
-        transform="rotate(-90 14 14)"
+        transform="rotate(-90 17 14)"
       />
-      <text x={14} y={16} textAnchor="middle" fontSize={8} fontWeight={700} fill="#475569">
+      <text x={17} y={16} textAnchor="middle" fontSize={8} fontWeight={700} fill="#475569">
         {Math.round(clamped)}%
       </text>
     </svg>
