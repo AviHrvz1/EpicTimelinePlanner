@@ -2061,17 +2061,17 @@ export function SprintAnalytics({
                         const donePct = row.estTotal > 0 ? Math.round((doneDays / row.estTotal) * 100) : 100;
                         // Burndown-based verdict shared with Month Team Progress so
                         // both surfaces speak the same vocabulary (Done · Overdue ·
-                        // At Risk · Watch · On Track). In storyCount mode the
-                        // calendar comparison doesn't apply, so the verdict falls
-                        // back to plain review/onTrack.
-                        const verdict = metric === "daysLeft"
-                          ? sprintBurndownVerdict({
-                              daysLeft: row.daysLeft,
-                              estTotal: row.estTotal,
-                              sprintDaysLeft,
-                              sprintDaysTotal,
-                            })
-                          : { status: (row.daysLeft <= 0 && row.estTotal > 0 ? "done" : "onTrack") as HealthStatus, gap: 0, idealLeft: 0 };
+                        // At Risk · Watch · On Track). Used in BOTH metric modes —
+                        // in storyCount mode the "ideal" is a linear burndown of
+                        // stories over sprint days, which gives a meaningful
+                        // health verdict for the badge even though the threshold
+                        // constants (1d / 4d) read as "stories" instead.
+                        const verdict = sprintBurndownVerdict({
+                          daysLeft: row.daysLeft,
+                          estTotal: row.estTotal,
+                          sprintDaysLeft,
+                          sprintDaysTotal,
+                        });
                         const atRisk = verdict.status === "atRisk" || verdict.status === "overdue";
                         const watch = verdict.status === "watch";
                         const allDone = verdict.status === "done";
@@ -2170,20 +2170,25 @@ export function SprintAnalytics({
                                     </div>
                                     {/* Health badge — sits between bar
                                      *  and chip, the bar's natural
-                                     *  outcome (same as Team Progress). */}
-                                    {metric === "daysLeft" ? (
-                                      <span className="inline-flex shrink-0 items-center">
-                                        <SprintLoadHealthBadge
-                                          status={verdict.status}
-                                          rowLabel={row.label}
-                                          atRiskStories={atRiskStories}
-                                          watchStories={watchStories}
-                                          overdueStories={overdueStories}
-                                          sprintLabel={sprintEnded ? "Sprint ended" : `${sprintDaysLeft}d left`}
-                                          onOpenStory={onOpenStory}
-                                        />
-                                      </span>
-                                    ) : null}
+                                     *  outcome (same as Team Progress).
+                                     *  Always rendered, in both metric
+                                     *  modes — the badge popover lists
+                                     *  flagged stories only in daysLeft
+                                     *  mode (storyCount mode passes
+                                     *  empty arrays), but the badge
+                                     *  itself + tone always reflects the
+                                     *  row's verdict. */}
+                                    <span className="inline-flex shrink-0 items-center">
+                                      <SprintLoadHealthBadge
+                                        status={verdict.status}
+                                        rowLabel={row.label}
+                                        atRiskStories={atRiskStories}
+                                        watchStories={watchStories}
+                                        overdueStories={overdueStories}
+                                        sprintLabel={sprintEnded ? "Sprint ended" : `${sprintDaysLeft}d left`}
+                                        onOpenStory={onOpenStory}
+                                      />
+                                    </span>
                                     {/* Three-segment chip preserving all
                                      *  three numbers inline. Label of
                                      *  the first segment swaps with
