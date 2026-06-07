@@ -2429,9 +2429,33 @@ export function MonthAnalytics({
     setStatusDrilldownEpicFilter({ ...EMPTY_EPIC_DRILLDOWN_FILTER, status: colPrefill });
   };
   const clearStatusDrilldown = () => setStatusDrilldownFilter(null);
+  /**
+   * Epics in scope for the burndown / burnup charts. Mirrors the hero
+   * `PortfolioBurndownChart` rule exactly: epic's plan window must
+   * overlap the scope period. We don't fall back to "epic has stories
+   * in the period" or filter by initiative status — those broader
+   * criteria fit the donut / drilldown views (which use `monthEpics`
+   * directly) but cause the burndown to disagree with the hero on
+   * "what counts as a Q2 epic." Same question, same answer across
+   * surfaces. Single-epic focus bypasses the filter — the user picked
+   * that epic explicitly. */
+  const burndownScopedEpics = useMemo<EpicItem[]>(() => {
+    if (selectedEpicOption != null) return [selectedEpicOption.epic];
+    if (scopeMonths.length === 0) return monthEpics.map((row) => row.epic);
+    const startMonth = Math.min(...scopeMonths);
+    const endMonth = Math.max(...scopeMonths);
+    return monthEpics
+      .map((row) => row.epic)
+      .filter((epic) => {
+        if (epic.planStartMonth == null || epic.planEndMonth == null) return false;
+        if (epic.planStartMonth > endMonth) return false;
+        if (epic.planEndMonth < startMonth) return false;
+        return true;
+      });
+  }, [monthEpics, selectedEpicOption, scopeMonths]);
+
   const monthBurndownEpics = useMemo(() => {
-    const source = selectedEpicOption != null ? [selectedEpicOption.epic] : monthEpics.map((row) => row.epic);
-    return source.map((epic) => ({
+    return burndownScopedEpics.map((epic) => ({
       ...epicForBurndown(
         {
           ...epic,
@@ -2445,7 +2469,7 @@ export function MonthAnalytics({
         estimateSource === "original" && (epic.originalEstimateDays ?? 0) <= 0 ? "stories" : estimateSource,
       ),
     }));
-  }, [monthEpics, selectedEpicOption, estimateSource]);
+  }, [burndownScopedEpics, estimateSource]);
 
   const monthBurndown = useMemo(
     () =>
@@ -2492,7 +2516,12 @@ export function MonthAnalytics({
   }, [monthBurndown, monthBurndownEpics, planYear, month, scopeStartMonth]);
   const monthBurndownFromSnapshots = useMemo(() => {
     if (monthBurndown.length === 0) return null;
-    const sourceEpics = selectedEpicOption != null ? [selectedEpicOption.epic] : monthEpics.map((row) => row.epic);
+    // Same epic scope as monthBurndownEpics — keeps the snapshot-aware
+    // per-epic values aligned with the chart's headline filter. Without
+    // this we'd pick up epics that the hero filters out (and that the
+    // burndown's own legend/series doesn't list), so the aggregate
+    // Actual would diverge again.
+    const sourceEpics = burndownScopedEpics;
     const hasSnapshots = sourceEpics.some((epic) => (epic.userStories ?? []).some((story) => (story.snapshots?.length ?? 0) > 0));
     if (!hasSnapshots) return null;
 
@@ -2528,7 +2557,7 @@ export function MonthAnalytics({
       rows[i].actual = dayIdx <= elapsedDays ? (metric === "storyCount" ? Math.round(dayTotal) : Number(dayTotal.toFixed(1))) : null;
     }
     return rows as typeof monthBurndownFilledToToday;
-  }, [monthBurndown, monthBurndownFilledToToday, selectedEpicOption, monthEpics, planYear, month, metric, scopeStartMonth]);
+  }, [monthBurndown, monthBurndownFilledToToday, burndownScopedEpics, planYear, month, metric, scopeStartMonth]);
   const monthBurndownResolvedRaw = monthBurndownFromSnapshots ?? monthBurndownFilledToToday;
   /**
    * In `epicEst` basis the chart's ideal line + scope-promise reference are in
@@ -3234,11 +3263,16 @@ export function MonthAnalytics({
 
   /** Same shape as `burndownHealth`, scoped to the burnup chart's basis. */
   const burnupHealth = useMemo(() => {
+    // Use the same plan-overlap filter as burndownScopedEpics so the
+    // verdict respects the same epic population the chart plots.
     const epicsInScope = selectedEpicOption != null
       ? [selectedEpicOption.epic]
       : selectedInitiativeId !== "all"
-        ? monthEpics.filter((row) => row.initiative.id === selectedInitiativeId).map((row) => row.epic)
-        : monthEpics.map((r) => r.epic).filter((e) => burnUpVisibleKeys.length === 0 || burnUpVisibleKeys.includes(e.id));
+        ? burndownScopedEpics.filter((epic) => {
+            const init = monthEpics.find((row) => row.epic.id === epic.id)?.initiative;
+            return init?.id === selectedInitiativeId;
+          })
+        : burndownScopedEpics.filter((e) => burnUpVisibleKeys.length === 0 || burnUpVisibleKeys.includes(e.id));
     if (epicsInScope.length === 0) return null;
     const aggregateStories = epicsInScope.flatMap((epic) => epic.userStories ?? []);
     if (burnupBasis !== "epicEst" && aggregateStories.length === 0) return null;
@@ -3372,9 +3406,12 @@ export function MonthAnalytics({
   }, [selectedEpicOption, monthEpics, burnUpVisibleKeys, scopeStartMonth, planYear]);
 
   const burnUpData = useMemo(() => {
+    // Use the same plan-overlap filter as burndownScopedEpics so the
+    // burnup chart's series + aggregate sit on the same population as
+    // its legend (which is keyed off burnUpEpicRows / burndownScopedEpics).
     const epicsInScope = selectedEpicOption != null
       ? [selectedEpicOption.epic]
-      : monthEpics.map((r) => r.epic).filter((e) => burnUpVisibleKeys.length === 0 || burnUpVisibleKeys.includes(e.id));
+      : burndownScopedEpics.filter((e) => burnUpVisibleKeys.length === 0 || burnUpVisibleKeys.includes(e.id));
     const allStories = epicsInScope.flatMap((e) => (e.userStories ?? []).filter((s) => s.sprint != null));
     const isDays = burnUpMetric === "daysLeft";
     const useEpicEst = isDays && burnupBasis === "epicEst";
@@ -3718,7 +3755,9 @@ export function MonthAnalytics({
   //  longer needed.)
 
   const burnUpEpicRows = useMemo(() => {
-    const epicsInScope = selectedEpicOption != null ? [selectedEpicOption.epic] : monthEpics.map((r) => r.epic);
+    // Same plan-overlap filter as the burndown so the two charts list
+    // the same epic set across their legends + aggregates.
+    const epicsInScope = burndownScopedEpics;
     return epicsInScope.map((epic, idx) => {
       const stories = (epic.userStories ?? []).filter((s) => s.sprint != null);
       const completed = stories.filter((s) => s.status === "review" || s.status === "done").length;
