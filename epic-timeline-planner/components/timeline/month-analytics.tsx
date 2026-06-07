@@ -3619,7 +3619,15 @@ export function MonthAnalytics({
               // original bug: a now-review story leaked back to "review on
               // day 1" and the completed line ran above scope.
               const status = snap?.status ?? "todo";
-              if (status !== "todo" && status !== "inProgress") continue;
+              // "Open" = anything that isn't truly shipped. Now includes
+              // review/testing alongside todo + inProgress, since a
+              // review story can still bounce back to in-progress.
+              // Matches the storyDone helper above + the Sprint Load
+              // fix (e026fce). We skip ONLY status === "done" so the
+              // per-day "completed" line tracks status="done" stories
+              // (~106 in Q2) instead of the hybrid 123 the loop was
+              // emitting when it treated review as completed.
+              if (status === "done") continue;
               if (isDays) {
                 const daysLeft = snap?.daysLeft ?? snap?.estimatedDays ?? story.estimatedDays ?? story.daysLeft ?? 1;
                 epicOpenStoryDays += Math.max(0, daysLeft);
