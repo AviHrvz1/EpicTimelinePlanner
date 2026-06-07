@@ -118,7 +118,13 @@ export function buildQuarterBurndownSeries(
       const cal = new Date(planYear, month - 1, day);
       const weekdayShort = WEEKDAY_SHORT[cal.getDay()];
       const isCalendarToday = startOfLocalDay(cal) === todayMs;
-      const dateDayLabel = `${day}/${month} (${weekdayShort})`;
+      // Compact "7/6(Sun)" form (no space before paren) so the
+      // burndown's X-axis labels share the same string format as the
+      // CFD / Burnup charts (which use flowChartDayLabel). Recharts
+      // matches X positions by string equality across charts, so the
+      // labels MUST be identical for the three charts to align their
+      // ticks + today line at the same horizontal pixels.
+      const dateDayLabel = `${day}/${month}(${weekdayShort})`;
       return {
         dayLabel: dateDayLabel,
         axisLabel: dateDayLabel,
