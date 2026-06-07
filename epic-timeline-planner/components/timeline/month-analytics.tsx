@@ -2572,6 +2572,43 @@ export function MonthAnalytics({
       return next;
     }) as typeof monthBurndownResolvedRaw;
   }, [monthBurndownResolvedRaw, burndownBasis, metric, monthBurndownEpics]);
+  /**
+   * Aggregate `actual` line for the "All" view. The default `actual`
+   * field that buildQuarterBurndownSeries emits is a LINEAR
+   * interpolation from startTotal -> remainingTotal — fine in days /
+   * stories basis when no snapshot reconstruction is available, but it
+   * doesn't follow the snapshot-aware per-epic curves that
+   * monthBurndownFromSnapshots replaces. Result: the All-view aggregate
+   * Line looked like a straight slope while the per-epic lines (when
+   * shown) curved with real data.
+   *
+   * Replace `actual` with the SUM of per-epic snapshot-aware columns
+   * at each day so the aggregate Line traces the true rollup. The
+   * epicEst path already does this scaling above; here we just sum
+   * unscaled per-epic values for the days / stories paths. The
+   * resulting curve matches the hero PortfolioBurndownChart's
+   * snapshot-summed actual.
+   */
+  const monthBurndownChartData = useMemo(() => {
+    if (monthBurndownResolved.length === 0) return monthBurndownResolved;
+    const epicIds = monthBurndownEpics.map((e) => e.id);
+    return monthBurndownResolved.map((row) => {
+      let aggregate = 0;
+      let anyValue = false;
+      for (const id of epicIds) {
+        const v = row[id];
+        if (typeof v === "number") {
+          aggregate += v;
+          anyValue = true;
+        }
+      }
+      // Only overwrite when we actually have per-epic values. Future
+      // days (everything past today) leave per-epic as null, so we
+      // preserve whatever `actual` already held (null, in that case).
+      if (!anyValue) return row;
+      return { ...row, actual: Number(aggregate.toFixed(1)) };
+    }) as typeof monthBurndownResolved;
+  }, [monthBurndownResolved, monthBurndownEpics]);
   const burndownFocusedEpicOption = useMemo(() => {
     if (selectedEpicOption) return selectedEpicOption;
     if (burndownVisibleKeys.length !== 1) return null;
@@ -2753,8 +2790,8 @@ export function MonthAnalytics({
     return m;
   }, [monthBurndownResolved, monthBurndownEpics]);
   const monthBurndownTruncated = useMemo(() => {
-    if (monthBurndownDoneByKey.size === 0) return monthBurndownResolved;
-    return monthBurndownResolved.map((row, i) => {
+    if (monthBurndownDoneByKey.size === 0) return monthBurndownChartData;
+    return monthBurndownChartData.map((row, i) => {
       let next: Record<string, unknown> | null = null;
       for (const [key, doneIdx] of monthBurndownDoneByKey) {
         if (i > doneIdx) {
@@ -2762,9 +2799,9 @@ export function MonthAnalytics({
           next[key] = null;
         }
       }
-      return (next ?? row) as (typeof monthBurndownResolved)[number];
-    }) as typeof monthBurndownResolved;
-  }, [monthBurndownResolved, monthBurndownDoneByKey]);
+      return (next ?? row) as (typeof monthBurndownChartData)[number];
+    }) as typeof monthBurndownChartData;
+  }, [monthBurndownChartData, monthBurndownDoneByKey]);
   /** True when the focused epic's actual line hits 0 anywhere in the
    *  rendered window — drives the "Done ✓" marker on the due date. */
   const isFocusedBurndownDone = useMemo(() => {
