@@ -5987,13 +5987,13 @@ export function MonthAnalytics({
                                  *  "X review" detail accessible via
                                  *  hover. */}
                                 <span
-                                  className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1", tone.chip)}
+                                  className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1 text-slate-700", tone.chip)}
                                   title={`${row.estTotal}d estimated total · ${doneDays}d in review · ${row.daysLeft}d left`}
                                 >
                                   <Clock className="size-2.5" strokeWidth={2.2} aria-hidden />
-                                  <span>{row.daysLeft}d</span>
+                                  <span className="text-slate-700">{row.daysLeft}d</span>
                                   <span className="text-slate-400">/</span>
-                                  <span>{row.estTotal}d left</span>
+                                  <span className="text-slate-700">{row.estTotal}d left</span>
                                 </span>
                                 <CircleProgress percent={donePct} color={tone.stroke} />
                               </>
