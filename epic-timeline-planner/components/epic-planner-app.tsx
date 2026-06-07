@@ -5893,6 +5893,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           onRemoveYearFromRoadmap={handleRemoveYearFromRoadmap}
           onGetRoadmapCounts={handleGetRoadmapCounts}
           onDeleteRoadmap={handleDeleteRoadmap}
+          onSelectLaggards={handleSelectLaggards}
         />
         <div
           className={cn(

@@ -3,14 +3,12 @@
 import { Fragment, useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
   Activity,
-  CalendarOff,
   AlertOctagon,
   AlertTriangle,
   Bell,
   BookOpen,
   Check,
   CheckCheck,
-  CheckCircle2,
   ChevronDown,
   CircleDashed,
   CircleDotDashed,
@@ -21,8 +19,6 @@ import {
   HeartPulse,
   HelpCircle,
   Info,
-  ListTodo,
-  PlayCircle,
   Ruler,
   ShieldCheck,
   Sigma,
@@ -34,8 +30,10 @@ import {
 import { UserChip } from "@/components/auth/user-chip";
 import { HealthExplainerPopover } from "@/components/dashboard/health-explainer-popover";
 import { RoadmapSelector } from "@/components/timeline/roadmap-selector";
+import { PortfolioBurndownChart } from "@/components/dashboard/charts/portfolio-burndown-chart";
 import { computeProgress, type HealthStatus } from "@/lib/progress";
 import { computeEpicHealthVerdict } from "@/lib/epic-health";
+import { now as clockNow } from "@/lib/clock";
 import { monthTeamLabelForId } from "@/lib/month-team-board";
 import { globalSprintFromMonthLane, sprintEndDate, sprintStartDate } from "@/lib/year-sprint";
 import { TeamAvatar } from "@/components/ui/team-avatar";
@@ -126,6 +124,7 @@ export function RoadmapHealthHero({
   statusFilter,
   onStatusFilterChange,
   onOpenEpicEstimatePanel,
+  onSelectLaggards,
 }: {
   initiatives: readonly InitiativeItem[];
   roadmaps: RoadmapItem[];
@@ -170,6 +169,11 @@ export function RoadmapHealthHero({
   onOpenEpicEstimatePanel?: (
     tab: "estimated" | "partiallyEstimated" | "unestimated" | "epicsNoDesc" | "storiesNoDesc",
   ) => void;
+  /** Cross-mode laggard filter emit — the new Portfolio Burndown card
+   *  (which replaced the Work Progress donut here) fires this when the
+   *  planner picks a contributor row or "Highlight on Roadmap". Inert
+   *  when omitted; the chart's popover still works as a read-only list. */
+  onSelectLaggards?: (epicIds: string[], label: string) => void;
 }) {
   const stats = useMemo(() => computeRoadmapStats(initiatives, selectedYear, progressBasis), [
     initiatives,
@@ -386,60 +390,25 @@ export function RoadmapHealthHero({
             onRowClick={(teamId, label) => setDrilldownTeam({ teamId, label })}
             panelClassName="bg-emerald-50/60 ring-emerald-100"
           />
-          <DonutCard
-            panelClassName="bg-sky-50/60 ring-sky-100"
-            title={
-              // Title separator switched from "(...)" to "·" so the
-              // new basis labels — which themselves contain parens
-              // like "Epic Est (d)" — don't render with nested
-              // parentheses ("Work Progress · Days (Epic Est (d))").
-              progressBasis === "stories"
-                ? `Work Progress · Stories · ${basisLabel}`
-                : `Work Progress · Days · ${basisLabel}`
-            }
-            titleIcon={<Activity className="size-3.5 text-blue-500" strokeWidth={2.1} aria-hidden />}
-            centerCount={
-              progressBasis === "stories"
-                ? stats.storiesCount
-                : stats.workProgress.backlogEpic +
-                  stats.workProgress.todo +
-                  stats.workProgress.inProgress +
-                  stats.workProgress.review +
-                  stats.workProgress.done
-            }
-            centerLabel={progressBasis === "stories" ? "Stories" : "Days"}
-            slices={(() => {
-              const suffix = progressBasis === "stories" ? "stories" : "days";
-              // Workflow order: Backlog epic → To do → In progress →
-              // Review / testing → Done. Reads left-to-right as the
-              // natural lifecycle, from "not placed yet" to "shipped".
-              return [
-                { label: "Backlog epic", value: stats.workProgress.backlogEpic, color: "#a3a3a3", icon: <CalendarOff className="size-3.5" strokeWidth={2} />, valueSuffix: suffix },
-                { label: "To do", value: stats.workProgress.todo, color: "#94a3b8", icon: <ListTodo className="size-3.5" strokeWidth={2} />, valueSuffix: suffix },
-                { label: "In progress", value: stats.workProgress.inProgress, color: "#3b82f6", icon: <PlayCircle className="size-3.5" strokeWidth={2} />, valueSuffix: suffix },
-                { label: "Review / testing", value: stats.workProgress.review, color: "#8b5cf6", icon: <CheckCheck className="size-3.5" strokeWidth={2} />, valueSuffix: suffix },
-                { label: "Done", value: stats.workProgress.done, color: "#10b981", icon: <CheckCircle2 className="size-3.5" strokeWidth={2} />, valueSuffix: suffix },
-              ];
-            })()}
-            onSliceClick={
-              onStatusFilterChange
-                ? (label) => {
-                    const value = STATUS_LABEL_TO_VALUE[label];
-                    if (!value) return;
-                    const next = new Set(statusFilter ?? []);
-                    if (next.has(value)) next.delete(value);
-                    else next.add(value);
-                    onStatusFilterChange(next);
-                  }
-                : undefined
-            }
-            activeLabels={
-              statusFilter && statusFilter.size > 0
-                ? new Set(
-                    Array.from(statusFilter).map((v) => STATUS_VALUE_TO_LABEL[v]).filter(Boolean) as string[],
-                  )
-                : undefined
-            }
+          {/* Portfolio Burndown — replaces the legacy "Work Progress"
+           *  status donut that lived here. Same slot, same sky-tinted
+           *  panel chrome, but now answers a trajectory question
+           *  ("Will we hit this quarter? When?") instead of a snapshot
+           *  one. The two retained donuts (Health Distribution, Epic
+           *  Estimates) plus the Team Progress card cover the status /
+           *  verdict / coverage angles the old donut was loosely
+           *  speaking to.
+           *
+           *  Scope is deliberately portfolio-wide and pinned to the
+           *  current calendar quarter — no team filter, no quarter
+           *  picker. Per-team / per-quarter burnups live on the
+           *  customizable Dashboard as configurable chart cards. */}
+          <PortfolioBurndownHeroCard
+            initiatives={initiatives}
+            year={selectedYear}
+            quarter={Math.ceil((clockNow().getMonth() + 1) / 3)}
+            progressBasis={progressBasis}
+            onSelectLaggards={onSelectLaggards}
           />
           <DonutCard
             panelClassName="bg-orange-50/60 ring-orange-100"
@@ -1005,6 +974,67 @@ function TeamProgressCard({
             );
           })
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Hero card that wraps the Portfolio Burndown chart with the same 520px
+ * panel chrome as the donut cards next to it. Sits in the slot the
+ * legacy "Work Progress" status donut used to occupy — same width, same
+ * sky-tint background — so the four-card row stays visually aligned.
+ *
+ * The chart itself owns its KPI strip, ideal/actual/forecast lines, and
+ * contributor popover. We just give it a fixed-height container, a title
+ * banner, and a small basis-label so the planner can see what unit the
+ * chart is in (Stories / Days / Epic Est) at a glance.
+ */
+function PortfolioBurndownHeroCard({
+  initiatives,
+  year,
+  quarter,
+  progressBasis,
+  onSelectLaggards,
+}: {
+  initiatives: readonly InitiativeItem[];
+  year: number;
+  quarter: number;
+  progressBasis: "days" | "stories" | "epicEst";
+  onSelectLaggards?: (epicIds: string[], label: string) => void;
+}) {
+  const basisLabel =
+    progressBasis === "epicEst"
+      ? "Epic Est (d)"
+      : progressBasis === "days"
+        ? "Σ | Child Est (d)"
+        : "Stories Completed (%)";
+  return (
+    <div
+      className={cn(
+        "flex w-[520px] min-w-[520px] max-w-[520px] shrink-0 flex-col gap-2 rounded-2xl px-7 py-3 ring-1 ring-inset transition-shadow",
+        "bg-sky-50/60 ring-sky-100",
+      )}
+    >
+      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500">
+        <Activity className="size-3.5 shrink-0 text-blue-500" strokeWidth={2.1} aria-hidden />
+        Portfolio Burndown · Q{quarter} {year} · {basisLabel}
+      </span>
+      {/* Fixed height keeps the card the same vertical footprint as the
+       *  three donut cards in the row, so the hero band doesn't get a
+       *  jagged silhouette when the chart fills its slot. */}
+      <div className="relative h-[200px] w-full">
+        {/* Cast to mutable type — chart accepts read-only too, but its
+         *  prop signature is non-readonly to match the rest of the
+         *  dashboard chart family. Safe at the boundary: chart never
+         *  mutates. */}
+        <PortfolioBurndownChart
+          initiatives={initiatives as InitiativeItem[]}
+          year={year}
+          quarter={quarter}
+          progressBasis={progressBasis}
+          onSelectLaggards={onSelectLaggards}
+        />
       </div>
     </div>
   );
