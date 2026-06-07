@@ -760,12 +760,14 @@ export function PortfolioBurndownChart({
                   // Vertical caption running parallel to the y-axis
                   // numbers, like a classic burndown chart. In tight-
                   // chrome layouts the font shrinks to 9px and the
-                  // label sits at the left edge of a 60px-wide axis,
-                  // leaving ~36px of breathing room for 3-digit ticks.
+                  // label sits ~12px in from the YAxis area's left
+                  // edge so the rotated text doesn't get clipped by
+                  // the card padding. Leaves ~36px between the
+                  // caption and the 3-digit tick numbers on the right.
                   value: basisYAxisLabel(progressBasis),
                   angle: -90,
                   position: "insideLeft",
-                  offset: tightChartChrome ? -2 : 0,
+                  offset: tightChartChrome ? 12 : 0,
                   style: {
                     fontSize: tightChartChrome ? 9 : 11,
                     fill: "#475569",
