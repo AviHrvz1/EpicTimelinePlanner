@@ -866,7 +866,12 @@ function TeamProgressCard({
   return (
     <div
       className={cn(
-        "flex w-[520px] min-w-[520px] max-w-[520px] shrink-0 flex-col gap-2 rounded-2xl px-7 py-3 ring-1 ring-inset transition-shadow",
+        // Asymmetric padding: tighter on the left so the avatar +
+        // team name start closer to the card edge (matches the user-
+        // requested layout); right side keeps the wider gutter so
+        // the scrollbar + circular-progress indicator have room to
+        // breathe without crashing into the rim.
+        "flex w-[520px] min-w-[520px] max-w-[520px] shrink-0 flex-col gap-2 rounded-2xl pl-3 pr-7 py-3 ring-1 ring-inset transition-shadow",
         panelClassName ?? "bg-white ring-slate-200/70",
       )}
     >
