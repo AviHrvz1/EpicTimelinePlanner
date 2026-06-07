@@ -4764,7 +4764,38 @@ export function MonthAnalytics({
                           isAnimationActive={false}
                         />
                       );
-                    })() : monthBurndownEpics.map((epic, idx) =>
+                    })() : allBurndownKeysSelected ? (
+                      // "All" view → render ONE aggregate line (sum of
+                      // all epics' remaining work) plus the aggregate
+                      // ideal, instead of N per-epic colored lines.
+                      // Mirrors the Portfolio Burndown hero card so the
+                      // two surfaces speak the same visual language.
+                      <>
+                        <Line
+                          key="__aggregate__actual"
+                          type="monotone"
+                          dataKey="actual"
+                          stroke="#2563eb"
+                          strokeWidth={2.5}
+                          dot={false}
+                          name="Aggregate remaining"
+                          connectNulls={false}
+                          isAnimationActive={false}
+                        />
+                        <Line
+                          key="__aggregate__ideal"
+                          type="monotone"
+                          dataKey="ideal"
+                          stroke="#f97316"
+                          strokeDasharray="5 4"
+                          strokeWidth={1.5}
+                          dot={false}
+                          name="Aggregate ideal"
+                          connectNulls={false}
+                          isAnimationActive={false}
+                        />
+                      </>
+                    ) : monthBurndownEpics.map((epic, idx) =>
                       burndownVisibleKeys.includes(epic.id) ? (
                       <Line
                         key={epic.id}
@@ -6204,24 +6235,26 @@ export function MonthAnalytics({
                         ) : null;
                       })()}
                       {/* Total-scope reference + aggregate ideal/completed —
-                       *  only shown when narrowed below "All" since each epic
-                       *  carries its own due date, so a single shared scope/
-                       *  ideal is meaningless in the All view (mirrors the
-                       *  burndown chart's All-view behavior). */}
-                      {burnUpSingleEpicVisible ? (
+                       *  shown either when narrowed to a single epic OR when
+                       *  ALL epics are visible (the "All" view). The
+                       *  aggregate completed line is what most planners
+                       *  want to read on the All view, mirroring the
+                       *  Portfolio Burndown hero card.
+                       *  In the in-between case (a hand-picked subset of
+                       *  epics), the per-epic colored lines below still
+                       *  render so users can compare specific epics. */}
+                      {burnUpSingleEpicVisible || allBurnUpKeysSelected ? (
                         <>
                           <Line type="monotone" dataKey="scope" name="Total scope" stroke="#94a3b8" strokeWidth={1.5} dot={false} isAnimationActive={false} />
                           <Line type="monotone" dataKey="ideal" name={burnUpDueDateLabel ? `Ideal (due ${burnUpDueDateLabel})` : "Ideal"} stroke="#f97316" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} isAnimationActive={false} />
                           <Line type="monotone" dataKey="completed" name="Completed" stroke="#0ea5e9" strokeWidth={2.5} dot={false} connectNulls={false} isAnimationActive={false} />
                         </>
                       ) : null}
-                      {/* Per-epic completed lines — one per visible epic,
-                       *  colored with the same palette as the legend marker.
-                       *  Always rendered when in scope (in All view they
-                       *  carry the chart on their own, since the Y-axis
-                       *  auto-scales to their max without the scope line
-                       *  forcing it). */}
-                      {burnUpEpicRows.map((row, rowIdx) =>
+                      {/* Per-epic completed lines — rendered only when a
+                       *  HAND-PICKED SUBSET of epics is visible (not single,
+                       *  not all). In single + all modes the aggregate
+                       *  lines above carry the chart on their own. */}
+                      {!burnUpSingleEpicVisible && !allBurnUpKeysSelected ? burnUpEpicRows.map((row, rowIdx) =>
                         burnUpVisibleKeys.includes(row.id) ? (
                           <Line
                             key={row.id}
@@ -6235,7 +6268,7 @@ export function MonthAnalytics({
                             isAnimationActive={false}
                           />
                         ) : null,
-                      )}
+                      ) : null}
                       {/* Δ annotation at today — only shown when the
                        *  burnup verdict is Watch or At Risk. Mirrors the
                        *  "Δ = +N" callout on slides 3–7 of the Health
