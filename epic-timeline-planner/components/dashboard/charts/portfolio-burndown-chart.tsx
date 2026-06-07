@@ -20,7 +20,7 @@
  * axis, ideal slope, pace delta, and ETA all recompute.
  */
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CartesianGrid,
   Legend,
@@ -40,6 +40,8 @@ import type {
   StoryDailySnapshotItem,
   UserStoryItem,
 } from "@/lib/types";
+import { computeEpicHealthVerdict } from "@/lib/epic-health";
+import { cn } from "@/lib/utils";
 
 type ProgressBasis = "days" | "stories" | "epicEst";
 
@@ -176,20 +178,27 @@ export function PortfolioBurndownChart({
   const totalDays = Math.max(1, Math.round((endMs - startMs) / 86400000) + 1);
 
   // Epics whose plan window touches the quarter at all. Team filter applied
-  // here so per-team dashboards burn only their slice.
-  const epicsInScope = useMemo(() => {
-    const out: EpicItem[] = [];
+  // here so per-team dashboards burn only their slice. Keep the parent
+  // initiative alongside so the contributor popover can show "<epic> ·
+  // <initiative>" without re-walking the tree.
+  type ScopeRow = { epic: EpicItem; initiative: InitiativeItem };
+  const epicsInScopeRows: ScopeRow[] = useMemo(() => {
+    const out: ScopeRow[] = [];
     for (const initiative of initiatives) {
       for (const epic of initiative.epics ?? []) {
         if (team && epic.team !== team) continue;
         if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
         if (epic.planStartMonth > endMonth) continue;
         if (epic.planEndMonth < startMonth) continue;
-        out.push(epic);
+        out.push({ epic, initiative });
       }
     }
     return out;
   }, [initiatives, team, startMonth, endMonth]);
+  const epicsInScope: EpicItem[] = useMemo(
+    () => epicsInScopeRows.map((r) => r.epic),
+    [epicsInScopeRows],
+  );
 
   // Total scope at quarter start — the burndown's ceiling.
   const startTotal = useMemo(() => {
@@ -302,6 +311,56 @@ export function PortfolioBurndownChart({
   );
   const totalEpicCount = epicsInScope.length;
 
+  // Per-epic contribution to the pace gap. Each row carries the epic's own
+  // delta vs its own plan window (positive = behind, negative = ahead) —
+  // computed via the shared verdict helper so this surface speaks the same
+  // basis-aware language as the dashboard donut and Gantt bar badges.
+  //
+  // We rank by absolute delta and split into a behind list and an ahead
+  // list. The popover shows whichever side matches the chart's current
+  // overall paceState, so clicking "4d behind" surfaces the laggards and
+  // clicking "3d ahead" surfaces the outperformers — symmetric semantics.
+  type ContributorRow = {
+    epicId: string;
+    epicTitle: string;
+    initiativeTitle: string;
+    /** Days/stories above the per-epic ideal at "now". Positive = behind. */
+    delta: number;
+  };
+  const epicContributors: ContributorRow[] = useMemo(() => {
+    const out: ContributorRow[] = [];
+    for (const { epic, initiative } of epicsInScopeRows) {
+      const v = computeEpicHealthVerdict(epic, year, progressBasis);
+      if (v == null) continue;
+      const delta = v.result.deltaDays;
+      if (!Number.isFinite(delta)) continue;
+      out.push({
+        epicId: epic.id,
+        epicTitle: epic.title,
+        initiativeTitle: initiative.title,
+        delta,
+      });
+    }
+    return out;
+  }, [epicsInScopeRows, year, progressBasis]);
+
+  const topBehind = useMemo(
+    () =>
+      epicContributors
+        .filter((c) => c.delta > 0.5)
+        .sort((a, b) => b.delta - a.delta)
+        .slice(0, 8),
+    [epicContributors],
+  );
+  const topAhead = useMemo(
+    () =>
+      epicContributors
+        .filter((c) => c.delta < -0.5)
+        .sort((a, b) => a.delta - b.delta)
+        .slice(0, 8),
+    [epicContributors],
+  );
+
   const etaDate = forecast?.etaDate ?? null;
   const etaWithinPeriod = etaDate != null && etaDate.getTime() <= endMs;
 
@@ -336,30 +395,86 @@ export function PortfolioBurndownChart({
   }
 
   const unit = basisUnitLabel(progressBasis);
+  const unitSuffix = unit === "stories" ? "" : "d";
+  const decimals = progressBasis === "stories" ? 0 : 1;
+
+  // The pace chip turns into a button when there are contributors to drill
+  // into. Click opens a popover with the top contributors — laggards if
+  // we're behind, outperformers if we're ahead. Outside-click + Esc close.
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const paceButtonRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (!popoverOpen) return;
+    function onPointer(e: MouseEvent) {
+      const target = e.target as Node;
+      if (popoverRef.current?.contains(target)) return;
+      if (paceButtonRef.current?.contains(target)) return;
+      setPopoverOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setPopoverOpen(false);
+    }
+    window.addEventListener("mousedown", onPointer);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onPointer);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [popoverOpen]);
+
+  const contributorList = paceState === "behind" ? topBehind : paceState === "ahead" ? topAhead : [];
+  const paceClickable =
+    (paceState === "behind" && topBehind.length > 0) ||
+    (paceState === "ahead" && topAhead.length > 0);
 
   return (
     <div className="relative h-full w-full">
       {/* KPI strip — three numbers in one floating chip, top-left.
        *  Mirrors the HealthBadge placement used in the per-epic burndown so
        *  the visual language stays consistent across charts. */}
-      <div className="pointer-events-none absolute left-3 top-1 z-10 flex items-center gap-2 rounded-md bg-white/85 px-2 py-1 text-[11px] font-medium text-slate-700 shadow-sm ring-1 ring-slate-200/80 backdrop-blur-sm">
+      <div className="absolute left-3 top-1 z-10 flex items-center gap-2 rounded-md bg-white/85 px-2 py-1 text-[11px] font-medium text-slate-700 shadow-sm ring-1 ring-slate-200/80 backdrop-blur-sm">
         <span>
           Done <span className="tabular-nums font-semibold text-slate-900">{doneEpicCount}/{totalEpicCount}</span>{" "}
           <span className="text-slate-500">epics</span>
         </span>
         <span className="text-slate-300">·</span>
         {paceState === "behind" && paceMagnitude != null ? (
-          <span className="inline-flex items-center gap-1 text-amber-700">
+          <button
+            ref={paceButtonRef}
+            type="button"
+            disabled={!paceClickable}
+            onClick={() => setPopoverOpen((v) => !v)}
+            className={cn(
+              "inline-flex items-center gap-1 rounded text-amber-700 transition-colors",
+              paceClickable
+                ? "cursor-pointer hover:bg-amber-50 hover:text-amber-800 px-1 -mx-1"
+                : "cursor-default",
+            )}
+            title={paceClickable ? `Show top ${topBehind.length} epic${topBehind.length === 1 ? "" : "s"} behind plan` : undefined}
+          >
             <span aria-hidden>⚠</span>
-            <span className="tabular-nums font-semibold">{paceMagnitude.toFixed(progressBasis === "stories" ? 0 : 1)}{unit === "stories" ? "" : "d"}</span>
+            <span className="tabular-nums font-semibold">{paceMagnitude.toFixed(decimals)}{unitSuffix}</span>
             <span className="text-amber-600">behind</span>
-          </span>
+          </button>
         ) : paceState === "ahead" && paceMagnitude != null ? (
-          <span className="inline-flex items-center gap-1 text-emerald-700">
+          <button
+            ref={paceButtonRef}
+            type="button"
+            disabled={!paceClickable}
+            onClick={() => setPopoverOpen((v) => !v)}
+            className={cn(
+              "inline-flex items-center gap-1 rounded text-emerald-700 transition-colors",
+              paceClickable
+                ? "cursor-pointer hover:bg-emerald-50 hover:text-emerald-800 px-1 -mx-1"
+                : "cursor-default",
+            )}
+            title={paceClickable ? `Show top ${topAhead.length} epic${topAhead.length === 1 ? "" : "s"} ahead of plan` : undefined}
+          >
             <span aria-hidden>✓</span>
-            <span className="tabular-nums font-semibold">{paceMagnitude.toFixed(progressBasis === "stories" ? 0 : 1)}{unit === "stories" ? "" : "d"}</span>
+            <span className="tabular-nums font-semibold">{paceMagnitude.toFixed(decimals)}{unitSuffix}</span>
             <span className="text-emerald-600">ahead</span>
-          </span>
+          </button>
         ) : paceState === "onPace" ? (
           <span className="inline-flex items-center gap-1 text-emerald-700">
             <span aria-hidden>✓</span>
@@ -374,6 +489,68 @@ export function PortfolioBurndownChart({
           {etaDate != null ? (etaWithinPeriod ? " ✓" : " ⚠") : ""}
         </span>
       </div>
+
+      {/* Contributor popover — opens under the KPI strip when the pace chip
+       *  is clicked. Lists top laggards (or outperformers) ranked by their
+       *  per-epic delta against their own plan window. Closes on outside
+       *  click or Esc. Phase 2(b) will wire row clicks to a cross-mode
+       *  filter; here we just surface the names so the planner knows who
+       *  to chase. */}
+      {popoverOpen && contributorList.length > 0 ? (
+        <div
+          ref={popoverRef}
+          className="absolute left-3 top-9 z-20 w-[min(360px,calc(100%-1.5rem))] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl ring-1 ring-slate-900/5"
+          role="dialog"
+          aria-label={paceState === "behind" ? "Epics behind plan" : "Epics ahead of plan"}
+        >
+          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+              {paceState === "behind"
+                ? `Top ${contributorList.length} behind plan`
+                : `Top ${contributorList.length} ahead of plan`}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPopoverOpen(false)}
+              className="rounded p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+              aria-label="Close"
+            >
+              <span aria-hidden>×</span>
+            </button>
+          </div>
+          <ul className="max-h-[260px] overflow-y-auto py-1">
+            {contributorList.map((c) => {
+              const abs = Math.abs(c.delta);
+              return (
+                <li
+                  key={c.epicId}
+                  className="flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50"
+                >
+                  <span
+                    className={cn(
+                      "inline-flex h-1.5 w-1.5 shrink-0 rounded-full",
+                      paceState === "behind" ? "bg-amber-500" : "bg-emerald-500",
+                    )}
+                    aria-hidden
+                  />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate font-medium text-slate-800">{c.epicTitle}</span>
+                    <span className="truncate text-[10.5px] text-slate-500">{c.initiativeTitle}</span>
+                  </span>
+                  <span
+                    className={cn(
+                      "shrink-0 tabular-nums font-semibold",
+                      paceState === "behind" ? "text-amber-700" : "text-emerald-700",
+                    )}
+                  >
+                    {abs.toFixed(decimals)}{unitSuffix}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={rows} margin={{ top: 36, right: 56, left: 16, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
