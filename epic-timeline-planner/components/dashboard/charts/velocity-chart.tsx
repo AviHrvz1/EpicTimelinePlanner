@@ -77,7 +77,8 @@ function buildVelocity(
     let committed = 0;
     let completed = 0;
     for (const initiative of initiatives) {
-      if (initiative.status !== "scheduled") continue;
+      // No initiative-status filter — consistent with the rest of the
+      // chart-aggregation paths in the app.
       if (initiative.startMonth == null || initiative.endMonth == null) continue;
       if (initiative.endMonth < month || initiative.startMonth > month) continue;
       for (const epic of initiative.epics ?? []) {

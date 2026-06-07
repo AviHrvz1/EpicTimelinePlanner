@@ -19,7 +19,9 @@ function collectQuarterStories(initiatives: InitiativeItem[], year: number, quar
   const months = QUARTER_MONTHS[quarter] ?? [];
   const stories = [];
   for (const initiative of initiatives) {
-    if (initiative.status !== "scheduled") continue;
+    // Drop initiative-status filter so chart aggregations across the
+    // app count the same Q work population. See insights burndown
+    // alignment for rationale.
     if (initiative.startMonth == null || initiative.endMonth == null) continue;
     const qStart = months[0] ?? 1;
     const qEnd = months[months.length - 1] ?? 12;

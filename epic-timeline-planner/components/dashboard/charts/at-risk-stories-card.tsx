@@ -45,7 +45,9 @@ export function AtRiskStoriesCard({ initiatives, year, sprint, team, teams }: Pr
 
   const rows: RiskRow[] = [];
   for (const initiative of initiatives) {
-    if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
+    // No initiative-status filter — consistent with the rest of the
+    // chart-aggregation paths in the app.
+    if (initiative.startMonth == null || initiative.endMonth == null) continue;
     if (initiative.endMonth < month || initiative.startMonth > month) continue;
     for (const epic of initiative.epics ?? []) {
       if (teamFilterSet && !teamFilterSet.has(epic.team ?? "")) continue;

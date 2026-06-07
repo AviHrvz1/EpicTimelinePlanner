@@ -63,7 +63,8 @@ export function TeamFocusMixCard({ initiatives, year, quarter, sprint, scope, te
   const slices: Slice[] = [];
   const byInit = new Map<string, Slice>();
   initiatives.forEach((initiative, idx) => {
-    if (initiative.status !== "scheduled") return;
+    // No initiative-status filter — keep the population consistent
+    // with the other chart aggregations across the app.
     if (initiative.startMonth == null || initiative.endMonth == null) return;
     // Initiative must overlap the picked window.
     if (initiative.endMonth < monthRange[0] || initiative.startMonth > monthRange[1]) return;

@@ -66,7 +66,9 @@ export function MiniGanttCard({ initiatives, year, quarter, team, teams }: Props
   type Row = { id: string; title: string; color: string; initiativeTitle: string; team: string | null; leftPct: number; widthPct: number; progressPct: number };
   const rows: Row[] = [];
   for (const initiative of initiatives) {
-    if (initiative.status !== "scheduled") continue;
+    // Initiative-status filter dropped for consistency with all other
+    // chart aggregations — sprints landing in the quarter count as
+    // quarter work regardless of initiative status.
     if (initiative.startMonth == null || initiative.endMonth == null) continue;
     if (initiative.endMonth < qStartMonth || initiative.startMonth > qEndMonth) continue;
     for (const epic of initiative.epics ?? []) {

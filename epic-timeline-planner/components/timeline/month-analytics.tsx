@@ -1286,7 +1286,11 @@ function collectPeriodStories(
   const maxMonth = Math.max(...months);
   const monthsSet = new Set(months);
   for (const initiative of initiatives) {
-    if (initiative.status !== "scheduled") continue;
+    // Note: no `initiative.status === "scheduled"` filter — if a team
+    // is sprinting on an epic, it counts as period work regardless of
+    // the parent initiative's status. Keeps this collector aligned
+    // with the burndown's filter so CFD / drilldown / capacity all
+    // count the same population.
     if (filterInitiativeId && initiative.id !== filterInitiativeId) continue;
     for (const epic of initiative.epics ?? []) {
       if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(epic.team ?? "")) continue;
@@ -1316,7 +1320,11 @@ function collectPeriodEpics(
   const maxMonth = Math.max(...months);
   const monthsSet = new Set(months);
   for (const initiative of initiatives) {
-    if (initiative.status !== "scheduled") continue;
+    // Note: no `initiative.status === "scheduled"` filter — if a team
+    // is sprinting on an epic, it counts as period work regardless of
+    // the parent initiative's status. Keeps this collector aligned
+    // with the burndown's filter so CFD / drilldown / capacity all
+    // count the same population.
     if (filterInitiativeId && initiative.id !== filterInitiativeId) continue;
     for (const epic of initiative.epics ?? []) {
       if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(epic.team ?? "")) continue;
@@ -2075,7 +2083,11 @@ export function MonthAnalytics({
       const minMonth = Math.min(...scopeMonths);
       const maxMonth = Math.max(...scopeMonths);
       for (const initiative of initiatives) {
-        if (initiative.status !== "scheduled" || initiative.startMonth == null || initiative.endMonth == null) continue;
+        // No initiative-status filter — see collectPeriodEpics for
+        // rationale. Still skip initiatives with no plan dates since
+        // the workload aggregation uses them as fallback for epics
+        // with missing dates.
+        if (initiative.startMonth == null || initiative.endMonth == null) continue;
         for (const epic of initiative.epics ?? []) {
           const teamId = epic.team ?? null;
           if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(teamId ?? "")) continue;
