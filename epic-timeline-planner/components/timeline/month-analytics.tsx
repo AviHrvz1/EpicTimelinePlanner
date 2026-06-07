@@ -121,16 +121,18 @@ function CircleProgress({
   color: string;
 }) {
   // Slightly elliptical so 3-digit "100%" fits without clipping.
-  // See sprint-analytics CircleProgress for the math derivation.
-  const rx = 14;
-  const ry = 11;
+  // See sprint-analytics CircleProgress for the math derivation —
+  // the vertical-then-rotated trick is what makes the fill start
+  // at the visible top.
+  const rx = 11;
+  const ry = 14;
   const h = ((rx - ry) ** 2) / ((rx + ry) ** 2);
   const circumference = Math.PI * (rx + ry) * (1 + (3 * h) / (10 + Math.sqrt(4 - 3 * h)));
   const clamped = Math.max(0, Math.min(100, percent));
   const dashOffset = circumference * (1 - clamped / 100);
   return (
     <svg width={34} height={28} viewBox="0 0 34 28" aria-hidden>
-      <ellipse cx={17} cy={14} rx={rx} ry={ry} fill="none" stroke="#e2e8f0" strokeWidth={2.4} />
+      <ellipse cx={17} cy={14} rx={rx} ry={ry} fill="none" stroke="#e2e8f0" strokeWidth={2.4} transform="rotate(-90 17 14)" />
       <ellipse
         cx={17}
         cy={14}

@@ -86,19 +86,24 @@ function CircleProgress({
   color: string;
 }) {
   // Slightly elliptical so 3-digit "100%" fits without clipping.
-  // Height stays the same as the original 28px circle; width grows
-  // to 34px and the ring is drawn as an ellipse (rx > ry). The arc
-  // math uses the Ramanujan approximation since the ellipse
-  // circumference doesn't have a closed-form expression.
-  const rx = 14;
-  const ry = 11;
+  // The ellipse is DEFINED vertically (rx 11, ry 14) and rotated
+  // -90° — so the displayed shape ends up wide (visible 14 × 11)
+  // AND the stroke's natural start point (right of the unrotated
+  // ellipse) lands at the TOP of the rotated shape. If we defined
+  // it horizontal and rotated, the rotation would swap axes back
+  // to vertical and the fill would look misplaced.
+  //
+  // Arc length uses the Ramanujan ellipse-circumference
+  // approximation since closed-form doesn't exist.
+  const rx = 11;
+  const ry = 14;
   const h = ((rx - ry) ** 2) / ((rx + ry) ** 2);
   const circumference = Math.PI * (rx + ry) * (1 + (3 * h) / (10 + Math.sqrt(4 - 3 * h)));
   const clamped = Math.max(0, Math.min(100, percent));
   const dashOffset = circumference * (1 - clamped / 100);
   return (
     <svg width={34} height={28} viewBox="0 0 34 28" aria-hidden>
-      <ellipse cx={17} cy={14} rx={rx} ry={ry} fill="none" stroke="#e2e8f0" strokeWidth={2.4} />
+      <ellipse cx={17} cy={14} rx={rx} ry={ry} fill="none" stroke="#e2e8f0" strokeWidth={2.4} transform="rotate(-90 17 14)" />
       <ellipse
         cx={17}
         cy={14}
