@@ -7,7 +7,6 @@ import {
   AlertTriangle,
   Bell,
   BookOpen,
-  Calendar,
   Check,
   CheckCheck,
   ChevronDown,
@@ -1035,15 +1034,14 @@ function TeamProgressCard({
                           />
                         </div>
                       </div>
-                      {/* Calendar chip — total estimate, always neutral. */}
-                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-slate-600 ring-1 ring-slate-200/70">
-                        <Calendar className="size-2.5" strokeWidth={2.2} aria-hidden />
-                        {row.estTotal}{unitSuffix}
-                      </span>
-                      {/* Clock chip — days left, takes the row's tone. */}
+                      {/* Single combined chip — days-left / total in one
+                       *  pill ("77d/330d left") instead of two side-by-
+                       *  side chips. Reads as a fraction of the team's
+                       *  total work, which lines up with the percentage
+                       *  in the title row. Tinted by health tone. */}
                       <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1", tone.chip)}>
                         <Clock className="size-2.5" strokeWidth={2.2} aria-hidden />
-                        {row.daysLeft}{unitSuffix} left
+                        {row.daysLeft}{unitSuffix}/{row.estTotal}{unitSuffix} left
                       </span>
                       {/* Circular percent — same number as the inline
                        *  label, but visual; mirrors the donut-card
