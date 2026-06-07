@@ -71,8 +71,12 @@ type Props = {
    *   - "side": the KPIs become rows in a right-column list, stacked
    *     above the legend rows. Used by the Hero card so the dense
    *     130px slot doesn't waste pixels on a top-left chrome that
-   *     overlaps the chart's first data points. */
-  kpiPlacement?: "floating" | "side";
+   *     overlaps the chart's first data points.
+   *   - "hidden": KPIs don't render anywhere on the chart — the caller
+   *     either shows them elsewhere or omits them. Chart reclaims 100%
+   *     of the card width for the plot area, no side column, no
+   *     overlay. */
+  kpiPlacement?: "floating" | "side" | "hidden";
 };
 
 function startOfDay(d: Date): Date {
@@ -560,11 +564,14 @@ export function PortfolioBurndownChart({
   // The chart subtree itself — same JSX in both layouts. Extracted so the
   // floating / side wrappers don't have to duplicate it.
   // Recharts auto-hides its inline legend whenever the side column owns
-  // the legend rendering (kpiPlacement="side" implies hideLegend).
-  const inlineLegendHidden = hideLegend || kpiPlacement === "side";
-  // Floating layout uses a 36px top margin to clear the chip; side
-  // layout doesn't need that, so axes get more vertical room.
-  const chartTopMargin = kpiPlacement === "side" ? 8 : 36;
+  // the legend rendering (kpiPlacement="side" implies hideLegend), and
+  // whenever the chart is told to render no KPIs at all.
+  const inlineLegendHidden = hideLegend || kpiPlacement === "side" || kpiPlacement === "hidden";
+  // Floating layout uses a 36px top margin to clear the chip; side and
+  // hidden layouts don't need that, so axes get more vertical room.
+  const chartTopMargin = kpiPlacement === "floating" ? 36 : 4;
+  const hasSideColumn = kpiPlacement === "side";
+  const tightChartChrome = kpiPlacement !== "floating";
 
   return (
     <div className="relative h-full w-full">
@@ -705,30 +712,37 @@ export function PortfolioBurndownChart({
        *  takes the full width and the floating chip overlays it. In
        *  `side` placement, the chart takes the flex-1 left half and a
        *  KPI + legend column sits on the right. */}
-      <div className={cn("flex h-full w-full flex-row", kpiPlacement === "side" ? "gap-2" : "gap-3")}>
-        <div className={cn("relative h-full min-w-0", kpiPlacement === "side" ? "flex-1" : "w-full")}>
+      <div className={cn("flex h-full w-full flex-row", hasSideColumn ? "gap-2" : "gap-0")}>
+        <div className={cn("relative h-full min-w-0", hasSideColumn ? "flex-1" : "w-full")}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               data={rows}
               margin={{
                 top: chartTopMargin,
-                right: kpiPlacement === "side" ? 12 : 56,
-                // Side layout drops the rotated Y-axis label entirely,
-                // so the YAxis itself can be ~30px wide and the chart's
+                right: tightChartChrome ? 8 : 56,
+                // Tight layouts drop the rotated Y-axis label entirely,
+                // so the YAxis itself can be ~28px wide and the chart's
                 // left margin can shrink toward zero — giving the lines
                 // and grid noticeably more horizontal room.
-                left: kpiPlacement === "side" ? -10 : 16,
+                left: tightChartChrome ? -12 : 16,
                 bottom: 0,
               }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} ticks={xAxisTicks} />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: tightChartChrome ? 9 : 10 }}
+                interval={0}
+                ticks={xAxisTicks}
+                tickMargin={tightChartChrome ? 2 : 5}
+                height={tightChartChrome ? 18 : 30}
+              />
               <YAxis
-                tick={{ fontSize: 10 }}
-                width={kpiPlacement === "side" ? 30 : 48}
+                tick={{ fontSize: tightChartChrome ? 9 : 10 }}
+                width={tightChartChrome ? 28 : 48}
                 allowDecimals={progressBasis !== "stories"}
                 label={
-                  kpiPlacement === "side"
+                  tightChartChrome
                     ? undefined
                     : {
                         value: basisYAxisLabel(progressBasis),
@@ -801,8 +815,9 @@ export function PortfolioBurndownChart({
          *  rows (Done / pace / ETA); the chart-line legend (Actual /
          *  Forecast / Ideal pace) lives at the card's title strip in the
          *  hero, so we don't repeat it here. Narrower width (110px)
-         *  hands more horizontal pixels to the chart itself. */}
-        {kpiPlacement === "side" ? (
+         *  hands more horizontal pixels to the chart itself.
+         *  `hidden` placement skips the column entirely. */}
+        {hasSideColumn ? (
           <aside className="flex w-[110px] shrink-0 flex-col justify-center gap-1.5 text-[11px] text-slate-700">
             <div>
               <span className="text-slate-500">Done</span>{" "}

@@ -1012,7 +1012,10 @@ function PortfolioBurndownHeroCard({
   return (
     <div
       className={cn(
-        "flex w-[520px] min-w-[520px] max-w-[520px] shrink-0 flex-col gap-2 rounded-2xl px-7 py-3 ring-1 ring-inset transition-shadow",
+        // Tighter vertical padding (py-2) than the donut cards (py-3)
+        // so the chart's 150px slot doesn't push the card past the
+        // Team Progress card's footprint. The hero row stays aligned.
+        "flex w-[520px] min-w-[520px] max-w-[520px] shrink-0 flex-col gap-1.5 rounded-2xl px-7 py-2 ring-1 ring-inset transition-shadow",
         "bg-sky-50/60 ring-sky-100",
       )}
     >
@@ -1020,20 +1023,26 @@ function PortfolioBurndownHeroCard({
         <Activity className="size-3.5 shrink-0 text-blue-500" strokeWidth={2.1} aria-hidden />
         Portfolio Burndown · Q{quarter} {year} · {basisLabel}
       </span>
-      {/* Chart + KPI/legend column — `kpiPlacement="side"` tells the chart
-       *  to render its three KPIs (Done / pace / ETA) and its three
-       *  legend rows together as a vertical list on the right, matching
-       *  the donut cards' chart-plus-list rhythm. Height matches the
-       *  Team Progress card's `max-h-[130px]` rows area so the four
-       *  widgets in the hero band sit on a single baseline. */}
-      <div className="h-[130px] w-full">
+      {/* Chart-only mode (`kpiPlacement="hidden"`) — no side column, no
+       *  floating chip. The chart fills the full card width and the
+       *  full slot height; the KPI strip and contributor popover
+       *  affordance are deliberately dropped from the Hero so the
+       *  trajectory line gets every available pixel. (To see Done /
+       *  pace / ETA / contributor list, add the same chart to a
+       *  customizable Dashboard card where it renders with the
+       *  floating chip.)
+       *
+       *  Slot is now 150px (was 130) — the same total card footprint
+       *  as before since `py-2` replaces `py-3` and the chart's own
+       *  bottom-margin shrunk to 0. Net: visibly larger plot area. */}
+      <div className="h-[150px] w-full">
         <PortfolioBurndownChart
           initiatives={initiatives as InitiativeItem[]}
           year={year}
           quarter={quarter}
           progressBasis={progressBasis}
           onSelectLaggards={onSelectLaggards}
-          kpiPlacement="side"
+          kpiPlacement="hidden"
         />
       </div>
     </div>
