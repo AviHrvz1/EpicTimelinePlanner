@@ -2592,7 +2592,25 @@ export function MonthAnalytics({
   const monthBurndownChartData = useMemo(() => {
     if (monthBurndownResolved.length === 0) return monthBurndownResolved;
     const epicIds = monthBurndownEpics.map((e) => e.id);
-    return monthBurndownResolved.map((row) => {
+    // First pass: find the snapshot-aware starting total (the sum of
+    // per-epic columns on the first non-null row). This is the value
+    // both the aggregate Actual and Ideal lines should anchor to —
+    // without it, the Ideal still came from buildQuarterBurndownSeries
+    // which only counts currently-open stories, so it started way
+    // below the snapshot-based Actual.
+    let startTotal = 0;
+    for (const row of monthBurndownResolved) {
+      let sum = 0;
+      let any = false;
+      for (const id of epicIds) {
+        const v = row[id];
+        if (typeof v === "number") { sum += v; any = true; }
+      }
+      if (any) { startTotal = sum; break; }
+    }
+    const horizon = monthBurndownResolved.length;
+    const span = Math.max(1, horizon - 1);
+    return monthBurndownResolved.map((row, idx) => {
       let aggregate = 0;
       let anyValue = false;
       for (const id of epicIds) {
@@ -2602,11 +2620,23 @@ export function MonthAnalytics({
           anyValue = true;
         }
       }
-      // Only overwrite when we actually have per-epic values. Future
-      // days (everything past today) leave per-epic as null, so we
-      // preserve whatever `actual` already held (null, in that case).
-      if (!anyValue) return row;
-      return { ...row, actual: Number(aggregate.toFixed(1)) };
+      // Linear burndown anchored at startTotal across the visible
+      // window. Goes from startTotal at day 0 -> 0 at the last day,
+      // so the Ideal line lines up with the aggregate Actual at the
+      // visible start of the chart (matches the hero
+      // PortfolioBurndownChart behaviour).
+      const idealRaw = startTotal > 0
+        ? Math.max(0, startTotal * (1 - idx / span))
+        : 0;
+      const next: typeof row = {
+        ...row,
+        ideal: Number(idealRaw.toFixed(1)),
+      };
+      // Only overwrite `actual` when we actually have per-epic values.
+      // Future days (everything past today) leave per-epic as null, so
+      // we preserve whatever `actual` already held (null, in that case).
+      if (anyValue) next.actual = Number(aggregate.toFixed(1));
+      return next;
     }) as typeof monthBurndownResolved;
   }, [monthBurndownResolved, monthBurndownEpics]);
   const burndownFocusedEpicOption = useMemo(() => {
