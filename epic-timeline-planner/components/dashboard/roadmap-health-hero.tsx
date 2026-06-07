@@ -1024,8 +1024,10 @@ function PortfolioBurndownHeroCard({
        *  matches the donut cards' chart-plus-list layout so the four hero
        *  widgets read with the same rhythm. The custom legend reclaims the
        *  bottom strip Recharts would have used for its inline legend,
-       *  giving the small chart more vertical room to breathe. */}
-      <div className="flex h-[110px] w-full flex-row items-stretch gap-3">
+       *  giving the small chart more vertical room to breathe. Height
+       *  matches the Team Progress card's `max-h-[130px]` rows area so
+       *  the four widgets in the hero band sit on a single baseline. */}
+      <div className="flex h-[130px] w-full flex-row items-stretch gap-3">
         <div className="relative h-full min-w-0 flex-1">
           {/* Cast to mutable type — chart accepts read-only too, but its
            *  prop signature is non-readonly to match the rest of the
