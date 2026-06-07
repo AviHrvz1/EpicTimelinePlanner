@@ -107,6 +107,11 @@ const CHART_META: Record<ChartType, { label: string; icon: React.ReactNode; desc
     icon: <Donut className="size-4 text-fuchsia-500" />,
     description: "Donut of effort split across initiatives — spot too-many-irons-in-the-fire",
   },
+  "portfolio-burndown": {
+    label: "Portfolio Burndown",
+    icon: <TrendingDown className="size-4 text-blue-500" />,
+    description: "Quarter-wide remaining work vs ideal + forecast ETA — answers “will we hit this quarter?”",
+  },
 };
 
 const CHART_TYPE_VALUES: string[] = Object.keys(CHART_META);

@@ -1,0 +1,450 @@
+"use client";
+
+/**
+ * Portfolio Burndown — a quarter-scope burndown across every epic whose plan
+ * overlaps the focused quarter. The line trails today, the ideal line shows
+ * the linear drop expected to land at zero by the quarter end, and a forecast
+ * tail extrapolates "if we keep this pace, here's when we hit zero."
+ *
+ * The KPIs floating at top-left answer the planner's three Monday-morning
+ * questions in one glance:
+ *   1. Done X/Y epics    → how much of the quarter's scope already shipped?
+ *   2. ±Nd vs ideal      → are we ahead or behind today's burn target?
+ *   3. ETA <date>        → at current pace, when will we finish?
+ *
+ * Phase 1 (this file): static chart + KPIs, no click-to-filter yet. The next
+ * phase adds gap-region click → laggard list → Gantt highlight.
+ *
+ * Health calc coupling: the chart's unit follows `progressBasis` exactly the
+ * same way the Health Distribution donut does — flip the basis and the Y
+ * axis, ideal slope, pace delta, and ETA all recompute.
+ */
+
+import { useMemo } from "react";
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ReferenceDot,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+
+import type {
+  EpicItem,
+  InitiativeItem,
+  StoryDailySnapshotItem,
+  UserStoryItem,
+} from "@/lib/types";
+
+type ProgressBasis = "days" | "stories" | "epicEst";
+
+type Props = {
+  initiatives: InitiativeItem[];
+  year: number;
+  /** 1..4 — the quarter being burned down. */
+  quarter: number;
+  team?: string | null;
+  /** Follows the global Health calc setting. Controls unit + per-epic math. */
+  progressBasis?: ProgressBasis;
+};
+
+function startOfDay(d: Date): Date {
+  const out = new Date(d);
+  out.setHours(0, 0, 0, 0);
+  return out;
+}
+
+function shortLabel(d: Date): string {
+  return `${d.getDate()}/${d.getMonth() + 1}`;
+}
+
+function isStoryOpen(status: UserStoryItem["status"] | null | undefined): boolean {
+  // "open" = anything that still has work attached. Matches the per-epic
+  // burndown's convention so the curves agree when one epic is summed in.
+  return status === "todo" || status === "inProgress";
+}
+
+function latestSnapshotAtDay(story: UserStoryItem, day: Date): StoryDailySnapshotItem | null {
+  const snapshots = story.snapshots ?? [];
+  if (snapshots.length === 0) return null;
+  const cutoff = day.getTime();
+  for (let i = snapshots.length - 1; i >= 0; i -= 1) {
+    const snap = snapshots[i];
+    if (!snap) continue;
+    const ts = new Date(snap.snapshotDate).getTime();
+    if (Number.isFinite(ts) && ts <= cutoff) return snap;
+  }
+  return null;
+}
+
+function quarterMonthRange(quarter: number): { startMonth: number; endMonth: number } {
+  const q = Math.max(1, Math.min(4, Math.round(quarter)));
+  return { startMonth: (q - 1) * 3 + 1, endMonth: q * 3 };
+}
+
+function quarterBounds(year: number, quarter: number): { start: Date; end: Date } {
+  const { startMonth, endMonth } = quarterMonthRange(quarter);
+  const lastDay = new Date(year, endMonth, 0).getDate();
+  return {
+    start: startOfDay(new Date(year, startMonth - 1, 1)),
+    end: startOfDay(new Date(year, endMonth - 1, lastDay)),
+  };
+}
+
+/**
+ * Per-epic "open work" measured in whatever unit the basis selects.
+ *
+ *  - stories   → count of stories still open
+ *  - days      → sum of remaining estimated days across open stories
+ *  - epicEst   → same daysLeft sum, scaled into the epic's
+ *                originalEstimateDays unit so the chart's Y axis can stack
+ *                epics that priced their work differently
+ */
+function epicOpenAt(epic: EpicItem, day: Date, basis: ProgressBasis): number {
+  const stories = epic.userStories ?? [];
+  let openDays = 0;
+  let openStoryCount = 0;
+  let totalStoryDays = 0;
+  for (const story of stories) {
+    const snap = latestSnapshotAtDay(story, day);
+    const status = snap?.status ?? story.status;
+    const estDays =
+      snap?.estimatedDays ?? story.estimatedDays ?? null;
+    if (estDays != null) totalStoryDays += estDays;
+    if (!isStoryOpen(status)) continue;
+    if (basis === "stories") {
+      openStoryCount += 1;
+      continue;
+    }
+    const daysLeft =
+      snap?.daysLeft ?? snap?.estimatedDays ?? story.daysLeft ?? story.estimatedDays ?? 1;
+    openDays += Math.max(0, daysLeft);
+  }
+  if (basis === "stories") return openStoryCount;
+  if (basis === "epicEst") {
+    const epicEst = epic.originalEstimateDays ?? 0;
+    if (epicEst > 0 && totalStoryDays > 0) {
+      return Math.max(0, (openDays * epicEst) / totalStoryDays);
+    }
+    // Fallback when no epic estimate is set: behave like `days`.
+    return openDays;
+  }
+  return openDays;
+}
+
+function epicCountsForDone(epic: EpicItem): boolean {
+  const stories = epic.userStories ?? [];
+  if (stories.length === 0) return false;
+  return stories.every((s) => s.status === "done");
+}
+
+function formatEta(d: Date | null): string {
+  if (d == null) return "—";
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function basisUnitLabel(basis: ProgressBasis): string {
+  if (basis === "stories") return "stories";
+  return "days";
+}
+
+function basisYAxisLabel(basis: ProgressBasis): string {
+  if (basis === "stories") return "Stories remaining";
+  if (basis === "epicEst") return "Epic-days remaining";
+  return "Story-days remaining";
+}
+
+export function PortfolioBurndownChart({
+  initiatives,
+  year,
+  quarter,
+  team,
+  progressBasis = "days",
+}: Props) {
+  const { start, end } = useMemo(() => quarterBounds(year, quarter), [year, quarter]);
+  const { startMonth, endMonth } = useMemo(() => quarterMonthRange(quarter), [quarter]);
+
+  const startMs = start.getTime();
+  const endMs = end.getTime();
+  const today = useMemo(() => startOfDay(new Date()), []);
+  const todayMs = today.getTime();
+  const totalDays = Math.max(1, Math.round((endMs - startMs) / 86400000) + 1);
+
+  // Epics whose plan window touches the quarter at all. Team filter applied
+  // here so per-team dashboards burn only their slice.
+  const epicsInScope = useMemo(() => {
+    const out: EpicItem[] = [];
+    for (const initiative of initiatives) {
+      for (const epic of initiative.epics ?? []) {
+        if (team && epic.team !== team) continue;
+        if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
+        if (epic.planStartMonth > endMonth) continue;
+        if (epic.planEndMonth < startMonth) continue;
+        out.push(epic);
+      }
+    }
+    return out;
+  }, [initiatives, team, startMonth, endMonth]);
+
+  // Total scope at quarter start — the burndown's ceiling.
+  const startTotal = useMemo(() => {
+    return epicsInScope.reduce(
+      (sum, epic) => sum + epicOpenAt(epic, start, progressBasis),
+      0,
+    );
+  }, [epicsInScope, start, progressBasis]);
+
+  type Row = {
+    label: string;
+    /** `null` for future days — Recharts skips them so the line stops at today. */
+    actual: number | null;
+    ideal: number;
+    /** Forecast tail value — `null` until today; numeric only on/after today. */
+    forecast: number | null;
+  };
+
+  // First pass: actual + ideal for every day.
+  const baseRows: Row[] = useMemo(() => {
+    const rows: Row[] = [];
+    for (let i = 0; i < totalDays; i += 1) {
+      const day = startOfDay(new Date(startMs + i * 86400000));
+      const isFuture = day.getTime() > todayMs;
+      let actual: number | null = null;
+      if (!isFuture) {
+        let v = 0;
+        for (const epic of epicsInScope) v += epicOpenAt(epic, day, progressBasis);
+        actual = Number(v.toFixed(progressBasis === "stories" ? 0 : 1));
+      }
+      const idealRaw = totalDays <= 1 ? 0 : startTotal * (1 - i / (totalDays - 1));
+      const ideal = Number(Math.max(0, idealRaw).toFixed(progressBasis === "stories" ? 0 : 1));
+      rows.push({ label: shortLabel(day), actual, ideal, forecast: null });
+    }
+    return rows;
+  }, [totalDays, startMs, todayMs, epicsInScope, startTotal, progressBasis]);
+
+  // Forecast: simple linear fit on the last ≤14 days of actuals. Skip when
+  // the team isn't burning down (slope ≥ 0) — there's nothing to project.
+  const forecast = useMemo(() => {
+    const elapsedDays = Math.min(
+      totalDays,
+      Math.max(0, Math.floor((todayMs - startMs) / 86400000) + 1),
+    );
+    if (elapsedDays < 2) return null;
+    const lastIdx = elapsedDays - 1;
+    const firstIdx = Math.max(0, lastIdx - 13);
+    const v0 = baseRows[firstIdx]?.actual;
+    const v1 = baseRows[lastIdx]?.actual;
+    if (v0 == null || v1 == null) return null;
+    const days = lastIdx - firstIdx;
+    if (days <= 0) return null;
+    const slope = (v1 - v0) / days;
+    if (slope >= 0 || v1 <= 0) return null;
+    const daysToZero = v1 / -slope;
+    const projectedIdx = lastIdx + daysToZero;
+    const etaMs = startMs + projectedIdx * 86400000;
+    return { lastIdx, lastValue: v1, slope, projectedIdx, etaDate: new Date(etaMs) };
+  }, [baseRows, totalDays, startMs, todayMs]);
+
+  // Second pass: fold the forecast tail in. Two anchor points (today's value
+  // and the projected zero) so the line draws cleanly. Use the same dataset
+  // so Recharts shares the X domain.
+  const rows: Row[] = useMemo(() => {
+    if (forecast == null) return baseRows;
+    const out = baseRows.map((r) => ({ ...r }));
+    // Anchor at today.
+    const f0 = out[forecast.lastIdx];
+    if (f0) f0.forecast = forecast.lastValue;
+    // Anchor at the projected zero — clip to the last row if the forecast
+    // overshoots the quarter end (slips past Q's last day).
+    const endIdx = Math.min(out.length - 1, Math.round(forecast.projectedIdx));
+    if (endIdx > forecast.lastIdx) {
+      const target = out[endIdx];
+      if (target) {
+        // Linear interpolate forecast value at the end of the visible window
+        // when ETA is past the quarter end.
+        const remainingDays = endIdx - forecast.lastIdx;
+        const projectedValue =
+          forecast.lastValue + forecast.slope * remainingDays;
+        target.forecast = Math.max(0, Number(projectedValue.toFixed(progressBasis === "stories" ? 0 : 1)));
+      }
+    }
+    return out;
+  }, [baseRows, forecast, progressBasis]);
+
+  // KPIs.
+  const todayIdx = Math.max(0, Math.min(totalDays - 1, Math.floor((todayMs - startMs) / 86400000)));
+  const todayRow = rows[todayIdx];
+  const paceDeltaRaw =
+    todayRow != null && todayRow.actual != null
+      ? todayRow.actual - todayRow.ideal
+      : null;
+  // Tolerance: treat sub-half-unit deltas as "on pace" so micro-jitter doesn't
+  // flash amber/emerald. Stories basis snaps to whole units.
+  const tolerance = progressBasis === "stories" ? 0.5 : 0.5;
+  const paceState: "behind" | "ahead" | "onPace" | "unknown" =
+    paceDeltaRaw == null
+      ? "unknown"
+      : paceDeltaRaw > tolerance
+        ? "behind"
+        : paceDeltaRaw < -tolerance
+          ? "ahead"
+          : "onPace";
+  const paceMagnitude = paceDeltaRaw == null ? null : Math.abs(paceDeltaRaw);
+
+  const doneEpicCount = useMemo(
+    () => epicsInScope.filter(epicCountsForDone).length,
+    [epicsInScope],
+  );
+  const totalEpicCount = epicsInScope.length;
+
+  const etaDate = forecast?.etaDate ?? null;
+  const etaWithinPeriod = etaDate != null && etaDate.getTime() <= endMs;
+
+  // Markers + axis ticks.
+  const todayLabel =
+    todayMs >= startMs && todayMs <= endMs ? shortLabel(today) : null;
+  const endLabel = shortLabel(end);
+  const xAxisTicks: string[] = useMemo(() => {
+    const labels = rows.map((r) => r.label);
+    if (labels.length <= 10) return labels;
+    const targetCount = 10;
+    const step = (labels.length - 1) / (targetCount - 1);
+    const picked = Array.from({ length: targetCount }, (_, i) => labels[Math.round(i * step)]);
+    return Array.from(new Set(picked.filter((l): l is string => l != null)));
+  }, [rows]);
+
+  // Empty-state guards.
+  if (totalEpicCount === 0) {
+    return (
+      <p className="flex h-full min-h-[180px] items-center justify-center text-xs text-slate-400">
+        No epics planned in Q{quarter} {year}
+        {team ? ` · ${team}` : ""} yet.
+      </p>
+    );
+  }
+  if (startTotal <= 0) {
+    return (
+      <p className="flex h-full min-h-[180px] items-center justify-center text-xs text-slate-400">
+        Q{quarter} {year} has no measurable work in this basis.
+      </p>
+    );
+  }
+
+  const unit = basisUnitLabel(progressBasis);
+
+  return (
+    <div className="relative h-full w-full">
+      {/* KPI strip — three numbers in one floating chip, top-left.
+       *  Mirrors the HealthBadge placement used in the per-epic burndown so
+       *  the visual language stays consistent across charts. */}
+      <div className="pointer-events-none absolute left-3 top-1 z-10 flex items-center gap-2 rounded-md bg-white/85 px-2 py-1 text-[11px] font-medium text-slate-700 shadow-sm ring-1 ring-slate-200/80 backdrop-blur-sm">
+        <span>
+          Done <span className="tabular-nums font-semibold text-slate-900">{doneEpicCount}/{totalEpicCount}</span>{" "}
+          <span className="text-slate-500">epics</span>
+        </span>
+        <span className="text-slate-300">·</span>
+        {paceState === "behind" && paceMagnitude != null ? (
+          <span className="inline-flex items-center gap-1 text-amber-700">
+            <span aria-hidden>⚠</span>
+            <span className="tabular-nums font-semibold">{paceMagnitude.toFixed(progressBasis === "stories" ? 0 : 1)}{unit === "stories" ? "" : "d"}</span>
+            <span className="text-amber-600">behind</span>
+          </span>
+        ) : paceState === "ahead" && paceMagnitude != null ? (
+          <span className="inline-flex items-center gap-1 text-emerald-700">
+            <span aria-hidden>✓</span>
+            <span className="tabular-nums font-semibold">{paceMagnitude.toFixed(progressBasis === "stories" ? 0 : 1)}{unit === "stories" ? "" : "d"}</span>
+            <span className="text-emerald-600">ahead</span>
+          </span>
+        ) : paceState === "onPace" ? (
+          <span className="inline-flex items-center gap-1 text-emerald-700">
+            <span aria-hidden>✓</span>
+            <span>on pace</span>
+          </span>
+        ) : (
+          <span className="text-slate-400">pace —</span>
+        )}
+        <span className="text-slate-300">·</span>
+        <span className={etaDate == null ? "text-slate-400" : etaWithinPeriod ? "text-emerald-700" : "text-amber-700"}>
+          ETA <span className="tabular-nums font-semibold">{formatEta(etaDate)}</span>
+          {etaDate != null ? (etaWithinPeriod ? " ✓" : " ⚠") : ""}
+        </span>
+      </div>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={rows} margin={{ top: 36, right: 56, left: 16, bottom: 4 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} ticks={xAxisTicks} />
+          <YAxis
+            tick={{ fontSize: 10 }}
+            width={48}
+            allowDecimals={progressBasis !== "stories"}
+            label={{
+              value: basisYAxisLabel(progressBasis),
+              angle: -90,
+              position: "insideLeft",
+              offset: 0,
+              style: { fontSize: 11, fill: "#475569", fontWeight: 600 },
+            }}
+            domain={[0, Math.max(1, Math.ceil(startTotal * 1.12))]}
+          />
+          <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
+          <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
+          {todayLabel ? (
+            <ReferenceLine
+              x={todayLabel}
+              stroke="#94a3b8"
+              strokeDasharray="4 2"
+              label={{ value: "Today", position: "insideTop", fontSize: 10, fill: "#64748b" }}
+            />
+          ) : null}
+          <Line
+            type="monotone"
+            dataKey="actual"
+            stroke="#2563eb"
+            dot={false}
+            strokeWidth={2}
+            name="Actual"
+            connectNulls={false}
+            isAnimationActive={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="ideal"
+            stroke="#f97316"
+            strokeDasharray="6 4"
+            dot={false}
+            strokeWidth={1.5}
+            name="Ideal pace"
+            isAnimationActive={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="forecast"
+            stroke="#0ea5e9"
+            strokeDasharray="2 4"
+            dot={false}
+            strokeWidth={1.5}
+            name="Forecast"
+            connectNulls={true}
+            isAnimationActive={false}
+          />
+          {/* Quarter-end marker at zero — the destination the ideal line is
+           *  aiming at, and the bar against which the forecast is judged. */}
+          <ReferenceDot
+            x={endLabel}
+            y={0}
+            r={5}
+            fill="#fff"
+            stroke="#dc2626"
+            strokeWidth={2}
+            label={{ value: `End ${endLabel}`, position: "top", fontSize: 10, fill: "#dc2626" }}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}

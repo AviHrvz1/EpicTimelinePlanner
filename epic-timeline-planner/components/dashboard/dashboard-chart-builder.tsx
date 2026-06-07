@@ -197,6 +197,12 @@ const CHART_META: Record<ChartType, { label: string; icon: React.ReactNode; desc
     description: "Donut of effort split across initiatives — spot too-many-irons-in-the-fire",
     accent: "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700",
   },
+  "portfolio-burndown": {
+    label: "Portfolio Burndown",
+    icon: <TrendingDown className="size-4 text-blue-500" />,
+    description: "Quarter-wide remaining work vs ideal + forecast ETA — answers “will we hit this quarter?”",
+    accent: "border-blue-200 bg-blue-50 text-blue-700",
+  },
 };
 
 // Gadget chart types — appear under a "Gadgets" header below the chart list.
@@ -204,10 +210,11 @@ const CHART_META: Record<ChartType, { label: string; icon: React.ReactNode; desc
 const GADGET_CHART_TYPES = new Set<ChartType>(["sprint-countdown", "sticky-note"]);
 
 // Chart types that use the structured SprintChartForm flow (vs. the chat-style OtherChartFlow).
-const SPRINT_CHART_TYPES = new Set<ChartType>(["burndown", "epic-burndown", "cfd", "epic-cfd", "story-status", "workload-balance", "workload", "sprint-load", "sprint-burnup", "epic-burnup", "velocity", "at-risk-stories", "mini-gantt", "team-focus-mix"]);
+const SPRINT_CHART_TYPES = new Set<ChartType>(["burndown", "epic-burndown", "cfd", "epic-cfd", "story-status", "workload-balance", "workload", "sprint-load", "sprint-burnup", "epic-burnup", "velocity", "at-risk-stories", "mini-gantt", "team-focus-mix", "portfolio-burndown"]);
 
 // Display order: burndowns first, burnups next, then other sprint types, then quarter-level
 const CHART_TYPE_ORDER: ChartType[] = [
+  "portfolio-burndown",
   "burndown",
   "epic-burndown",
   "sprint-burnup",
@@ -639,6 +646,11 @@ function SprintChartForm({
 
   const isEpicChart = chartType === "epic-burndown" || chartType === "epic-burnup" || chartType === "epic-cfd";
   const isVelocityChart = chartType === "velocity";
+  // Portfolio Burndown is quarter-scoped (year + quarter), not sprint-scoped.
+  // Treat it like Velocity for picker visibility: skip the sprint slider, keep
+  // year/quarter/team. Basis follows the global Health calc selection at
+  // render time — there's no per-chart basis picker on this widget.
+  const isPortfolioBurndownChart = chartType === "portfolio-burndown";
   // Epic Burndown / Epic Burnup expose the 3-option basis picker instead
   // of the simpler 2-option metric picker — basis drives the Y-axis
   // automatically (epicEst/days → daysLeft, stories → storyCount), so
@@ -924,20 +936,32 @@ function SprintChartForm({
       for (const teamId of teamEntries) {
         const teamLabel = teamId ? (monthTeamLabelForId(teamId) ?? teamId) : null;
         const roadmapLabel = roadmap ? roadmap.name : null;
+        // Period label: velocity uses its sprint range, portfolio-burndown
+        // uses "QN YYYY" (no sprint segment), everything else uses the
+        // sprint number.
+        const periodSegment = isVelocityChart
+          ? velocityPeriodLabel
+          : isPortfolioBurndownChart
+            ? `Q${sprintInfo.quarter} ${sprintInfo.year}`
+            : `Sprint ${sprintInfo.sprint}`;
         const parts = [
           CHART_META[chartType].label,
           roadmapLabel,
           teamLabel,
-          isVelocityChart ? velocityPeriodLabel : `Sprint ${sprintInfo.sprint}`,
+          periodSegment,
         ].filter(Boolean);
         configs.push({
           chartType,
           title: parts.join(" · "),
           params: {
             year: sprintInfo.year,
+            // Velocity carries a sprint range; portfolio-burndown is quarter-
+            // scoped (no sprint key); everything else carries quarter+sprint.
             ...(isVelocityChart
               ? { startYearSprint: velocityStartLo, endYearSprint: velocityEndHi }
-              : { quarter: sprintInfo.quarter, sprint: sprintInfo.sprint }),
+              : isPortfolioBurndownChart
+                ? { quarter: sprintInfo.quarter }
+                : { quarter: sprintInfo.quarter, sprint: sprintInfo.sprint }),
             ...(roadmap ? { roadmapId: roadmap.id } : {}),
             ...(teamId ? { team: teamId } : {}),
             ...(supportsMetricPicker ? { metric } : {}),
@@ -971,7 +995,7 @@ function SprintChartForm({
 
       <div className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
         {/* Current sprint — for sprint-scoped charts only */}
-        {!isVelocityChart && (
+        {!isVelocityChart && !isPortfolioBurndownChart && (
           <div>
             <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400 pl-0.5"><Flag className="size-3" />Current Sprint</p>
             <div className="flex items-center gap-2.5 rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-violet-50 px-4 py-3 shadow-sm">

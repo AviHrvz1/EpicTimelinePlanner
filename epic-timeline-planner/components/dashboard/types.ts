@@ -15,7 +15,8 @@ export type ChartType =
   | "sticky-note"
   | "at-risk-stories"
   | "mini-gantt"
-  | "team-focus-mix";
+  | "team-focus-mix"
+  | "portfolio-burndown";
 
 export type DashboardChartConfig = {
   chartType: ChartType;

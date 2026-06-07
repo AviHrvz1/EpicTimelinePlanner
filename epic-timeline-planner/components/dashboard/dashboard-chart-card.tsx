@@ -28,6 +28,7 @@ import { StickyNoteCard } from "./charts/sticky-note-card";
 import { AtRiskStoriesCard } from "./charts/at-risk-stories-card";
 import { MiniGanttCard } from "./charts/mini-gantt-card";
 import { TeamFocusMixCard } from "./charts/team-focus-mix-card";
+import { PortfolioBurndownChart } from "./charts/portfolio-burndown-chart";
 import { DashboardChartItem } from "./types";
 
 type Props = {
@@ -153,7 +154,7 @@ function renderTitleNodes(chart: DashboardChartItem, displayTitle: string) {
   });
 }
 
-function ChartBody({ chart, initiatives, isEditMode, onUpdateConfig, progressBasis = "days" }: { chart: DashboardChartItem; initiatives: InitiativeItem[]; isEditMode: boolean; onUpdateConfig?: (id: string, partial: Record<string, unknown>) => void; progressBasis?: "days" | "stories" | "epicEst" }) {
+function ChartBody({ chart, initiatives, isEditMode, onUpdateConfig, workspaceDirectoryUsers, progressBasis = "days" }: { chart: DashboardChartItem; initiatives: InitiativeItem[]; isEditMode: boolean; onUpdateConfig?: (id: string, partial: Record<string, unknown>) => void; workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[]; progressBasis?: "days" | "stories" | "epicEst" }) {
   let params: Record<string, unknown> = {};
   try { params = JSON.parse(chart.config); } catch { /* ignore */ }
 
@@ -391,6 +392,19 @@ function ChartBody({ chart, initiatives, isEditMode, onUpdateConfig, progressBas
           teams={Array.isArray(params.teams) ? (params.teams as string[]) : null}
         />
       );
+    case "portfolio-burndown":
+      // Quarter-wide burndown. Reads progressBasis from the global Health
+      // calc setting (threaded in via the card props) so the chart and the
+      // Health Distribution donut speak the same unit.
+      return (
+        <PortfolioBurndownChart
+          initiatives={scopedInitiatives}
+          year={(params.year as number) ?? new Date().getFullYear()}
+          quarter={(params.quarter as number) ?? 1}
+          team={params.team as string | null}
+          progressBasis={progressBasis}
+        />
+      );
     default:
       return <div className="flex h-32 items-center justify-center text-sm text-slate-400">Unknown chart type</div>;
   }
@@ -497,7 +511,7 @@ export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, o
 
       {/* Chart body — min-h-0 ensures flex-1 has a definite height so height="100%" works in ResponsiveContainer */}
       <div className="min-h-0 flex-1 overflow-hidden px-2 py-2">
-        <ChartBody chart={chart} initiatives={initiatives} isEditMode={isEditMode} onUpdateConfig={onUpdateConfig} progressBasis={progressBasis} />
+        <ChartBody chart={chart} initiatives={initiatives} isEditMode={isEditMode} onUpdateConfig={onUpdateConfig} workspaceDirectoryUsers={workspaceDirectoryUsers} progressBasis={progressBasis} />
       </div>
     </div>
   );
