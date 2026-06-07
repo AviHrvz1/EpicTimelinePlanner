@@ -1023,7 +1023,7 @@ function PortfolioBurndownHeroCard({
       {/* Fixed height keeps the card the same vertical footprint as the
        *  three donut cards in the row, so the hero band doesn't get a
        *  jagged silhouette when the chart fills its slot. */}
-      <div className="relative h-[200px] w-full">
+      <div className="relative h-[110px] w-full">
         {/* Cast to mutable type — chart accepts read-only too, but its
          *  prop signature is non-readonly to match the rest of the
          *  dashboard chart family. Safe at the boundary: chart never

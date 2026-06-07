@@ -21,6 +21,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   CartesianGrid,
   Legend,
@@ -408,11 +409,40 @@ export function PortfolioBurndownChart({
   // The pace chip turns into a button when there are contributors to drill
   // into. Click opens a popover with the top contributors — laggards if
   // we're behind, outperformers if we're ahead. Outside-click + Esc close.
+  // The popover renders via a portal into document.body so a parent's
+  // `overflow-x-auto` (Hero row) can't clip it — without the portal, any
+  // tall popover hosted inside a horizontally-scrolling container gets
+  // its bottom hidden behind the next page section.
   const [popoverOpen, setPopoverOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const paceButtonRef = useRef<HTMLButtonElement | null>(null);
+  // Live viewport-relative coordinates for the portal popover. Recomputed
+  // when the popover opens, when the window scrolls, and on resize so the
+  // popover stays anchored to the chip.
+  const [popoverAnchor, setPopoverAnchor] = useState<
+    { top: number; left: number; width: number } | null
+  >(null);
   useEffect(() => {
-    if (!popoverOpen) return;
+    if (!popoverOpen) {
+      setPopoverAnchor(null);
+      return;
+    }
+    function reanchor() {
+      const btn = paceButtonRef.current;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      // Anchor the popover's top edge ~6px below the chip and align its
+      // left edge with the chip. Width is capped at 360 but clamped to
+      // the viewport so the popover never overflows the right edge of
+      // narrow screens.
+      const maxLeft = Math.max(8, window.innerWidth - 368);
+      setPopoverAnchor({
+        top: rect.bottom + 6,
+        left: Math.min(rect.left, maxLeft),
+        width: Math.min(360, window.innerWidth - 16),
+      });
+    }
+    reanchor();
     function onPointer(e: MouseEvent) {
       const target = e.target as Node;
       if (popoverRef.current?.contains(target)) return;
@@ -424,9 +454,13 @@ export function PortfolioBurndownChart({
     }
     window.addEventListener("mousedown", onPointer);
     window.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", reanchor, true);
+    window.addEventListener("resize", reanchor);
     return () => {
       window.removeEventListener("mousedown", onPointer);
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", reanchor, true);
+      window.removeEventListener("resize", reanchor);
     };
   }, [popoverOpen]);
 
@@ -497,16 +531,22 @@ export function PortfolioBurndownChart({
         </span>
       </div>
 
-      {/* Contributor popover — opens under the KPI strip when the pace chip
-       *  is clicked. Lists top laggards (or outperformers) ranked by their
-       *  per-epic delta against their own plan window. Closes on outside
-       *  click or Esc. Phase 2(b) will wire row clicks to a cross-mode
-       *  filter; here we just surface the names so the planner knows who
-       *  to chase. */}
-      {popoverOpen && contributorList.length > 0 ? (
+      {/* Contributor popover — renders into document.body via a portal so
+       *  the Hero row's `overflow-x-auto` (which also clips vertical
+       *  overflow) can't truncate the bottom of the list. Positioned with
+       *  `position: fixed` anchored to the chip's viewport rect; re-
+       *  anchored on scroll / resize so it tracks the chip. */}
+      {popoverOpen && contributorList.length > 0 && popoverAnchor && typeof document !== "undefined" ? (
+        createPortal(
         <div
           ref={popoverRef}
-          className="absolute left-3 top-9 z-20 w-[min(360px,calc(100%-1.5rem))] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl ring-1 ring-slate-900/5"
+          style={{
+            position: "fixed",
+            top: popoverAnchor.top,
+            left: popoverAnchor.left,
+            width: popoverAnchor.width,
+          }}
+          className="z-[1000] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl ring-1 ring-slate-900/5"
           role="dialog"
           aria-label={paceState === "behind" ? "Epics behind plan" : "Epics ahead of plan"}
         >
@@ -599,7 +639,9 @@ export function PortfolioBurndownChart({
               </button>
             </div>
           ) : null}
-        </div>
+        </div>,
+        document.body,
+        )
       ) : null}
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={rows} margin={{ top: 36, right: 56, left: 16, bottom: 4 }}>
