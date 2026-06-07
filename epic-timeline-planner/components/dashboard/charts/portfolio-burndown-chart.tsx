@@ -719,10 +719,13 @@ export function PortfolioBurndownChart({
               data={rows}
               margin={{
                 top: chartTopMargin,
-                // Right margin holds the "End {date}" label that hangs
-                // off the quarter-end reference dot. Tight layouts still
-                // need ~28px so "End 30/6" doesn't get truncated.
-                right: tightChartChrome ? 28 : 56,
+                // The quarter-end ReferenceDot label sits with
+                // `position: "top"` (centered above the dot, not
+                // hanging to the right), so the right margin only
+                // needs to hold half the label width. ~14px is
+                // enough for "End 30/6" without truncation, and lets
+                // the plot area extend further right.
+                right: tightChartChrome ? 14 : 56,
                 // Tight layouts drop the rotated Y-axis label entirely,
                 // so the YAxis itself can be ~32px wide; left margin
                 // stays at 0 so the YAxis ticks (e.g. "1012") render
