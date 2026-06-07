@@ -2163,18 +2163,22 @@ export function SprintAnalytics({
                                         />
                                       </span>
                                     ) : null}
-                                    {/* Three-segment chip keeping all
-                                     *  numbers (est, done, left)
-                                     *  visible inline. Dark-gray text,
-                                     *  tone-colored bg + icon, gap
-                                     *  around the dividers. */}
+                                    {/* Three-segment chip preserving all
+                                     *  three numbers inline. Label of
+                                     *  the first segment swaps with
+                                     *  the metric — "est" in days
+                                     *  mode (where the number is an
+                                     *  estimated-days total) and
+                                     *  "total" in stories mode (where
+                                     *  the number is a plain story
+                                     *  count and "est" reads wrong). */}
                                     <span
                                       className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1 text-slate-700", teamColor.chip)}
                                       title={`${row.estTotal}${loadUnit} ${loadUnit === "d" ? "estimated" : "total"} · ${doneDays}${loadUnit} done · ${row.daysLeft}${loadUnit} left`}
                                     >
                                       <Clock className={cn("size-2.5", teamColor.icon)} strokeWidth={2.2} aria-hidden />
                                       <span>{row.estTotal}{loadUnit}</span>
-                                      <span className="text-slate-400">est</span>
+                                      <span className="text-slate-400">{loadUnit === "d" ? "est" : "total"}</span>
                                       <span className="text-slate-300">·</span>
                                       <span>{doneDays}{loadUnit}</span>
                                       <span className="text-slate-400">done</span>
