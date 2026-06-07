@@ -986,12 +986,12 @@ function TeamProgressCard({
                  */}
                 {(() => {
                   const tone = atRisk
-                    ? { bar: "bg-amber-400", chip: "bg-amber-50 text-amber-700 ring-amber-200/70", stroke: "#f59e0b" }
+                    ? { bar: "bg-amber-400", chipRing: "bg-white ring-amber-200", icon: "text-amber-500", accent: "text-amber-600", stroke: "#f59e0b" }
                     : allDone
-                      ? { bar: "bg-emerald-400", chip: "bg-emerald-50 text-emerald-700 ring-emerald-200/70", stroke: "#10b981" }
+                      ? { bar: "bg-emerald-400", chipRing: "bg-white ring-emerald-200", icon: "text-emerald-500", accent: "text-emerald-600", stroke: "#10b981" }
                       : watch
-                        ? { bar: "bg-amber-300", chip: "bg-amber-50 text-amber-700 ring-amber-200/70", stroke: "#f59e0b" }
-                        : { bar: "bg-indigo-400", chip: "bg-indigo-50 text-indigo-700 ring-indigo-200/70", stroke: "#6366f1" };
+                        ? { bar: "bg-amber-300", chipRing: "bg-white ring-amber-200", icon: "text-amber-500", accent: "text-amber-600", stroke: "#f59e0b" }
+                        : { bar: "bg-indigo-400", chipRing: "bg-white ring-indigo-200", icon: "text-indigo-500", accent: "text-indigo-600", stroke: "#6366f1" };
                   return (
                     <div className="flex items-center gap-2">
                       <TeamAvatar
@@ -1034,14 +1034,16 @@ function TeamProgressCard({
                           />
                         </div>
                       </div>
-                      {/* Single combined chip — days-left / total in one
-                       *  pill ("77d/330d left") instead of two side-by-
-                       *  side chips. Reads as a fraction of the team's
-                       *  total work, which lines up with the percentage
-                       *  in the title row. Tinted by health tone. */}
-                      <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1", tone.chip)}>
-                        <Clock className="size-2.5" strokeWidth={2.2} aria-hidden />
-                        {row.daysLeft}{unitSuffix}/{row.estTotal}{unitSuffix} left
+                      {/* Single pill chip: white bg, tone-colored ring +
+                       *  icon, "Xd" stands out in tone, "/ Yd left" sits
+                       *  in muted slate — the fraction reads as "how much
+                       *  of the total is still open." Matches the
+                       *  mockup's two-tone style. */}
+                      <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold tabular-nums ring-1", tone.chipRing)}>
+                        <Clock className={cn("size-3", tone.icon)} strokeWidth={2.2} aria-hidden />
+                        <span className={tone.accent}>{row.daysLeft}{unitSuffix}</span>
+                        <span className="text-slate-400">/</span>
+                        <span className="text-slate-500">{row.estTotal}{unitSuffix} left</span>
                       </span>
                       {/* Circular percent — same number as the inline
                        *  label, but visual; mirrors the donut-card
