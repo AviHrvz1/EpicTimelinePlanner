@@ -958,7 +958,7 @@ function TeamProgressCard({
           );
         })()}
         {!(rows.length === 0 || (rows.length === 1 && rows[0].teamId === "__unassigned__")) && (
-          rows.map((row) => {
+          rows.map((row, rowIdx) => {
             const atRisk = row.status === "atRisk" || row.status === "overdue";
             const watch = row.status === "watch";
             const allDone = row.daysLeft === 0 && row.estTotal > 0;
@@ -985,13 +985,25 @@ function TeamProgressCard({
                  *  stroke so a quick glance reads the team's status.
                  */}
                 {(() => {
-                  const tone = atRisk
-                    ? { bar: "bg-amber-400", chipBg: "bg-amber-50/80", icon: "text-amber-500", accent: "text-amber-600", stroke: "#f59e0b" }
-                    : allDone
-                      ? { bar: "bg-emerald-400", chipBg: "bg-emerald-50/80", icon: "text-emerald-500", accent: "text-emerald-600", stroke: "#10b981" }
-                      : watch
-                        ? { bar: "bg-amber-300", chipBg: "bg-amber-50/80", icon: "text-amber-500", accent: "text-amber-600", stroke: "#f59e0b" }
-                        : { bar: "bg-indigo-400", chipBg: "bg-indigo-50/80", icon: "text-indigo-500", accent: "text-indigo-600", stroke: "#6366f1" };
+                  // Per-team palette: each row picks a colour from a
+                  // cycling list so the four rows on the hero read as
+                  // visually distinct (amber / emerald / violet / rose
+                  // / sky / fuchsia). Drives the clock chip + circle
+                  // stroke + clock icon. The progress bar still uses
+                  // the health-aware tone (amber when at-risk,
+                  // emerald when done) so the verdict signal isn't
+                  // lost.
+                  const TEAM_PALETTE = [
+                    { chipBg: "bg-amber-50/80", icon: "text-amber-500", accent: "text-amber-600", stroke: "#f59e0b" },
+                    { chipBg: "bg-emerald-50/80", icon: "text-emerald-500", accent: "text-emerald-600", stroke: "#10b981" },
+                    { chipBg: "bg-violet-50/80", icon: "text-violet-500", accent: "text-violet-600", stroke: "#8b5cf6" },
+                    { chipBg: "bg-rose-50/80", icon: "text-rose-500", accent: "text-rose-600", stroke: "#f43f5e" },
+                    { chipBg: "bg-sky-50/80", icon: "text-sky-500", accent: "text-sky-600", stroke: "#0ea5e9" },
+                    { chipBg: "bg-fuchsia-50/80", icon: "text-fuchsia-500", accent: "text-fuchsia-600", stroke: "#d946ef" },
+                  ];
+                  const teamColor = TEAM_PALETTE[rowIdx % TEAM_PALETTE.length]!;
+                  const bar = atRisk ? "bg-amber-400" : allDone ? "bg-emerald-400" : watch ? "bg-amber-300" : "bg-indigo-400";
+                  const tone = { bar, ...teamColor };
                   return (
                     <div className="flex items-center gap-2">
                       <TeamAvatar
