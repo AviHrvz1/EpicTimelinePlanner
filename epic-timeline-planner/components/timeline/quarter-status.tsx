@@ -239,7 +239,7 @@ export function QuarterStatus({ initiatives, quarterMonths, planYear }: QuarterS
                 ]}
               />
               <Legend />
-              <Line type="monotone" dataKey="ideal" stroke="#94a3b8" dot={false} name="Ideal" />
+              <Line type="monotone" dataKey="ideal" stroke="#94a3b8" dot={false} name="Ideal" connectNulls={false} />
               {aggregateMode ? (
                 <Line type="monotone" dataKey="actual" stroke="#2563eb" strokeWidth={2} name="Actual" />
               ) : (

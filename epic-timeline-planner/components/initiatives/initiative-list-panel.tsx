@@ -431,8 +431,8 @@ function IconFilterSelect<T extends string>({
 /**
  * Compact icon button + popover that controls BOTH the health-verdict filter
  * (the rose-tinted block of On Track / Watch / At Risk / Overdue / Done) and
- * the calculation basis (Epic Days Est / Stories Days Est / Stories
- * Completed) the verdicts are computed against. Sits next to the eraser so
+ * the calculation basis (Epic Est (d) / Σ | Child Est (d) / Stories
+ * Completed (%)) the verdicts are computed against. Sits next to the eraser so
  * the planner picks the lane separately from the execution-status dropdown.
  */
 function HealthFilterMenu({

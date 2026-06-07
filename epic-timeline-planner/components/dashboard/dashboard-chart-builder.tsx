@@ -655,7 +655,7 @@ function SprintChartForm({
   useEffect(() => { setMetric(initMetric); }, [initMetric]);
 
   // ─── Health/progress basis state ──────────────────────────────────────
-  // The Σ Epic Days Est. / Σ Story Days Est. / % Stories Completed toggle
+  // The Epic Est (d) / Σ | Child Est (d) / Stories Completed (%) toggle
   // drives the scope-promise reference line on Epic Burndown / Epic Burnup
   // charts. Stored per-chart in `params.basis` so a chart created with
   // "epicEst" stays on that basis even if the global popover later flips.
@@ -1131,7 +1131,7 @@ function SprintChartForm({
                   basis === "epicEst" ? "bg-white text-slate-800 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-slate-700",
                 )}
               >
-                Σ Epic Days Est.
+                Epic Est (d)
               </button>
               <button
                 type="button"
@@ -1141,7 +1141,7 @@ function SprintChartForm({
                   basis === "days" ? "bg-white text-slate-800 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-slate-700",
                 )}
               >
-                Σ Story Days Est.
+                Σ | Child Est (d)
               </button>
               <button
                 type="button"
@@ -1151,7 +1151,7 @@ function SprintChartForm({
                   basis === "stories" ? "bg-white text-slate-800 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-slate-700",
                 )}
               >
-                % Stories Count
+                Stories Completed (%)
               </button>
             </div>
           </div>

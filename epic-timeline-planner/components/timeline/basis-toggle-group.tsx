@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 /**
  * Compact segmented control used by the Roadmap Health popover AND the
  * Insights view (MonthAnalytics) to drive the same global state — health
- * basis (Σ Epic Days Est. / Σ Story Days Est. / % Stories Completed) and
+ * basis (Epic Est (d) / Σ | Child Est (d) / Stories Completed (%)) and
  * the popover's "Initiative Health / Epic Health" scope toggle.
  *
  * Shared between the two surfaces so the visual treatment stays identical
@@ -41,7 +41,7 @@ export function ToggleGroup({
               onClick={() => onChange(opt.value)}
               className={cn(
                 // `whitespace-nowrap` keeps long labels like
-                // "% Stories Completed" on a single line; the segmented
+                // "Stories Completed (%)" on a single line; the segmented
                 // control grows to fit instead of wrapping the text.
                 "inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1 text-[12px] font-semibold transition-all",
                 isOn

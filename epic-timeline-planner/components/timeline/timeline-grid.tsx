@@ -4462,10 +4462,16 @@ export function TimelineGrid({
               </span>
             </th>
             <th className={cn(estimatePanelHeadCellClass, "w-[6.5rem] text-center")}>
-              Est days
+              Epic Est
             </th>
             {showEstimatedColumns ? (
-              <th className={cn(estimatePanelHeadCellClass, "w-[5rem] whitespace-nowrap text-center")}>Σ Child Est</th>
+              <th className={cn(estimatePanelHeadCellClass, "w-[6.5rem] whitespace-nowrap text-center")}>
+                <span className="inline-flex items-center justify-center gap-1.5">
+                  <span className="text-slate-400">Σ</span>
+                  <span className="text-slate-300">|</span>
+                  <span>Child Est</span>
+                </span>
+              </th>
             ) : null}
           </tr>
         </thead>
@@ -4665,7 +4671,11 @@ export function TimelineGrid({
                   </td>
                   {showEstimatedColumns ? (
                     <td className={cn(estimatePanelCellClass, "group/cell relative text-center text-[14px] font-semibold tabular-nums text-slate-950")}>
-                      <span className="block text-center">{childEstimateSum}d</span>
+                      <span className="inline-flex w-full items-center justify-center gap-1.5">
+                        <span className="font-normal text-slate-400">Σ</span>
+                        <span className="font-normal text-slate-300">|</span>
+                        <span>{childEstimateSum}d</span>
+                      </span>
                       <span className="absolute right-1 top-1/2 -translate-y-1/2">
                         <LockHint tip="Σ Child Est is auto-computed from child story estimates" />
                       </span>

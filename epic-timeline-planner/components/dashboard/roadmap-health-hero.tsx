@@ -182,10 +182,10 @@ export function RoadmapHealthHero({
    *  the verdicts on screen. */
   const basisLabel =
     progressBasis === "epicEst"
-      ? "Epic Days Est."
+      ? "Epic Est (d)"
       : progressBasis === "days"
-        ? "Story Days Est."
-        : "Stories Count";
+        ? "Σ | Child Est (d)"
+        : "Stories Completed (%)";
   /** Selected team for the Team Progress drilldown. Null = no modal. */
   const [drilldownTeam, setDrilldownTeam] = useState<{
     teamId: string;
@@ -302,15 +302,28 @@ export function RoadmapHealthHero({
               <span className="inline-flex h-[18px] items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.05em] leading-[18px] text-slate-500">
                 <HeartPulse className="size-[18px] shrink-0 text-rose-500" strokeWidth={2.2} aria-hidden />
                 <span className="inline-block translate-y-[1px]">Health calculation</span>
-                <Info className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+                <button
+                  type="button"
+                  aria-label="How is health calculated?"
+                  title="How is health calculated?"
+                  // Same target as the Info icons on Health Distribution,
+                  // Roadmap Health popover, and the Initiative Health
+                  // verdict menu — opens the full 7-page explainer. The
+                  // first slide is the basis explainer, which is the
+                  // contextually right starting page for this label.
+                  onClick={() => setHealthExplainerOpen(true)}
+                  className="inline-flex size-4 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <Info className="size-3.5" aria-hidden />
+                </button>
               </span>
               <PillToggle
                 value={progressBasis}
                 onChange={(v) => onProgressBasisChange(v as "days" | "stories" | "epicEst")}
                 options={[
-                  { value: "epicEst", label: "Epic Days Est." },
-                  { value: "days", label: "Story Days Est." },
-                  { value: "stories", label: "Stories Count" },
+                  { value: "epicEst", label: "Epic Est (d)" },
+                  { value: "days", label: "Σ | Child Est (d)" },
+                  { value: "stories", label: "Stories Completed (%)" },
                 ]}
               />
             </div>
@@ -375,9 +388,13 @@ export function RoadmapHealthHero({
           <DonutCard
             panelClassName="bg-sky-50/60 ring-sky-100"
             title={
+              // Title separator switched from "(...)" to "·" so the
+              // new basis labels — which themselves contain parens
+              // like "Epic Est (d)" — don't render with nested
+              // parentheses ("Work Progress · Days (Epic Est (d))").
               progressBasis === "stories"
-                ? `Work Progress · Stories (${basisLabel})`
-                : `Work Progress · Days (${basisLabel})`
+                ? `Work Progress · Stories · ${basisLabel}`
+                : `Work Progress · Days · ${basisLabel}`
             }
             titleIcon={<Activity className="size-3.5 text-blue-500" strokeWidth={2.1} aria-hidden />}
             centerCount={
@@ -425,7 +442,7 @@ export function RoadmapHealthHero({
           />
           <DonutCard
             panelClassName="bg-orange-50/60 ring-orange-100"
-            title={`Health Distribution · Epics (${basisLabel})`}
+            title={`Health Distribution · Epics · ${basisLabel}`}
             titleIcon={<HeartPulse className="size-3.5 text-rose-500" strokeWidth={2.1} aria-hidden />}
             titleAction={
               <button
@@ -475,8 +492,8 @@ export function RoadmapHealthHero({
             panelClassName="bg-violet-50/60 ring-violet-100"
             title={
               progressBasis === "epicEst"
-                ? `Epic Estimates · Epics (${basisLabel})`
-                : `Story Estimates · Stories (${basisLabel})`
+                ? `Epic Estimates · Epics · ${basisLabel}`
+                : `Story Estimates · Stories · ${basisLabel}`
             }
             titleIcon={<Sigma className="size-3.5 text-indigo-500" strokeWidth={2.1} aria-hidden />}
             centerCount={
@@ -860,9 +877,9 @@ function TeamProgressCard({
               1. No teams in the Users directory yet → show the "Create a
                  team" CTA so the planner can set one up. Reasons for the
                  rollup being empty in this case: either no rows at all
-                 (Σ Story est days / Epic est days bases with no estimates)
+                 (Σ | Child Est (d) / Epic Est (d) bases with no estimates)
                  or only the synthetic "__unassigned__" bucket exists
-                 (Stories Count basis with stories but no real team).
+                 (Stories Completed (%) basis with stories but no real team).
               2. Teams exist but no real-team row has data yet → show a
                  plain "No data" line. The planner already created teams;
                  nagging them to create another would be wrong. */}

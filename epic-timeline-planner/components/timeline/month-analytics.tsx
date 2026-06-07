@@ -332,6 +332,43 @@ function isStoryOpen(status: UserStoryItem["status"] | null | undefined) {
   return status === "todo" || status === "inProgress";
 }
 
+/** When did the team ACTUALLY start working on this epic, as recorded by
+ *  daily snapshots? Returns the earliest date on which any child story
+ *  shows real movement — either:
+ *    • its rolled-up daysLeft fell below estimatedDays, OR
+ *    • its status advanced past `todo` / `inProgress` (i.e. reached
+ *      `review` or `done`).
+ *  Stories without snapshots are ignored — there's nothing to observe.
+ *  Returns null when nothing has moved yet; callers then fall back to
+ *  the epic's planned start date. Used by the burn-up / burn-down ideal
+ *  lines so the ramp aligns with where the blue actual line begins,
+ *  and by the verdict so chart and badge can't disagree. */
+function computeEpicObservedStart(epic: EpicItem): Date | null {
+  const stories = epic.userStories ?? [];
+  if (stories.length === 0) return null;
+  let earliestMs = Infinity;
+  for (const story of stories) {
+    const baseline = story.estimatedDays ?? 0;
+    const snaps = story.snapshots ?? [];
+    if (snaps.length === 0) continue;
+    // Snapshots are usually persisted in chronological order, but
+    // re-sort defensively so callers don't depend on storage order.
+    const sorted = [...snaps].sort((a, b) =>
+      new Date(a.snapshotDate).getTime() - new Date(b.snapshotDate).getTime());
+    for (const snap of sorted) {
+      const advancedStatus = snap.status === "review" || snap.status === "done";
+      const snapDaysLeft = snap.daysLeft ?? snap.estimatedDays ?? baseline;
+      const burntSomething = baseline > 0 && snapDaysLeft < baseline;
+      if (advancedStatus || burntSomething) {
+        const ts = new Date(snap.snapshotDate).getTime();
+        if (Number.isFinite(ts) && ts < earliestMs) earliestMs = ts;
+        break;
+      }
+    }
+  }
+  return Number.isFinite(earliestMs) ? new Date(earliestMs) : null;
+}
+
 /** Per-epic entry inside a team's flagged-epic list. Carries the full
  *  ProgressResult so the popover can show *why* this epic is in its
  *  bucket (delta vs ideal, working days left, etc.). */
@@ -470,7 +507,11 @@ function TeamHealthBadgeWithList({
       aria-haspopup="dialog"
       aria-expanded={open}
     >
-      <HealthBadge status={status} tooltip={tipLines.join("\n")} />
+      {/* "xs" size — the Team Progress rows on the insights page are
+          dense (team name + est/review/left numerics + progress bar),
+          so the verdict badge drops to text-[10px] / px-1.5 / py-px
+          to sit alongside without dominating the row. */}
+      <HealthBadge size="xs" status={status} tooltip={tipLines.join("\n")} />
       {open && pos && typeof document !== "undefined" ? createPortal(
         <div
           ref={popoverRef}
@@ -633,9 +674,9 @@ function DrilldownSortHeader({
 }
 
 function basisDisplayLabel(basis: ProgressBasis, scope: "epic" | "initiative"): string {
-  if (basis === "stories") return "% Stories Count";
-  if (basis === "days") return "Σ Story Days Est.";
-  return scope === "epic" ? "Epic Days Est." : "Σ Epic Days Est.";
+  if (basis === "stories") return "Stories Completed (%)";
+  if (basis === "days") return "Σ | Child Est (d)";
+  return scope === "epic" ? "Epic Est (d)" : "Σ | Epic Est (d)";
 }
 
 /** Compact display name: "John S." — first name + last-name initial. Used on
@@ -2645,14 +2686,22 @@ export function MonthAnalytics({
     // the chart shows it cliff-diving — because the period extends out
     // to year-end, inflating "working days left". Fall back to the
     // period bounds only when the epic has no plan dates.
+    // Resolve each epic's window using the OBSERVED start when child
+    // story snapshots show work began earlier than the planned start.
+    // Falls back to the planned start if no movement has been recorded.
+    // This keeps the verdict aligned with what the chart's ideal line
+    // actually draws — both anchor to the team's real timeline, not a
+    // calendar window the team may have started early on.
     const epicBounds = (epic: EpicItem): { start: Date; end: Date } => {
       const epicYear = epic.planYear ?? planYear;
-      const start = epic.planStartMonth != null
+      const plannedStart = epic.planStartMonth != null
         ? sprintStartDate(epicYear, globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1))
         : periodStartDate;
       const end = epic.planEndMonth != null
         ? sprintEndDate(epicYear, globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2))
         : periodEndDate;
+      const observed = computeEpicObservedStart(epic);
+      const start = observed != null && observed < plannedStart ? observed : plannedStart;
       return { start, end };
     };
     const epicOriginalEstSum = epicsInScope.reduce(
@@ -2685,9 +2734,9 @@ export function MonthAnalytics({
       });
       return h.status;
     });
-    // Aggregate window = span of all child epics' planned bounds (min
-    // start, max end) — so the rolled-up delta-vs-ideal reflects the
-    // overall portfolio window, not a fixed period.
+    // Aggregate window = span of all child epics' (observed-or-planned)
+    // bounds — same rule as the per-epic verdict above. Earliest start,
+    // latest end.
     const childBoundsList = epicsInScope.map(epicBounds);
     const aggStart = childBoundsList.reduce((min, b) => b.start < min ? b.start : min, childBoundsList[0].start);
     const aggEnd = childBoundsList.reduce((max, b) => b.end > max ? b.end : max, childBoundsList[0].end);
@@ -2713,6 +2762,22 @@ export function MonthAnalytics({
     const dueDay = dueSprint === 1 ? 15 : new Date(dueYear, dueMonth, 0).getDate();
     return new Date(dueYear, dueMonth - 1, dueDay);
   }, [burndownFocusedEpicOption, scopeEndMonth, planYear]);
+  /** Symmetric to `selectedEpicDueDate` — the focused epic's effective
+   *  start. Prefers the OBSERVED start (first day a story moved per
+   *  snapshots) when it's earlier than the planned start, so the chart's
+   *  ideal line aligns with where the blue actual line begins. Falls
+   *  back to the planned start when no work has been recorded yet. */
+  const selectedEpicStartDate = useMemo(() => {
+    if (!burndownFocusedEpicOption) return null;
+    const epic = burndownFocusedEpicOption.epic;
+    const startSprint = epic.planSprint;
+    const startMonth = epic.planStartMonth ?? scopeStartMonth;
+    const startYear = epic.planYear ?? planYear;
+    const startDay = startSprint === 2 ? 16 : 1;
+    const plannedStart = new Date(startYear, startMonth - 1, startDay);
+    const observed = computeEpicObservedStart(epic);
+    return observed != null && observed < plannedStart ? observed : plannedStart;
+  }, [burndownFocusedEpicOption, scopeStartMonth, planYear]);
   /**
    * Truncate each burndown series after the first day it reaches 0 — once
    * an epic is fully burned down (or the aggregate hits 0) there's nothing
@@ -2776,14 +2841,28 @@ export function MonthAnalytics({
     const msPerDay = 24 * 60 * 60 * 1000;
     const dueDayIndex = Math.floor((selectedEpicDueDate.getTime() - monthStart.getTime()) / msPerDay) + 1;
     const targetDayIndex = Math.max(1, dueDayIndex);
+    // Epic ideal stays flat at `startValue` until the epic actually
+    // begins (selectedEpicStartDate), then ramps down to 0 by the due
+    // day. Without this clamp the ramp spans the whole period — a
+    // quarter-wide chart visually shows "we've been burning since Jan 1"
+    // for an epic that only starts in July.
+    const startDayIndex = selectedEpicStartDate != null
+      ? Math.max(1, Math.floor((selectedEpicStartDate.getTime() - monthStart.getTime()) / msPerDay) + 1)
+      : 1;
+    const epicSpan = Math.max(1, targetDayIndex - startDayIndex);
     const withIdeal = monthBurndownTruncated.map((row, idx) => {
       const dayIdx = idx + 1;
-      if (dayIdx > targetDayIndex) {
+      // Same approach as the burnup: only draw the ideal between the
+      // epic's start and due. Outside that window we emit `null` so
+      // Recharts (with connectNulls=false on the epicIdeal Line) skips
+      // those segments — producing a single clean linear diagonal
+      // instead of a long flat plateau plus a ramp.
+      if (dayIdx > targetDayIndex || dayIdx < startDayIndex) {
         return { ...row, epicIdeal: null };
       }
       let epicIdealRaw: number;
       if (targetDayIndex <= 1) epicIdealRaw = 0;
-      else epicIdealRaw = startValue * (1 - (dayIdx - 1) / (targetDayIndex - 1));
+      else epicIdealRaw = startValue * (1 - (dayIdx - startDayIndex) / epicSpan);
       const epicIdeal = metric === "storyCount"
         ? Math.max(0, Math.round(epicIdealRaw))
         : Number(Math.max(0, epicIdealRaw).toFixed(1));
@@ -2794,9 +2873,12 @@ export function MonthAnalytics({
     for (let dayIdx = totalDays + 1; dayIdx <= targetDayIndex; dayIdx += 1) {
       const dayDate = new Date(monthStart);
       dayDate.setDate(dayIdx);
+      // Skip the pre-start tail in the EXTENDED region too — same
+      // option-A rule: ideal is null outside the epic's window.
+      if (dayIdx < startDayIndex) continue;
       let epicIdealRaw: number;
       if (targetDayIndex <= 1) epicIdealRaw = 0;
-      else epicIdealRaw = startValue * (1 - (dayIdx - 1) / (targetDayIndex - 1));
+      else epicIdealRaw = startValue * (1 - (dayIdx - startDayIndex) / epicSpan);
       const epicIdeal =
         metric === "storyCount"
           ? Math.max(0, Math.round(epicIdealRaw))
@@ -2811,7 +2893,7 @@ export function MonthAnalytics({
       });
     }
     return extended as typeof monthBurndownResolved;
-  }, [monthBurndownTruncated, burndownFocusedEpicOption, selectedEpicDueDate, metric, burndownBasis, planYear, month, scopeStartMonth]);
+  }, [monthBurndownTruncated, burndownFocusedEpicOption, selectedEpicDueDate, selectedEpicStartDate, metric, burndownBasis, planYear, month, scopeStartMonth]);
   const selectedEpicDueMarker = useMemo(() => {
     if (!selectedEpicDueDate || !burndownFocusedEpicOption) return null;
     if (monthBurndownWithDueTarget.length === 0) return null;
@@ -3145,14 +3227,18 @@ export function MonthAnalytics({
     const periodEndDate = new Date(planYear, scopeEndMonth, 0);
     // Same anchor rule as burndownHealth — verdict reads off each epic's
     // own planned window, not the scope period.
+    // Same observed-start rule as burndownHealth — use the team's
+    // actual start when it's earlier than the planned start.
     const epicBounds = (epic: EpicItem): { start: Date; end: Date } => {
       const epicYear = epic.planYear ?? planYear;
-      const start = epic.planStartMonth != null
+      const plannedStart = epic.planStartMonth != null
         ? sprintStartDate(epicYear, globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1))
         : periodStartDate;
       const end = epic.planEndMonth != null
         ? sprintEndDate(epicYear, globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2))
         : periodEndDate;
+      const observed = computeEpicObservedStart(epic);
+      const start = observed != null && observed < plannedStart ? observed : plannedStart;
       return { start, end };
     };
     const epicOriginalEstSum = epicsInScope.reduce(
@@ -3229,6 +3315,42 @@ export function MonthAnalytics({
     }
     return latestDate;
   }, [selectedEpicOption, monthEpics, burnUpVisibleKeys, scopeEndMonth, planYear]);
+
+  /** Earliest start across the in-scope epics. The ideal line should not
+   *  start ramping until the epic actually begins — before that, no work
+   *  is expected so the ideal stays at 0 (burnup) / totalScope (burndown).
+   *  Without this, the ideal line slope spans the entire insights period
+   *  (e.g. Jan→Dec) instead of just the epic's window (e.g. July 1→31),
+   *  making any partial pre-start progress look like a deficit and any
+   *  in-window progress look like it's flatly above the ideal. */
+  const burnUpStartDate = useMemo(() => {
+    const epicsToCheck = selectedEpicOption != null
+      ? [selectedEpicOption.epic]
+      : monthEpics
+          .map((r) => r.epic)
+          .filter((e) => burnUpVisibleKeys.length === 0 || burnUpVisibleKeys.includes(e.id));
+    if (epicsToCheck.length === 0) return null;
+    // Earliest EFFECTIVE start across visible epics. Each epic's
+    // effective start is min(observed, planned). Pre-start work pulls
+    // the ramp anchor backwards so the ideal aligns with where the
+    // blue actual line first moved.
+    let earliestMs = Infinity;
+    let earliestDate: Date | null = null;
+    for (const epic of epicsToCheck) {
+      const startMonth = epic.planStartMonth ?? scopeStartMonth;
+      const startYear = epic.planYear ?? planYear;
+      const startSprint = epic.planSprint;
+      const startDay = startSprint === 2 ? 16 : 1;
+      const plannedStart = new Date(startYear, startMonth - 1, startDay);
+      const observed = computeEpicObservedStart(epic);
+      const effective = observed != null && observed < plannedStart ? observed : plannedStart;
+      if (effective.getTime() < earliestMs) {
+        earliestMs = effective.getTime();
+        earliestDate = effective;
+      }
+    }
+    return earliestDate;
+  }, [selectedEpicOption, monthEpics, burnUpVisibleKeys, scopeStartMonth, planYear]);
 
   const burnUpData = useMemo(() => {
     const epicsInScope = selectedEpicOption != null
@@ -3307,7 +3429,14 @@ export function MonthAnalytics({
     const round = (n: number) => isDays ? Number(n.toFixed(1)) : Math.round(n);
 
     const periodStartDate = new Date(planYear, scopeStartMonth - 1, 1);
-    const periodEndDate = new Date(planYear, scopeEndMonth, 0);
+    const quarterEndDate = new Date(planYear, scopeEndMonth, 0);
+    // Extend the chart's right edge past quarter-end when the visible
+    // epic(s) have a due date beyond it. When the due falls inside the
+    // quarter the chart stops at quarter-end as before — preserves
+    // visual symmetry across cards. Only stretches when necessary.
+    const periodEndDate = burnUpDueDate != null && burnUpDueDate.getTime() > quarterEndDate.getTime()
+      ? burnUpDueDate
+      : quarterEndDate;
     // Use Math.round (not Math.floor) for ms→day so a DST hour shift can't
     // truncate a day. With Math.floor, going from a no-DST date to a DST
     // date subtracts one hour, dropping the floor by 1 → today gets treated
@@ -3329,6 +3458,14 @@ export function MonthAnalytics({
     const dueDayIndex = dueDate != null
       ? Math.max(1, msToDays(dueDate.getTime() - periodStartDate.getTime()) + 1)
       : totalDays;
+    // The ideal ramp should start at the epic's own start, not at the
+    // insights period start. burnUpStartDate is the earliest start
+    // across in-scope epics; if it's after periodStart we clamp the
+    // ideal to 0 before that day (no work expected pre-start).
+    const startDate = burnUpStartDate;
+    const startDayIndex = startDate != null
+      ? Math.max(1, msToDays(startDate.getTime() - periodStartDate.getTime()) + 1)
+      : 1;
 
     return Array.from({ length: totalDays }, (_, idx): { labelShort: string; isToday: boolean; completed: number | null; scope: number; ideal: number | null; [epicKey: string]: number | string | boolean | null } => {
       const dayIdx = idx + 1;
@@ -3442,8 +3579,16 @@ export function MonthAnalytics({
 
       const scopeForRow = round(dayScopeAgg);
       let ideal: number | null = null;
-      if (totalScope > 0 && dayIdx <= dueDayIndex) {
-        const raw = dueDayIndex <= 1 ? totalScope : totalScope * (dayIdx - 1) / (dueDayIndex - 1);
+      // Draw the ideal ramp ONLY inside the epic's actual window so it
+      // reads as a single clean linear segment. Days outside the window
+      // get `null` — Recharts honors `connectNulls={false}` on the ideal
+      // Line and simply doesn't paint those segments. This avoids the
+      // L-shape ("flat at 0 for months, then ramp") that arises when
+      // the chart's X axis is much longer than the epic's plan.
+      if (totalScope > 0 && dayIdx >= startDayIndex && dayIdx <= dueDayIndex) {
+        const span = Math.max(1, dueDayIndex - startDayIndex);
+        const progressInWindow = dayIdx - startDayIndex;
+        const raw = totalScope * (progressInWindow / span);
         ideal = round(Math.max(0, Math.min(totalScope, raw)));
       }
 
@@ -4555,14 +4700,14 @@ export function MonthAnalytics({
                 options={
                   selectedEpicOption != null
                     ? [
-                        { value: "epicEst", label: "Epic Days Est.", icon: Folder },
-                        { value: "days", label: "Σ Story Days Est.", icon: StickyNote },
-                        { value: "stories", label: "% Stories Count", icon: CheckCircle2 },
+                        { value: "epicEst", label: "Epic Est (d)", icon: Folder },
+                        { value: "days", label: "Σ | Child Est (d)", icon: StickyNote },
+                        { value: "stories", label: "Stories Completed (%)", icon: CheckCircle2 },
                       ]
                     : [
-                        { value: "epicEst", label: "Σ Epic Days Est.", icon: Folder },
-                        { value: "days", label: "Σ Story Days Est.", icon: StickyNote },
-                        { value: "stories", label: "% Stories Count", icon: CheckCircle2 },
+                        { value: "epicEst", label: "Σ | Epic Est (d)", icon: Folder },
+                        { value: "days", label: "Σ | Child Est (d)", icon: StickyNote },
+                        { value: "stories", label: "Stories Completed (%)", icon: CheckCircle2 },
                       ]
                 }
                 value={burndownBasis}
@@ -4690,6 +4835,7 @@ export function MonthAnalytics({
                         strokeDasharray="5 4"
                         dot={false}
                         name="Epic ideal to due"
+                        connectNulls={false}
                         isAnimationActive={false}
                       />
                     ) : null}
@@ -4724,6 +4870,55 @@ export function MonthAnalytics({
                         }}
                       />
                     ) : null}
+                    {/* Δ annotation at today — same affordance as the
+                     *  burnup chart and as slides 3–7 of the Health
+                     *  Explainer. Renders only on the focused epic and
+                     *  only when the burndown verdict is Watch or At
+                     *  Risk. The pill sits at the midpoint between
+                     *  actual and the focused epic's ideal at today,
+                     *  visually annotating the gap. */}
+                    {burndownFocusedEpicOption && burndownHealth
+                      && (burndownHealth.status === "watch" || burndownHealth.status === "atRisk")
+                      ? (() => {
+                        const todayRow = monthBurndownWithDueTarget.find(
+                          (r) => (r as { isCalendarToday?: boolean }).isCalendarToday,
+                        ) as (Record<string, number | string | boolean | null | undefined> & { axisLabel?: string }) | undefined;
+                        if (!todayRow || !todayRow.axisLabel) return null;
+                        const focusedEpicKey = burndownFocusedEpicOption.epic.id;
+                        const actualAtToday = typeof todayRow[focusedEpicKey] === "number"
+                          ? (todayRow[focusedEpicKey] as number)
+                          : typeof todayRow.actual === "number" ? (todayRow.actual as number) : null;
+                        const idealAtToday = typeof todayRow.epicIdeal === "number"
+                          ? (todayRow.epicIdeal as number)
+                          : typeof todayRow.ideal === "number" ? (todayRow.ideal as number) : null;
+                        if (actualAtToday == null || idealAtToday == null) return null;
+                        const midY = (actualAtToday + idealAtToday) / 2;
+                        const delta = burndownHealth.result.deltaDays;
+                        const deltaText = `Δ = ${delta >= 0 ? "+" : ""}${metric === "storyCount" ? Math.round(delta) : delta.toFixed(1)}`;
+                        const accent = burndownHealth.status === "atRisk" ? "#dc2626" : "#d97706";
+                        return (
+                          <ReferenceDot
+                            x={todayRow.axisLabel}
+                            y={midY}
+                            r={0}
+                            isFront
+                            ifOverflow="visible"
+                            shape={(shapeProps: { cx?: number; cy?: number }) => {
+                              const cx = shapeProps.cx ?? 0;
+                              const cy = shapeProps.cy ?? 0;
+                              return (
+                                <g>
+                                  <rect x={cx + 6} y={cy - 9} width={64} height={18} rx={9} fill="white" stroke={accent} strokeWidth={1.4} />
+                                  <text x={cx + 38} y={cy + 4} textAnchor="middle" fill={accent} fontSize={11} fontWeight={700}>
+                                    {deltaText}
+                                  </text>
+                                </g>
+                              );
+                            }}
+                          />
+                        );
+                      })()
+                      : null}
                     {/* Done ✓ — sits ABOVE the due-date target (and above
                      *  the "Due X/Y" label) when the focused epic's burndown
                      *  has reached 0. Visual stacking top-to-bottom:
@@ -5919,14 +6114,14 @@ export function MonthAnalytics({
                     options={
                       selectedEpicOption != null
                         ? [
-                            { value: "epicEst", label: "Epic Days Est.", icon: Folder },
-                            { value: "days", label: "Σ Story Days Est.", icon: StickyNote },
-                            { value: "stories", label: "% Stories Count", icon: CheckCircle2 },
+                            { value: "epicEst", label: "Epic Est (d)", icon: Folder },
+                            { value: "days", label: "Σ | Child Est (d)", icon: StickyNote },
+                            { value: "stories", label: "Stories Completed (%)", icon: CheckCircle2 },
                           ]
                         : [
-                            { value: "epicEst", label: "Σ Epic Days Est.", icon: Folder },
-                            { value: "days", label: "Σ Story Days Est.", icon: StickyNote },
-                            { value: "stories", label: "% Stories Count", icon: CheckCircle2 },
+                            { value: "epicEst", label: "Σ | Epic Est (d)", icon: Folder },
+                            { value: "days", label: "Σ | Child Est (d)", icon: StickyNote },
+                            { value: "stories", label: "Stories Completed (%)", icon: CheckCircle2 },
                           ]
                     }
                     value={burnupBasis}
@@ -6047,6 +6242,58 @@ export function MonthAnalytics({
                           />
                         ) : null,
                       )}
+                      {/* Δ annotation at today — only shown when the
+                       *  burnup verdict is Watch or At Risk. Mirrors the
+                       *  "Δ = +N" callout on slides 3–7 of the Health
+                       *  Explainer: the value is `remainingEffort −
+                       *  idealRemaining`, so positive = behind ideal.
+                       *  Anchored at today's X position, vertically
+                       *  centered between the completed and ideal values
+                       *  so the bracket reads as "this is the gap." Hidden
+                       *  in All-view (each epic has its own delta), Done
+                       *  (no gap to flag), Overdue (different annotation),
+                       *  and On Track (no risk to surface). */}
+                      {burnUpSingleEpicVisible && burnupHealth
+                        && (burnupHealth.status === "watch" || burnupHealth.status === "atRisk")
+                        ? (() => {
+                          const todayRow = burnUpDataTruncated.find((r) => r.isToday);
+                          if (!todayRow) return null;
+                          const completedAtToday = typeof todayRow.completed === "number" ? todayRow.completed : null;
+                          const idealAtToday = typeof todayRow.ideal === "number" ? todayRow.ideal : null;
+                          if (completedAtToday == null || idealAtToday == null) return null;
+                          const midY = (completedAtToday + idealAtToday) / 2;
+                          // deltaDays from computeProgress is signed:
+                          // positive = behind ideal. Burnup units follow
+                          // the active basis: stories → integer count;
+                          // days/epicEst → days. We just respect whatever
+                          // unit the chart is currently drawing.
+                          const delta = burnupHealth.result.deltaDays;
+                          const deltaText = `Δ = ${delta >= 0 ? "+" : ""}${burnUpMetric === "storyCount" ? Math.round(delta) : delta.toFixed(1)}`;
+                          const accent = burnupHealth.status === "atRisk" ? "#dc2626" : "#d97706";
+                          return (
+                            <ReferenceDot
+                              x={String(todayRow.labelShort ?? "")}
+                              y={midY}
+                              r={0}
+                              isFront
+                              ifOverflow="visible"
+                              shape={(shapeProps: { cx?: number; cy?: number }) => {
+                                const cx = shapeProps.cx ?? 0;
+                                const cy = shapeProps.cy ?? 0;
+                                return (
+                                  <g>
+                                    {/* Pill */}
+                                    <rect x={cx + 6} y={cy - 9} width={64} height={18} rx={9} fill="white" stroke={accent} strokeWidth={1.4} />
+                                    <text x={cx + 38} y={cy + 4} textAnchor="middle" fill={accent} fontSize={11} fontWeight={700}>
+                                      {deltaText}
+                                    </text>
+                                  </g>
+                                );
+                              }}
+                            />
+                          );
+                        })()
+                        : null}
                       {/* Due target marker — same red BurndownTargetIcon
                        *  the burndown chart uses, anchored at the burnup's
                        *  due-date label so the two charts read symmetric.

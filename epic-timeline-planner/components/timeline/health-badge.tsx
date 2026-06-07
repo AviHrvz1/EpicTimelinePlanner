@@ -303,7 +303,7 @@ export function HealthBadgeWithDetail({
   status: HealthStatus;
   result: ProgressResult;
   basis: ProgressBasis;
-  /** Human-readable label of the basis, e.g. "Σ Epic Days Est." */
+  /** Human-readable label of the basis, e.g. "Epic Est (d)" */
   basisLabel: string;
   /** What the verdict applies to: e.g. "Mobile platform v2 (initiative)". */
   scopeLabel?: string;

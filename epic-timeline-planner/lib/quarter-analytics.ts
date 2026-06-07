@@ -11,7 +11,7 @@ export type QuarterBurndownPoint = {
   axisLabel: string;
   monthLabel: string;
   isCalendarToday: boolean;
-  ideal?: number;
+  ideal?: number | null;
   actual?: number | null;
   [key: string]: string | number | boolean | null | undefined;
 };
@@ -139,6 +139,51 @@ export function buildQuarterBurndownSeries(
     return 0;
   })();
 
+  // Map each month → its first 1-indexed day position inside the
+  // quarterDays horizon (used to translate per-epic
+  // planStartMonth+sprint into a dayIdx for the ideal-line ramp).
+  const monthToFirstDayIdx = new Map<number, number>();
+  {
+    let cum = 0;
+    for (const m of quarterMonths) {
+      monthToFirstDayIdx.set(m, cum + 1);
+      cum += MONTH_DAY_COUNTS[m] ?? 30;
+    }
+  }
+  const clampToHorizon = (n: number) => Math.max(1, Math.min(horizon, n));
+
+  // Period start in ms for converting an observed-start Date back into
+  // a horizon dayIdx. Anchored at the first day of the first quarter
+  // month exactly like the existing quarterDays computation.
+  const periodStartMs = new Date(planYear, quarterMonths[0] - 1, 1).getTime();
+  /** First day the epic's snapshots show real movement — earliest
+   *  snapshot where any story's daysLeft fell below estimatedDays OR
+   *  status advanced past todo / inProgress. Returns null when nothing
+   *  has moved yet (callers fall back to the planned start). */
+  const epicObservedDayIdx = (epic: EpicItem): number | null => {
+    const stories = epic.userStories ?? [];
+    let earliestMs = Infinity;
+    for (const story of stories) {
+      const baseline = story.estimatedDays ?? 0;
+      const snaps = story.snapshots ?? [];
+      if (snaps.length === 0) continue;
+      const sorted = [...snaps].sort((a, b) =>
+        new Date(a.snapshotDate).getTime() - new Date(b.snapshotDate).getTime());
+      for (const snap of sorted) {
+        const advancedStatus = snap.status === "review" || snap.status === "done";
+        const snapDaysLeft = snap.daysLeft ?? snap.estimatedDays ?? baseline;
+        const burntSomething = baseline > 0 && snapDaysLeft < baseline;
+        if (advancedStatus || burntSomething) {
+          const ts = new Date(snap.snapshotDate).getTime();
+          if (Number.isFinite(ts) && ts < earliestMs) earliestMs = ts;
+          break;
+        }
+      }
+    }
+    if (!Number.isFinite(earliestMs)) return null;
+    return Math.floor((earliestMs - periodStartMs) / 86400000) + 1;
+  };
+
   const series = selectedEpics.map((epic) => {
     const stories = epic.userStories ?? [];
     const start =
@@ -149,8 +194,49 @@ export function buildQuarterBurndownSeries(
       metric === "daysLeft"
         ? stories.reduce((sum, s) => sum + (s.daysLeft ?? 0), 0)
         : stories.filter((s) => s.status !== "done").length;
-    return { key: epic.id, start, actualRemaining };
+    // Resolve the epic's own window inside the quarter. The ideal ramp
+    // anchors to the EFFECTIVE start — observed when it's earlier than
+    // the planned start, planned otherwise. So an epic the team began
+    // ahead of schedule gets its ramp aligned with the blue line's
+    // first movement, not the empty calendar weeks before.
+    const startMonth = epic.planStartMonth ?? quarterMonths[0];
+    const startSprint = epic.planSprint === 2 ? 2 : 1;
+    const endMonth = epic.planEndMonth ?? quarterMonths[quarterMonths.length - 1];
+    const endSprint = epic.planEndSprint === 1 ? 1 : 2;
+    const startDayOfMonth = startSprint === 2 ? 16 : 1;
+    const endDayOfMonth = endSprint === 1 ? 15 : (MONTH_DAY_COUNTS[endMonth] ?? 30);
+    const startBase = monthToFirstDayIdx.get(startMonth);
+    const endBase = monthToFirstDayIdx.get(endMonth);
+    const plannedStartDayIdx = startBase != null ? clampToHorizon(startBase + startDayOfMonth - 1) : 1;
+    const observedDayIdx = epicObservedDayIdx(epic);
+    const startDayIdx = observedDayIdx != null && observedDayIdx < plannedStartDayIdx
+      ? Math.max(1, observedDayIdx)
+      : plannedStartDayIdx;
+    const dueDayIdx = endBase != null ? clampToHorizon(endBase + endDayOfMonth - 1) : horizon;
+    return { key: epic.id, start, actualRemaining, startDayIdx, dueDayIdx };
   });
+
+  /** Aggregate window = earliest start … latest due across the series.
+   *  Used by the aggregate ideal line so it stays flat at startTotal
+   *  before any epic begins and reaches 0 only once the last epic is
+   *  due. */
+  const aggStartDayIdx = series.length === 0
+    ? 1
+    : series.reduce((min, s) => Math.min(min, s.startDayIdx), series[0].startDayIdx);
+  const aggDueDayIdx = series.length === 0
+    ? horizon
+    : series.reduce((max, s) => Math.max(max, s.dueDayIdx), series[0].dueDayIdx);
+
+  /** Burndown ideal — returns null outside the epic's window so the
+   *  rendered line is a single clean linear segment inside [startIdx,
+   *  dueIdx]. Recharts skips null points when `connectNulls={false}`,
+   *  so no flat tails appear outside the plan. */
+  const idealFor = (dayIdx: number, startVal: number, startIdx: number, dueIdx: number): number | null => {
+    if (startVal <= 0) return null;
+    if (dayIdx < startIdx || dayIdx > dueIdx) return null;
+    const span = Math.max(1, dueIdx - startIdx);
+    return startVal * (1 - (dayIdx - startIdx) / span);
+  };
 
   return Array.from({ length: horizon }, (_, idx) => {
     const dayIdx = idx + 1;
@@ -168,12 +254,14 @@ export function buildQuarterBurndownSeries(
     };
     const startTotal = series.reduce((sum, s) => sum + s.start, 0);
     const remainingTotal = series.reduce((sum, s) => sum + s.actualRemaining, 0);
-    const idealRaw = startTotal * (1 - idx / Math.max(horizon - 1, 1));
+    const idealRaw = idealFor(dayIdx, startTotal, aggStartDayIdx, aggDueDayIdx);
     const inPast = todayCalendarDay > 0 && dayIdx <= todayCalendarDay;
     const actualRaw = inPast
       ? startTotal - (startTotal - remainingTotal) * ((dayIdx - 1) / Math.max(todayCalendarDay - 1, 1))
       : null;
-    row.ideal = metric === "storyCount" ? Math.round(idealRaw) : Number(idealRaw.toFixed(1));
+    row.ideal = idealRaw == null
+      ? null
+      : metric === "storyCount" ? Math.round(idealRaw) : Number(idealRaw.toFixed(1));
     row.actual =
       actualRaw == null ? null : metric === "storyCount" ? Math.round(actualRaw) : Number(actualRaw.toFixed(1));
     if (mode === "aggregate") {

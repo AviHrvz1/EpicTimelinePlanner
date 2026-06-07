@@ -376,14 +376,14 @@ export function RoadmapHealthPopover({
               options={
                 barMode === "initiatives"
                   ? [
-                      { value: "epicEst", label: "Σ Epic Days Est.", icon: Folder },
-                      { value: "days", label: "Σ Story Days Est.", icon: StickyNote },
-                      { value: "stories", label: "% Stories Count", icon: CheckCircle2 },
+                      { value: "epicEst", label: "Σ | Epic Est (d)", icon: Folder },
+                      { value: "days", label: "Σ | Child Est (d)", icon: StickyNote },
+                      { value: "stories", label: "Stories Completed (%)", icon: CheckCircle2 },
                     ]
                   : [
-                      { value: "epicEst", label: "Epic Days Est.", icon: Folder },
-                      { value: "days", label: "Story Days Est.", icon: StickyNote },
-                      { value: "stories", label: "Stories Count", icon: CheckCircle2 },
+                      { value: "epicEst", label: "Epic Est (d)", icon: Folder },
+                      { value: "days", label: "Σ | Child Est (d)", icon: StickyNote },
+                      { value: "stories", label: "Stories Completed (%)", icon: CheckCircle2 },
                     ]
               }
               value={progressBasis}
@@ -761,7 +761,7 @@ function BasisHelpBody() {
     {
       icon: Folder,
       iconTint: "bg-sky-50 text-sky-700 ring-sky-100",
-      title: "Epic Days Est.",
+      title: "Epic Est (d)",
       breakdown: [
         { label: "Epic", body: <>Uses this epic&apos;s <em>Est. Days</em>.</> },
         { label: "Initiative", body: <>Sums <em>Est. Days</em> across the initiative&apos;s child epics.</> },
@@ -771,7 +771,7 @@ function BasisHelpBody() {
     {
       icon: StickyNote,
       iconTint: "bg-violet-50 text-violet-700 ring-violet-100",
-      title: "Story Days Est.",
+      title: "Σ | Child Est (d)",
       breakdown: [
         { label: "Epic", body: <>Sums <em>Est. Days</em> on every child story.</> },
         { label: "Initiative", body: <>Sums across <em>initiative → epics → stories</em>.</> },
@@ -781,7 +781,7 @@ function BasisHelpBody() {
     {
       icon: CheckCircle2,
       iconTint: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-      title: "Stories Count",
+      title: "Stories Completed (%)",
       breakdown: [
         { label: "All views", body: <>% of child stories whose status is <em>Done</em>.</> },
       ],
