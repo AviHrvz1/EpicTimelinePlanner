@@ -3445,7 +3445,14 @@ export function MonthAnalytics({
 
     const storyValue = (s: (typeof allStories)[number]) =>
       isDays ? Math.max(0, s.estimatedDays ?? s.daysLeft ?? 0) : 1;
-    const storyDone = (status: string) => status === "review" || status === "done";
+    // "Completed" on a burnup means the story has actually shipped —
+    // status === "done". Stories in review/testing are NOT considered
+    // completed here even though some surfaces (e.g. the workload
+    // balance "review" bucket) lump them together: a review story
+    // can still be sent back to in-progress, so it hasn't crossed the
+    // burnup's promise yet. Matches the Sprint Load fix (e026fce)
+    // which already uses status === "done" for the "Y done" count.
+    const storyDone = (status: string) => status === "done";
 
     // Per-epic baseline (story-day sum of open stories at start) so we can
     // scale openRemaining into epic-est units in `epicEst` basis. Without
@@ -3790,7 +3797,9 @@ export function MonthAnalytics({
     const epicsInScope = burndownScopedEpics;
     return epicsInScope.map((epic, idx) => {
       const stories = (epic.userStories ?? []).filter((s) => s.sprint != null);
-      const completed = stories.filter((s) => s.status === "review" || s.status === "done").length;
+      // Same definition as burnUpData.storyDone — review-state stories
+      // are NOT counted as completed since they can still bounce back.
+      const completed = stories.filter((s) => s.status === "done").length;
       const remaining = stories.length - completed;
       const daysLeft = stories
         .filter((s) => s.status === "todo" || s.status === "inProgress")
