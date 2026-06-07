@@ -1012,10 +1012,15 @@ function PortfolioBurndownHeroCard({
   return (
     <div
       className={cn(
-        // Tighter vertical padding (py-2) than the donut cards (py-3)
-        // so the chart's 150px slot doesn't push the card past the
-        // Team Progress card's footprint. The hero row stays aligned.
-        "flex w-[520px] min-w-[520px] max-w-[520px] shrink-0 flex-col gap-1.5 rounded-2xl px-7 py-2 ring-1 ring-inset transition-shadow",
+        // Tighter padding (py-2 + px-3) than the donut cards (px-7 py-3)
+        // because the burndown is a line chart, not a donut+legend —
+        // the donuts need the wider gutter to keep their long legend
+        // labels off the card edge, but the burndown's only edge-of-
+        // card text is the x-axis date ticks, which read fine at 12px
+        // from the rim. The reclaimed horizontal pixels go to the
+        // plot area so "End 30/6" doesn't get truncated and the
+        // y-axis caption has breathing room from the tick numbers.
+        "flex w-[520px] min-w-[520px] max-w-[520px] shrink-0 flex-col gap-1.5 rounded-2xl px-3 py-2 ring-1 ring-inset transition-shadow",
         "bg-sky-50/60 ring-sky-100",
       )}
     >

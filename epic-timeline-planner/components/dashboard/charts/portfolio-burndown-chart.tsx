@@ -732,14 +732,10 @@ export function PortfolioBurndownChart({
                 // The quarter-end ReferenceDot label sits with
                 // `position: "top"` (centered above the dot, not
                 // hanging to the right), so the right margin only
-                // needs to hold half the label width. ~14px is
-                // enough for "End 30/6" without truncation, and lets
-                // the plot area extend further right.
-                right: tightChartChrome ? 14 : 56,
-                // Tight layouts drop the rotated Y-axis label entirely,
-                // so the YAxis itself can be ~32px wide; left margin
-                // stays at 0 so the YAxis ticks (e.g. "1012") render
-                // fully without clipping into the card's padding.
+                // needs to hold half the label width. ~22px keeps
+                // "End 30/6" from truncating even with the tighter
+                // hero-card padding (px-3 instead of px-7).
+                right: tightChartChrome ? 22 : 56,
                 left: tightChartChrome ? 0 : 16,
                 bottom: 0,
               }}
@@ -755,18 +751,21 @@ export function PortfolioBurndownChart({
               />
               <YAxis
                 tick={{ fontSize: tightChartChrome ? 9 : 10 }}
-                width={tightChartChrome ? 48 : 48}
+                // Wider axis (60 vs 48) creates a gap between the
+                // rotated caption on the far left and the tick numbers
+                // on the right, so they no longer feel crammed.
+                width={tightChartChrome ? 60 : 48}
                 allowDecimals={progressBasis !== "stories"}
                 label={{
                   // Vertical caption running parallel to the y-axis
                   // numbers, like a classic burndown chart. In tight-
-                  // chrome layouts the font shrinks to 9px so the
-                  // label + 3-digit ticks both fit in the 48px axis
-                  // width. Floating layout keeps the original 11px.
+                  // chrome layouts the font shrinks to 9px and the
+                  // label sits at the left edge of a 60px-wide axis,
+                  // leaving ~36px of breathing room for 3-digit ticks.
                   value: basisYAxisLabel(progressBasis),
                   angle: -90,
                   position: "insideLeft",
-                  offset: tightChartChrome ? 14 : 0,
+                  offset: tightChartChrome ? -2 : 0,
                   style: {
                     fontSize: tightChartChrome ? 9 : 11,
                     fill: "#475569",
