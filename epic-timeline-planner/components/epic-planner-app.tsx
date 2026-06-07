@@ -6241,6 +6241,9 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 summaryBarPortalElement={null}
                 onSummaryStatusQuickFilterChange={setPanelStatusQuickFilter}
                 summaryStatusQuickFilter={panelStatusQuickFilter}
+                highlightedEpicIds={roadmapHighlight?.epicIds ?? null}
+                highlightLabel={roadmapHighlight?.label ?? null}
+                onClearHighlight={() => setRoadmapHighlight(null)}
                 roadmaps={roadmaps}
                 selectedRoadmapId={selectedRoadmapId}
                 selectedRoadmap={selectedRoadmap}

@@ -669,6 +669,9 @@ type EpicGanttLaneRowProps = {
   /** Effort-based progress percent to show on the bar's chip. Defaults to
    *  null which makes the bar fall back to the story-count formula. */
   effortProgressPercent?: number | null;
+  /** Forwarded to the bar — dims it when the cross-mode highlight filter
+   *  is active and this epic isn't in the highlighted set. */
+  dimmed?: boolean;
 };
 
 function formatDayMonthYearShort(date: Date): string {
@@ -1270,6 +1273,7 @@ function EpicGanttLaneRow({
   healthStatus = null,
   healthTooltip,
   effortProgressPercent = null,
+  dimmed = false,
 }: EpicGanttLaneRowProps) {
   const stories = epic.userStories ?? [];
   const totalStories = stories.length;
@@ -1403,6 +1407,7 @@ function EpicGanttLaneRow({
               epic.planEndMonth ?? epic.planStartMonth,
               epic.planEndDay,
             )}
+            dimmed={dimmed}
           />
           {/* Left resize handle */}
           {onDayRangeChange && (epic.planStartMonth == null || month! <= epic.planStartMonth) ? (
@@ -1461,6 +1466,7 @@ function EpicGanttLaneRow({
               epic.planEndMonth ?? epic.planStartMonth,
               epic.planEndDay,
             )}
+            dimmed={dimmed}
           />
         </div>
       </div>
@@ -1761,6 +1767,20 @@ type TimelineGridProps = {
    * causes only Mobile-owned epics to render on the Gantt.
    */
   ganttTeamFilterExternal?: Set<string>;
+  /**
+   * Cross-mode "highlight these epic IDs" filter — set by the Portfolio
+   * Burndown's contributor popover when the planner picks laggards (or
+   * "Highlight on Roadmap"). Unlike the other filter sets above which
+   * DROP non-matching bars, this one keeps every bar visible but DIMS
+   * the non-matching ones so the planner can still see the surrounding
+   * plan context. `highlightLabel` drives a small banner above the
+   * Gantt; `onClearHighlight` wires the banner's clear button.
+   * All three are inert (defaults) when no chart has emitted a
+   * selection.
+   */
+  highlightedEpicIds?: ReadonlySet<string> | null;
+  highlightLabel?: string | null;
+  onClearHighlight?: () => void;
   /** Controlled mirror of the Gantt's team-chip overlay. When provided,
    *  the parent decides; when omitted, TimelineGrid keeps the state
    *  internal (so the toolbar toggle still works in standalone uses). */
@@ -2627,11 +2647,22 @@ export function TimelineGrid({
   onDeleteRoadmap,
   summaryBarPortalElement,
   suppressInlineChips,
+  highlightedEpicIds = null,
+  highlightLabel = null,
+  onClearHighlight,
 }: TimelineGridProps) {
   const { active: dndActive } = useDndContext();
   const isAnyDragActive = dndActive != null;
   const ROADMAP_BAR_MODE_STORAGE_KEY = "timeline:roadmap-bar-mode";
   void zoom;
+
+  // Cross-mode "highlight these epics" filter: when set (Portfolio Burndown
+  // emits it through the planner), the Gantt keeps every bar visible but
+  // fades anything not in the set. The banner below the toolbar gives the
+  // planner a one-click exit. When inactive (null/empty), every consumer
+  // below short-circuits and the Gantt renders normally.
+  const isHighlightActive =
+    highlightedEpicIds != null && highlightedEpicIds.size > 0;
   const [focusedMonth, setFocusedMonth] = useState<number | null>(null);
   const [activeSprint, setActiveSprint] = useState<number | null>(null);
   const [activeSprintTab, setActiveSprintTab] = useState<"kanban" | "status">("kanban");
@@ -7292,6 +7323,7 @@ export function TimelineGrid({
                                   ? epicDeliveryTeamAssignmentChip(row.epic.team)
                                   : null
                               }
+                              dimmed={isHighlightActive && !highlightedEpicIds!.has(row.epic.id)}
                             />
                             {onResizeEpicPlanRange ? (
                               <>
@@ -9040,6 +9072,7 @@ export function TimelineGrid({
                                   emphasizeTick={emphasizeTick}
                                   showProgress={showRoadmapProgress}
                                   teamAssignmentChip={showGanttTeamChips ? epicDeliveryTeamAssignmentChip(epic.team) : null}
+                                  dimmed={isHighlightActive && !highlightedEpicIds!.has(epic.id)}
                                 />
                               </div>
                             );
@@ -9813,6 +9846,7 @@ export function TimelineGrid({
                                       onClick={() => onOpenEpic(row.epic.id)}
                                       onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", row.epic.id)}
                                       teamAssignmentChip={showGanttTeamChips ? epicDeliveryTeamAssignmentChip(row.epic.team) : null}
+                                      dimmed={isHighlightActive && !highlightedEpicIds!.has(row.epic.id)}
                                     />
                                     {onResizeEpicPlanRange ? (
                                       <>
@@ -10180,6 +10214,31 @@ export function TimelineGrid({
 
   return (
     <div className="relative flex h-full min-h-0 min-w-0 w-full flex-col overflow-x-clip overflow-y-hidden rounded-xl border border-indigo-200 bg-card py-5 shadow-lg ring-1 ring-black/5">
+      {/* Cross-mode highlight banner — appears when a dashboard widget
+       *  (currently Portfolio Burndown's contributor popover) has set a
+       *  highlight on the Roadmap. The banner names the filter (e.g.
+       *  "3 epics behind plan") so the planner knows WHY the surrounding
+       *  bars look faded, and the Clear button is the always-available
+       *  way out. Inert when nothing has emitted a highlight — the slot
+       *  collapses to zero height. */}
+      {isHighlightActive && highlightLabel ? (
+        <div className="mx-4 mb-2 mt-[-0.5rem] flex shrink-0 items-center justify-between gap-3 rounded-md border border-amber-200/80 bg-amber-50/85 px-3 py-1.5 text-[12px] font-medium text-amber-800 shadow-sm">
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden>⚠</span>
+            <span>Showing <span className="font-semibold tabular-nums">{highlightLabel}</span> — other epics dimmed</span>
+          </span>
+          {onClearHighlight ? (
+            <button
+              type="button"
+              onClick={onClearHighlight}
+              className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900"
+            >
+              <span aria-hidden>×</span>
+              <span>Clear</span>
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <div ref={yearRoadmapMeasureRef} className="flex min-h-0 min-w-0 flex-1 flex-col">
         {panelHScroll ? (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-auto overflow-y-hidden [scrollbar-gutter:stable]">

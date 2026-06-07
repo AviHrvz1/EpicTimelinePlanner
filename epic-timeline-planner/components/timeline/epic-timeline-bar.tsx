@@ -356,6 +356,11 @@ type EpicPlanTimelineBarProps = {
   /** Pre-formatted "Mar 1 – Apr 15" range, shown on the hover tooltip. Use
    *  `buildGanttBarDateRange` from this module to format consistently. */
   tooltipDateRange?: string | null;
+  /** When true, fades the bar to a muted opacity — used by cross-mode
+   *  highlight filters (e.g. Portfolio Burndown's "highlight laggards on
+   *  Roadmap" flow) to surface a subset while keeping the rest of the
+   *  plan visible as context. Defaults to false; no visual change. */
+  dimmed?: boolean;
 };
 
 /** Draggable epic plan bar (month / quarter timeline); uses `epicTimelineDraggableId`. */
@@ -382,6 +387,7 @@ export function EpicPlanTimelineBar({
   epicStatus = null,
   isOverdue = false,
   tooltipDateRange = null,
+  dimmed = false,
 }: EpicPlanTimelineBarProps) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
   const lightBg = isLightColor(color);
@@ -411,8 +417,9 @@ export function EpicPlanTimelineBar({
         onClick?.();
       }}
       className={cn(
-        "group/bar relative z-20 space-y-0",
+        "group/bar relative z-20 space-y-0 transition-opacity duration-150",
         isDragging && "opacity-0",
+        dimmed && !isDragging && "opacity-30 saturate-50 hover:opacity-60",
       )}
       style={{
         transform:
