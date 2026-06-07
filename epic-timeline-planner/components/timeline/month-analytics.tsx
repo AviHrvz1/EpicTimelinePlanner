@@ -377,7 +377,13 @@ function applyDrilldownFilterSort<T extends { id: string; title: string; sprint:
 }
 
 function isStoryOpen(status: UserStoryItem["status"] | null | undefined) {
-  return status === "todo" || status === "inProgress";
+  // "Open" = anything that isn't truly shipped. Review-state stories
+  // count as open here too — they can still bounce back to in-progress
+  // and they haven't crossed the burnup's "completed" line. Mirrors
+  // the storyDone helper in burnUpData and the Sprint Load fix
+  // (e026fce) so Burndown / Burnup / CFD all share one definition:
+  // Completed = status === "done"; Open / Remaining = everything else.
+  return status !== "done";
 }
 
 
@@ -3692,13 +3698,17 @@ export function MonthAnalytics({
             for (const story of dayStories) {
               epicTotalStoryValue += storyValue(story);
               const snap = latestSnapshotAtDayCached(story, dayEnd);
-              // Before the story's first snapshot the only sane assumption
-              // is that it was "open with full estimate" — the burndown's
-              // line wouldn't drop on that day either. Falling back to
-              // story.status (which is the CURRENT state) here was the
-              // original bug: a now-review story leaked back to "review on
-              // day 1" and the completed line ran above scope.
-              const status = snap?.status ?? "todo";
+              // Fall back to the story's CURRENT status when no
+              // snapshot exists at/before this day. Matches the CFD's
+              // snapshot loop (which uses story.status as fallback) so
+              // both surfaces count the same stories as done — without
+              // this, a currently-done story with no snapshot record
+              // counts as todo and the burnup's Completed line stays
+              // at 0 even when CFD's Done band correctly reads 106.
+              // The earlier "leaked back to day 1" concern that drove
+              // the todo fallback is moot now that "completed" means
+              // status === "done" only (e026fce / b69b0aa / 948b94f).
+              const status = snap?.status ?? story.status;
               // "Open" = anything that isn't truly shipped. Now includes
               // review/testing alongside todo + inProgress, since a
               // review story can still bounce back to in-progress.
