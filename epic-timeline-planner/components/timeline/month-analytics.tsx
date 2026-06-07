@@ -5980,15 +5980,20 @@ export function MonthAnalytics({
                                 ) : null}
                                 {/* Single combined chip: days-left /
                                  *  total in one pill, mirroring the
-                                 *  hero card. Title attribute keeps
-                                 *  the "X review" detail accessible
-                                 *  via hover. */}
+                                 *  hero card. Each segment is a
+                                 *  separate span so the flex `gap-1`
+                                 *  puts breathing room around the
+                                 *  slash. Title attribute keeps the
+                                 *  "X review" detail accessible via
+                                 *  hover. */}
                                 <span
                                   className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1", tone.chip)}
                                   title={`${row.estTotal}d estimated total · ${doneDays}d in review · ${row.daysLeft}d left`}
                                 >
                                   <Clock className="size-2.5" strokeWidth={2.2} aria-hidden />
-                                  {row.daysLeft}d/{row.estTotal}d left
+                                  <span>{row.daysLeft}d</span>
+                                  <span className="text-slate-400">/</span>
+                                  <span>{row.estTotal}d left</span>
                                 </span>
                                 <CircleProgress percent={donePct} color={tone.stroke} />
                               </>
