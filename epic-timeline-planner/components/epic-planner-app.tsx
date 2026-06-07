@@ -1280,6 +1280,23 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     }
   });
   const [topMode, setTopMode] = useState<"roadmap" | "backlog" | "dashboard" | "users" | "demoBuilder" | "timeDebugger">("roadmap");
+  // Cross-mode "highlight these epics on the Roadmap" filter. Set by the
+  // Portfolio Burndown's contributor popover when the planner picks a
+  // laggard (or "Highlight all on Roadmap"). Read by the Gantt + Initiative
+  // panel to dim everything except the highlighted set and to render a
+  // small banner above the Gantt. Cleared by an explicit user action
+  // (clear button on the banner). Null when no filter is active.
+  const [roadmapHighlight, setRoadmapHighlight] = useState<
+    { epicIds: ReadonlySet<string>; label: string } | null
+  >(null);
+  const handleSelectLaggards = (epicIds: string[], label: string) => {
+    if (epicIds.length === 0) {
+      setRoadmapHighlight(null);
+      return;
+    }
+    setRoadmapHighlight({ epicIds: new Set(epicIds), label });
+    setTopMode("roadmap");
+  };
   /**
    * Once the user opens the Dashboard mode at least once, keep <DashboardPage /> mounted (just visually hidden when not active).
    * That preserves unsaved drafts and in-progress chart layouts in memory across mode switches without writing them to the DB.
@@ -6898,6 +6915,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 roadmaps={roadmaps}
                 workspaceDirectoryUsers={workspaceDirectoryUsers}
                 progressBasis={progressBasis}
+                onSelectLaggards={handleSelectLaggards}
               />
             </div>
           ) : null}

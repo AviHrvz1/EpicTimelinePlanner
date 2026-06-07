@@ -50,6 +50,9 @@ type Props = {
    *  reference line at the epic's originalEstimateDays. Other chart types
    *  ignore it. Defaults to "days" for public/static dashboards. */
   progressBasis?: "days" | "stories" | "epicEst";
+  /** Cross-mode laggard filter emit — used by Portfolio Burndown's
+   *  contributor popover. Other chart types ignore it. */
+  onSelectLaggards?: (epicIds: string[], label: string) => void;
 };
 
 function ResizePad({
@@ -154,7 +157,7 @@ function renderTitleNodes(chart: DashboardChartItem, displayTitle: string) {
   });
 }
 
-function ChartBody({ chart, initiatives, isEditMode, onUpdateConfig, workspaceDirectoryUsers, progressBasis = "days" }: { chart: DashboardChartItem; initiatives: InitiativeItem[]; isEditMode: boolean; onUpdateConfig?: (id: string, partial: Record<string, unknown>) => void; workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[]; progressBasis?: "days" | "stories" | "epicEst" }) {
+function ChartBody({ chart, initiatives, isEditMode, onUpdateConfig, workspaceDirectoryUsers, progressBasis = "days", onSelectLaggards }: { chart: DashboardChartItem; initiatives: InitiativeItem[]; isEditMode: boolean; onUpdateConfig?: (id: string, partial: Record<string, unknown>) => void; workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[]; progressBasis?: "days" | "stories" | "epicEst"; onSelectLaggards?: (epicIds: string[], label: string) => void }) {
   let params: Record<string, unknown> = {};
   try { params = JSON.parse(chart.config); } catch { /* ignore */ }
 
@@ -395,7 +398,9 @@ function ChartBody({ chart, initiatives, isEditMode, onUpdateConfig, workspaceDi
     case "portfolio-burndown":
       // Quarter-wide burndown. Reads progressBasis from the global Health
       // calc setting (threaded in via the card props) so the chart and the
-      // Health Distribution donut speak the same unit.
+      // Health Distribution donut speak the same unit. `onSelectLaggards`
+      // (threaded down from the planner) wires the popover row + "Highlight
+      // on Roadmap" button to a cross-mode filter.
       return (
         <PortfolioBurndownChart
           initiatives={scopedInitiatives}
@@ -403,6 +408,7 @@ function ChartBody({ chart, initiatives, isEditMode, onUpdateConfig, workspaceDi
           quarter={(params.quarter as number) ?? 1}
           team={params.team as string | null}
           progressBasis={progressBasis}
+          onSelectLaggards={onSelectLaggards}
         />
       );
     default:
@@ -410,7 +416,7 @@ function ChartBody({ chart, initiatives, isEditMode, onUpdateConfig, workspaceDi
   }
 }
 
-export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, onEdit, onToggleSpan, onDecreaseSpan, onChangeHeight, onRenameChart, onUpdateConfig, workspaceDirectoryUsers, progressBasis = "days" }: Props) {
+export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, onEdit, onToggleSpan, onDecreaseSpan, onChangeHeight, onRenameChart, onUpdateConfig, workspaceDirectoryUsers, progressBasis = "days", onSelectLaggards }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: chart.id, disabled: !isEditMode });
   const rowSpan = chart.rowSpan ?? 1;
   const cardHeight = 300 + (rowSpan - 1) * 220;
@@ -511,7 +517,7 @@ export function DashboardChartCard({ chart, initiatives, isEditMode, onRemove, o
 
       {/* Chart body — min-h-0 ensures flex-1 has a definite height so height="100%" works in ResponsiveContainer */}
       <div className="min-h-0 flex-1 overflow-hidden px-2 py-2">
-        <ChartBody chart={chart} initiatives={initiatives} isEditMode={isEditMode} onUpdateConfig={onUpdateConfig} workspaceDirectoryUsers={workspaceDirectoryUsers} progressBasis={progressBasis} />
+        <ChartBody chart={chart} initiatives={initiatives} isEditMode={isEditMode} onUpdateConfig={onUpdateConfig} workspaceDirectoryUsers={workspaceDirectoryUsers} progressBasis={progressBasis} onSelectLaggards={onSelectLaggards} />
       </div>
     </div>
   );

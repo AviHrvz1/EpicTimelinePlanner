@@ -29,9 +29,15 @@ type Props = {
    *  scope-promise reference line when basis === "epicEst". Defaults
    *  to "days". */
   progressBasis?: "days" | "stories" | "epicEst";
+  /** Cross-mode laggard filter emit — Portfolio Burndown's contributor
+   *  popover fires this when the planner picks a row or "Highlight on
+   *  Roadmap". Caller is responsible for storing the selection and
+   *  switching the top mode to Roadmap so the highlight lands on a
+   *  visible Gantt. Public/embedded dashboards leave this unset. */
+  onSelectLaggards?: (epicIds: string[], label: string) => void;
 };
 
-export function DashboardPage({ initiatives: passedInitiatives, planYear, roadmaps = [], workspaceDirectoryUsers = [], progressBasis }: Props) {
+export function DashboardPage({ initiatives: passedInitiatives, planYear, roadmaps = [], workspaceDirectoryUsers = [], progressBasis, onSelectLaggards }: Props) {
   const [dashboards, setDashboards] = useState<DashboardItem[]>([]);
   const [activeDashboardId, setActiveDashboardId] = useState<string | null>(null);
   const [charts, setCharts] = useState<DashboardChartItem[]>([]);
@@ -616,6 +622,7 @@ export function DashboardPage({ initiatives: passedInitiatives, planYear, roadma
                 onRenameChart={renameChart}
                 onUpdateConfig={updateChartConfig}
                 progressBasis={progressBasis}
+                onSelectLaggards={onSelectLaggards}
               />
             </div>
           ) : (

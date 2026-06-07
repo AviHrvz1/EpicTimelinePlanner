@@ -27,9 +27,13 @@ type Props = {
    *  types ignore it. Defaults to "days" so public dashboards stay on
    *  the existing behavior. */
   progressBasis?: "days" | "stories" | "epicEst";
+  /** Forwarded for Portfolio Burndown — fires when the planner picks a
+   *  laggard row or "Highlight on Roadmap". Public dashboards leave it
+   *  unset; the chart degrades gracefully. */
+  onSelectLaggards?: (epicIds: string[], label: string) => void;
 };
 
-export function DashboardCanvas({ charts, initiatives, isEditMode, onReorder, onRemove, onEdit, onToggleSpan, onDecreaseSpan, onChangeHeight, onRenameChart, onUpdateConfig, workspaceDirectoryUsers, progressBasis }: Props) {
+export function DashboardCanvas({ charts, initiatives, isEditMode, onReorder, onRemove, onEdit, onToggleSpan, onDecreaseSpan, onChangeHeight, onRenameChart, onUpdateConfig, workspaceDirectoryUsers, progressBasis, onSelectLaggards }: Props) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   function handleDragEnd(event: DragEndEvent) {
@@ -69,6 +73,7 @@ export function DashboardCanvas({ charts, initiatives, isEditMode, onReorder, on
           onUpdateConfig={onUpdateConfig}
           workspaceDirectoryUsers={workspaceDirectoryUsers}
           progressBasis={progressBasis}
+          onSelectLaggards={onSelectLaggards}
         />
       ))}
     </div>

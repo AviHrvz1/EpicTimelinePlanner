@@ -53,6 +53,12 @@ type Props = {
   team?: string | null;
   /** Follows the global Health calc setting. Controls unit + per-epic math. */
   progressBasis?: ProgressBasis;
+  /** Fires when the planner picks a row in the contributor popover or the
+   *  "Highlight on Roadmap" button. The caller is expected to (a) store
+   *  the selection as a cross-mode filter and (b) switch the top mode to
+   *  the Roadmap so the highlight lands on a visible Gantt. Receives a
+   *  human label for the filter banner (e.g. "3 epics behind plan"). */
+  onSelectLaggards?: (epicIds: string[], label: string) => void;
 };
 
 function startOfDay(d: Date): Date {
@@ -167,6 +173,7 @@ export function PortfolioBurndownChart({
   quarter,
   team,
   progressBasis = "days",
+  onSelectLaggards,
 }: Props) {
   const { start, end } = useMemo(() => quarterBounds(year, quarter), [year, quarter]);
   const { startMonth, endMonth } = useMemo(() => quarterMonthRange(quarter), [quarter]);
@@ -521,34 +528,77 @@ export function PortfolioBurndownChart({
           <ul className="max-h-[260px] overflow-y-auto py-1">
             {contributorList.map((c) => {
               const abs = Math.abs(c.delta);
+              const rowClickable = !!onSelectLaggards;
               return (
-                <li
-                  key={c.epicId}
-                  className="flex items-center gap-2 px-3 py-1.5 text-[12px] text-slate-700 hover:bg-slate-50"
-                >
-                  <span
+                <li key={c.epicId}>
+                  <button
+                    type="button"
+                    disabled={!rowClickable}
+                    onClick={() => {
+                      if (!onSelectLaggards) return;
+                      const sideLabel = paceState === "behind" ? "behind plan" : "ahead of plan";
+                      onSelectLaggards([c.epicId], `1 epic ${sideLabel}`);
+                      setPopoverOpen(false);
+                    }}
                     className={cn(
-                      "inline-flex h-1.5 w-1.5 shrink-0 rounded-full",
-                      paceState === "behind" ? "bg-amber-500" : "bg-emerald-500",
+                      "flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-slate-700 transition-colors",
+                      rowClickable
+                        ? "cursor-pointer hover:bg-slate-50"
+                        : "cursor-default",
                     )}
-                    aria-hidden
-                  />
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate font-medium text-slate-800">{c.epicTitle}</span>
-                    <span className="truncate text-[10.5px] text-slate-500">{c.initiativeTitle}</span>
-                  </span>
-                  <span
-                    className={cn(
-                      "shrink-0 tabular-nums font-semibold",
-                      paceState === "behind" ? "text-amber-700" : "text-emerald-700",
-                    )}
+                    title={rowClickable ? "Highlight this epic on the Roadmap" : undefined}
                   >
-                    {abs.toFixed(decimals)}{unitSuffix}
-                  </span>
+                    <span
+                      className={cn(
+                        "inline-flex h-1.5 w-1.5 shrink-0 rounded-full",
+                        paceState === "behind" ? "bg-amber-500" : "bg-emerald-500",
+                      )}
+                      aria-hidden
+                    />
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate font-medium text-slate-800">{c.epicTitle}</span>
+                      <span className="truncate text-[10.5px] text-slate-500">{c.initiativeTitle}</span>
+                    </span>
+                    <span
+                      className={cn(
+                        "shrink-0 tabular-nums font-semibold",
+                        paceState === "behind" ? "text-amber-700" : "text-emerald-700",
+                      )}
+                    >
+                      {abs.toFixed(decimals)}{unitSuffix}
+                    </span>
+                  </button>
                 </li>
               );
             })}
           </ul>
+          {/* "Highlight all" footer — only shown when the caller wired the
+           *  cross-mode emit. Sends every epic in the list (not just the
+           *  visible top 8) so the Roadmap filter covers everyone behind. */}
+          {onSelectLaggards ? (
+            <div className="border-t border-slate-100 bg-slate-50 px-3 py-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const fullList = paceState === "behind" ? topBehind : topAhead;
+                  if (fullList.length === 0) return;
+                  const ids = fullList.map((c) => c.epicId);
+                  const sideLabel = paceState === "behind" ? "behind plan" : "ahead of plan";
+                  const label = `${ids.length} epic${ids.length === 1 ? "" : "s"} ${sideLabel}`;
+                  onSelectLaggards(ids, label);
+                  setPopoverOpen(false);
+                }}
+                className={cn(
+                  "inline-flex w-full items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[11.5px] font-semibold transition-colors",
+                  paceState === "behind"
+                    ? "bg-amber-100 text-amber-800 hover:bg-amber-200/80"
+                    : "bg-emerald-100 text-emerald-800 hover:bg-emerald-200/80",
+                )}
+              >
+                Highlight {contributorList.length} on Roadmap →
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
       <ResponsiveContainer width="100%" height="100%">
