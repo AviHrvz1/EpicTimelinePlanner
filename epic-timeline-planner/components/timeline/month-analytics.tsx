@@ -4179,7 +4179,11 @@ export function MonthAnalytics({
             </button>
             {isEpicDropdownOpen ? (
               <div
-                className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 max-h-72 overflow-auto rounded-xl bg-white p-1.5 shadow-xl"
+                // z-50 keeps the dropdown above the Progress pie's
+                // center button (z-20). Without this the donut's
+                // "Σ Epics 18" label bleeds through the dropdown
+                // panel when both overlap.
+                className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-72 overflow-auto rounded-xl bg-white p-1.5 shadow-xl"
                 onMouseLeave={() => {
                   setIsEpicDropdownOpen(false);
                   setShowAllEpicSuggestions(false);
