@@ -576,11 +576,10 @@ export function PortfolioBurndownChart({
   // the legend rendering (kpiPlacement="side" implies hideLegend), and
   // whenever the chart is told to render no KPIs at all.
   const inlineLegendHidden = hideLegend || kpiPlacement === "side" || kpiPlacement === "hidden";
-  // Floating layout uses a 36px top margin to clear the chip; side and
-  // hidden layouts reserve ~14px so the y-axis unit caption fits above
-  // the topmost tick. Hidden mode is the only one that shows the
-  // caption (side mode covers it in the side column).
-  const chartTopMargin = kpiPlacement === "floating" ? 36 : 14;
+  // Floating layout uses a 36px top margin to clear the chip; tight
+  // layouts can use a tiny 4px since the y-axis unit caption rotates
+  // alongside the tick numbers and doesn't eat top space.
+  const chartTopMargin = kpiPlacement === "floating" ? 36 : 4;
   const hasSideColumn = kpiPlacement === "side";
   const tightChartChrome = kpiPlacement !== "floating";
 
@@ -725,15 +724,6 @@ export function PortfolioBurndownChart({
        *  KPI + legend column sits on the right. */}
       <div className={cn("flex h-full w-full flex-row", hasSideColumn ? "gap-2" : "gap-0")}>
         <div className={cn("relative h-full min-w-0", hasSideColumn ? "flex-1" : "w-full")}>
-          {/* Tight-chrome y-axis unit caption — sits above the topmost
-           *  YAxis tick. Replaces the rotated "Story-days remaining"
-           *  label that doesn't fit in the 32px-wide axis. Hidden mode
-           *  uses this; side mode shows the unit in the KPI rows. */}
-          {tightChartChrome && !hasSideColumn ? (
-            <span className="pointer-events-none absolute left-0 top-0 z-[5] text-[9px] font-medium leading-none tracking-tight text-slate-500">
-              {basisYAxisUnitShort(progressBasis)}
-            </span>
-          ) : null}
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               data={rows}
@@ -765,19 +755,25 @@ export function PortfolioBurndownChart({
               />
               <YAxis
                 tick={{ fontSize: tightChartChrome ? 9 : 10 }}
-                width={tightChartChrome ? 32 : 48}
+                width={tightChartChrome ? 48 : 48}
                 allowDecimals={progressBasis !== "stories"}
-                label={
-                  tightChartChrome
-                    ? undefined
-                    : {
-                        value: basisYAxisLabel(progressBasis),
-                        angle: -90,
-                        position: "insideLeft",
-                        offset: 0,
-                        style: { fontSize: 11, fill: "#475569", fontWeight: 600 },
-                      }
-                }
+                label={{
+                  // Vertical caption running parallel to the y-axis
+                  // numbers, like a classic burndown chart. In tight-
+                  // chrome layouts the font shrinks to 9px so the
+                  // label + 3-digit ticks both fit in the 48px axis
+                  // width. Floating layout keeps the original 11px.
+                  value: basisYAxisLabel(progressBasis),
+                  angle: -90,
+                  position: "insideLeft",
+                  offset: tightChartChrome ? 14 : 0,
+                  style: {
+                    fontSize: tightChartChrome ? 9 : 11,
+                    fill: "#475569",
+                    fontWeight: 600,
+                    textAnchor: "middle",
+                  },
+                }}
                 domain={[0, Math.max(1, Math.ceil(startTotal * 1.12))]}
               />
               <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
