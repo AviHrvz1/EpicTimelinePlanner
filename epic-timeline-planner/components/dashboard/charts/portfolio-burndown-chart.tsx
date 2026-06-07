@@ -185,6 +185,15 @@ function basisYAxisLabel(basis: ProgressBasis): string {
   return "Story-days remaining";
 }
 
+/** Compact y-axis unit, used in tight-chrome layouts where the rotated
+ *  "Story-days remaining" caption doesn't fit. Renders as a small label
+ *  above the highest Y tick instead. */
+function basisYAxisUnitShort(basis: ProgressBasis): string {
+  if (basis === "stories") return "stories";
+  if (basis === "epicEst") return "epic-days";
+  return "story-days";
+}
+
 export function PortfolioBurndownChart({
   initiatives,
   year,
@@ -568,8 +577,10 @@ export function PortfolioBurndownChart({
   // whenever the chart is told to render no KPIs at all.
   const inlineLegendHidden = hideLegend || kpiPlacement === "side" || kpiPlacement === "hidden";
   // Floating layout uses a 36px top margin to clear the chip; side and
-  // hidden layouts don't need that, so axes get more vertical room.
-  const chartTopMargin = kpiPlacement === "floating" ? 36 : 4;
+  // hidden layouts reserve ~14px so the y-axis unit caption fits above
+  // the topmost tick. Hidden mode is the only one that shows the
+  // caption (side mode covers it in the side column).
+  const chartTopMargin = kpiPlacement === "floating" ? 36 : 14;
   const hasSideColumn = kpiPlacement === "side";
   const tightChartChrome = kpiPlacement !== "floating";
 
@@ -714,6 +725,15 @@ export function PortfolioBurndownChart({
        *  KPI + legend column sits on the right. */}
       <div className={cn("flex h-full w-full flex-row", hasSideColumn ? "gap-2" : "gap-0")}>
         <div className={cn("relative h-full min-w-0", hasSideColumn ? "flex-1" : "w-full")}>
+          {/* Tight-chrome y-axis unit caption — sits above the topmost
+           *  YAxis tick. Replaces the rotated "Story-days remaining"
+           *  label that doesn't fit in the 32px-wide axis. Hidden mode
+           *  uses this; side mode shows the unit in the KPI rows. */}
+          {tightChartChrome && !hasSideColumn ? (
+            <span className="pointer-events-none absolute left-0 top-0 z-[5] text-[9px] font-medium leading-none tracking-tight text-slate-500">
+              {basisYAxisUnitShort(progressBasis)}
+            </span>
+          ) : null}
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               data={rows}
