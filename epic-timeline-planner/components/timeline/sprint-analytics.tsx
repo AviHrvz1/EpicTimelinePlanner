@@ -1811,12 +1811,19 @@ export function SprintAnalytics({
             const loadRows = teamMode
               ? analytics.workloadByTeam.map((t) => {
                   const totalStories = t.storiesByStatus.todo + t.storiesByStatus.inProgress + t.storiesByStatus.review + t.storiesByStatus.done;
+                  // In stories mode, "done" is the count of stories
+                  // strictly in `done` status — Review/Testing stories
+                  // count as NOT done, so the chip number matches what
+                  // the planner sees in the per-row drilldown table.
+                  // (In days-left mode the upstream daysLeftTotal
+                  // already excludes work-time from review stories.)
+                  const notDoneStories = totalStories - t.storiesByStatus.done;
                   return {
                     key: t.teamLabel,
                     label: t.teamLabel,
                     initials: t.teamLabel.slice(0, 2).toUpperCase(),
                     image: null as string | null,
-                    daysLeft: metric === "storyCount" ? t.openCount : t.daysLeftTotal,
+                    daysLeft: metric === "storyCount" ? notDoneStories : t.daysLeftTotal,
                     estTotal: metric === "storyCount" ? totalStories : t.estimatedTotal,
                     isTeam: true,
                     matchKey: (t.teamId ?? "") as string,
@@ -1829,6 +1836,7 @@ export function SprintAnalytics({
                 })
               : analytics.workloadByAssignee.map((row) => {
                   const totalStories = row.storiesByStatus.todo + row.storiesByStatus.inProgress + row.storiesByStatus.review + row.storiesByStatus.done;
+                  const notDoneStories = totalStories - row.storiesByStatus.done;
                   // Resolve the photo from the workspace directory so the row
                   // circle shows the user's avatar instead of initials when
                   // available — falls back gracefully when there's no match.
@@ -1838,7 +1846,7 @@ export function SprintAnalytics({
                     label: row.assignee,
                     initials: row.assignee.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join(""),
                     image: resolved.image,
-                    daysLeft: metric === "storyCount" ? row.openCount : row.daysLeftTotal,
+                    daysLeft: metric === "storyCount" ? notDoneStories : row.daysLeftTotal,
                     estTotal: metric === "storyCount" ? totalStories : row.estimatedTotal,
                     isTeam: false,
                     matchKey: row.assignee,
