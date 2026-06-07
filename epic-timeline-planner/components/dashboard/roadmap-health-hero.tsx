@@ -774,42 +774,39 @@ function CircleProgress({
   percent: number;
   color: string;
 }) {
-  // Thicker stroke + larger radius gives the donut a more prominent
-  // visual weight — matches the requested mockup where the ring reads
-  // as a proper "filled meter" rather than a thin outline.
-  const radius = 14;
+  const radius = 11;
   const circumference = 2 * Math.PI * radius;
   const clamped = Math.max(0, Math.min(100, percent));
   const dashOffset = circumference * (1 - clamped / 100);
   return (
-    <svg width={36} height={36} viewBox="0 0 36 36" aria-hidden>
+    <svg width={28} height={28} viewBox="0 0 28 28" aria-hidden>
       <circle
-        cx={18}
-        cy={18}
+        cx={14}
+        cy={14}
         r={radius}
         fill="none"
         stroke="#e2e8f0"
-        strokeWidth={3.5}
+        strokeWidth={2.4}
       />
       <circle
-        cx={18}
-        cy={18}
+        cx={14}
+        cy={14}
         r={radius}
         fill="none"
         stroke={color}
-        strokeWidth={3.5}
+        strokeWidth={2.4}
         strokeDasharray={circumference}
         strokeDashoffset={dashOffset}
         strokeLinecap="round"
-        transform="rotate(-90 18 18)"
+        transform="rotate(-90 14 14)"
       />
       <text
-        x={18}
-        y={21}
+        x={14}
+        y={16}
         textAnchor="middle"
-        fontSize={9}
+        fontSize={8}
         fontWeight={700}
-        fill="#1e293b"
+        fill="#475569"
       >
         {Math.round(clamped)}%
       </text>
@@ -989,12 +986,12 @@ function TeamProgressCard({
                  */}
                 {(() => {
                   const tone = atRisk
-                    ? { bar: "bg-amber-400", chipBg: "bg-amber-100", icon: "text-amber-500", accent: "text-amber-600", stroke: "#f59e0b" }
+                    ? { bar: "bg-amber-400", chipBg: "bg-amber-50/80", icon: "text-amber-500", accent: "text-amber-600", stroke: "#f59e0b" }
                     : allDone
-                      ? { bar: "bg-emerald-400", chipBg: "bg-emerald-100", icon: "text-emerald-500", accent: "text-emerald-600", stroke: "#10b981" }
+                      ? { bar: "bg-emerald-400", chipBg: "bg-emerald-50/80", icon: "text-emerald-500", accent: "text-emerald-600", stroke: "#10b981" }
                       : watch
-                        ? { bar: "bg-amber-300", chipBg: "bg-amber-100", icon: "text-amber-500", accent: "text-amber-600", stroke: "#f59e0b" }
-                        : { bar: "bg-indigo-400", chipBg: "bg-indigo-100", icon: "text-indigo-500", accent: "text-indigo-600", stroke: "#6366f1" };
+                        ? { bar: "bg-amber-300", chipBg: "bg-amber-50/80", icon: "text-amber-500", accent: "text-amber-600", stroke: "#f59e0b" }
+                        : { bar: "bg-indigo-400", chipBg: "bg-indigo-50/80", icon: "text-indigo-500", accent: "text-indigo-600", stroke: "#6366f1" };
                   return (
                     <div className="flex items-center gap-2">
                       <TeamAvatar
@@ -1037,10 +1034,10 @@ function TeamProgressCard({
                           />
                         </div>
                       </div>
-                      {/* Single pill chip: solidly tone-tinted background,
-                       *  no border, generous rounded corners. "Xd" in
+                      {/* Single pill chip: soft tone-tinted background,
+                       *  no border, slightly rounded corners. "Xd" in
                        *  tone accent, "/ Yd left" in muted slate. */}
-                      <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-xl px-2 py-1 text-[10.5px] font-semibold tabular-nums", tone.chipBg)}>
+                      <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-[10.5px] font-semibold tabular-nums", tone.chipBg)}>
                         <Clock className={cn("size-3", tone.icon)} strokeWidth={2.2} aria-hidden />
                         <span className={tone.accent}>{row.daysLeft}{unitSuffix}</span>
                         <span className="text-slate-400">/</span>
