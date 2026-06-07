@@ -5669,6 +5669,15 @@ export function MonthAnalytics({
                     setMonthLoadDrilldownFilter({ ...EMPTY_DRILLDOWN_FILTER, assignee: row.assignee });
                   },
                 }));
+            // Sort by completion % descending: rows with the most work
+            // already done bubble to the top, laggards sink to the
+            // bottom. Empty estTotal counts as 100% so a team with
+            // nothing planned isn't ranked above one that's mid-burn.
+            loadRows.sort((a, b) => {
+              const pctA = a.estTotal > 0 ? (a.estTotal - a.daysLeft) / a.estTotal : 1;
+              const pctB = b.estTotal > 0 ? (b.estTotal - b.daysLeft) / b.estTotal : 1;
+              return pctB - pctA;
+            });
             if (loadRows.length === 0 && !monthLoadDrilldownAssignee) return <div className="hidden lg:block lg:col-span-1" />;
             return (
               <div className="flex min-h-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1">
