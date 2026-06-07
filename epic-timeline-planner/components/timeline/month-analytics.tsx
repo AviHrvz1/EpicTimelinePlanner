@@ -4758,7 +4758,12 @@ export function MonthAnalytics({
         })() : null}
         <div
           className={cn(
-            "grid flex-1 lg:grid-cols-[minmax(0,1fr)_12.5rem] lg:items-stretch",
+            // Legend column 12.5 -> 14.5rem so "Review / Testing 35 (19%)"
+            // fits on one line instead of wrapping to "Review /\nTesting".
+            // Same total card width — the donut takes 2rem less. The
+            // donut still has more than enough room at the chart's
+            // typical aspect ratio.
+            "grid flex-1 lg:grid-cols-[minmax(0,1fr)_14.5rem] lg:items-stretch",
             INSIGHTS_CHART_GRID_GAP,
             INSIGHTS_CONTENT_HEIGHT,
             // Pie panel needs a touch more vertical room than the shared
