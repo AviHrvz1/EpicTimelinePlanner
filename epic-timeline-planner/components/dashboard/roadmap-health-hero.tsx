@@ -986,12 +986,12 @@ function TeamProgressCard({
                  */}
                 {(() => {
                   const tone = atRisk
-                    ? { bar: "bg-amber-400", chipRing: "bg-white ring-amber-200", icon: "text-amber-500", accent: "text-amber-600", stroke: "#f59e0b" }
+                    ? { bar: "bg-amber-400", chipBg: "bg-amber-50/80", icon: "text-amber-500", accent: "text-amber-600", stroke: "#f59e0b" }
                     : allDone
-                      ? { bar: "bg-emerald-400", chipRing: "bg-white ring-emerald-200", icon: "text-emerald-500", accent: "text-emerald-600", stroke: "#10b981" }
+                      ? { bar: "bg-emerald-400", chipBg: "bg-emerald-50/80", icon: "text-emerald-500", accent: "text-emerald-600", stroke: "#10b981" }
                       : watch
-                        ? { bar: "bg-amber-300", chipRing: "bg-white ring-amber-200", icon: "text-amber-500", accent: "text-amber-600", stroke: "#f59e0b" }
-                        : { bar: "bg-indigo-400", chipRing: "bg-white ring-indigo-200", icon: "text-indigo-500", accent: "text-indigo-600", stroke: "#6366f1" };
+                        ? { bar: "bg-amber-300", chipBg: "bg-amber-50/80", icon: "text-amber-500", accent: "text-amber-600", stroke: "#f59e0b" }
+                        : { bar: "bg-indigo-400", chipBg: "bg-indigo-50/80", icon: "text-indigo-500", accent: "text-indigo-600", stroke: "#6366f1" };
                   return (
                     <div className="flex items-center gap-2">
                       <TeamAvatar
@@ -1034,12 +1034,10 @@ function TeamProgressCard({
                           />
                         </div>
                       </div>
-                      {/* Single pill chip: white bg, tone-colored ring +
-                       *  icon, "Xd" stands out in tone, "/ Yd left" sits
-                       *  in muted slate — the fraction reads as "how much
-                       *  of the total is still open." Matches the
-                       *  mockup's two-tone style. */}
-                      <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold tabular-nums ring-1", tone.chipRing)}>
+                      {/* Single pill chip: soft tone-tinted background,
+                       *  no border, slightly rounded corners. "Xd" in
+                       *  tone accent, "/ Yd left" in muted slate. */}
+                      <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-[10.5px] font-semibold tabular-nums", tone.chipBg)}>
                         <Clock className={cn("size-3", tone.icon)} strokeWidth={2.2} aria-hidden />
                         <span className={tone.accent}>{row.daysLeft}{unitSuffix}</span>
                         <span className="text-slate-400">/</span>
