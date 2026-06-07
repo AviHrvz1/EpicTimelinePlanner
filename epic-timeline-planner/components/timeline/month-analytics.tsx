@@ -4694,7 +4694,12 @@ export function MonthAnalytics({
                 </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center">
+              {/* Sits ABOVE the PieChart container (which is z-10) so
+               *  clicks on the center button actually land on the
+               *  button rather than getting intercepted by the SVG.
+               *  Without this, the center "Σ Epics" click did nothing
+               *  even though the slice buttons next to it worked. */}
+              <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
                 <button
                   type="button"
                   onClick={() => openStatusDrilldown("All")}
