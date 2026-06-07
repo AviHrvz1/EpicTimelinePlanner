@@ -2430,27 +2430,42 @@ export function MonthAnalytics({
   };
   const clearStatusDrilldown = () => setStatusDrilldownFilter(null);
   /**
-   * Epics in scope for the burndown / burnup charts. Mirrors the hero
-   * `PortfolioBurndownChart` rule exactly: epic's plan window must
-   * overlap the scope period. We don't fall back to "epic has stories
-   * in the period" or filter by initiative status — those broader
-   * criteria fit the donut / drilldown views (which use `monthEpics`
-   * directly) but cause the burndown to disagree with the hero on
-   * "what counts as a Q2 epic." Same question, same answer across
-   * surfaces. Single-epic focus bypasses the filter — the user picked
-   * that epic explicitly. */
+   * Epics in scope for the burndown / burnup charts. An epic counts as
+   * "in this period" when EITHER of these is true:
+   *
+   *   1. Its plan window overlaps the period (planned-Q2 work).
+   *   2. It has active stories whose sprint falls inside the period
+   *      (delivery-in-Q2 work — captures epics that slipped from a
+   *      prior quarter and are still being worked on now).
+   *
+   * Rule 2 is critical: a Q1-planned epic that the team didn't finish
+   * by Mar 31 IS Q2 work in practice, and the burndown should plot it.
+   * Without rule 2 the chart understates how much work is actually
+   * underway in the current quarter.
+   *
+   * Single-epic focus bypasses the filter — the user picked that
+   * epic explicitly. */
   const burndownScopedEpics = useMemo<EpicItem[]>(() => {
     if (selectedEpicOption != null) return [selectedEpicOption.epic];
     if (scopeMonths.length === 0) return monthEpics.map((row) => row.epic);
     const startMonth = Math.min(...scopeMonths);
     const endMonth = Math.max(...scopeMonths);
+    const monthsSet = new Set(scopeMonths);
     return monthEpics
       .map((row) => row.epic)
       .filter((epic) => {
-        if (epic.planStartMonth == null || epic.planEndMonth == null) return false;
-        if (epic.planStartMonth > endMonth) return false;
-        if (epic.planEndMonth < startMonth) return false;
-        return true;
+        // Rule 1: plan window overlaps the period.
+        const planInScope =
+          epic.planStartMonth != null &&
+          epic.planEndMonth != null &&
+          epic.planStartMonth <= endMonth &&
+          epic.planEndMonth >= startMonth;
+        if (planInScope) return true;
+        // Rule 2: stories in this period's sprints — covers slipping
+        // epics whose plan dates are outside the period but whose
+        // engineers are still working in-period.
+        const contextMonth = epic.planStartMonth ?? startMonth;
+        return epicHasStoryInPeriodMonths(epic, monthsSet, contextMonth);
       });
   }, [monthEpics, selectedEpicOption, scopeMonths]);
 

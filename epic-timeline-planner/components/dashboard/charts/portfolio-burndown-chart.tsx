@@ -42,6 +42,7 @@ import type {
   UserStoryItem,
 } from "@/lib/types";
 import { computeEpicHealthVerdict } from "@/lib/epic-health";
+import { clampYearSprint, globalSprintFromMonthLane, monthLaneFromGlobalSprint } from "@/lib/year-sprint";
 import { cn } from "@/lib/utils";
 
 type ProgressBasis = "days" | "stories" | "epicEst";
@@ -213,20 +214,46 @@ export function PortfolioBurndownChart({
   const todayMs = today.getTime();
   const totalDays = Math.max(1, Math.round((endMs - startMs) / 86400000) + 1);
 
-  // Epics whose plan window touches the quarter at all. Team filter applied
-  // here so per-team dashboards burn only their slice. Keep the parent
-  // initiative alongside so the contributor popover can show "<epic> ·
-  // <initiative>" without re-walking the tree.
+  // Epics counted toward this quarter. Two ways to qualify:
+  //   1. Plan window overlaps the quarter (planned-quarter work).
+  //   2. Has stories whose sprint falls inside the quarter
+  //      (delivery-quarter work — catches epics that slipped from a
+  //      previous quarter and are still being worked on now).
+  // Without rule 2 the chart understates active work whenever epic
+  // plans slip past their planned end. Matches the insights
+  // burndownScopedEpics filter so the two surfaces report the same
+  // population.
+  // Team filter still applied first so per-team dashboards burn only
+  // their slice. Keep the parent initiative alongside so the
+  // contributor popover can show "<epic> · <initiative>" without
+  // re-walking the tree.
   type ScopeRow = { epic: EpicItem; initiative: InitiativeItem };
   const epicsInScopeRows: ScopeRow[] = useMemo(() => {
+    const monthsSet = new Set<number>();
+    for (let m = startMonth; m <= endMonth; m += 1) monthsSet.add(m);
+    const hasStoryInQuarter = (epic: EpicItem): boolean => {
+      for (const story of epic.userStories ?? []) {
+        if (story.sprint == null) continue;
+        const normalized =
+          story.sprint === 1 || story.sprint === 2
+            ? globalSprintFromMonthLane(epic.planStartMonth ?? startMonth, story.sprint)
+            : clampYearSprint(story.sprint);
+        if (monthsSet.has(monthLaneFromGlobalSprint(normalized).month)) return true;
+      }
+      return false;
+    };
     const out: ScopeRow[] = [];
     for (const initiative of initiatives) {
       for (const epic of initiative.epics ?? []) {
         if (team && epic.team !== team) continue;
-        if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
-        if (epic.planStartMonth > endMonth) continue;
-        if (epic.planEndMonth < startMonth) continue;
-        out.push({ epic, initiative });
+        const planInScope =
+          epic.planStartMonth != null &&
+          epic.planEndMonth != null &&
+          epic.planStartMonth <= endMonth &&
+          epic.planEndMonth >= startMonth;
+        if (planInScope || hasStoryInQuarter(epic)) {
+          out.push({ epic, initiative });
+        }
       }
     }
     return out;
