@@ -362,9 +362,13 @@ function yearRoadmapGanttMinWidthPx(columnCount: number, minSprintPx: number = Y
 function YearRoadmapTodayLine({ leftPercent }: { leftPercent: string | null }) {
   if (leftPercent == null) return null;
   return (
-    // z-30 keeps the marker above the lanes (which sit at z-10) when it's rendered as a sibling of the scroll container.
+    // z-30 keeps the marker above the lanes (which sit at z-10) when
+    // it's rendered as a sibling of the scroll container.
+    // `-bottom-3` bleeds the wrapper 12px past the panel's content box
+    // so the bottom arrow lands flush with the panel's visual bottom
+    // edge instead of stopping inside the trailing padding.
     <div
-      className="pointer-events-none absolute inset-y-0 z-30 overflow-visible"
+      className="pointer-events-none absolute top-0 -bottom-[12px] z-[60] overflow-visible"
       style={{ left: leftPercent }}
       aria-hidden
     >
@@ -6973,7 +6977,13 @@ export function TimelineGrid({
         ) : focusedQuarter && quarterViewTab === "gantt" ? null : roadmapBarMode === "initiatives" ? (
           <div
             className={cn(
-              "relative isolate flex min-h-0 min-w-0 flex-1 flex-col bg-white pl-0 pr-0 pb-1 sm:pl-0 sm:pr-0 sm:pb-1",
+              // `min-h-fit` (instead of `min-h-0`) lets this flex item
+              // grow with its bar content. Without it, `flex-1 min-h-0`
+              // would clamp the box to the flex-allocated height, leaving
+              // the absolutely-positioned today line (which uses
+              // `inset-y-0` of this box) shorter than the visible bars
+              // when content overflows the viewport.
+              "relative isolate flex min-h-fit min-w-0 flex-1 flex-col bg-white pl-0 pr-0 pb-1 sm:pl-0 sm:pr-0 sm:pb-1",
               // Unified-scroll: `overflow-x-clip` (not -hidden) so the browser
 // does NOT coerce `overflow-y: visible` to `auto`, which would
 // resurrect an internal vertical scrollbar on the Gantt panel.
@@ -6984,7 +6994,7 @@ export function TimelineGrid({
             <YearRoadmapTodayLine leftPercent={roadmapLaneTodayLeft} />
             <div
               className={cn(
-                "relative flex min-h-0 w-full flex-1 flex-col",
+                "relative flex min-h-fit w-full flex-1 flex-col",
                 // Unified-scroll: `overflow-x-clip` (not -hidden) so the browser
 // does NOT coerce `overflow-y: visible` to `auto`, which would
 // resurrect an internal vertical scrollbar on the Gantt panel.
@@ -6996,7 +7006,7 @@ export function TimelineGrid({
                 className={cn(
                   // Unified-scroll: vertical scroll bubbles up to the
                   // page scroller (main element).
-                  "relative z-10 min-h-0 flex-1 space-y-0.5 overflow-y-visible",
+                  "relative z-10 min-h-fit flex-1 space-y-0.5 overflow-y-visible",
                   // Unified-scroll: `overflow-x-clip` (not -hidden) so the browser
 // does NOT coerce `overflow-y: visible` to `auto`, which would
 // resurrect an internal vertical scrollbar on the Gantt panel.
@@ -7101,7 +7111,11 @@ export function TimelineGrid({
         ) : (
           <div
             className={cn(
-              "relative isolate flex min-h-0 min-w-0 flex-1 flex-col bg-white pl-0 pr-0 pb-1 sm:pl-0 sm:pr-0 sm:pb-1",
+              // `min-h-fit` so the today line (absolute `inset-y-0` of
+              // this box) extends with the bar content instead of being
+              // clipped to the flex allocation — see the initiatives
+              // branch above for the same rationale.
+              "relative isolate flex min-h-fit min-w-0 flex-1 flex-col bg-white pl-0 pr-0 pb-1 sm:pl-0 sm:pr-0 sm:pb-1",
               // Unified-scroll: `overflow-x-clip` (not -hidden) so the browser
 // does NOT coerce `overflow-y: visible` to `auto`, which would
 // resurrect an internal vertical scrollbar on the Gantt panel.
@@ -7112,7 +7126,7 @@ export function TimelineGrid({
             <YearRoadmapTodayLine leftPercent={roadmapLaneTodayLeft} />
             <div
               className={cn(
-                "relative flex min-h-0 w-full flex-1 flex-col",
+                "relative flex min-h-fit w-full flex-1 flex-col",
                 // Unified-scroll: `overflow-x-clip` (not -hidden) so the browser
 // does NOT coerce `overflow-y: visible` to `auto`, which would
 // resurrect an internal vertical scrollbar on the Gantt panel.
@@ -7124,7 +7138,7 @@ export function TimelineGrid({
                 className={cn(
                   // Unified-scroll: vertical scroll bubbles up to the
                   // page scroller (main element).
-                  "relative z-10 min-h-0 flex-1 space-y-0.5 overflow-y-visible",
+                  "relative z-10 min-h-fit flex-1 space-y-0.5 overflow-y-visible",
                   // Unified-scroll: `overflow-x-clip` (not -hidden) so the browser
 // does NOT coerce `overflow-y: visible` to `auto`, which would
 // resurrect an internal vertical scrollbar on the Gantt panel.

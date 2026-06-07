@@ -495,8 +495,17 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
     }
   }
 
-  // Closed-sprint cleanup: leave a realistic 70/30 mix of `done`/`review`
-  // instead of 100% done.
+  // Closed-sprint cleanup: 100% done.
+  //
+  // Earlier versions left a 70/30 done/review mix to give the kanban
+  // some texture, but that made every past-window epic land in
+  // Overdue — review stories keep their non-zero daysLeft, so the
+  // epic-est rollup never reaches 100% and the verdict cliffs to
+  // overdue once `now > planEnd`. For the demo's health distribution
+  // (most On Track / Done, a handful of explicit Watch / At Risk /
+  // Overdue picks) past sprints should read as cleanly closed.
+  // Current-sprint diversity is preserved by the separate
+  // diversify pass below.
   //
   // Why this matters for the demo: epic-planner-app has a post-close
   // auto-rollover effect that scans all stories on mount and PATCHes any
@@ -521,36 +530,22 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
     select: { id: true, sprint: true, planYear: true, status: true },
   });
   const promoteToDoneIds: string[] = [];
-  const promoteToApprovedIds: string[] = [];
   for (const s of closedStories) {
     if (s.sprint == null) continue;
     const seEnd = sprintEndDate(s.planYear ?? planYear, s.sprint);
     if (seEnd >= today) continue; // open / future sprint — keep its live status
-    if (s.status === StoryStatus.todo || s.status === StoryStatus.inProgress) {
-      // Always rescue these from the rollover by completing them. Then
-      // their `review` state runs through the 70/30 split below.
-      promoteToDoneIds.push(s.id);
-    }
-    // Deterministic 70% pick — same id hash trick as the diversify pass.
-    let h = 0;
-    for (let i = 0; i < s.id.length; i++) h = (h * 31 + s.id.charCodeAt(i)) | 0;
-    if (Math.abs(h) % 10 < 7) promoteToApprovedIds.push(s.id);
+    promoteToDoneIds.push(s.id);
   }
   if (promoteToDoneIds.length > 0) {
+    // Mark fully done with zero remaining so the epic rollup hits 100%
+    // and reads as "Done" (not Overdue) on past-window epics.
     await db.userStory.updateMany({
       where: { id: { in: promoteToDoneIds } },
-      data: { status: StoryStatus.review },
-    });
-  }
-  if (promoteToApprovedIds.length > 0) {
-    await db.userStory.updateMany({
-      where: { id: { in: promoteToApprovedIds } },
-      data: { status: StoryStatus.done },
+      data: { status: StoryStatus.done, daysLeft: 0 },
     });
   }
   console.log("[demo-builder] closed-sprint status mix", {
-    promoteToDoneCount: promoteToDoneIds.length,
-    promoteToApprovedCount: promoteToApprovedIds.length,
+    promotedToDone: promoteToDoneIds.length,
   });
 
   // Diversify current-sprint statuses. The snapshot-generated `final` state
@@ -655,24 +650,25 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
       });
       console.log("[demo-builder] backfill check", { teamSlug, targetSprint, existingCount });
       if (existingCount > 0) continue;
-      // Prefer an epic whose plan window includes the target sprint (so the
-      // story's sprint is consistent with its epic on the Gantt). Fall back
-      // to any epic of this team.
+      // Only attach to an epic whose plan window INCLUDES the target
+      // sprint. The previous fallback to "any epic of this team" was
+      // creating spurious snapshots in past sprints under future- or
+      // active-month epics — that pulled `computeEpicObservedStart`
+      // backwards into May for a June epic, which then made the
+      // verdict math compute against the extended window and push
+      // the epic into At Risk / Overdue. If no eligible epic exists
+      // for this (team × sprint), skip — team retro may miss data
+      // for that combo but the health distribution stays honest.
       const { month: targetMonth } = monthLaneFromGlobalSprint(targetSprint);
-      const teamEpic =
-        (await db.epic.findFirst({
-          where: {
-            team: teamSlug,
-            planYear,
-            planStartMonth: { lte: targetMonth },
-            planEndMonth: { gte: targetMonth },
-          },
-          orderBy: { planStartMonth: "asc" },
-        })) ??
-        (await db.epic.findFirst({
-          where: { team: teamSlug, planYear },
-          orderBy: { planStartMonth: "asc" },
-        }));
+      const teamEpic = await db.epic.findFirst({
+        where: {
+          team: teamSlug,
+          planYear,
+          planStartMonth: { lte: targetMonth },
+          planEndMonth: { gte: targetMonth },
+        },
+        orderBy: { planStartMonth: "asc" },
+      });
       console.log("[demo-builder] backfill epic pick", {
         teamSlug,
         targetSprint,
@@ -744,10 +740,10 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
   totalSnapshots += backfillSnapshotsAdded;
   console.log("[demo-builder] backfill review", { backfillStoriesAdded, backfillSnapshotsAdded });
 
-  // Apply the same closed-sprint status cleanup to backfilled stories —
-  // promote any `todo` / `inProgress` residual to `review` (rescue from
-  // rollover), then split the resulting `review` set 70/30 done/review
-  // so the retro pie chart shows status variety.
+  // Apply the same 100%-done cleanup to backfilled stories. Same
+  // rationale as the main cleanup above — any non-done backfill story
+  // in a closed sprint would leak into the verdict math and push an
+  // active or future epic to Overdue / At Risk.
   const backfillClosed = await db.userStory.findMany({
     where: {
       sprint: { in: lastTwoClosedSprints },
@@ -757,33 +753,20 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
     select: { id: true, sprint: true, planYear: true, status: true },
   });
   const backfillToDoneIds: string[] = [];
-  const backfillToApprovedIds: string[] = [];
   for (const s of backfillClosed) {
     if (s.sprint == null) continue;
     const seEnd = sprintEndDate(s.planYear ?? planYear, s.sprint);
     if (seEnd >= today) continue;
-    if (s.status === StoryStatus.todo || s.status === StoryStatus.inProgress) {
-      backfillToDoneIds.push(s.id);
-    }
-    let h = 0;
-    for (let i = 0; i < s.id.length; i++) h = (h * 31 + s.id.charCodeAt(i)) | 0;
-    if (Math.abs(h) % 10 < 7) backfillToApprovedIds.push(s.id);
+    backfillToDoneIds.push(s.id);
   }
   if (backfillToDoneIds.length > 0) {
     await db.userStory.updateMany({
       where: { id: { in: backfillToDoneIds } },
-      data: { status: StoryStatus.review },
-    });
-  }
-  if (backfillToApprovedIds.length > 0) {
-    await db.userStory.updateMany({
-      where: { id: { in: backfillToApprovedIds } },
-      data: { status: StoryStatus.done },
+      data: { status: StoryStatus.done, daysLeft: 0 },
     });
   }
   console.log("[demo-builder] backfill status mix", {
-    promoteToDoneCount: backfillToDoneIds.length,
-    promoteToApprovedCount: backfillToApprovedIds.length,
+    promotedToDone: backfillToDoneIds.length,
   });
 
   // Ground-truth audit: for each of the last 2 closed sprints, count stories

@@ -157,7 +157,21 @@ export function computeProgress(input: ProgressInputs): ProgressResult {
         }
       }
       totalEffort = epicEst;
-      if (totalStoryDays > 0) {
+      // If every child story is terminal (done/cancelled), the epic
+      // has delivered its full broken-down scope — collapse to zero
+      // remaining regardless of any gap between epicEst and the
+      // story-days sum. Without this, an epic whose estimate exceeds
+      // the sum of its story estimates (e.g. planner bumped epicEst,
+      // or the breakdown rounded down) shows a phantom 1–3 days
+      // remaining even with 10/10 stories done — and past the end
+      // date that flips the verdict to "Overdue" purely from
+      // estimation noise.
+      const allStoriesTerminal =
+        input.stories.length > 0 &&
+        input.stories.every((s) => TERMINAL_STATUSES.has(s.status));
+      if (allStoriesTerminal) {
+        remainingEffort = 0;
+      } else if (totalStoryDays > 0) {
         // Burn the epic budget down by the actual story-days already
         // completed. Previously we scaled the open/total story ratio
         // back up by epicEst — that hid the risk created when epicEst

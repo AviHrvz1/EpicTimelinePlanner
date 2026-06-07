@@ -1,10 +1,16 @@
 /**
  * When did the team ACTUALLY start working on this epic, as recorded by
- * daily snapshots? Returns the earliest date on which any child story
- * shows real movement — either:
- *   • its rolled-up `daysLeft` fell below `estimatedDays`, OR
- *   • its `status` advanced past `todo` / `inProgress` (i.e. reached
- *     `review` or `done`).
+ * daily snapshots? Returns the earliest date on which any child story's
+ * `status` advanced past `todo` — i.e. someone moved the card to
+ * `inProgress`, `review`, or `done`.
+ *
+ * NOTE on what we look for: we deliberately do NOT use "daysLeft fell
+ * below estimatedDays" as a signal. Some seeders (and some real-world
+ * automations) write daysLeft snapshots gradually before a sprint even
+ * starts — e.g. to render a smooth chart curve. That mechanical
+ * decrement doesn't mean "the team started working"; it's just a
+ * visualization scaffold. Anchoring observed start to genuine status
+ * advances keeps the verdict aligned with the real human workflow.
  *
  * Stories without snapshots are ignored — there's nothing to observe.
  * Returns `null` when nothing has moved yet; callers should then fall
@@ -32,7 +38,6 @@ export function computeEpicObservedStart(epic: EpicItem): Date | null {
   if (stories.length === 0) return null;
   let earliestMs = Infinity;
   for (const story of stories) {
-    const baseline = story.estimatedDays ?? 0;
     const snaps = story.snapshots ?? [];
     if (snaps.length === 0) continue;
     // Snapshots are usually persisted chronologically, but re-sort
@@ -40,10 +45,13 @@ export function computeEpicObservedStart(epic: EpicItem): Date | null {
     const sorted = [...snaps].sort((a, b) =>
       new Date(a.snapshotDate).getTime() - new Date(b.snapshotDate).getTime());
     for (const snap of sorted) {
-      const advancedStatus = snap.status === "review" || snap.status === "done";
-      const snapDaysLeft = snap.daysLeft ?? snap.estimatedDays ?? baseline;
-      const burntSomething = baseline > 0 && snapDaysLeft < baseline;
-      if (advancedStatus || burntSomething) {
+      // ONLY status advances count — see header. A daysLeft-only
+      // drop while status is still `todo` is treated as scaffolding,
+      // not as the team starting work.
+      const advanced = snap.status === "inProgress"
+        || snap.status === "review"
+        || snap.status === "done";
+      if (advanced) {
         const ts = new Date(snap.snapshotDate).getTime();
         if (Number.isFinite(ts) && ts < earliestMs) earliestMs = ts;
         break;

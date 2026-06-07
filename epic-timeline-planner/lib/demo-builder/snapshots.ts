@@ -48,14 +48,18 @@ export function pickDemoStoryCurve(seed: string): DemoStoryCurve {
  * push the override epic back into On Track. Today ≈ end-of-May 2026, so
  * the picks below all land on epics whose plan window contains May.
  *
- * Distribution (3 At Risk + 2 Watch, per the demo-data spec):
+ * Distribution (most On Track · 3 At Risk · 3 Watch · 2 Overdue):
  *   - At Risk:
- *       initIdx 0 / teamIdx 3  → "Onboarding revamp" epic at month 4
- *       initIdx 2 / teamIdx 2  → "Mobile app redesign" epic at month 5
- *       initIdx 4 / teamIdx 0  → "Growth experiments Q2" epic at month 5
+ *       initIdx 0 / teamIdx 4  → "Onboarding revamp" epic at month 6
+ *       initIdx 2 / teamIdx 3  → "Mobile app redesign" epic at months 6-8
+ *       initIdx 4 / teamIdx 1  → "Growth experiments Q2" epic at months 6-7
  *   - Watch:
- *       initIdx 1 / teamIdx 2  → "Payments platform v2" epic at months 4–5
- *       initIdx 3 / teamIdx 1  → "Analytics data warehouse" epic at month 5
+ *       initIdx 1 / teamIdx 3  → "Payments platform v2" epic at month 6
+ *       initIdx 3 / teamIdx 2  → "Analytics data warehouse" epic at month 6
+ *       initIdx 5 / teamIdx 1  → "Search & discovery" epic at month 6
+ *   - Overdue:
+ *       initIdx 0 / teamIdx 0  → "Onboarding revamp" epic at month 1
+ *       initIdx 1 / teamIdx 1  → "Payments platform v2" epic at month 3
  */
 /** Health verdicts we explicitly seed in the demo data so the popover and
  *  Insights chart show a realistic mix instead of "everything On Track".
@@ -81,8 +85,9 @@ export function pickDemoEpicHealthOverride(
   //   Init 2 "Mobile app redesign"    start=3 → months 3, 4, 5, 6-8, 9
   //   Init 3 "Analytics data warehouse" start=4 → months 4, 5, 6, 7, 8
   //   Init 4 "Growth experiments Q2"  start=5 → months 5, 6-7, 8, 9, 10
+  //   Init 5 "Search & discovery"    start=4 → months 4-5, 6, 7, 8, 9-12
   if (key === "0/4" || key === "2/3" || key === "4/1") return "atRisk";
-  if (key === "1/3" || key === "3/2") return "watch";
+  if (key === "1/3" || key === "3/2" || key === "5/1") return "watch";
   if (key === "0/0" || key === "1/1") return "overdue";
   return null;
 }
