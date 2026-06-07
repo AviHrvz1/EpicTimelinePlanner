@@ -1047,11 +1047,10 @@ function TeamProgressCard({
                         </div>
                       </div>
                       {/* Single pill chip: soft tone-tinted background +
-                       *  tone-colored clock icon, but the text itself
-                       *  is plain slate-900 (black) so the days-left
-                       *  values read as the primary content rather
-                       *  than competing with the chip's tint. */}
-                      <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-[10.5px] font-semibold tabular-nums text-slate-900", tone.chipBg)}>
+                       *  tone-colored clock icon. Text in slate-700
+                       *  (dark gray) so the days-left values read as
+                       *  the primary content without going full black. */}
+                      <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-[10.5px] font-semibold tabular-nums text-slate-700", tone.chipBg)}>
                         <Clock className={cn("size-3", tone.icon)} strokeWidth={2.2} aria-hidden />
                         <span>{row.daysLeft}{unitSuffix}</span>
                         <span className="text-slate-400">/</span>
