@@ -705,23 +705,39 @@ export function PortfolioBurndownChart({
        *  takes the full width and the floating chip overlays it. In
        *  `side` placement, the chart takes the flex-1 left half and a
        *  KPI + legend column sits on the right. */}
-      <div className="flex h-full w-full flex-row gap-3">
+      <div className={cn("flex h-full w-full flex-row", kpiPlacement === "side" ? "gap-2" : "gap-3")}>
         <div className={cn("relative h-full min-w-0", kpiPlacement === "side" ? "flex-1" : "w-full")}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={rows} margin={{ top: chartTopMargin, right: kpiPlacement === "side" ? 24 : 56, left: 16, bottom: 4 }}>
+            <LineChart
+              data={rows}
+              margin={{
+                top: chartTopMargin,
+                right: kpiPlacement === "side" ? 12 : 56,
+                // Side layout drops the rotated Y-axis label entirely,
+                // so the YAxis itself can be ~30px wide and the chart's
+                // left margin can shrink toward zero — giving the lines
+                // and grid noticeably more horizontal room.
+                left: kpiPlacement === "side" ? -10 : 16,
+                bottom: 0,
+              }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} ticks={xAxisTicks} />
               <YAxis
                 tick={{ fontSize: 10 }}
-                width={48}
+                width={kpiPlacement === "side" ? 30 : 48}
                 allowDecimals={progressBasis !== "stories"}
-                label={{
-                  value: basisYAxisLabel(progressBasis),
-                  angle: -90,
-                  position: "insideLeft",
-                  offset: 0,
-                  style: { fontSize: 11, fill: "#475569", fontWeight: 600 },
-                }}
+                label={
+                  kpiPlacement === "side"
+                    ? undefined
+                    : {
+                        value: basisYAxisLabel(progressBasis),
+                        angle: -90,
+                        position: "insideLeft",
+                        offset: 0,
+                        style: { fontSize: 11, fill: "#475569", fontWeight: 600 },
+                      }
+                }
                 domain={[0, Math.max(1, Math.ceil(startTotal * 1.12))]}
               />
               <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
@@ -781,12 +797,13 @@ export function PortfolioBurndownChart({
             </LineChart>
           </ResponsiveContainer>
         </div>
-        {/* Side column — only rendered in `side` placement. Stacks the
-         *  three KPIs (Done / pace / ETA) above the three legend rows
-         *  with a thin divider. Matches the donut cards' chart-plus-list
-         *  layout so the four hero widgets read with the same rhythm. */}
+        {/* Side column — only rendered in `side` placement. Three KPI
+         *  rows (Done / pace / ETA); the chart-line legend (Actual /
+         *  Forecast / Ideal pace) lives at the card's title strip in the
+         *  hero, so we don't repeat it here. Narrower width (110px)
+         *  hands more horizontal pixels to the chart itself. */}
         {kpiPlacement === "side" ? (
-          <aside className="flex w-[140px] shrink-0 flex-col justify-center gap-1.5 text-[11px] text-slate-700">
+          <aside className="flex w-[110px] shrink-0 flex-col justify-center gap-1.5 text-[11px] text-slate-700">
             <div>
               <span className="text-slate-500">Done</span>{" "}
               <span className="tabular-nums font-semibold text-slate-900">
@@ -800,17 +817,6 @@ export function PortfolioBurndownChart({
               <span className="tabular-nums font-semibold">{formatEta(etaDate)}</span>
               {etaDate != null ? (etaWithinPeriod ? " ✓" : " ⚠") : ""}
             </div>
-            <hr className="my-0.5 border-slate-200/80" />
-            {sideLegendRows.map((row) => (
-              <div key={row.label} className="inline-flex items-center gap-1.5">
-                <span
-                  className="inline-block size-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: row.color }}
-                  aria-hidden
-                />
-                <span className="truncate">{row.label}</span>
-              </div>
-            ))}
           </aside>
         ) : null}
       </div>
