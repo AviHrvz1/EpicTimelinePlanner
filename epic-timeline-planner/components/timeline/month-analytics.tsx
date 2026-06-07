@@ -5677,7 +5677,11 @@ export function MonthAnalytics({
         </div>
         <div
           className={cn(
-            "grid md:grid-cols-[minmax(0,1fr)_10rem] md:items-stretch",
+            // Match the Burndown + Burnup legend column width (24rem)
+            // so all three Q-insights charts share the same plot
+            // rectangle width. Without this CFD's plot area is ~14rem
+            // wider than the other two and the X-axes don't line up.
+            "grid md:grid-cols-[minmax(0,1fr)_24rem] md:items-stretch",
             INSIGHTS_CHART_GRID_GAP,
             INSIGHTS_CHART_BAND,
           )}
