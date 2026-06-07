@@ -5943,18 +5943,6 @@ export function MonthAnalytics({
                                   <div className="flex items-baseline gap-1.5">
                                     <span className="truncate text-[12.5px] font-semibold text-slate-800">{row.label}</span>
                                     <span className={cn("shrink-0 text-[10.5px] font-semibold tabular-nums", tone.pct)}>{donePct}%</span>
-                                    {teamHealth ? (
-                                      <span className="ml-1 inline-flex shrink-0 items-center">
-                                        <TeamHealthBadgeWithList
-                                          status={teamHealth.status}
-                                          atRiskEpics={teamHealth.atRiskEpics}
-                                          watchEpics={teamHealth.watchEpics}
-                                          overdueEpics={teamHealth.overdueEpics}
-                                          teamLabel={row.label}
-                                          onOpenEpic={onOpenEpic}
-                                        />
-                                      </span>
-                                    ) : null}
                                   </div>
                                   <div className="mt-1 relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/50">
                                     <div
@@ -5963,6 +5951,23 @@ export function MonthAnalytics({
                                     />
                                   </div>
                                 </div>
+                                {/* Health badge — sits to the right of the
+                                 *  progress bar (before the chip cluster)
+                                 *  so the verdict pill reads as the
+                                 *  bar's natural "outcome", not crammed
+                                 *  inline with the name. */}
+                                {teamHealth ? (
+                                  <span className="inline-flex shrink-0 items-center">
+                                    <TeamHealthBadgeWithList
+                                      status={teamHealth.status}
+                                      atRiskEpics={teamHealth.atRiskEpics}
+                                      watchEpics={teamHealth.watchEpics}
+                                      overdueEpics={teamHealth.overdueEpics}
+                                      teamLabel={row.label}
+                                      onOpenEpic={onOpenEpic}
+                                    />
+                                  </span>
+                                ) : null}
                                 {/* Calendar chip — total estimate, neutral
                                  *  slate; matches the hero card. */}
                                 <span
