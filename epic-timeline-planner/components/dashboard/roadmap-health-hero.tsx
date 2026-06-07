@@ -7,11 +7,13 @@ import {
   AlertTriangle,
   Bell,
   BookOpen,
+  Calendar,
   Check,
   CheckCheck,
   ChevronDown,
   CircleDashed,
   CircleDotDashed,
+  Clock,
   FileWarning,
   Flag,
   Folder,
@@ -762,6 +764,57 @@ function TeamDrilldownTable({
  *  and a horizontal progress bar — but trimmed to fit alongside the
  *  three donut cards in the hero band. Rolls up across the entire
  *  roadmap (all quarters) rather than the active month. */
+/** Small circular progress indicator — sits at the right edge of each
+ *  Team Progress row alongside the calendar / clock chips. Renders the
+ *  same percentage the bar shows so the planner can read either at a
+ *  glance. Stroke color follows the row's health tone. */
+function CircleProgress({
+  percent,
+  color,
+}: {
+  percent: number;
+  color: string;
+}) {
+  const radius = 11;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.max(0, Math.min(100, percent));
+  const dashOffset = circumference * (1 - clamped / 100);
+  return (
+    <svg width={28} height={28} viewBox="0 0 28 28" aria-hidden>
+      <circle
+        cx={14}
+        cy={14}
+        r={radius}
+        fill="none"
+        stroke="#e2e8f0"
+        strokeWidth={2.4}
+      />
+      <circle
+        cx={14}
+        cy={14}
+        r={radius}
+        fill="none"
+        stroke={color}
+        strokeWidth={2.4}
+        strokeDasharray={circumference}
+        strokeDashoffset={dashOffset}
+        strokeLinecap="round"
+        transform="rotate(-90 14 14)"
+      />
+      <text
+        x={14}
+        y={16}
+        textAnchor="middle"
+        fontSize={8}
+        fontWeight={700}
+        fill="#475569"
+      >
+        {Math.round(clamped)}%
+      </text>
+    </svg>
+  );
+}
+
 function TeamProgressCard({
   rows,
   unitSuffix = "d",
@@ -918,58 +971,82 @@ function TeamProgressCard({
                     : "cursor-default",
                 )}
               >
-                <div className="flex items-center gap-2">
-                  <TeamAvatar
-                    slug={row.teamId === "__unassigned__" ? null : row.teamId}
-                    sizePx={18}
-                    rounded="rounded-full"
-                    className={cn(
-                      "ring-1",
-                      atRisk
-                        ? "ring-amber-200/80"
-                        : allDone
-                          ? "ring-emerald-200/80"
-                          : "ring-violet-200/80",
-                    )}
-                    fallback={
-                      <span
+                {/* New row layout (matches the mockup):
+                 *    [avatar] name 77% [─── progress bar ───] [📅 330d] [🕐 77d left] (○ 77%)
+                 *  Avatar + name share the left; the progress bar fills
+                 *  the middle (flex-1); calendar + clock chips and a
+                 *  small circular percentage sit on the right. Health
+                 *  tone (amber / emerald / indigo) drives both the
+                 *  bar fill, the clock-chip color, and the circle
+                 *  stroke so a quick glance reads the team's status.
+                 */}
+                {(() => {
+                  const tone = atRisk
+                    ? { bar: "bg-amber-400", chip: "bg-amber-50 text-amber-700 ring-amber-200/70", stroke: "#f59e0b" }
+                    : allDone
+                      ? { bar: "bg-emerald-400", chip: "bg-emerald-50 text-emerald-700 ring-emerald-200/70", stroke: "#10b981" }
+                      : watch
+                        ? { bar: "bg-amber-300", chip: "bg-amber-50 text-amber-700 ring-amber-200/70", stroke: "#f59e0b" }
+                        : { bar: "bg-indigo-400", chip: "bg-indigo-50 text-indigo-700 ring-indigo-200/70", stroke: "#6366f1" };
+                  return (
+                    <div className="flex items-center gap-2">
+                      <TeamAvatar
+                        slug={row.teamId === "__unassigned__" ? null : row.teamId}
+                        sizePx={18}
+                        rounded="rounded-full"
                         className={cn(
-                          "inline-flex size-[18px] shrink-0 items-center justify-center rounded-full text-[9px] font-bold ring-1",
-                          atRisk
-                            ? "bg-amber-100 text-amber-800 ring-amber-200/80"
-                            : allDone
-                              ? "bg-emerald-100 text-emerald-700 ring-emerald-200/80"
-                              : "bg-violet-100 text-violet-700 ring-violet-200/80",
+                          "ring-1",
+                          atRisk ? "ring-amber-200/80" : allDone ? "ring-emerald-200/80" : "ring-violet-200/80",
                         )}
-                      >
-                        {row.label.slice(0, 2).toUpperCase()}
-                      </span>
-                    }
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-1.5">
-                      <span className="inline-flex min-w-0 items-baseline gap-1">
-                        <span className="truncate text-[12px] font-semibold text-slate-800">{row.label}</span>
-                        <span className="shrink-0 text-[10.5px] font-semibold tabular-nums text-slate-500">{row.donePct}%</span>
-                      </span>
-                      <span className="shrink-0 text-[10.5px] tabular-nums text-slate-500">
-                        <span className="font-semibold text-slate-700">{row.estTotal}{unitSuffix}</span>
-                        <span className="mx-1 text-slate-300">·</span>
-                        <span className={cn("font-semibold", atRisk || watch ? "text-amber-700" : "text-slate-700")}>{row.daysLeft}{unitSuffix}</span>
-                        <span className="ml-0.5 text-slate-400">left</span>
-                      </span>
-                    </div>
-                    <div className="mt-0.5 relative h-1.5 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/50">
-                      <div
-                        className={cn(
-                          "absolute inset-y-0 left-0 rounded-full transition-all",
-                          atRisk ? "bg-amber-400" : allDone ? "bg-emerald-400" : "bg-indigo-400",
-                        )}
-                        style={{ width: `${row.donePct}%` }}
+                        fallback={
+                          <span
+                            className={cn(
+                              "inline-flex size-[18px] shrink-0 items-center justify-center rounded-full text-[9px] font-bold ring-1",
+                              atRisk
+                                ? "bg-amber-100 text-amber-800 ring-amber-200/80"
+                                : allDone
+                                  ? "bg-emerald-100 text-emerald-700 ring-emerald-200/80"
+                                  : "bg-violet-100 text-violet-700 ring-violet-200/80",
+                            )}
+                          >
+                            {row.label.slice(0, 2).toUpperCase()}
+                          </span>
+                        }
                       />
+                      {/* Name + % + progress bar — flex-1 so they take
+                       *  the slack between the avatar and the right-side
+                       *  chips + circle. */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline gap-1">
+                          <span className="truncate text-[12px] font-semibold text-slate-800">{row.label}</span>
+                          <span className={cn("shrink-0 text-[10.5px] font-semibold tabular-nums", atRisk || watch ? "text-amber-700" : allDone ? "text-emerald-700" : "text-indigo-600")}>
+                            {row.donePct}%
+                          </span>
+                        </div>
+                        <div className="mt-0.5 relative h-1.5 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/50">
+                          <div
+                            className={cn("absolute inset-y-0 left-0 rounded-full transition-all", tone.bar)}
+                            style={{ width: `${row.donePct}%` }}
+                          />
+                        </div>
+                      </div>
+                      {/* Calendar chip — total estimate, always neutral. */}
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-slate-600 ring-1 ring-slate-200/70">
+                        <Calendar className="size-2.5" strokeWidth={2.2} aria-hidden />
+                        {row.estTotal}{unitSuffix}
+                      </span>
+                      {/* Clock chip — days left, takes the row's tone. */}
+                      <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1", tone.chip)}>
+                        <Clock className="size-2.5" strokeWidth={2.2} aria-hidden />
+                        {row.daysLeft}{unitSuffix} left
+                      </span>
+                      {/* Circular percent — same number as the inline
+                       *  label, but visual; mirrors the donut-card
+                       *  visual language elsewhere in the hero. */}
+                      <CircleProgress percent={row.donePct} color={tone.stroke} />
                     </div>
-                  </div>
-                </div>
+                  );
+                })()}
               </button>
             );
           })
