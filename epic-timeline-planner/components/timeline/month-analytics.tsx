@@ -5686,7 +5686,13 @@ export function MonthAnalytics({
             {cfdDataResolved.length > 0 ? (
               <div className="absolute inset-0">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={cfdDataResolved} margin={{ top: 2, right: 12, left: 18, bottom: 0 }}>
+                  {/* Margins match the Burndown + Burnup charts (right 24,
+                   *  left 18) so all three Q-insights charts share the
+                   *  same plot rectangle width — the X-axis labels and
+                   *  today line then land at the same horizontal pixels
+                   *  across all three. Top/bottom margins stay tight
+                   *  for the AreaChart since it has no chip strip. */}
+                  <AreaChart data={cfdDataResolved} margin={{ top: 2, right: 24, left: 18, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis
                       dataKey="labelShort"
