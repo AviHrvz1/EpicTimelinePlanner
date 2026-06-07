@@ -971,15 +971,64 @@ function BurndownTooltip({
   payload,
   label,
   metric,
+  totalScope,
 }: {
   active?: boolean;
   payload?: readonly BurndownTooltipPayload[];
   label?: string | number;
   metric: BurndownMetric;
+  /** Aggregate total scope at chart start — used to surface a
+   *  "Completed" row alongside Ideal so the tooltip reads
+   *  "Total scope · Ideal · Completed" instead of just the raw
+   *  remaining values. Pass null when the chart can't infer a
+   *  meaningful scope (e.g. per-epic focused view); the tooltip then
+   *  falls back to the legacy per-series rows. */
+  totalScope?: number | null;
 }) {
   if (!active || !payload || payload.length === 0) return null;
   const rows = payload.filter((item) => item.value != null);
   if (rows.length === 0) return null;
+
+  // Aggregate-view tooltip — three rows: Total scope · Ideal · Completed.
+  // Triggered when the chart is in "All" mode and the caller supplied a
+  // totalScope. We sniff for the `actual` and `ideal` dataKeys in the
+  // payload to compute Completed = scope − actual.
+  if (totalScope != null && totalScope > 0) {
+    const actualRow = rows.find((r) => r.dataKey === "actual");
+    const idealRow = rows.find((r) => r.dataKey === "ideal");
+    const actualValue =
+      actualRow && typeof actualRow.value === "number" ? actualRow.value : null;
+    const idealValue =
+      idealRow && typeof idealRow.value === "number" ? idealRow.value : null;
+    const completedValue =
+      actualValue != null ? Math.max(0, totalScope - actualValue) : null;
+    return (
+      <AnalyticsTooltipShell title={String(label ?? "Burndown")}>
+        <AnalyticsTooltipRow
+          color="#94a3b8"
+          label="Total scope"
+          value={formatBurndownValue(totalScope, metric)}
+        />
+        {idealValue != null ? (
+          <AnalyticsTooltipRow
+            color={idealRow?.color ?? "#f97316"}
+            label="Ideal"
+            value={formatBurndownValue(idealValue, metric)}
+          />
+        ) : null}
+        {completedValue != null ? (
+          <AnalyticsTooltipRow
+            color={actualRow?.color ?? "#2563eb"}
+            label="Completed"
+            value={formatBurndownValue(completedValue, metric)}
+          />
+        ) : null}
+      </AnalyticsTooltipShell>
+    );
+  }
+
+  // Legacy per-series tooltip — used when the chart is showing the
+  // single-epic focused view or per-epic colored lines.
   return (
     <AnalyticsTooltipShell title={String(label ?? "Burndown")}>
       {rows.map((row) => (
@@ -2714,6 +2763,18 @@ export function MonthAnalytics({
       return next;
     }) as typeof monthBurndownResolved;
   }, [monthBurndownResolved, monthBurndownEpics]);
+  /** Aggregate scope total used by the burndown tooltip's "Total scope"
+   *  and "Completed" rows. First non-null `actual` reading in the
+   *  snapshot-aware aggregate = starting total. Null when there are
+   *  no rows yet (chart still hydrating) so the tooltip falls back to
+   *  the per-series view. */
+  const burndownAggregateStartTotal = useMemo<number | null>(() => {
+    for (const row of monthBurndownChartData) {
+      const v = (row as { actual?: number | null }).actual;
+      if (typeof v === "number") return v;
+    }
+    return null;
+  }, [monthBurndownChartData]);
   const burndownFocusedEpicOption = useMemo(() => {
     if (selectedEpicOption) return selectedEpicOption;
     if (burndownVisibleKeys.length !== 1) return null;
@@ -4924,7 +4985,13 @@ export function MonthAnalytics({
                     />
                     <Tooltip
                       labelFormatter={(_, payload) => payload?.[0]?.payload?.dayLabel ?? ""}
-                      content={(props) => <BurndownTooltip {...props} metric={metric} />}
+                      content={(props) => (
+                        <BurndownTooltip
+                          {...props}
+                          metric={metric}
+                          totalScope={allBurndownKeysSelected ? burndownAggregateStartTotal : null}
+                        />
+                      )}
                       cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3", strokeOpacity: 0.5 }}
                     />
                     {(() => {
