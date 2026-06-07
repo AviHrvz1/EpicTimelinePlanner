@@ -719,12 +719,15 @@ export function PortfolioBurndownChart({
               data={rows}
               margin={{
                 top: chartTopMargin,
-                right: tightChartChrome ? 8 : 56,
+                // Right margin holds the "End {date}" label that hangs
+                // off the quarter-end reference dot. Tight layouts still
+                // need ~28px so "End 30/6" doesn't get truncated.
+                right: tightChartChrome ? 28 : 56,
                 // Tight layouts drop the rotated Y-axis label entirely,
-                // so the YAxis itself can be ~28px wide and the chart's
-                // left margin can shrink toward zero — giving the lines
-                // and grid noticeably more horizontal room.
-                left: tightChartChrome ? -12 : 16,
+                // so the YAxis itself can be ~32px wide; left margin
+                // stays at 0 so the YAxis ticks (e.g. "1012") render
+                // fully without clipping into the card's padding.
+                left: tightChartChrome ? 0 : 16,
                 bottom: 0,
               }}
             >
@@ -739,7 +742,7 @@ export function PortfolioBurndownChart({
               />
               <YAxis
                 tick={{ fontSize: tightChartChrome ? 9 : 10 }}
-                width={tightChartChrome ? 28 : 48}
+                width={tightChartChrome ? 32 : 48}
                 allowDecimals={progressBasis !== "stories"}
                 label={
                   tightChartChrome
