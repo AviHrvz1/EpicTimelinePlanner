@@ -16,7 +16,6 @@ import {
   Activity,
   AlertOctagon,
   AlertTriangle,
-  Calendar,
   CheckCheck,
   CheckCircle2,
   ChartNoAxesCombined,
@@ -5979,19 +5978,17 @@ export function MonthAnalytics({
                                     />
                                   </span>
                                 ) : null}
-                                {/* Calendar chip — total estimate, neutral
-                                 *  slate; matches the hero card. */}
+                                {/* Single combined chip: days-left /
+                                 *  total in one pill, mirroring the
+                                 *  hero card. Title attribute keeps
+                                 *  the "X review" detail accessible
+                                 *  via hover. */}
                                 <span
-                                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-slate-600 ring-1 ring-slate-200/70"
-                                  title={`${row.estTotal}d estimated total · ${doneDays}d in review`}
+                                  className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1", tone.chip)}
+                                  title={`${row.estTotal}d estimated total · ${doneDays}d in review · ${row.daysLeft}d left`}
                                 >
-                                  <Calendar className="size-2.5" strokeWidth={2.2} aria-hidden />
-                                  {row.estTotal}d
-                                </span>
-                                {/* Clock chip — days left, tinted by tone. */}
-                                <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1", tone.chip)}>
                                   <Clock className="size-2.5" strokeWidth={2.2} aria-hidden />
-                                  {row.daysLeft}d left
+                                  {row.daysLeft}d/{row.estTotal}d left
                                 </span>
                                 <CircleProgress percent={donePct} color={tone.stroke} />
                               </>
