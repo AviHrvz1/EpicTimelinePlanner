@@ -1172,6 +1172,12 @@ function initiativeExecutionStatusMeta(initiative: InitiativeItem): { label: str
 type InitiativeListPanelProps = {
   initiatives: InitiativeItem[];
   activeMonth: number | null;
+  /** Cross-mode "highlight these epic IDs" filter — mirrors the same prop
+   *  on TimelineGrid. When set, every epic row whose id isn't in the set
+   *  fades; rows in the set stay full-strength. Inert (null/empty) when
+   *  no chart has emitted a selection. Phase 2(d) of the Portfolio
+   *  Burndown click-to-filter flow. */
+  highlightedEpicIds?: ReadonlySet<string> | null;
   /**
    * When true (Roadmap header “Progress” on), show review % and progress bars in initiative/epic cards.
    * Parent keeps this in sync with the timeline grid.
@@ -1705,6 +1711,7 @@ function InitiativeTreeCard({
   forceOpenEpicIds,
   searchQuery,
   workspaceDirectoryUsers = [],
+  isEpicDimmed,
 }: {
   initiative: InitiativeItem;
   isOpen: boolean;
@@ -1732,6 +1739,10 @@ function InitiativeTreeCard({
    *  ring to titles that include the query. Empty string = no highlight. */
   searchQuery?: string;
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
+  /** Optional dim predicate — when provided, epics for which this returns
+   *  true fade. Threaded from the panel-level `highlightedEpicIds` filter
+   *  so the same fade rule applies across panel + Gantt. */
+  isEpicDimmed?: (epicId: string) => boolean;
 }) {
   const inMonthView = planContextMonth != null;
   const { setNodeRef: setDropRef, isOver: isBacklogDropOver } = useDroppable({
@@ -2009,7 +2020,13 @@ function InitiativeTreeCard({
                         (forceOpenEpicIds?.has(epic.id) ?? false) || (openEpicIds[epic.id] ?? false);
                       const isLast = epicIdx === epics.length - 1;
                       return (
-                        <div key={epic.id} className="relative pl-6">
+                        <div
+                          key={epic.id}
+                          className={cn(
+                            "relative pl-6 transition-opacity duration-150",
+                            isEpicDimmed?.(epic.id) && "opacity-30 saturate-50 hover:opacity-60",
+                          )}
+                        >
                           <span className="absolute left-0 top-0 w-px bg-border/70" style={{ height: isLast ? "22px" : "100%" }} />
                           <span className="absolute left-0 top-[22px] h-px w-4 -translate-y-px bg-border/70" />
                           <InitiativeTreeEpicRow
@@ -2548,7 +2565,30 @@ export function InitiativeListPanel({
   onPanelTeamFilterActiveChange,
   onPanelTeamFilterDerivedChange,
   onProgressBasisChange,
+  highlightedEpicIds = null,
 }: InitiativeListPanelProps) {
+  // Cross-mode "highlight these epics" filter — same semantics as the
+  // identical prop on TimelineGrid. We compute the matching helpers once
+  // at the top of the component so the deep-nested epic rows can just
+  // ask `isEpicDimmed(epic.id)` without re-deriving each render.
+  const isHighlightActive =
+    highlightedEpicIds != null && highlightedEpicIds.size > 0;
+  const isEpicDimmed = (epicId: string): boolean =>
+    isHighlightActive && !highlightedEpicIds!.has(epicId);
+  const isInitiativeDimmed = (initiative: InitiativeItem): boolean => {
+    if (!isHighlightActive) return false;
+    // An initiative stays full-strength if it owns any highlighted epic.
+    // Avoid `.some(...)` over the empty case (initiative with no epics)
+    // since that would always dim — instead treat childless initiatives
+    // as dimmed under an active filter.
+    const epics = initiative.epics ?? [];
+    if (epics.length === 0) return true;
+    return !epics.some((e) => highlightedEpicIds!.has(e.id));
+  };
+  // `isInitiativeDimmed` is reserved for a future iteration that fades the
+  // initiative card chrome itself (header, progress bar). Phase 2(d) ships
+  // only the epic-row fade since that's where the planner's eye lands.
+  void isInitiativeDimmed;
   const { active } = useDndContext();
   const isTimelineEpicDragActive = active != null && String(active.id).startsWith("timeline-epic:");
   /** Gantt epic bars must stay on the timeline; do not accept drops on the unplan / month backlog strip. */
@@ -3940,6 +3980,7 @@ export function InitiativeListPanel({
                     storyProgressDetailsVisible={storyProgressDetailsVisible}
                             progressBasis={progressBasis}
                     workspaceDirectoryUsers={workspaceDirectoryUsers}
+                    isEpicDimmed={isHighlightActive ? isEpicDimmed : undefined}
                     onToggle={() => {
                       const next = !(openInitiativeIds[initiative.id] ?? false);
                       setOpenInitiativeIds((prev) => ({ ...prev, [initiative.id]: next }));

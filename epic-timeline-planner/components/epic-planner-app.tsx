@@ -5984,6 +5984,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                       progressBasis={progressBasis}
                       onProgressBasisChange={setProgressBasis}
                       planYear={selectedYear}
+                      highlightedEpicIds={roadmapHighlight?.epicIds ?? null}
                       healthFilter={healthFilter}
                       onHealthFilterChange={handleHealthFilterChange}
                       onUserPickedFilter={() => setShowRoadmapProgress(true)}
