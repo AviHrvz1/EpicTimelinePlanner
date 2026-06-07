@@ -1500,6 +1500,13 @@ export function MonthAnalytics({
    *  initiative, assignee, status. */
   const [statusDrilldownEpicFilter, setStatusDrilldownEpicFilter] = useState<EpicDrilldownFilter>(EMPTY_EPIC_DRILLDOWN_FILTER);
   const [statusDrilldownEpicSort, setStatusDrilldownEpicSort] = useState<{ key: EpicDrilldownSortKey; dir: "asc" | "desc" } | null>(null);
+  /** User-selected mode for the status pie chart when no specific epic
+   *  is pinned. "epics" shows the Epic Progress donut (epic-level
+   *  status rollup); "stories" shows the Story status pie (per-story
+   *  status counts). When an epic IS pinned, the chart is forced into
+   *  "stories" mode since rolling that single epic up makes no sense.
+   *  Defaults to "epics" — same as the legacy behaviour. */
+  const [statusChartMode, setStatusChartMode] = useState<"epics" | "stories">("epics");
   const [monthLoadDrilldownAssignee, setMonthLoadDrilldownAssignee] = useState<string | null>(null);
   const [monthLoadDrilldownIsTeam, setMonthLoadDrilldownIsTeam] = useState(false);
   // When the breadcrumb team filter changes (e.g. user switches between
@@ -2168,7 +2175,15 @@ export function MonthAnalytics({
       { name: "Done", value: counts.done },
     ];
   }, [epicStatusById]);
-  const statusChartShowsEpics = isQuarterInsights && selectedEpicOption == null;
+  // Show epics in the status pie when (a) we're on a quarter-style
+  // insights view AND (b) no specific epic is pinned (rolling up a
+  // single epic into its own status is meaningless) AND (c) the user
+  // hasn't toggled the chart into "stories" mode via the header
+  // switch. The switch is the new affordance — letting planners flip
+  // between epic-level + story-level status drilldowns without
+  // changing the picked scope.
+  const statusChartShowsEpics = isQuarterInsights && selectedEpicOption == null && statusChartMode === "epics";
+  const statusChartToggleAvailable = isQuarterInsights && selectedEpicOption == null;
   const pieData = statusChartShowsEpics ? epicStatusPie.filter((x) => x.value > 0) : pieLegendItems;
   const pieTotal = pieData.reduce((sum, item) => sum + item.value, 0);
   const scopedStories = useMemo(
@@ -2280,7 +2295,11 @@ export function MonthAnalytics({
     }
     updateStatusDrilldownArrowState();
   }, [statusDrilldownFilter, statusDrilldownRowCount, statusChartShowsEpics]);
-  const statusPanelTitle = statusChartShowsEpics ? "Epic Progress" : "User Story Progress";
+  // Title swaps with statusChartShowsEpics (which is now driven by the
+  // user toggle when available). When the toggle is OFF (e.g. an epic
+  // is pinned), the chart always shows user-story progress and the
+  // title reads accordingly — same legacy wording.
+  const statusPanelTitle = statusChartShowsEpics ? "Epic Progress" : "Stories Progress";
   // scopedStoryDisplayIds was moved above the drilldown story memos to avoid
   // a TDZ error — keep the original definition site untouched aside from this
   // pointer comment so anyone scrolling here knows where to find it.
@@ -4336,6 +4355,41 @@ export function MonthAnalytics({
             <PieChartIcon className="size-4 text-slate-600" />
             {statusPanelTitle}{scopeTitleSuffix}
           </h3>
+          {/* Mode switch — only shown when no specific epic is pinned
+           *  (otherwise the chart always rolls up to user stories). Two
+           *  small pill buttons that flip the donut between epic-level
+           *  status and story-level status, and rewire the
+           *  slice-click → drilldown table to match. */}
+          {statusChartToggleAvailable ? (
+            <div className="inline-flex rounded-md border border-slate-200 bg-white p-0.5 text-[11.5px] font-medium shadow-sm">
+              <button
+                type="button"
+                onClick={() => setStatusChartMode("epics")}
+                className={cn(
+                  "rounded px-2 py-0.5 transition",
+                  statusChartMode === "epics"
+                    ? "bg-slate-100 text-slate-800"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-700",
+                )}
+                title="Show epic-level status rollup"
+              >
+                Epics
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusChartMode("stories")}
+                className={cn(
+                  "rounded px-2 py-0.5 transition",
+                  statusChartMode === "stories"
+                    ? "bg-slate-100 text-slate-800"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-700",
+                )}
+                title="Show user-story status pie"
+              >
+                Stories
+              </button>
+            </div>
+          ) : null}
         </div>
         {statusDrilldownFilter ? (() => {
           const uniqueSprints = statusChartShowsEpics ? [] : Array.from(new Set(statusDrilldownStoriesRaw.map((s) => storySprintDisplayLabel(s.sprint, scopeStartMonth)))).filter(Boolean).sort();
