@@ -1020,21 +1020,42 @@ function PortfolioBurndownHeroCard({
         <Activity className="size-3.5 shrink-0 text-blue-500" strokeWidth={2.1} aria-hidden />
         Portfolio Burndown · Q{quarter} {year} · {basisLabel}
       </span>
-      {/* Fixed height keeps the card the same vertical footprint as the
-       *  three donut cards in the row, so the hero band doesn't get a
-       *  jagged silhouette when the chart fills its slot. */}
-      <div className="relative h-[110px] w-full">
-        {/* Cast to mutable type — chart accepts read-only too, but its
-         *  prop signature is non-readonly to match the rest of the
-         *  dashboard chart family. Safe at the boundary: chart never
-         *  mutates. */}
-        <PortfolioBurndownChart
-          initiatives={initiatives as InitiativeItem[]}
-          year={year}
-          quarter={quarter}
-          progressBasis={progressBasis}
-          onSelectLaggards={onSelectLaggards}
-        />
+      {/* Side-by-side: chart on the left, vertical legend on the right —
+       *  matches the donut cards' chart-plus-list layout so the four hero
+       *  widgets read with the same rhythm. The custom legend reclaims the
+       *  bottom strip Recharts would have used for its inline legend,
+       *  giving the small chart more vertical room to breathe. */}
+      <div className="flex h-[110px] w-full flex-row items-stretch gap-3">
+        <div className="relative h-full min-w-0 flex-1">
+          {/* Cast to mutable type — chart accepts read-only too, but its
+           *  prop signature is non-readonly to match the rest of the
+           *  dashboard chart family. Safe at the boundary: chart never
+           *  mutates. */}
+          <PortfolioBurndownChart
+            initiatives={initiatives as InitiativeItem[]}
+            year={year}
+            quarter={quarter}
+            progressBasis={progressBasis}
+            onSelectLaggards={onSelectLaggards}
+            hideLegend
+          />
+        </div>
+        <ul className="flex w-[100px] shrink-0 flex-col justify-center gap-1.5 text-[11px] text-slate-700">
+          {[
+            { label: "Actual", color: "#2563eb" },
+            { label: "Forecast", color: "#0ea5e9" },
+            { label: "Ideal pace", color: "#f97316" },
+          ].map((row) => (
+            <li key={row.label} className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-block size-2 shrink-0 rounded-full"
+                style={{ backgroundColor: row.color }}
+                aria-hidden
+              />
+              <span className="truncate">{row.label}</span>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );

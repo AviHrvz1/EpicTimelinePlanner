@@ -60,6 +60,11 @@ type Props = {
    *  the Roadmap so the highlight lands on a visible Gantt. Receives a
    *  human label for the filter banner (e.g. "3 epics behind plan"). */
   onSelectLaggards?: (epicIds: string[], label: string) => void;
+  /** Hide the Recharts bottom-aligned legend. Used by the Hero card,
+   *  which renders its own vertical legend on the right (matching the
+   *  donut-card layout) and reclaims the bottom strip for chart area.
+   *  Defaults to false (legend renders inline). */
+  hideLegend?: boolean;
 };
 
 function startOfDay(d: Date): Date {
@@ -175,6 +180,7 @@ export function PortfolioBurndownChart({
   team,
   progressBasis = "days",
   onSelectLaggards,
+  hideLegend = false,
 }: Props) {
   const { start, end } = useMemo(() => quarterBounds(year, quarter), [year, quarter]);
   const { startMonth, endMonth } = useMemo(() => quarterMonthRange(quarter), [quarter]);
@@ -661,7 +667,9 @@ export function PortfolioBurndownChart({
             domain={[0, Math.max(1, Math.ceil(startTotal * 1.12))]}
           />
           <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
-          <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
+          {hideLegend ? null : (
+            <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
+          )}
           {todayLabel ? (
             <ReferenceLine
               x={todayLabel}
