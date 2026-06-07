@@ -3513,11 +3513,14 @@ export function MonthAnalytics({
 
     const periodStartDate = new Date(planYear, scopeStartMonth - 1, 1);
     const quarterEndDate = new Date(planYear, scopeEndMonth, 0);
-    // Extend the chart's right edge past quarter-end when the visible
-    // epic(s) have a due date beyond it. When the due falls inside the
-    // quarter the chart stops at quarter-end as before — preserves
-    // visual symmetry across cards. Only stretches when necessary.
-    const periodEndDate = burnUpDueDate != null && burnUpDueDate.getTime() > quarterEndDate.getTime()
+    // Extend the chart's right edge past quarter-end ONLY when the user
+    // is focused on a single epic with a due date beyond Q2. In the
+    // multi-epic "All" view we always pin to quarterEndDate so the
+    // burnup's X-axis matches the burndown's + CFD's — otherwise a
+    // single late-finishing epic stretches the burnup's axis and the
+    // three insights charts no longer line up tick-for-tick.
+    const isSingleEpicView = selectedEpicOption != null || burnUpVisibleKeys.length === 1;
+    const periodEndDate = isSingleEpicView && burnUpDueDate != null && burnUpDueDate.getTime() > quarterEndDate.getTime()
       ? burnUpDueDate
       : quarterEndDate;
     // Use Math.round (not Math.floor) for ms→day so a DST hour shift can't
