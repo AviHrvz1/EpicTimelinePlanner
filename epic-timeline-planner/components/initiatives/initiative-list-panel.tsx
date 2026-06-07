@@ -66,6 +66,7 @@ import { InitiativeStatus } from "@/lib/generated/prisma";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { resolveStoryYearSprint, sprintStartDate, sprintEndDate, globalSprintFromMonthLane } from "@/lib/year-sprint";
 import { computeProgress, type HealthStatus } from "@/lib/progress";
+import { computeEpicHealthVerdict } from "@/lib/epic-health";
 import { resolveAssigneeAvatar, UserAvatar } from "@/components/ui/user-avatar";
 import { TeamAvatar } from "@/components/ui/team-avatar";
 import { formatAssigneeShortLabel } from "@/lib/assignee-display";
@@ -2776,23 +2777,8 @@ export function InitiativeListPanel({
     if (planYear == null) return map;
     for (const initiative of initiatives) {
       for (const epic of initiative.epics ?? []) {
-        if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
-        const startGlobalSprint = globalSprintFromMonthLane(
-          epic.planStartMonth,
-          epic.planSprint === 2 ? 2 : 1,
-        );
-        const endGlobalSprint = globalSprintFromMonthLane(
-          epic.planEndMonth,
-          epic.planEndSprint === 1 ? 1 : 2,
-        );
-        const h = computeProgress({
-          stories: epic.userStories ?? [],
-          start: sprintStartDate(planYear, startGlobalSprint),
-          end: sprintEndDate(planYear, endGlobalSprint),
-          basis: progressBasis,
-          epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
-        });
-        map.set(epic.id, h.status);
+        const v = computeEpicHealthVerdict(epic, planYear, progressBasis);
+        if (v != null) map.set(epic.id, v.status);
       }
     }
     return map;

@@ -67,6 +67,8 @@ import { cn } from "@/lib/utils";
 import { MONTH_TEAM_COLUMNS, monthTeamLabelForId } from "@/lib/month-team-board";
 import { clampYearSprint, globalSprintFromMonthLane, monthLaneFromGlobalSprint, sprintStartDate, sprintEndDate } from "@/lib/year-sprint";
 import { computeProgress, computeInitiativeProgress, type HealthStatus, type ProgressBasis, type ProgressResult } from "@/lib/progress";
+import { computeEpicObservedStart, effectiveEpicStart } from "@/lib/epic-observed-start";
+import { computeEpicHealthVerdict } from "@/lib/epic-health";
 import { nowMs as clockNowMs } from "@/lib/clock";
 import { projectInitiativesToCloseDate } from "@/lib/story-snapshot-projection";
 import { SnapshotHeaderStrip, type SnapshotHeaderStripScope } from "@/components/timeline/snapshot-header-strip";
@@ -332,42 +334,6 @@ function isStoryOpen(status: UserStoryItem["status"] | null | undefined) {
   return status === "todo" || status === "inProgress";
 }
 
-/** When did the team ACTUALLY start working on this epic, as recorded by
- *  daily snapshots? Returns the earliest date on which any child story
- *  shows real movement — either:
- *    • its rolled-up daysLeft fell below estimatedDays, OR
- *    • its status advanced past `todo` / `inProgress` (i.e. reached
- *      `review` or `done`).
- *  Stories without snapshots are ignored — there's nothing to observe.
- *  Returns null when nothing has moved yet; callers then fall back to
- *  the epic's planned start date. Used by the burn-up / burn-down ideal
- *  lines so the ramp aligns with where the blue actual line begins,
- *  and by the verdict so chart and badge can't disagree. */
-function computeEpicObservedStart(epic: EpicItem): Date | null {
-  const stories = epic.userStories ?? [];
-  if (stories.length === 0) return null;
-  let earliestMs = Infinity;
-  for (const story of stories) {
-    const baseline = story.estimatedDays ?? 0;
-    const snaps = story.snapshots ?? [];
-    if (snaps.length === 0) continue;
-    // Snapshots are usually persisted in chronological order, but
-    // re-sort defensively so callers don't depend on storage order.
-    const sorted = [...snaps].sort((a, b) =>
-      new Date(a.snapshotDate).getTime() - new Date(b.snapshotDate).getTime());
-    for (const snap of sorted) {
-      const advancedStatus = snap.status === "review" || snap.status === "done";
-      const snapDaysLeft = snap.daysLeft ?? snap.estimatedDays ?? baseline;
-      const burntSomething = baseline > 0 && snapDaysLeft < baseline;
-      if (advancedStatus || burntSomething) {
-        const ts = new Date(snap.snapshotDate).getTime();
-        if (Number.isFinite(ts) && ts < earliestMs) earliestMs = ts;
-        break;
-      }
-    }
-  }
-  return Number.isFinite(earliestMs) ? new Date(earliestMs) : null;
-}
 
 /** Per-epic entry inside a team's flagged-epic list. Carries the full
  *  ProgressResult so the popover can show *why* this epic is in its
@@ -1547,29 +1513,14 @@ export function MonthAnalytics({
         let health: HealthStatus | null = null;
         let healthTooltip: string | null = null;
         let healthResult: ProgressResult | null = null;
-        if (epic.planStartMonth != null && epic.planEndMonth != null) {
-          const start = sprintStartDate(
-            planYear,
-            globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1),
-          );
-          const end = sprintEndDate(
-            planYear,
-            globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2),
-          );
-          const h = computeProgress({
-            stories: epic.userStories ?? [],
-            start,
-            end,
-            basis: progressBasis,
-            epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
-          });
-          // epicEst mode produces a verdict even without stories — that's
-          // the point. Other modes still need at least one story.
-          if (progressBasis === "epicEst" || (epic.userStories ?? []).length > 0) {
-            health = h.status;
-            healthTooltip = formatHealthTooltip(h);
-            healthResult = h;
-          }
+        // Same shared verdict function the donut + Gantt bar + chart
+        // corner all call — guarantees the picker badge can't say
+        // "On Track" while the chart says "Watch".
+        const v = computeEpicHealthVerdict(epic, planYear, progressBasis);
+        if (v != null) {
+          health = v.status;
+          healthTooltip = formatHealthTooltip(v.result);
+          healthResult = v.result;
         }
         return {
           id: epic.id,
@@ -1611,24 +1562,8 @@ export function MonthAnalytics({
     const childStatuses: HealthStatus[] = [];
     const aggregateStories = epicsForInit.flatMap((e) => e.userStories ?? []);
     for (const epic of epicsForInit) {
-      if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
-      const start = sprintStartDate(
-        planYear,
-        globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1),
-      );
-      const end = sprintEndDate(
-        planYear,
-        globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2),
-      );
-      childStatuses.push(
-        computeProgress({
-          stories: epic.userStories ?? [],
-          start,
-          end,
-          basis: progressBasis,
-          epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
-        }).status,
-      );
+      const v = computeEpicHealthVerdict(epic, planYear, progressBasis);
+      if (v != null) childStatuses.push(v.status);
     }
     // epicEst rollup works even with no child stories.
     if (progressBasis !== "epicEst" && aggregateStories.length === 0) return null;
@@ -1828,24 +1763,8 @@ export function MonthAnalytics({
       const childStatuses: HealthStatus[] = [];
       const aggregateStories = epicsForInit.flatMap((epic) => epic.userStories ?? []);
       for (const epic of epicsForInit) {
-        if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
-        const start = sprintStartDate(
-          planYear,
-          globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1),
-        );
-        const end = sprintEndDate(
-          planYear,
-          globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2),
-        );
-        childStatuses.push(
-          computeProgress({
-            stories: epic.userStories ?? [],
-            start,
-            end,
-            basis: progressBasis,
-            epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
-          }).status,
-        );
+        const v = computeEpicHealthVerdict(epic, planYear, progressBasis);
+        if (v != null) childStatuses.push(v.status);
       }
       // The initiative's own bar bounds — use the union of its epics, mirroring
       // how the year-Gantt rolls up. Fall back to the period bounds when the
@@ -2399,23 +2318,10 @@ export function MonthAnalytics({
       overdue: 3,
     };
     for (const { epic } of monthEpics) {
-      if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
       const teamKey = epic.team ?? "__unassigned__";
-      const start = sprintStartDate(
-        planYear,
-        globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1),
-      );
-      const end = sprintEndDate(
-        planYear,
-        globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2),
-      );
-      const h = computeProgress({
-        stories: epic.userStories ?? [],
-        start,
-        end,
-        basis: progressBasis,
-        epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
-      });
+      const v = computeEpicHealthVerdict(epic, planYear, progressBasis);
+      if (v == null) continue;
+      const h = v.result;
       // Skip epics that have no measurable work in the current basis (else
       // every unestimated epic in epicEst mode would dominate the rollup).
       if (progressBasis !== "epicEst" && (epic.userStories ?? []).length === 0) continue;
@@ -2425,7 +2331,7 @@ export function MonthAnalytics({
         watchEpics: [],
         overdueEpics: [],
       };
-      const flagged: FlaggedEpicEntry = { title: epic.title, epic, result: h, end };
+      const flagged: FlaggedEpicEntry = { title: epic.title, epic, result: h, end: v.end };
       if (h.status === "atRisk") entry.atRiskEpics.push(flagged);
       else if (h.status === "watch") entry.watchEpics.push(flagged);
       else if (h.status === "overdue") entry.overdueEpics.push(flagged);

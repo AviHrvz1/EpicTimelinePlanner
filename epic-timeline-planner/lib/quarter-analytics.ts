@@ -1,5 +1,6 @@
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { now as clockNow } from "@/lib/clock";
+import { computeEpicObservedStart } from "@/lib/epic-observed-start";
 
 export type QuarterEpicRow = {
   epic: EpicItem;
@@ -156,32 +157,10 @@ export function buildQuarterBurndownSeries(
   // a horizon dayIdx. Anchored at the first day of the first quarter
   // month exactly like the existing quarterDays computation.
   const periodStartMs = new Date(planYear, quarterMonths[0] - 1, 1).getTime();
-  /** First day the epic's snapshots show real movement — earliest
-   *  snapshot where any story's daysLeft fell below estimatedDays OR
-   *  status advanced past todo / inProgress. Returns null when nothing
-   *  has moved yet (callers fall back to the planned start). */
   const epicObservedDayIdx = (epic: EpicItem): number | null => {
-    const stories = epic.userStories ?? [];
-    let earliestMs = Infinity;
-    for (const story of stories) {
-      const baseline = story.estimatedDays ?? 0;
-      const snaps = story.snapshots ?? [];
-      if (snaps.length === 0) continue;
-      const sorted = [...snaps].sort((a, b) =>
-        new Date(a.snapshotDate).getTime() - new Date(b.snapshotDate).getTime());
-      for (const snap of sorted) {
-        const advancedStatus = snap.status === "review" || snap.status === "done";
-        const snapDaysLeft = snap.daysLeft ?? snap.estimatedDays ?? baseline;
-        const burntSomething = baseline > 0 && snapDaysLeft < baseline;
-        if (advancedStatus || burntSomething) {
-          const ts = new Date(snap.snapshotDate).getTime();
-          if (Number.isFinite(ts) && ts < earliestMs) earliestMs = ts;
-          break;
-        }
-      }
-    }
-    if (!Number.isFinite(earliestMs)) return null;
-    return Math.floor((earliestMs - periodStartMs) / 86400000) + 1;
+    const observed = computeEpicObservedStart(epic);
+    if (observed == null) return null;
+    return Math.floor((observed.getTime() - periodStartMs) / 86400000) + 1;
   };
 
   const series = selectedEpics.map((epic) => {

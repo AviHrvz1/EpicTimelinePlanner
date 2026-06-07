@@ -15,6 +15,7 @@ import {
 
 import type { InitiativeItem, EpicItem, UserStoryItem, StoryDailySnapshotItem } from "@/lib/types";
 import { computeProgress } from "@/lib/progress";
+import { computeEpicHealthVerdict } from "@/lib/epic-health";
 import { HealthBadge, formatHealthTooltip } from "@/components/timeline/health-badge";
 
 type Props = {
@@ -209,13 +210,9 @@ export function EpicBurndownChart({ initiatives, year, sprint, team, epicId, met
   // with what's drawn. Shown as a small chip floating in the top-right
   // corner of the chart plot area.
   const healthInfo = (() => {
-    const h = computeProgress({
-      stories,
-      start: startDate,
-      end: dueDate,
-      basis: progressBasis,
-      epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
-    });
+    const v = computeEpicHealthVerdict(epic, year, progressBasis);
+    if (v == null) return null;
+    const h = v.result;
     const hasData = progressBasis === "stories"
       ? stories.length > 0
       : h.totalEffort > 0;

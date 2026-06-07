@@ -15,6 +15,7 @@ import {
 
 import type { InitiativeItem, EpicItem, UserStoryItem, StoryDailySnapshotItem } from "@/lib/types";
 import { computeProgress } from "@/lib/progress";
+import { computeEpicHealthVerdict } from "@/lib/epic-health";
 import { HealthBadge, formatHealthTooltip } from "@/components/timeline/health-badge";
 
 type Props = {
@@ -211,20 +212,16 @@ export function EpicBurnupChart({ initiatives, year, sprint, team, epicId, metri
   const todayLabel = todayMs >= startMs && todayMs <= dueMs ? shortLabel(today) : null;
   const dueRow = rows[rows.length - 1];
 
-  // Basis-aware health verdict overlay (mirrors EpicBurndownChart).
+  // Basis-aware health verdict overlay — same shared verdict function
+  // every other surface calls.
   const healthInfo = (() => {
-    const h = computeProgress({
-      stories,
-      start: startDate,
-      end: dueDate,
-      basis: progressBasis,
-      epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
-    });
+    const v = computeEpicHealthVerdict(epic, year, progressBasis);
+    if (v == null) return null;
     const hasData = progressBasis === "stories"
       ? stories.length > 0
-      : h.totalEffort > 0;
+      : v.result.totalEffort > 0;
     if (!hasData) return null;
-    return { status: h.status, tooltip: formatHealthTooltip(h) };
+    return { status: v.status, tooltip: formatHealthTooltip(v.result) };
   })();
 
   // Evenly-spaced ticks so long plan ranges don't show uneven gaps.

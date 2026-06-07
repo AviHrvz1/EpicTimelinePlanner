@@ -35,6 +35,7 @@ import { UserChip } from "@/components/auth/user-chip";
 import { HealthExplainerPopover } from "@/components/dashboard/health-explainer-popover";
 import { RoadmapSelector } from "@/components/timeline/roadmap-selector";
 import { computeProgress, type HealthStatus } from "@/lib/progress";
+import { computeEpicHealthVerdict } from "@/lib/epic-health";
 import { monthTeamLabelForId } from "@/lib/month-team-board";
 import { globalSprintFromMonthLane, sprintEndDate, sprintStartDate } from "@/lib/year-sprint";
 import { TeamAvatar } from "@/components/ui/team-avatar";
@@ -1448,31 +1449,18 @@ function computeRoadmapStats(
       const team = (epic.team ?? "").trim();
       if (team) teamIds.add(team);
 
+      // SINGLE SOURCE OF TRUTH for the verdict — same function the
+      // Gantt bars, insights scope picker, initiative list, and the
+      // Epic Scope Burnup/Burndown corner badges all call. Skips
+      // epics without plan dates AND non-epicEst epics without any
+      // stories, so the donut doesn't quietly inflate the "On Track"
+      // count with empty placeholders the other surfaces are hiding.
       let epicHealth: HealthStatus | null = null;
-      if (epic.planStartMonth != null && epic.planEndMonth != null) {
-        const startSprint = globalSprintFromMonthLane(
-          epic.planStartMonth,
-          epic.planSprint === 2 ? 2 : 1,
-        );
-        const endSprint = globalSprintFromMonthLane(
-          epic.planEndMonth,
-          epic.planEndSprint === 1 ? 1 : 2,
-        );
-        const start = sprintStartDate(selectedYear, startSprint);
-        const end = sprintEndDate(selectedYear, endSprint);
-        const h = computeProgress({
-          stories: epic.userStories ?? [],
-          start,
-          end,
-          basis: progressBasis,
-          epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
-        });
-        const verdict: HealthStatus | null = h.status ?? null;
-        if (verdict != null) {
-          healthDistribution[verdict] = (healthDistribution[verdict] ?? 0) + 1;
-          healthDistribution.total += 1;
-          epicHealth = verdict;
-        }
+      const v = computeEpicHealthVerdict(epic, selectedYear, progressBasis);
+      if (v != null) {
+        healthDistribution[v.status] = (healthDistribution[v.status] ?? 0) + 1;
+        healthDistribution.total += 1;
+        epicHealth = v.status;
       }
 
       const teamKey = team || "__unassigned__";
