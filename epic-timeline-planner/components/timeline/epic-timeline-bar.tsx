@@ -175,12 +175,56 @@ export function TimelineBarDragPreview({
  * The bar wrapper MUST have `overflow: visible` (the default) for the
  * ghost to extend past its right edge.
  */
+/** Instant portal-based tooltip for the slip icon. Avoids the native
+ *  `title` attribute's ~500ms browser delay so hovering the small ⚠
+ *  glyph reveals the message immediately. Renders into `document.body`
+ *  via a portal so the chip is never clipped by ancestor `overflow`. */
+function SlipIconTooltip({ anchorRef, text }: {
+  anchorRef: React.RefObject<HTMLElement | null>;
+  text: string;
+}) {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const show = useCallback(() => {
+    if (!anchorRef.current) return;
+    const r = anchorRef.current.getBoundingClientRect();
+    setPos({ x: r.left + r.width / 2, y: r.top });
+  }, [anchorRef]);
+  const hide = useCallback(() => setPos(null), []);
+  useEffect(() => {
+    const el = anchorRef.current;
+    if (!el) return;
+    el.addEventListener("mouseenter", show);
+    el.addEventListener("mouseleave", hide);
+    el.addEventListener("focus", show);
+    el.addEventListener("blur", hide);
+    return () => {
+      el.removeEventListener("mouseenter", show);
+      el.removeEventListener("mouseleave", hide);
+      el.removeEventListener("focus", show);
+      el.removeEventListener("blur", hide);
+    };
+  }, [anchorRef, show, hide]);
+  if (!pos || typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      role="tooltip"
+      style={{ left: pos.x, top: pos.y - 8, transform: "translate(-50%, -100%)" }}
+      className="pointer-events-none fixed z-[99999] whitespace-nowrap rounded-lg border border-rose-200/80 bg-white/95 px-2.5 py-1 text-[12px] font-medium text-rose-800 shadow-md ring-1 ring-rose-100/70 backdrop-blur-sm"
+    >
+      {text}
+    </div>,
+    document.body,
+  );
+}
+
 export function OverdueSlipDecoration({
   severity,
   ghostPct,
   daysPastPlan,
   projectedDaysLeft,
   compact = false,
+  fillMode = "extend",
+  label,
 }: {
   severity: "amber" | "red";
   ghostPct: number;
@@ -191,8 +235,25 @@ export function OverdueSlipDecoration({
    *  bar's true vertical center instead of the wrapper's (which is
    *  taller when a badge row is rendered below the bar). */
   compact?: boolean;
+  /** Layout mode:
+   *  - `"extend"` (default): ghost extends to the RIGHT of the bar's
+   *    wrapper, width = `ghostPct%` of wrapper. Used by overdue epics
+   *    that still have a planned bar in the visible quarter.
+   *  - `"fill"`: ghost FILLS the wrapper itself (left: 0, right: 0);
+   *    no solid bar is drawn — used by quarter-drilled views to
+   *    surface slipped epics whose plan ended in a PRIOR quarter but
+   *    whose work is still in flight in the focused one. The slip
+   *    icon then sits at the wrapper's right edge.
+   */
+  fillMode?: "extend" | "fill";
+  /** Epic title rendered inside the ghost in `fill` mode — without a
+   *  solid bar there's no other place for it to appear, so the planner
+   *  needs to know WHICH slipped epic this stripe represents. Ignored
+   *  in `extend` mode (the bar carries the title there). */
+  label?: string;
 }) {
-  const showGhost = ghostPct > 0;
+  const iconRef = useRef<HTMLSpanElement | null>(null);
+  const showGhost = fillMode === "fill" || ghostPct > 0;
   const stripe = severity === "red"
     ? "repeating-linear-gradient(135deg, rgba(239,68,68,0.55) 0 4px, rgba(254,226,226,0.65) 4px 8px)"
     : "repeating-linear-gradient(135deg, rgba(245,158,11,0.55) 0 4px, rgba(254,243,199,0.65) 4px 8px)";
@@ -208,6 +269,26 @@ export function OverdueSlipDecoration({
   // wrapper would land on that badge row, not the bar.
   const barHeight = compact ? 28 : 30;
   const barCenterPx = barHeight / 2;
+  // Geometry differs per mode:
+  //  - "extend": ghost starts at the bar's right edge (left:100%), grows right.
+  //  - "fill":   ghost fills the wrapper (left:0, right:0); icon at wrapper's right edge.
+  const ghostStyleExtend = {
+    left: "100%",
+    top: 0,
+    height: barHeight,
+    width: `${Math.min(300, ghostPct)}%`,
+    background: stripe,
+  } as const;
+  const ghostStyleFill = {
+    left: 0,
+    right: 0,
+    top: 0,
+    height: barHeight,
+    background: stripe,
+  } as const;
+  const iconLeft = fillMode === "fill"
+    ? "100%"
+    : `calc(100% + ${showGhost ? Math.min(300, ghostPct) : 0}%)`;
   return (
     <>
       {showGhost ? (
@@ -216,33 +297,50 @@ export function OverdueSlipDecoration({
           // Square corners on left/top/bottom so the ghost flows
           // seamlessly out of the bar's right edge (no visible seam).
           className="pointer-events-none absolute z-10 opacity-70"
-          style={{
-            left: "100%",
-            top: 0,
-            height: barHeight,
-            // Cap visual width to 3× the bar so a wildly-slipped epic
-            // doesn't push the icon off the visible roadmap area.
-            width: `${Math.min(300, ghostPct)}%`,
-            background: stripe,
-          }}
+          style={fillMode === "fill" ? ghostStyleFill : ghostStyleExtend}
         />
       ) : null}
+      {fillMode === "fill" && label ? (
+        <span
+          // Title rendered ABOVE the ghost stripes so the planner can
+          // tell which slipped epic the row represents. Slate colour +
+          // text-shadow keeps it readable against the stripe pattern.
+          className="pointer-events-none absolute z-20 inline-flex items-center px-2 text-[12px] font-medium text-slate-800"
+          style={{
+            left: 0,
+            top: 0,
+            height: barHeight,
+            maxWidth: "calc(100% - 28px)",
+            textShadow: "0 1px 0 rgba(255,255,255,0.85)",
+          }}
+        >
+          <span className="truncate">{label}</span>
+        </span>
+      ) : null}
+      {/* Hit area is a `size-5` (20px) span wrapping a centered 16px
+       *  glyph — bigger target = easier to hover. The visible disc is
+       *  preserved via the inner span. */}
       <span
-        title={tooltip}
+        ref={iconRef}
         aria-label={tooltip}
-        className="pointer-events-auto absolute z-30 inline-flex size-4 items-center justify-center rounded-full bg-white text-[10px] font-bold leading-none shadow-sm"
+        tabIndex={0}
+        className="pointer-events-auto absolute z-30 inline-flex size-5 items-center justify-center"
         style={{
-          // Anchor at the END of the ghost (or bar's right edge when
-          // there's no ghost), then nudge a couple pixels further so
-          // the badge sits clear of any rounded corner.
-          left: `calc(100% + ${showGhost ? Math.min(300, ghostPct) : 0}%)`,
+          left: iconLeft,
           top: barCenterPx,
           transform: "translate(2px, -50%)",
-          color: iconColor,
-          border: `1.5px solid ${iconBorder}`,
         }}
       >
-        ⚠
+        <span
+          className="inline-flex size-4 items-center justify-center rounded-full bg-white text-[10px] font-bold leading-none shadow-sm"
+          style={{
+            color: iconColor,
+            border: `1.5px solid ${iconBorder}`,
+          }}
+        >
+          ⚠
+        </span>
+        <SlipIconTooltip anchorRef={iconRef} text={tooltip} />
       </span>
     </>
   );

@@ -111,6 +111,7 @@ import {
   monthLaneFromGlobalSprint,
   monthRangeFromYearSprintRange,
   resolvedInitiativeYearSprintBounds,
+  resolveStoryYearSprint,
   sprintEndDate,
   sprintStartDate,
   yearSprintContainingInstant,
@@ -829,13 +830,64 @@ function epicOverdueMeta(
  * ghost extension drawn past its planned end when the epic is overdue.
  * Used by the row-packer to detect ghost-on-bar collisions inside the
  * same row — non-overdue epics fall through to their normal `endS`.
+ *
+ * Ghost-only rows ALREADY have `endS` = last in-quarter sprint with
+ * open work (see `epicQuarterFootprint`) — that IS the visible right
+ * edge, so we skip the projected-end extension to keep the collision
+ * range honest. Without this, an epic whose Q2 footprint is just S7
+ * (one sprint) but whose `projectedDaysLeft` math points at S20 would
+ * displace every neighbour from S8 onward — visually a long, invisible
+ * collision zone.
  */
-function epicVirtualEndS(epic: EpicItem, planYear: number, planEndS: number): number {
+function epicVirtualEndS(
+  epic: EpicItem,
+  planYear: number,
+  planEndS: number,
+  isGhostOnly: boolean = false,
+): number {
+  if (isGhostOnly) return planEndS;
   const meta = epicOverdueMeta(epic, planYear);
   if (!meta || meta.projectedDaysLeft <= 0) return planEndS;
   const projectedSprint = yearSprintContainingInstant(planYear, meta.projectedEndMs);
   if (projectedSprint == null) return YEAR_SPRINT_MAX;
   return Math.max(planEndS, projectedSprint);
+}
+
+/**
+ * Sprint range + open daysLeft of an epic's stories that are scheduled
+ * inside `[qLo, qHi]` (the visible quarter). Returns `null` when NO
+ * open story of the epic is sprinted into the quarter — that's the
+ * "gate" that prevents a ghost-only row from showing for an overdue
+ * epic whose stories are still parked in a prior quarter (or
+ * unsprinted). Matches the burndown's Rule 2 (delivery-in-period) so
+ * the gantt and insights agree on what counts as Q-work.
+ *
+ * - `firstSprint` / `lastSprint`: contiguous range used as the ghost's
+ *   visible left / right edges (clamped by the caller to qLo / qHi).
+ * - `inQDaysLeft`: sum of `daysLeft` across in-quarter OPEN stories —
+ *   feeds the slip-icon tooltip so the projection number matches what
+ *   the ghost visually represents (not the epic's full open work).
+ */
+function epicQuarterFootprint(
+  epic: EpicItem,
+  qLo: number,
+  qHi: number,
+): { firstSprint: number; lastSprint: number; inQDaysLeft: number } | null {
+  const contextMonth = epic.planStartMonth ?? 1;
+  let firstSprint: number | null = null;
+  let lastSprint: number | null = null;
+  let inQDaysLeft = 0;
+  for (const story of epic.userStories ?? []) {
+    if (story.status === "done") continue;
+    const s = resolveStoryYearSprint(story, contextMonth);
+    if (s == null) continue;
+    if (s < qLo || s > qHi) continue;
+    if (firstSprint == null || s < firstSprint) firstSprint = s;
+    if (lastSprint == null || s > lastSprint) lastSprint = s;
+    inQDaysLeft += Math.max(0, story.daysLeft ?? 0);
+  }
+  if (firstSprint == null || lastSprint == null) return null;
+  return { firstSprint, lastSprint, inQDaysLeft };
 }
 
 /**
@@ -854,13 +906,13 @@ function epicVirtualEndS(epic: EpicItem, planYear: number, planEndS: number): nu
  * pure pass-through).
  */
 function repackEpicRowsWithGhostCollisions<
-  T extends { epic: EpicItem; startS: number; endS: number },
+  T extends { epic: EpicItem; startS: number; endS: number; ghostOnly?: boolean },
 >(
   items: T[],
   planYear: number,
 ): Array<{ timelineRow: number; items: (T & { virtualEndS: number })[] }> {
   const sorted = [...items]
-    .map((item) => ({ ...item, virtualEndS: epicVirtualEndS(item.epic, planYear, item.endS) }))
+    .map((item) => ({ ...item, virtualEndS: epicVirtualEndS(item.epic, planYear, item.endS, item.ghostOnly === true) }))
     .sort((a, b) => {
       const r = (Number.isFinite(a.epic.timelineRow) ? a.epic.timelineRow : 0) -
         (Number.isFinite(b.epic.timelineRow) ? b.epic.timelineRow : 0);
@@ -3479,17 +3531,48 @@ export function TimelineGrid({
     };
   }, [focusedMonthExternal, focusedQuarter, initiatives, summaryBadges]);
   const quarterRoadmapEpics = useMemo(() => {
-    if (!focusedQuarter) return [] as Array<{ epic: EpicItem; initiative: InitiativeItem; startS: number; endS: number }>;
+    if (!focusedQuarter) return [] as Array<{ epic: EpicItem; initiative: InitiativeItem; startS: number; endS: number; ghostOnly: boolean; ghostInQDaysLeft?: number }>;
     const qStart = focusedQuarter.months[0];
     const qEnd = focusedQuarter.months[focusedQuarter.months.length - 1];
-    const rows: Array<{ epic: EpicItem; initiative: InitiativeItem; startS: number; endS: number }> = [];
+    const qStartS = firstGlobalSprintForMonth(qStart);
+    const qHiS = globalSprintFromMonthLane(focusedQuarter.months[focusedQuarter.months.length - 1], 2);
+    const rows: Array<{ epic: EpicItem; initiative: InitiativeItem; startS: number; endS: number; ghostOnly: boolean; ghostInQDaysLeft?: number }> = [];
     for (const initiative of initiatives) {
       for (const epic of initiative.epics ?? []) {
         if (epic.planStartMonth == null || epic.planEndMonth == null) continue;
-        if (epic.planEndMonth < qStart || epic.planStartMonth > qEnd) continue;
+        const planInScope = !(epic.planEndMonth < qStart || epic.planStartMonth > qEnd);
         const startS = globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1);
         const endS = globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2);
-        rows.push({ epic, initiative, startS, endS });
+        if (planInScope) {
+          rows.push({ epic, initiative, startS, endS, ghostOnly: false });
+          continue;
+        }
+        // Plan is OUTSIDE the focused quarter. Only surface a ghost-only
+        // row when ALL of these hold:
+        //   1. Plan-end is before the quarter starts (slipped Q1 epic).
+        //   2. Epic is still overdue (not formally done).
+        //   3. AT LEAST ONE of its open stories is sprinted INTO this
+        //      quarter — the Rule 2 gate. Without this, an "abstractly
+        //      overdue" epic whose stories never moved out of Q1 would
+        //      show a phantom ghost in Q2 even though no engineer is
+        //      scheduled to work on it here.
+        if (epic.planEndMonth < qStart) {
+          if (!epicIsOverdueByPlan(epic, currentYear)) continue;
+          const footprint = epicQuarterFootprint(epic, qStartS, qHiS);
+          if (footprint == null) continue;
+          rows.push({
+            epic,
+            initiative,
+            // Ghost spans the in-quarter sprint footprint exactly —
+            // first sprint with an open story → last sprint with an
+            // open story. This is the visible right edge that
+            // `epicVirtualEndS(isGhostOnly=true)` returns verbatim.
+            startS: footprint.firstSprint,
+            endS: footprint.lastSprint,
+            ghostOnly: true,
+            ghostInQDaysLeft: footprint.inQDaysLeft,
+          });
+        }
       }
     }
     return rows.sort(
@@ -3497,7 +3580,7 @@ export function TimelineGrid({
         a.epic.timelineRow - b.epic.timelineRow ||
         a.epic.title.localeCompare(b.epic.title),
     );
-  }, [focusedQuarter, initiatives]);
+  }, [focusedQuarter, initiatives, currentYear]);
   const yearRoadmapEpics = useMemo(() => {
     const rows: Array<{ epic: EpicItem; initiative: InitiativeItem; startS: number; endS: number }> = [];
     for (const initiative of initiatives) {
@@ -9864,11 +9947,24 @@ export function TimelineGrid({
                           <div className="relative z-[1] grid min-w-0 gap-2" style={ganttLaneGridStyle}>
                             {group.items.map((row) => {
                               const qLo = firstGlobalSprintForMonth(focusedQuarter.months[0]);
-                              const rz = epicResizePreview?.epicId === row.epic.id ? epicResizePreview : null;
+                              const qHi = globalSprintFromMonthLane(focusedQuarter.months[focusedQuarter.months.length - 1], 2);
+                              const isGhostOnlyRow = row.ghostOnly === true;
+                              const rz = !isGhostOnlyRow && epicResizePreview?.epicId === row.epic.id ? epicResizePreview : null;
                               let previewStart = row.startS;
                               let previewEnd = row.endS;
-                              if (rz) {
-                                if (rz.side === "right") previewEnd = Math.min(globalSprintFromMonthLane(focusedQuarter.months[focusedQuarter.months.length - 1], 2), Math.max(row.startS, row.endS + rz.deltaSteps));
+                              if (isGhostOnlyRow) {
+                                // Ghost-only row: span = sprint
+                                // footprint of in-quarter OPEN stories.
+                                // Already baked into row.startS / row.endS
+                                // by the `quarterRoadmapEpics` memo via
+                                // `epicQuarterFootprint`. previewStart/End
+                                // just mirror that — no resize logic
+                                // applies, no projected-end clamping
+                                // needed.
+                                previewStart = row.startS;
+                                previewEnd = row.endS;
+                              } else if (rz) {
+                                if (rz.side === "right") previewEnd = Math.min(qHi, Math.max(row.startS, row.endS + rz.deltaSteps));
                                 else previewStart = Math.max(qLo, Math.min(row.endS, row.startS + rz.deltaSteps));
                               }
                               const columnStart = Math.max(1, previewStart - qLo + 1);
@@ -9917,8 +10013,8 @@ export function TimelineGrid({
                                     : 0;
                               const resizeEdgeClass =
                                 "pointer-events-auto absolute inset-y-0.5 z-20 w-2.5 touch-none select-none rounded-md bg-white/0 transition-colors hover:bg-white/30 active:bg-white/40";
-                              const qDayAbs = quarterBarAbsoluteDayPct(row.epic, row.startS, span, currentYear);
-                              const qInset = qDayAbs ? null : epicBarDayInsetPct(row.epic, row.startS, row.endS, span, currentYear);
+                              const qDayAbs = isGhostOnlyRow ? null : quarterBarAbsoluteDayPct(row.epic, row.startS, span, currentYear);
+                              const qInset = (isGhostOnlyRow || qDayAbs) ? null : epicBarDayInsetPct(row.epic, row.startS, row.endS, span, currentYear);
                               return (
                                 <div
                                   key={`q-epic-${row.epic.id}`}
@@ -9939,76 +10035,122 @@ export function TimelineGrid({
                                         : { marginLeft: qInset?.left || undefined, marginRight: qInset?.right || undefined }
                                     }
                                   >
-                                    <EpicPlanTimelineBar
-                                      id={row.epic.id}
-                                      title={row.epic.title}
-                                      icon={row.epic.icon}
-                                      color={row.epic.color?.trim() ? row.epic.color : row.initiative.color}
-                                      progressPercent={epicHealthQ.progressPercent}
-                                      progressLabel={epicHealthTooltipQ}
-                                      isResizing={Boolean(rz)}
-                                      emphasizeFlash={emphasizeFlash}
-                                      emphasizeTick={emphasizeTick}
-                                      showProgress={showRoadmapProgress || healthFilter.size > 0}
-                                      healthStatus={(showRoadmapProgress || healthFilter.size > 0) && epicHasDataQ && healthFilter.size > 0 ? epicHealthQ.status : null}
-                                      healthTooltip={epicHealthTooltipQ}
-                                      epicStatus={showRoadmapProgress && healthFilter.size === 0 ? epicLiveStatusQ : null}
-                                      // See year-roadmap branch — Overdue lives in the health-
-                                      // verdict pill exclusively, never alongside the status pill.
-                                      isOverdue={false}
-                                      // Border severity — same source of
-                                      // truth as the banner.
-                                      daysPastPlan={epicOverdueMeta(row.epic, currentYear)?.daysPastPlan ?? 0}
-                                      onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
-                                      onClick={() => onOpenEpic(row.epic.id)}
-                                      onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", row.epic.id)}
-                                      teamAssignmentChip={showGanttTeamChips ? epicDeliveryTeamAssignmentChip(row.epic.team) : null}
-                                      dimmed={isHighlightActive && !highlightedEpicIds!.has(row.epic.id)}
-                                    />
-                                    {(() => {
-                                      // Mirror of the year-roadmap branch above. Same source of truth (`epicOverdueMeta`)
-                                      // so the banner, the bar's border, and the ghost+icon all agree on the math.
-                                      if (rz != null) return null;
+                                    {isGhostOnlyRow ? (() => {
+                                      // Ghost-only row: slipped epic whose
+                                      // plan ended in a prior quarter but
+                                      // whose work is still in flight here.
+                                      // Render a clickable cell-wide ghost
+                                      // with the epic title floated on
+                                      // top + the slip icon at the right
+                                      // edge. Clicking opens the epic
+                                      // editor so the planner can extend
+                                      // planEnd into this quarter.
                                       const meta = epicOverdueMeta(row.epic, currentYear);
                                       if (meta == null) return null;
-                                      const planStartMs = sprintStartDate(currentYear, previewStart).getTime();
-                                      const planEndMs = sprintEndDate(currentYear, previewEnd).getTime();
-                                      const barPlanDays = Math.max(1, (planEndMs - planStartMs) / 86400000);
-                                      const ghostPct = (meta.projectedDaysLeft / barPlanDays) * 100;
                                       const severity: "amber" | "red" = meta.daysPastPlan > 7 ? "red" : "amber";
+                                      // Tooltip's "projected to ship" line
+                                      // must reflect only the IN-Q open
+                                      // work (sum of daysLeft across the
+                                      // stories that put this epic in the
+                                      // visible footprint), not the
+                                      // epic's full open backlog —
+                                      // otherwise the number contradicts
+                                      // the visible ghost width.
+                                      const inQDaysLeft = row.ghostInQDaysLeft ?? meta.projectedDaysLeft;
                                       return (
-                                        <OverdueSlipDecoration
-                                          severity={severity}
-                                          ghostPct={ghostPct}
-                                          daysPastPlan={meta.daysPastPlan}
-                                          projectedDaysLeft={meta.projectedDaysLeft}
-                                        />
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={() => onOpenEpic(row.epic.id)}
+                                            aria-label={`Open ${row.epic.title} (slipped from prior quarter)`}
+                                            className="pointer-events-auto absolute z-[1] cursor-pointer rounded-sm"
+                                            style={{ left: 0, top: 0, right: 0, height: 28 }}
+                                          />
+                                          <OverdueSlipDecoration
+                                            severity={severity}
+                                            ghostPct={0}
+                                            daysPastPlan={meta.daysPastPlan}
+                                            projectedDaysLeft={inQDaysLeft}
+                                            compact
+                                            fillMode="fill"
+                                            label={row.epic.title}
+                                          />
+                                        </>
                                       );
-                                    })()}
-                                    {onResizeEpicPlanRange ? (
+                                    })() : (
                                       <>
-                                        <div
-                                          role="slider"
-                                          aria-label="Resize epic start (sprint step)"
-                                          title="Drag to change epic start sprint"
-                                          className={cn(resizeEdgeClass, "left-0 cursor-ew-resize")}
-                                          onPointerDown={(e) => {
-                                            e.stopPropagation();
-                                            handleEpicResizePointerDown(row.epic.id, "left", e);
-                                          }}
+                                        <EpicPlanTimelineBar
+                                          id={row.epic.id}
+                                          title={row.epic.title}
+                                          icon={row.epic.icon}
+                                          color={row.epic.color?.trim() ? row.epic.color : row.initiative.color}
+                                          progressPercent={epicHealthQ.progressPercent}
+                                          progressLabel={epicHealthTooltipQ}
+                                          isResizing={Boolean(rz)}
+                                          emphasizeFlash={emphasizeFlash}
+                                          emphasizeTick={emphasizeTick}
+                                          showProgress={showRoadmapProgress || healthFilter.size > 0}
+                                          healthStatus={(showRoadmapProgress || healthFilter.size > 0) && epicHasDataQ && healthFilter.size > 0 ? epicHealthQ.status : null}
+                                          healthTooltip={epicHealthTooltipQ}
+                                          epicStatus={showRoadmapProgress && healthFilter.size === 0 ? epicLiveStatusQ : null}
+                                          // See year-roadmap branch — Overdue lives in the health-
+                                          // verdict pill exclusively, never alongside the status pill.
+                                          isOverdue={false}
+                                          // Border severity — same source of
+                                          // truth as the banner.
+                                          daysPastPlan={epicOverdueMeta(row.epic, currentYear)?.daysPastPlan ?? 0}
+                                          onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
+                                          onClick={() => onOpenEpic(row.epic.id)}
+                                          onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", row.epic.id)}
+                                          teamAssignmentChip={showGanttTeamChips ? epicDeliveryTeamAssignmentChip(row.epic.team) : null}
+                                          dimmed={isHighlightActive && !highlightedEpicIds!.has(row.epic.id)}
                                         />
-                                        <div
-                                          role="slider"
-                                          aria-label="Resize epic end (sprint step)"
-                                          title="Drag to change epic end sprint"
-                                          className={cn(resizeEdgeClass, "right-0 cursor-ew-resize")}
-                                          onPointerDown={(e) => {
-                                            e.stopPropagation();
-                                            handleEpicResizePointerDown(row.epic.id, "right", e);
-                                          }}
-                                        />
+                                        {(() => {
+                                          // Mirror of the year-roadmap branch above. Same source of truth (`epicOverdueMeta`)
+                                          // so the banner, the bar's border, and the ghost+icon all agree on the math.
+                                          if (rz != null) return null;
+                                          const meta = epicOverdueMeta(row.epic, currentYear);
+                                          if (meta == null) return null;
+                                          const planStartMs = sprintStartDate(currentYear, previewStart).getTime();
+                                          const planEndMs = sprintEndDate(currentYear, previewEnd).getTime();
+                                          const barPlanDays = Math.max(1, (planEndMs - planStartMs) / 86400000);
+                                          const ghostPct = (meta.projectedDaysLeft / barPlanDays) * 100;
+                                          const severity: "amber" | "red" = meta.daysPastPlan > 7 ? "red" : "amber";
+                                          return (
+                                            <OverdueSlipDecoration
+                                              severity={severity}
+                                              ghostPct={ghostPct}
+                                              daysPastPlan={meta.daysPastPlan}
+                                              projectedDaysLeft={meta.projectedDaysLeft}
+                                            />
+                                          );
+                                        })()}
+                                        {onResizeEpicPlanRange ? (
+                                          <>
+                                            <div
+                                              role="slider"
+                                              aria-label="Resize epic start (sprint step)"
+                                              title="Drag to change epic start sprint"
+                                              className={cn(resizeEdgeClass, "left-0 cursor-ew-resize")}
+                                              onPointerDown={(e) => {
+                                                e.stopPropagation();
+                                                handleEpicResizePointerDown(row.epic.id, "left", e);
+                                              }}
+                                            />
+                                            <div
+                                              role="slider"
+                                              aria-label="Resize epic end (sprint step)"
+                                              title="Drag to change epic end sprint"
+                                              className={cn(resizeEdgeClass, "right-0 cursor-ew-resize")}
+                                              onPointerDown={(e) => {
+                                                e.stopPropagation();
+                                                handleEpicResizePointerDown(row.epic.id, "right", e);
+                                              }}
+                                            />
+                                          </>
+                                        ) : null}
                                       </>
-                                    ) : null}
+                                    )}
                                   </div>
                                 </div>
                               );
