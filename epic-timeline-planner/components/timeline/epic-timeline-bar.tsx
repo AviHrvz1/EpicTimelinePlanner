@@ -286,9 +286,26 @@ export function OverdueSlipDecoration({
     height: barHeight,
     background: stripe,
   } as const;
+  // Icon positioning:
+  //  - `fill` mode: icon sits AT the wrapper's right edge, padded
+  //    inward by its own width + 4px so it stays fully inside the
+  //    visible cell.
+  //  - `extend` + ghost present: icon sits AT the ghost's right edge,
+  //    padded inward similarly so the glyph never clips when the
+  //    ghost reaches the column boundary.
+  //  - `extend` + no ghost: icon sits JUST PAST the bar's right edge
+  //    (2px), the same as before — there's no overflow risk because
+  //    the bar always ends inside the cell.
+  const ICON_BOX_PX = 20; // size-5 = 20px hit area
+  const PADDING_PX = 4;
   const iconLeft = fillMode === "fill"
-    ? "100%"
-    : `calc(100% + ${showGhost ? Math.min(300, ghostPct) : 0}%)`;
+    ? `calc(100% - ${ICON_BOX_PX + PADDING_PX}px)`
+    : showGhost
+      ? `calc(100% + ${Math.min(300, ghostPct)}% - ${ICON_BOX_PX + PADDING_PX}px)`
+      : "100%";
+  const iconTransform = (fillMode === "fill" || showGhost)
+    ? "translateY(-50%)"
+    : "translate(2px, -50%)";
   return (
     <>
       {showGhost ? (
@@ -328,7 +345,7 @@ export function OverdueSlipDecoration({
         style={{
           left: iconLeft,
           top: barCenterPx,
-          transform: "translate(2px, -50%)",
+          transform: iconTransform,
         }}
       >
         <span

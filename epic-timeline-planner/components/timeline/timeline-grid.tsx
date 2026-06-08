@@ -782,6 +782,33 @@ function deriveEpicStatusKey(epic: EpicItem): UserStoryItem["status"] | null {
 }
 
 /**
+ * Bar's TRUE planned end as a wall-clock timestamp — respects
+ * `planEndDay` (day-precision) when present, otherwise falls back to
+ * the sprint's last day. Single source of truth for "is past plan"
+ * across the gantt: the overdue badge, the ghost extension, and
+ * everything else should agree with what the planner SEES on screen.
+ *
+ * Without the day-precision read, an epic stretched so its bar
+ * visually ends on the 8th of a month (via `planEndDay = 8`) would
+ * still be flagged "overdue" only after the whole sprint ends on the
+ * 15th — and the ghost would render in the next sprint even though
+ * the bar's right edge sits past today.
+ */
+function epicPlannedEndMs(epic: EpicItem, planYear: number): number | null {
+  if (epic.planEndMonth == null) return null;
+  const endLane: 1 | 2 = epic.planEndSprint === 1 ? 1 : 2;
+  const sprintFirstDay = endLane === 1 ? 1 : 16;
+  const sprintLastDay =
+    endLane === 1 ? 15 : new Date(planYear, epic.planEndMonth, 0).getDate();
+  const rawEndDay = epic.planEndDay;
+  const endDay =
+    rawEndDay != null && rawEndDay >= sprintFirstDay && rawEndDay <= sprintLastDay
+      ? rawEndDay
+      : sprintLastDay;
+  return new Date(planYear, epic.planEndMonth - 1, endDay, 23, 59, 59, 999).getTime();
+}
+
+/**
  * True when an epic's plan window has passed AND the rolled-up status
  * isn't `done`. Drives the inline `Overdue` indicator on the Gantt epic
  * bars so a roadmap row reads as late even when child stories' days have
@@ -790,10 +817,37 @@ function deriveEpicStatusKey(epic: EpicItem): UserStoryItem["status"] | null {
 function epicIsOverdueByPlan(epic: EpicItem, planYear: number): boolean {
   const status = deriveEpicStatusKey(epic);
   if (status === "done" || status == null) return false;
-  if (epic.planEndMonth == null) return false;
-  const planEndGlobalSprint = globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2);
-  const planEndMs = sprintEndDate(planYear, planEndGlobalSprint).getTime();
+  const planEndMs = epicPlannedEndMs(epic, planYear);
+  if (planEndMs == null) return false;
   return clockNowMs() > planEndMs;
+}
+
+/**
+ * Latest year-sprint that contains an OPEN story of this epic AND is
+ * strictly AFTER the epic's planned end sprint. This is the new
+ * source-of-truth for the ghost's right edge in `extend` mode:
+ * the ghost says "work is scheduled in this sprint past the plan,"
+ * and it ends where that scheduled work ends — not at an abstract
+ * `today + Σ daysLeft` projection.
+ *
+ * Returns `null` when no story is sprinted past the plan — in that
+ * case the bar still gets its severity border + slip icon, but no
+ * stripe extension (nothing concrete to point at).
+ */
+function epicLatestLateSprint(
+  epic: EpicItem,
+  planEndGlobalSprint: number,
+): number | null {
+  const contextMonth = epic.planStartMonth ?? 1;
+  let latest = -Infinity;
+  for (const story of epic.userStories ?? []) {
+    if (story.status === "done") continue;
+    const s = resolveStoryYearSprint(story, contextMonth);
+    if (s == null) continue;
+    if (s <= planEndGlobalSprint) continue;
+    if (s > latest) latest = s;
+  }
+  return latest === -Infinity ? null : latest;
 }
 
 /**
@@ -814,9 +868,10 @@ function epicOverdueMeta(
   planYear: number,
 ): { daysPastPlan: number; projectedDaysLeft: number; projectedEndMs: number; planEndMs: number } | null {
   if (!epicIsOverdueByPlan(epic, planYear)) return null;
-  if (epic.planEndMonth == null) return null;
-  const planEndGlobalSprint = globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2);
-  const planEndMs = sprintEndDate(planYear, planEndGlobalSprint).getTime();
+  // Single source of truth for "planned end" — respects `planEndDay`
+  // so the days-past-plan math matches the bar's visible right edge.
+  const planEndMs = epicPlannedEndMs(epic, planYear);
+  if (planEndMs == null) return null;
   const nowMs = clockNowMs();
   const daysPastPlan = Math.max(0, Math.floor((nowMs - planEndMs) / 86400000));
   const openStories = (epic.userStories ?? []).filter((s) => s.status !== "done");
@@ -7507,10 +7562,27 @@ export function TimelineGrid({
                               if (rz != null) return null;
                               const meta = epicOverdueMeta(row.epic, currentYear);
                               if (meta == null) return null;
+                              // Ghost length follows the LATEST OPEN-STORY
+                              // SPRINT past the epic's planEnd, not an
+                              // abstract `today + Σ daysLeft` projection.
+                              // If no story is sprinted past the plan,
+                              // the bar still gets its severity border +
+                              // slip icon, but no stripe.
                               const planStartMs = sprintStartDate(currentYear, previewStart).getTime();
-                              const planEndMs = sprintEndDate(currentYear, previewEnd).getTime();
+                              const planEndMs = epicPlannedEndMs(row.epic, currentYear)
+                                ?? sprintEndDate(currentYear, previewEnd).getTime();
                               const barPlanDays = Math.max(1, (planEndMs - planStartMs) / 86400000);
-                              const ghostPct = (meta.projectedDaysLeft / barPlanDays) * 100;
+                              const planEndGS = globalSprintFromMonthLane(
+                                row.epic.planEndMonth ?? 1,
+                                row.epic.planEndSprint === 1 ? 1 : 2,
+                              );
+                              const latestLateSprint = epicLatestLateSprint(row.epic, planEndGS);
+                              let ghostPct = 0;
+                              if (latestLateSprint != null) {
+                                const ghostEndMs = sprintEndDate(currentYear, latestLateSprint).getTime();
+                                const ghostExtraDays = Math.max(0, (ghostEndMs - planEndMs) / 86400000);
+                                ghostPct = (ghostExtraDays / barPlanDays) * 100;
+                              }
                               const severity: "amber" | "red" = meta.daysPastPlan > 7 ? "red" : "amber";
                               return (
                                 <OverdueSlipDecoration
@@ -10106,15 +10178,25 @@ export function TimelineGrid({
                                           dimmed={isHighlightActive && !highlightedEpicIds!.has(row.epic.id)}
                                         />
                                         {(() => {
-                                          // Mirror of the year-roadmap branch above. Same source of truth (`epicOverdueMeta`)
-                                          // so the banner, the bar's border, and the ghost+icon all agree on the math.
+                                          // Mirror of the year-roadmap branch above — same late-sprint rule.
                                           if (rz != null) return null;
                                           const meta = epicOverdueMeta(row.epic, currentYear);
                                           if (meta == null) return null;
                                           const planStartMs = sprintStartDate(currentYear, previewStart).getTime();
-                                          const planEndMs = sprintEndDate(currentYear, previewEnd).getTime();
+                                          const planEndMs = epicPlannedEndMs(row.epic, currentYear)
+                                            ?? sprintEndDate(currentYear, previewEnd).getTime();
                                           const barPlanDays = Math.max(1, (planEndMs - planStartMs) / 86400000);
-                                          const ghostPct = (meta.projectedDaysLeft / barPlanDays) * 100;
+                                          const planEndGS = globalSprintFromMonthLane(
+                                            row.epic.planEndMonth ?? 1,
+                                            row.epic.planEndSprint === 1 ? 1 : 2,
+                                          );
+                                          const latestLateSprint = epicLatestLateSprint(row.epic, planEndGS);
+                                          let ghostPct = 0;
+                                          if (latestLateSprint != null) {
+                                            const ghostEndMs = sprintEndDate(currentYear, latestLateSprint).getTime();
+                                            const ghostExtraDays = Math.max(0, (ghostEndMs - planEndMs) / 86400000);
+                                            ghostPct = (ghostExtraDays / barPlanDays) * 100;
+                                          }
                                           const severity: "amber" | "red" = meta.daysPastPlan > 7 ? "red" : "amber";
                                           return (
                                             <OverdueSlipDecoration
