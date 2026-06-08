@@ -2030,13 +2030,19 @@ export function EpicFormDialog({
                                   </Button>
                                 </div>
                               </td>
-                              <td className="px-2 py-1.5 text-slate-400">Not set</td>
-                              <td className="px-2 py-1.5 text-slate-400">To Do</td>
-                              <td className="px-2 py-1.5 text-slate-400">Unassigned</td>
-                              <td className="px-2 py-1.5 text-slate-400">Not set</td>
-                              <td className="px-2 py-1.5 text-slate-400">Not set</td>
-                              <td className="px-2 py-1.5 text-slate-400">-</td>
-                              <td className="px-2 py-1.5 text-slate-400">-</td>
+                              {/* Placeholders for the "Add new story" row. The
+                                * em dash reads obviously as "not yet set" without
+                                * mimicking the closed-cell wording of the rows
+                                * below — which used to make the planner think
+                                * the add-row's "Unassigned" was a duplicate
+                                * editor stacked on the row being edited. */}
+                              <td className="px-2 py-1.5 text-center text-slate-300">—</td>
+                              <td className="px-2 py-1.5 text-center text-slate-300">—</td>
+                              <td className="px-2 py-1.5 text-center text-slate-300">—</td>
+                              <td className="px-2 py-1.5 text-center text-slate-300">—</td>
+                              <td className="px-2 py-1.5 text-center text-slate-300">—</td>
+                              <td className="px-2 py-1.5 text-center text-slate-300">—</td>
+                              <td className="px-2 py-1.5 text-center text-slate-300">—</td>
                             </tr>
                             {sortedEpicChildStories.map((story, rowIndex) => (
                               <tr
@@ -2202,19 +2208,26 @@ export function EpicFormDialog({
                                     </button>
                                   )}
                                 </td>
-                                <td className="px-3 py-2 text-slate-600">
+                                <td className="relative px-3 py-2 text-slate-600">
                                   {childEditingCell?.rowId === story.id && childEditingCell.field === "assignee" ? (
-                                    <div className="relative z-20 flex min-w-0 flex-1 items-center gap-1">
-                                      <AssigneeCombobox
-                                        value={childEditingValue}
-                                        onChange={setChildEditingValue}
-                                        suggestions={assigneeNameSuggestions}
-                                        directoryUsers={workspaceDirectoryUsers}
-                                        placeholder="Assignee"
-                                        className="min-w-0 flex-1 rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
-                                      />
-                                      <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                      <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
+                                    // Absolute overlay so the combobox + ✓/✕ buttons
+                                    // render even when the assignee column is too
+                                    // narrow to hold them inline. `whitespace-nowrap`
+                                    // + bg-white covers the underlying cell content
+                                    // for the duration of the edit.
+                                    <div className="absolute left-2 top-1/2 z-30 flex -translate-y-1/2 items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
+                                      <div className="w-44">
+                                        <AssigneeCombobox
+                                          value={childEditingValue}
+                                          onChange={setChildEditingValue}
+                                          suggestions={assigneeNameSuggestions}
+                                          directoryUsers={workspaceDirectoryUsers}
+                                          placeholder="Assignee"
+                                          className="w-full rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
+                                        />
+                                      </div>
+                                      <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="shrink-0 rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
+                                      <button type="button" onClick={() => setChildEditingCell(null)} className="shrink-0 rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
                                     </div>
                                   ) : (
                                     <button type="button" onClick={() => beginChildCellEdit(story.id, "assignee")} className="inline-flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-slate-100">
