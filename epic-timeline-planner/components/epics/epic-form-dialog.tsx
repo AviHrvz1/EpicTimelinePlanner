@@ -2073,7 +2073,7 @@ export function EpicFormDialog({
                                 <td className="px-2 py-1.5 text-slate-600">
                                   {childEditingCell?.rowId === story.id && childEditingCell.field === "sprint" ? (
                                     <div className="relative z-20 flex items-center gap-1">
-                                      <div className="relative w-32">
+                                      <div className="relative w-40">
                                         <Flag
                                           className="pointer-events-none absolute left-1.5 top-1/2 size-3.5 -translate-y-1/2 text-rose-500"
                                           aria-hidden
@@ -2337,31 +2337,50 @@ export function EpicFormDialog({
                                   )}
                                 </td>
                                 <td className="px-2 py-1.5 text-slate-600">
-                                  <button
-                                    ref={(el) => { priorityTriggerRefs.current[story.id] = el; }}
-                                    type="button"
-                                    onClick={() => setPriorityPopoverRowId((cur) => (cur === story.id ? null : story.id))}
-                                    className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100"
-                                  >
-                                    <PriorityPill priority={childStoryDrafts[story.id]?.priority ?? story.priority ?? ""} />
-                                  </button>
-                                  {priorityPopoverRowId === story.id ? (
-                                    <PriorityPopover
-                                      value={((childStoryDrafts[story.id]?.priority ?? story.priority ?? "").toUpperCase() as Priority)}
-                                      triggerRef={{ current: priorityTriggerRefs.current[story.id] }}
-                                      onCancel={() => setPriorityPopoverRowId(null)}
-                                      onSelect={(next) => {
-                                        setPriorityPopoverRowId(null);
-                                        const existing = childStoryDrafts[story.id];
-                                        if (!existing) return;
-                                        const merged: ChildStoryDraft = { ...existing, priority: next };
-                                        setChildStoryDrafts((prev) => ({ ...prev, [story.id]: merged }));
-                                        if (onPatchStory) {
-                                          void onPatchStory(story.id, { priority: next ? next : null });
-                                        }
-                                      }}
-                                    />
-                                  ) : null}
+                                  {childEditingCell?.rowId === story.id && childEditingCell.field === "priority" ? (
+                                    <div className="relative z-20 flex items-center gap-1">
+                                      {/* Trigger pill mirrors the closed-cell appearance —
+                                        *  clicking it opens the priority popover. The
+                                        *  popover NO LONGER auto-saves on pick; selecting
+                                        *  an option updates the pending value only, and
+                                        *  the planner commits via the ✓ button (or
+                                        *  cancels via ✕) just like every other field. */}
+                                      <button
+                                        ref={(el) => { priorityTriggerRefs.current[story.id] = el; }}
+                                        type="button"
+                                        onClick={() => setPriorityPopoverRowId((cur) => (cur === story.id ? null : story.id))}
+                                        className="rounded px-1 py-0.5 text-left hover:bg-slate-100"
+                                      >
+                                        <PriorityPill priority={childEditingValue} />
+                                      </button>
+                                      <button type="button" onClick={() => { setPriorityPopoverRowId(null); void confirmChildCellEdit(story.id); }} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
+                                      <button type="button" onClick={() => { setPriorityPopoverRowId(null); setChildEditingCell(null); }} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
+                                      {priorityPopoverRowId === story.id ? (
+                                        <PriorityPopover
+                                          value={(childEditingValue.toUpperCase() as Priority)}
+                                          triggerRef={{ current: priorityTriggerRefs.current[story.id] }}
+                                          onCancel={() => setPriorityPopoverRowId(null)}
+                                          onSelect={(next) => {
+                                            // Update the pending value only — actual
+                                            // save happens on the ✓ button via
+                                            // confirmChildCellEdit (which patches
+                                            // `priority` through onPatchStory).
+                                            setChildEditingValue(next ?? "");
+                                            setPriorityPopoverRowId(null);
+                                          }}
+                                        />
+                                      ) : null}
+                                    </div>
+                                  ) : (
+                                    <button
+                                      ref={(el) => { priorityTriggerRefs.current[story.id] = el; }}
+                                      type="button"
+                                      onClick={() => beginChildCellEdit(story.id, "priority")}
+                                      className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100"
+                                    >
+                                      <PriorityPill priority={childStoryDrafts[story.id]?.priority ?? story.priority ?? ""} />
+                                    </button>
+                                  )}
                                 </td>
                                 <td className="px-3 py-2 text-slate-700">
                                   {childEditingCell?.rowId === story.id && childEditingCell.field === "estimatedDays" ? (
