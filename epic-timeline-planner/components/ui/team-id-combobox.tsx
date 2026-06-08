@@ -120,6 +120,14 @@ export function TeamIdCombobox({
     if (!open) {
       setInlineNewTeamName("");
       setInlineCreateExpanded(false);
+    } else {
+      // Reset the in-popover search input each time the menu opens.
+      // Without this, `draft` carries over from a previous edit (it
+      // holds the last committed team label) and the filter slices
+      // the list down to whatever was just picked — instead of
+      // showing every team as the planner expects when reopening
+      // the picker.
+      setDraft("");
     }
   }, [open]);
 

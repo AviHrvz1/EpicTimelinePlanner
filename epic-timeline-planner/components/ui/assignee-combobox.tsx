@@ -95,13 +95,22 @@ export function AssigneeCombobox({
   const portalRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+  // Tracks whether the user has TYPED into the input since the
+  // dropdown was last opened. When false (just-focused state), the
+  // dropdown shows ALL suggestions — even if the parent pre-filled
+  // the field with an existing value. This matches the planner's
+  // mental model: "I clicked this cell to change the assignee — show
+  // me my options," not "filter to whatever's already in here."
+  // First keystroke flips it true, the filter behaves normally
+  // (filter-as-you-type) until the field is blurred / re-focused.
+  const [userHasTyped, setUserHasTyped] = useState(false);
 
   const filtered = useMemo(() => {
-    const q = value.trim().toLowerCase();
+    const q = (userHasTyped ? value : "").trim().toLowerCase();
     const list = [...new Set(suggestions)];
     if (!q) return list.slice(0, 80);
     return list.filter((s) => s.toLowerCase().includes(q)).slice(0, 80);
-  }, [value, suggestions]);
+  }, [value, suggestions, userHasTyped]);
 
   const recalcMenu = useCallback(() => {
     const el = inputRef.current;
@@ -271,10 +280,17 @@ export function AssigneeCombobox({
         type="text"
         value={value}
         onChange={(e) => {
+          setUserHasTyped(true);
           onChange(e.target.value);
           setOpen(true);
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          // Re-snapshot "no typing yet" state every time the field
+          // gains focus, so reopening the dropdown shows every option
+          // regardless of what the user typed last time.
+          setUserHasTyped(false);
+          setOpen(true);
+        }}
         onBlur={() => onInputBlur?.(value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}

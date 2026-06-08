@@ -287,7 +287,15 @@ export function EpicFormDialog({
   const [childStorySortKey, setChildStorySortKey] = useState<EpicChildStorySortKey>("title");
   const [childStorySortDir, setChildStorySortDir] = useState<"asc" | "desc">("asc");
   const [isSprintAutocompleteOpen, setIsSprintAutocompleteOpen] = useState(false);
+  // Tracks whether the user has TYPED into the sprint input since the
+  // editor opened. While false, the dropdown shows every assignable
+  // sprint (so the planner can see all options on first click instead
+  // of being filtered to the pre-filled "Sprint N"). First keystroke
+  // flips it true; filter-as-you-type behaves normally from there.
+  const [sprintUserHasTyped, setSprintUserHasTyped] = useState(false);
   const [sprintAutocompletePosition, setSprintAutocompletePosition] = useState<{ left: number; top: number; width: number } | null>(null);
+  /** Drives the status editor's option popover; auto-closes on cell exit. */
+  const [statusOptionsOpen, setStatusOptionsOpen] = useState(false);
   const { widths: childTableWidths, onColumnResizeStart: onChildTableColResize } = useResizableTableColumns(
     `${open ? "1" : "0"}-${epic?.id ?? "none"}`,
     EPIC_CHILD_TABLE_DEFAULT_WIDTHS,
@@ -458,7 +466,7 @@ export function EpicFormDialog({
   }, [allAssigneeNameSuggestions, teamDraft, workspaceDirectoryUsers]);
   const filteredSprintAutocompleteOptions = useMemo(() => {
     if (!isSprintAutocompleteOpen || childEditingCell?.field !== "sprint") return [];
-    const raw = childEditingValue.trim().toLowerCase();
+    const raw = sprintUserHasTyped ? childEditingValue.trim().toLowerCase() : "";
     if (!raw) return assignableSprintOptions;
     const numericQuery = raw.replace(/[^0-9]/g, "");
     return assignableSprintOptions.filter((sprintNo) => {
@@ -467,7 +475,7 @@ export function EpicFormDialog({
       if (!numericQuery) return false;
       return String(sprintNo).includes(numericQuery);
     });
-  }, [assignableSprintOptions, childEditingCell?.field, childEditingValue, isSprintAutocompleteOpen]);
+  }, [assignableSprintOptions, childEditingCell?.field, childEditingValue, isSprintAutocompleteOpen, sprintUserHasTyped]);
   const allowedMonthNames = useMemo(() => {
     const indices = monthIndicesForQuarter(parseQuarterSelect(planQuarterDraft));
     return indices.map((i) => MONTHS[i - 1]);
@@ -1036,10 +1044,27 @@ export function EpicFormDialog({
   ) {
     const draft = childStoryDrafts[storyId];
     if (!draft) return;
-    const value = draft[field] ?? "";
+    const rawValue = draft[field] ?? "";
+    // Match the display formatting for sprint so the editor reads
+    // "Sprint 4" (with the icon-prefixed input), not the raw stored
+    // number "4". The parser strips non-digits anyway, so the user
+    // can still type just a number to switch sprints — but on first
+    // open the field mirrors what the cell showed a moment before.
+    const value =
+      field === "sprint"
+        ? (() => {
+            const n = parseSprintDraftValue(rawValue);
+            return n != null ? `Sprint ${n}` : "";
+          })()
+        : rawValue;
     setChildEditingCell({ rowId: storyId, field });
     setChildEditingValue(value);
     setIsSprintAutocompleteOpen(field === "sprint");
+    setStatusOptionsOpen(false);
+    // Reset "user typed" so the first time the sprint dropdown opens
+    // for this cell it shows every assignable sprint, not just the
+    // pre-filled one.
+    if (field === "sprint") setSprintUserHasTyped(false);
   }
 
   function updateSprintAutocompletePosition() {
@@ -2037,15 +2062,24 @@ export function EpicFormDialog({
                                 <td className="px-2 py-1.5 text-slate-600">
                                   {childEditingCell?.rowId === story.id && childEditingCell.field === "sprint" ? (
                                     <div className="relative z-20 flex items-center gap-1">
+                                      <div className="relative w-32">
+                                        <Flag
+                                          className="pointer-events-none absolute left-1.5 top-1/2 size-3.5 -translate-y-1/2 text-rose-500"
+                                          aria-hidden
+                                        />
                                       <input
                                         ref={sprintInputRef}
                                         value={childEditingValue}
                                         onChange={(event) => {
+                                          setSprintUserHasTyped(true);
                                           setChildEditingValue(event.target.value);
                                           setIsSprintAutocompleteOpen(true);
                                           updateSprintAutocompletePosition();
                                         }}
                                         onFocus={() => {
+                                          // Re-snapshot "no typing yet" so reopening
+                                          // shows the full list.
+                                          setSprintUserHasTyped(false);
                                           setIsSprintAutocompleteOpen(true);
                                           updateSprintAutocompletePosition();
                                         }}
@@ -2053,8 +2087,9 @@ export function EpicFormDialog({
                                           window.setTimeout(() => setIsSprintAutocompleteOpen(false), 120);
                                         }}
                                         placeholder="Sprint 1-24"
-                                        className="w-[7.25rem] rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
+                                        className="w-full rounded-md border bg-white py-1 pl-7 pr-2 text-xs text-slate-700"
                                       />
+                                      </div>
                                       <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
                                       <button
                                         type="button"
@@ -2087,18 +2122,55 @@ export function EpicFormDialog({
                                 <td className="px-3 py-2">
                                   {childEditingCell?.rowId === story.id && childEditingCell.field === "status" ? (
                                     <div className="relative z-20 flex items-center gap-1">
-                                      <select
-                                        value={childEditingValue}
-                                        onChange={(event) => setChildEditingValue(event.target.value)}
-                                        className="w-[7rem] min-w-[7rem] rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
-                                      >
-                                        <option value="todo">To Do</option>
-                                        <option value="inProgress">In Progress</option>
-                                        <option value="review">Done</option>
-                                        <option value="done">Approved</option>
-                                      </select>
-                                      <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                      <button type="button" onClick={() => setChildEditingCell(null)} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
+                                      <div className="relative">
+                                        {/* Custom trigger — shows the current status with its
+                                         *  icon + colored pill so the editor matches the
+                                         *  display chip on the closed cell, and labels every
+                                         *  status the same way the rest of the app does
+                                         *  ("Review / Testing" + "Done", not "Done" + "Approved"). */}
+                                        <button
+                                          type="button"
+                                          onClick={() => setStatusOptionsOpen((s) => !s)}
+                                          aria-haspopup="listbox"
+                                          aria-expanded={statusOptionsOpen}
+                                          className={cn(
+                                            "inline-flex w-[8.25rem] items-center justify-between gap-1.5 rounded-md border bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50",
+                                          )}
+                                        >
+                                          <span className="inline-flex items-center gap-1.5">
+                                            {renderStatusIcon(childEditingValue)}
+                                            <span className="truncate">{storyStatusLabel[childEditingValue] ?? childEditingValue ?? "To Do"}</span>
+                                          </span>
+                                          <ChevronDown className="size-3 shrink-0 text-slate-400" aria-hidden />
+                                        </button>
+                                        {statusOptionsOpen ? (
+                                          <ul
+                                            role="listbox"
+                                            className="absolute left-0 top-full z-30 mt-1 min-w-[10rem] overflow-hidden rounded-md border border-slate-200 bg-white py-0.5 shadow-md"
+                                          >
+                                            {(["todo", "inProgress", "review", "done"] as const).map((opt) => (
+                                              <li key={opt} role="option" aria-selected={childEditingValue === opt}>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setChildEditingValue(opt);
+                                                    setStatusOptionsOpen(false);
+                                                  }}
+                                                  className={cn(
+                                                    "flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100",
+                                                    childEditingValue === opt && "bg-slate-50 font-medium",
+                                                  )}
+                                                >
+                                                  {renderStatusIcon(opt)}
+                                                  <span className="truncate">{storyStatusLabel[opt]}</span>
+                                                </button>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        ) : null}
+                                      </div>
+                                      <button type="button" onClick={() => { setStatusOptionsOpen(false); void confirmChildCellEdit(story.id); }} className="rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
+                                      <button type="button" onClick={() => { setStatusOptionsOpen(false); setChildEditingCell(null); }} className="rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
                                     </div>
                                   ) : (
                                     <button type="button" onClick={() => beginChildCellEdit(story.id, "status")} className="w-full rounded px-1 py-0.5 text-left hover:bg-slate-100">
