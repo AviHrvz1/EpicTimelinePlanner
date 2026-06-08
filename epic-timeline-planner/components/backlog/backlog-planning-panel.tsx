@@ -137,6 +137,8 @@ type BacklogPlanningPanelProps = {
       status: "todo" | "inProgress" | "review" | "done";
       sprint: number | null;
       assignee: string | null;
+      /** Per-story team override slug. NULL clears it (inherit epic.team). */
+      team: string | null;
       estimatedDays: number | null;
       daysLeft: number | null;
       labels: string | null;
@@ -205,7 +207,7 @@ type BacklogColumnKey =
   | "progress";
 type GroupLevel = "roadmap" | "year" | "quarter" | "month" | "sprint";
 type WorkflowStatus = "todo" | "inProgress" | "review" | "done";
-type InlineEditableStoryField = "status" | "sprint" | "assignee" | "labels" | "estimatedDays" | "daysLeft";
+type InlineEditableStoryField = "status" | "sprint" | "assignee" | "team" | "labels" | "estimatedDays" | "daysLeft";
 type WorkItemKindFilter = "initiative" | "epic" | "story";
 
 type BacklogSortBy = "titleAsc" | "titleDesc" | "assigneeAsc" | "estDesc" | "leftDesc" | "status";
@@ -462,18 +464,21 @@ type StoryCellEditSnapshot = {
   status: string;
   sprint: number | null;
   assignee: string | null;
+  /** Story-level team override (slug). NULL = inherit parent epic.team. */
+  team: string | null;
   estimatedDays: number | null;
   daysLeft: number | null;
   labels: string | null;
 };
 
 function storyEditSnapshotFromFlat(
-  story: Pick<UserStoryItem, "status" | "sprint" | "assignee" | "estimatedDays" | "daysLeft" | "labels">,
+  story: Pick<UserStoryItem, "status" | "sprint" | "assignee" | "team" | "estimatedDays" | "daysLeft" | "labels">,
 ): StoryCellEditSnapshot {
   return {
     status: story.status,
     sprint: story.sprint,
     assignee: story.assignee?.trim() || null,
+    team: story.team?.trim() || null,
     estimatedDays: story.estimatedDays,
     daysLeft: story.daysLeft,
     labels: story.labels,
@@ -484,6 +489,9 @@ type BacklogGroupedStoryRowForSnapshot = {
   storyStatus: string;
   storySprintNum: number | null;
   storyAssignee: string;
+  /** Story-level team override (effective for display). Mirror of
+   *  story.team — empty string means "inherit from epic". */
+  storyTeamOverride?: string | null;
   storyEstimatedDays: number;
   storyDaysLeft: number;
   storyLabels: string | null;
@@ -494,6 +502,7 @@ function storyEditSnapshotFromGroupedRow(row: BacklogGroupedStoryRowForSnapshot)
     status: row.storyStatus,
     sprint: row.storySprintNum,
     assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
+    team: row.storyTeamOverride?.trim() || null,
     estimatedDays: row.storyEstimatedDays,
     daysLeft: row.storyDaysLeft,
     labels: row.storyLabels,
@@ -3248,7 +3257,16 @@ type BacklogStoryRowData = {
   monthLabelValue: string;
   epicId: string;
   epicTitle: string;
+  /** Effective team for display — `story.team ?? epic.team`. NULL when
+   *  neither is set. */
   teamId: string | null;
+  /** Raw story-level override (or NULL when the story inherits). The
+   *  editor needs this to distinguish "explicit" from "inherited", and
+   *  the cell decorator paints the "epic" chip when it's NULL. */
+  storyTeamOverride: string | null;
+  /** Parent epic's own team slug — kept so the row can render the
+   *  fallback even when the story override is set + later cleared. */
+  epicTeamSlug: string | null;
 };
 
 type BacklogStoryRowCtx = {
@@ -3280,6 +3298,11 @@ type BacklogStoryRowCtx = {
   ) => void;
   beginEpicTeamEdit: (params: { id: string; team: string | null }) => void;
   renderParentTeamEditor: (params: { kind: "epic"; id: string }) => React.ReactNode;
+  renderStoryTeamEditor: (params: {
+    storyId: string;
+    currentSlug: string;
+    snapshot: StoryCellEditSnapshot;
+  }) => React.ReactNode;
   renderBacklogTeamCell: (teamId: string | null) => React.ReactNode;
   renderQuarterChipsCell: (quarters: string[]) => React.ReactNode;
   renderParentCell: (params: {
@@ -3389,10 +3412,37 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
             </div>
           </div>
         ),
-        team: isEditingTeam ? (
-          ctx.renderParentTeamEditor({ kind: "epic", id: row.epicId })
+        team: isEditingCell && editingCellField === "team" ? (
+          // Per-story team override editor. Clicking the team cell on a
+          // story row opens THIS editor (not the epic-level one) — the
+          // pick writes story.team, not epic.team, so a single story
+          // can be pulled into a different team's column without
+          // splitting the epic.
+          ctx.renderStoryTeamEditor({
+            storyId: row.storyId,
+            currentSlug: editingCellValue,
+            snapshot: storyEditSnapshotFromGroupedRow(row),
+          })
         ) : (
-          ctx.renderBacklogTeamCell(row.teamId)
+          <button
+            type="button"
+            onMouseDown={(event) => {
+              event.preventDefault();
+              ctx.beginStoryCellEdit(row.storyId, "team", row.storyTeamOverride ?? "");
+            }}
+            title={row.storyTeamOverride ? "Click to change team" : "Click to set a story-specific team (currently inherited from epic)"}
+            className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
+          >
+            {ctx.renderBacklogTeamCell(row.teamId)}
+            {row.storyTeamOverride == null && row.teamId ? (
+              <span
+                className="shrink-0 rounded bg-slate-100 px-1 text-[9px] font-medium uppercase tracking-wide text-slate-500"
+                title="Inherited from the parent epic"
+              >
+                epic
+              </span>
+            ) : null}
+          </button>
         ),
         year: <span className="text-center text-[16px] text-slate-700">{row.initiativeYear}</span>,
         quarter: row.storyQuarterLabelValue ? (
@@ -4064,6 +4114,8 @@ export function BacklogPlanningPanel({
       status: "todo" | "inProgress" | "review" | "done";
       sprint: number | null;
       assignee: string | null;
+      /** Per-story team override slug; NULL clears it. */
+      team: string | null;
       estimatedDays: number | null;
       daysLeft: number | null;
       labels: string | null;
@@ -4127,6 +4179,12 @@ export function BacklogPlanningPanel({
       const currentValue = current.assignee?.trim() || null;
       console.log("[BacklogEdit] confirmStoryCellEdit assignee", { storyId, nextRaw, next, currentValue, willPatch: next !== currentValue });
       if (next !== currentValue) await patchStoryInline(storyId, { assignee: next });
+    } else if (field === "team") {
+      // Per-story team override. Empty string clears it so the story
+      // falls back to its parent epic.team for display + aggregation.
+      const next = nextRaw === "" ? null : nextRaw;
+      const currentValue = current.team?.trim() || null;
+      if (next !== currentValue) await patchStoryInline(storyId, { team: next });
     } else if (field === "labels") {
       const nextLabs = parseStoryLabels(nextRaw.replace(/\r?\n/g, ","));
       const nextSerialized = nextLabs.length > 0 ? nextLabs.join(", ") : null;
@@ -4443,6 +4501,31 @@ export function BacklogPlanningPanel({
           else void commitInitiativeTeamEdit(v);
         }}
         onCancel={() => setEditingParentTeam(null)}
+      />
+    );
+  }
+  /** Story-level team editor. Reuses the same ParentTeamEditor visual
+   *  (a list of team chips with "Not set" as the clear option) but
+   *  writes to `story.team` instead of `epic.team`. The snapshot is
+   *  passed so the confirm path can no-op when nothing changed. */
+  function renderStoryTeamEditor(args: {
+    storyId: string;
+    currentSlug: string;
+    snapshot: StoryCellEditSnapshot;
+  }): ReactNode {
+    return (
+      <ParentTeamEditor
+        kind="epic"
+        editingValue={args.currentSlug}
+        onSelect={(v) => {
+          // Update the in-flight editing value optimistically, then
+          // commit through the same story-cell path everything else
+          // uses (so the toast + save indicator + error handling all
+          // match the other backlog inline edits).
+          setEditingStoryCell((prev) => (prev ? { ...prev, value: v } : prev));
+          void confirmStoryCellEdit(args.storyId, "team", args.snapshot, v);
+        }}
+        onCancel={cancelStoryCellEdit}
       />
     );
   }
@@ -5333,7 +5416,14 @@ export function BacklogPlanningPanel({
             epicTitle: epic.title,
             epicAssignee: epic.assignee?.trim() || "Unassigned",
             epicOriginalEstimateDays: epic.originalEstimateDays ?? 0,
-            teamId: (epic.team ?? null) as string | null,
+            // Effective team for display rolls up `story.team ?? epic.team`
+            // — the override wins, null falls back to the parent epic's
+            // team. The raw story override is kept separately
+            // (`storyTeamOverride`) so the editor can distinguish
+            // "explicitly set" from "inherited".
+            teamId: (story.team ?? epic.team ?? null) as string | null,
+            storyTeamOverride: (story.team ?? null) as string | null,
+            epicTeamSlug: (epic.team ?? null) as string | null,
             monthNum,
             monthLabelValue: monthLabel(monthNum),
             quarterLabelValue: quarterFromMonth(monthNum),
@@ -5842,6 +5932,7 @@ export function BacklogPlanningPanel({
     beginEpicTeamEdit,
     isEditingParentTeam,
     renderParentTeamEditor,
+    renderStoryTeamEditor,
     renderBacklogTeamCell,
     renderQuarterChipsCell,
     renderParentCell,
@@ -5861,6 +5952,7 @@ export function BacklogPlanningPanel({
     beginEpicTeamEdit,
     isEditingParentTeam,
     renderParentTeamEditor,
+    renderStoryTeamEditor,
     renderBacklogTeamCell,
     renderQuarterChipsCell,
     renderParentCell,
@@ -5885,6 +5977,7 @@ export function BacklogPlanningPanel({
       storyRowRefs.current.handleStoryCellKeyDown(event as any, id, field as any, snapshot),
     beginEpicTeamEdit: (params) => storyRowRefs.current.beginEpicTeamEdit(params),
     renderParentTeamEditor: (params) => storyRowRefs.current.renderParentTeamEditor(params),
+    renderStoryTeamEditor: (params) => storyRowRefs.current.renderStoryTeamEditor(params),
     renderBacklogTeamCell: (teamId) => storyRowRefs.current.renderBacklogTeamCell(teamId),
     renderQuarterChipsCell: (quarters) => storyRowRefs.current.renderQuarterChipsCell(quarters),
     renderParentCell: (params) => storyRowRefs.current.renderParentCell(params as any),
