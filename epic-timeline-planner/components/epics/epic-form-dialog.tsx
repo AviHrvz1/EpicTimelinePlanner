@@ -152,6 +152,10 @@ type ChildStoryDraft = {
   sprint: string;
   status: string;
   assignee: string;
+  /** Story-level team override (slug). Empty string means "inherit
+   *  from the parent epic" — same convention the API uses (null on the
+   *  wire → falls back to epic.team for display + capacity rollups). */
+  team: string;
   priority: string;
   estimatedDays: string;
   daysLeft: string;
@@ -196,6 +200,7 @@ type EpicFormDialogProps = {
       sprint?: number | null;
       status?: string;
       assignee?: string | null;
+      team?: string | null;
       priority?: string | null;
       estimatedDays?: number | null;
       daysLeft?: number | null;
@@ -278,7 +283,7 @@ export function EpicFormDialog({
   const [childStoryDrafts, setChildStoryDrafts] = useState<Record<string, ChildStoryDraft>>({});
   const [childEditingCell, setChildEditingCell] = useState<{
     rowId: string;
-    field: "title" | "sprint" | "status" | "assignee" | "priority" | "estimatedDays" | "daysLeft";
+    field: "title" | "sprint" | "status" | "assignee" | "team" | "priority" | "estimatedDays" | "daysLeft";
   } | null>(null);
   const [childEditingValue, setChildEditingValue] = useState("");
   const [priorityPopoverRowId, setPriorityPopoverRowId] = useState<string | null>(null);
@@ -792,6 +797,7 @@ export function EpicFormDialog({
         sprint: row.sprint == null ? "" : String(row.sprint),
         status: row.status ?? "todo",
         assignee: row.assignee ?? "",
+        team: row.team ?? "",
         priority: row.priority ?? "",
         estimatedDays: row.estimatedDays == null ? "" : String(row.estimatedDays),
         daysLeft: row.daysLeft == null ? "" : String(row.daysLeft),
@@ -1040,7 +1046,7 @@ export function EpicFormDialog({
 
   function beginChildCellEdit(
     storyId: string,
-    field: "title" | "sprint" | "status" | "assignee" | "priority" | "estimatedDays" | "daysLeft",
+    field: "title" | "sprint" | "status" | "assignee" | "team" | "priority" | "estimatedDays" | "daysLeft",
   ) {
     const draft = childStoryDrafts[storyId];
     if (!draft) return;
@@ -1103,11 +1109,13 @@ export function EpicFormDialog({
             ? { status: next.status }
             : field === "assignee"
               ? { assignee: next.assignee.trim() === "" ? null : next.assignee.trim() }
-              : field === "priority"
-                ? { priority: next.priority.trim() === "" ? null : next.priority.trim() }
-                : field === "estimatedDays"
-                  ? { estimatedDays: next.estimatedDays.trim() === "" ? null : Number(next.estimatedDays) }
-                  : { daysLeft: next.daysLeft.trim() === "" ? null : Number(next.daysLeft) };
+              : field === "team"
+                ? { team: next.team.trim() === "" ? null : next.team.trim() }
+                : field === "priority"
+                  ? { priority: next.priority.trim() === "" ? null : next.priority.trim() }
+                  : field === "estimatedDays"
+                    ? { estimatedDays: next.estimatedDays.trim() === "" ? null : Number(next.estimatedDays) }
+                    : { daysLeft: next.daysLeft.trim() === "" ? null : Number(next.daysLeft) };
     await onPatchStory(storyId, patch);
   }
 
@@ -2221,16 +2229,52 @@ export function EpicFormDialog({
                                   )}
                                 </td>
                                 <td className="px-3 py-2 text-slate-600">
-                                  {(() => {
-                                    const teamSlug = teamDraft.trim() || persistedTeam;
-                                    const teamLabel = MONTH_TEAM_COLUMNS.find((t) => t.id === teamSlug)?.label ?? teamSlug ?? "Not set";
-                                    return (
-                                      <span className="inline-flex w-full items-center gap-1.5 px-1 py-0.5">
-                                        <TeamAvatar slug={teamSlug || null} sizePx={16} />
-                                        <span className="min-w-0 truncate">{teamLabel}</span>
-                                      </span>
-                                    );
-                                  })()}
+                                  {childEditingCell?.rowId === story.id && childEditingCell.field === "team" ? (
+                                    <div className="relative z-20 flex items-center gap-1">
+                                      <select
+                                        value={childEditingValue}
+                                        onChange={(event) => setChildEditingValue(event.target.value)}
+                                        className="min-w-[8rem] flex-1 rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
+                                      >
+                                        {/* Empty option = clear override → inherit from epic.team.
+                                          *  Labeled to make the cascade behaviour discoverable. */}
+                                        <option value="">Inherit from epic</option>
+                                        {MONTH_TEAM_COLUMNS.map((t) => (
+                                          <option key={t.id} value={t.id}>{t.label}</option>
+                                        ))}
+                                      </select>
+                                      <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="shrink-0 rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
+                                      <button type="button" onClick={() => setChildEditingCell(null)} className="shrink-0 rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => beginChildCellEdit(story.id, "team")}
+                                      className="inline-flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-slate-100"
+                                    >
+                                      {(() => {
+                                        // Per-story override wins; null falls back to the
+                                        // epic's team (mirrors the API + aggregation
+                                        // resolution rule: `story.team ?? epic.team`).
+                                        const storyTeamRaw = (childStoryDrafts[story.id]?.team ?? "").trim();
+                                        const epicTeamRaw = teamDraft.trim() || persistedTeam;
+                                        const effectiveSlug = storyTeamRaw || epicTeamRaw;
+                                        const label = MONTH_TEAM_COLUMNS.find((t) => t.id === effectiveSlug)?.label ?? effectiveSlug ?? "Not set";
+                                        const inherited = storyTeamRaw === "";
+                                        return (
+                                          <>
+                                            <TeamAvatar slug={effectiveSlug || null} sizePx={16} />
+                                            <span className="min-w-0 truncate">{label}</span>
+                                            {inherited && effectiveSlug ? (
+                                              <span className="shrink-0 rounded bg-slate-100 px-1 text-[9px] font-medium uppercase tracking-wide text-slate-500" title="Inherited from epic — set a story-specific team to override">
+                                                epic
+                                              </span>
+                                            ) : null}
+                                          </>
+                                        );
+                                      })()}
+                                    </button>
+                                  )}
                                 </td>
                                 <td className="px-2 py-1.5 text-slate-600">
                                   <button
