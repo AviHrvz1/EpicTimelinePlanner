@@ -27,6 +27,7 @@ import {
   ListTodo,
   Lock,
   Map as MapIcon,
+  Pencil,
   PlayCircle,
   Plus,
   Save,
@@ -3680,7 +3681,11 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
           </button>
         ),
       }, {
-        team: { kind: "edit", onEdit: () => ctx.beginEpicTeamEdit({ id: row.epicId, team: row.teamId }) },
+        // Team on a story row now writes the per-story override, not
+        // the epic's team. The pencil triggers the same story-team
+        // editor the cell-click does, so the affordance + click target
+        // stay in sync.
+        team: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "team", row.storyTeamOverride ?? "") },
         status: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "status", row.storyStatus) },
         sprint: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "sprint", row.storySprintNum == null ? "unscheduled" : String(row.storySprintNum)) },
         assignee: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "assignee", row.storyAssignee === "Unassigned" ? "" : row.storyAssignee) },
@@ -5351,13 +5356,26 @@ export function BacklogPlanningPanel({
             {cells[key]}
           </div>
           {hint.kind === "edit" ? (
-            // Edit-able cells no longer show a hover pencil — the user
-            // requested removing the per-column edit affordance because it
-            // added visual noise on every editable cell. Click-to-edit on
-            // the cell content still works (each cell still wires its
-            // onMouseDown to begin edit), this just hides the pencil
-            // indicator.
-            null
+            // Edit-able cells were previously bare (the per-column pencil
+            // was retired for being noisy on every cell). Reinstated for
+            // `status` + `team` only, where the cell content reads as a
+            // chip / avatar — without a pencil, the planner can miss
+            // that it's clickable. All other editable cells still rely
+            // on the cell content itself being a click target.
+            (key === "status" || key === "team") ? (
+              <button
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  hint.onEdit();
+                }}
+                title="Edit"
+                aria-label="Edit"
+                className="pointer-events-auto absolute right-1 top-1/2 z-20 shrink-0 -translate-y-1/2 inline-flex size-7 items-center justify-center rounded-lg bg-white text-slate-500 ring-1 ring-slate-200/80 opacity-0 transition-opacity hover:bg-slate-50 hover:text-slate-700 group-hover/cell:opacity-100 group-has-[input]/cell:hidden group-has-[select]/cell:hidden group-has-[textarea]/cell:hidden group-has-[[data-cell-editing]]/cell:hidden"
+              >
+                <Pencil className="size-3.5" strokeWidth={2} aria-hidden />
+              </button>
+            ) : null
           ) : (
             <span
               title="Read only"
