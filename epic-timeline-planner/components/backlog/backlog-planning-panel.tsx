@@ -3431,7 +3431,8 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
                   event.preventDefault();
                   ctx.beginStoryCellEdit(row.storyId, "status", row.storyStatus);
                 }}
-                className="inline-flex items-center gap-1.5 font-semibold"
+                title="Click to change status"
+                className="inline-flex items-center gap-1.5 font-semibold transition hover:ring-2 hover:ring-slate-300 focus-visible:ring-2 focus-visible:ring-slate-300 cursor-pointer rounded-full -mx-3 -my-[3px] px-3 py-[3px]"
               >
                 {statusIcon(row.storyStatus)}
                 {workflowStatusLabel(row.storyStatus as WorkflowStatus)}
