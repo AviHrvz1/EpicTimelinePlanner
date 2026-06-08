@@ -3934,6 +3934,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     icon: string;
     description: string | null;
     assignee: string | null;
+    team: string | null;
     labels: string | null;
     priority: string | null;
     sprint: number | null;
@@ -3984,6 +3985,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       icon: string;
       description: string | null;
       assignee: string | null;
+      team: string | null;
       labels: string | null;
       priority: string | null;
       sprint: number | null;

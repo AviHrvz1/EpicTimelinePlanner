@@ -81,6 +81,8 @@ type StoryDetailsDialogProps = {
     icon: string;
     description: string | null;
     assignee: string | null;
+    /** Per-story team override (slug). NULL = inherit parent epic.team. */
+    team: string | null;
     labels: string | null;
     priority: string | null;
     sprint: number | null;
@@ -96,6 +98,8 @@ type StoryDetailsDialogProps = {
       icon: string;
       description: string | null;
       assignee: string | null;
+      /** Per-story team override (slug). NULL = inherit parent epic.team. */
+      team: string | null;
       labels: string | null;
       priority: string | null;
       sprint: number | null;
@@ -313,6 +317,18 @@ export function StoryDetailsDialog({
   }, [newLabel, labelsDraft, filteredLabelSuggestions.length]);
 
   useEffect(() => {
+    // Pre-fill the team picker with the STORY's override when present,
+    // otherwise show the parent epic's team so the planner sees the
+    // effective team without an empty field. Saving writes back to
+    // story.team — leaving the picker on the inherited value is a
+    // no-op (the patch still sets `team = epic.team`, but the row
+    // already showed that). Clearing the field via the picker's
+    // built-in clear button sets story.team = null and restores
+    // pure inheritance.
+    if (story?.team && MONTH_TEAM_IDS.includes(story.team)) {
+      setEpicTeamDraft(story.team);
+      return;
+    }
     if (!epicId) {
       setEpicTeamDraft("");
       return;
@@ -325,7 +341,7 @@ export function StoryDetailsDialog({
       }
     }
     setEpicTeamDraft("");
-  }, [epicId, initiatives]);
+  }, [epicId, initiatives, story?.team]);
   const displayIds = useMemo(() => {
     const byInitiativeId = new Map<string, string>();
     const byEpicId = new Map<string, string>();
@@ -454,11 +470,19 @@ export function StoryDetailsDialog({
   function buildStoryPayload() {
     const normalizedTitle = title.trim();
     if (!normalizedTitle || !epicId) return null;
+    // The team picker shares state with the previous "edit epic team
+    // from a story" affordance (`epicTeamDraft`) — the actual save
+    // path now writes the value to STORY.team (per-story override) via
+    // the payload. Empty string clears the override so the story falls
+    // back to its parent epic's team for display + capacity rollups.
+    const t = epicTeamDraft.trim();
+    const team = t && MONTH_TEAM_IDS.includes(t) ? t : null;
     return {
       title: normalizedTitle,
       icon: icon.trim() || "📄",
       description: description.trim() ? description.trim() : null,
       assignee: assignee.trim() ? assignee.trim() : null,
+      team,
       labels: labelsDraft.length > 0 ? labelsDraft.join(", ") : null,
       priority: priority.trim() ? priority.trim() : null,
       sprint: sprint.trim() === "" ? null : Number(sprint),
@@ -478,21 +502,13 @@ export function StoryDetailsDialog({
     if (!payload) return;
     setSaving(true);
     try {
-      if (onPatchEpicTeam) {
-        let prevTeam: string | null = null;
-        outer: for (const initiative of initiatives) {
-          for (const epic of initiative.epics ?? []) {
-            if (epic.id !== payload.epicId) continue;
-            prevTeam = epic.team && MONTH_TEAM_IDS.includes(epic.team) ? epic.team : null;
-            break outer;
-          }
-        }
-        const t = epicTeamDraft.trim();
-        const nextTeam = t && MONTH_TEAM_IDS.includes(t) ? t : null;
-        if (prevTeam !== nextTeam) {
-          await onPatchEpicTeam(payload.epicId, nextTeam);
-        }
-      }
+      // `payload.team` carries the per-story team override now. The
+      // older `onPatchEpicTeam` path is no longer used here — the
+      // prop is kept on the signature for backwards-compat with
+      // callers that still pass it, but this dialog writes to
+      // story.team instead of epic.team. To change the EPIC's team
+      // (so every story under it picks up a new default), use the
+      // team field at the top of the Epic dialog.
       if (isCreateMode) {
         await onCreate(payload);
       } else {
