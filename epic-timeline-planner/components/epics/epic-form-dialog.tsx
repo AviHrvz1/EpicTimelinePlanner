@@ -301,6 +301,8 @@ export function EpicFormDialog({
   const [sprintAutocompletePosition, setSprintAutocompletePosition] = useState<{ left: number; top: number; width: number } | null>(null);
   /** Drives the status editor's option popover; auto-closes on cell exit. */
   const [statusOptionsOpen, setStatusOptionsOpen] = useState(false);
+  /** Drives the team editor's option popover; auto-closes on cell exit. */
+  const [teamOptionsOpen, setTeamOptionsOpen] = useState(false);
   const { widths: childTableWidths, onColumnResizeStart: onChildTableColResize } = useResizableTableColumns(
     `${open ? "1" : "0"}-${epic?.id ?? "none"}`,
     EPIC_CHILD_TABLE_DEFAULT_WIDTHS,
@@ -1067,6 +1069,7 @@ export function EpicFormDialog({
     setChildEditingValue(value);
     setIsSprintAutocompleteOpen(field === "sprint");
     setStatusOptionsOpen(false);
+    setTeamOptionsOpen(false);
     // Reset "user typed" so the first time the sprint dropdown opens
     // for this cell it shows every assignable sprint, not just the
     // pre-filled one.
@@ -2231,20 +2234,77 @@ export function EpicFormDialog({
                                 <td className="px-3 py-2 text-slate-600">
                                   {childEditingCell?.rowId === story.id && childEditingCell.field === "team" ? (
                                     <div className="relative z-20 flex items-center gap-1">
-                                      <select
-                                        value={childEditingValue}
-                                        onChange={(event) => setChildEditingValue(event.target.value)}
-                                        className="min-w-[8rem] flex-1 rounded-md border bg-white px-2 py-1 text-xs text-slate-700"
-                                      >
-                                        {/* Empty option = clear override → inherit from epic.team.
-                                          *  Labeled to make the cascade behaviour discoverable. */}
-                                        <option value="">Inherit from epic</option>
-                                        {MONTH_TEAM_COLUMNS.map((t) => (
-                                          <option key={t.id} value={t.id}>{t.label}</option>
-                                        ))}
-                                      </select>
-                                      <button type="button" onClick={() => void confirmChildCellEdit(story.id)} className="shrink-0 rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
-                                      <button type="button" onClick={() => setChildEditingCell(null)} className="shrink-0 rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
+                                      <div className="relative">
+                                        {/* Custom trigger — shows the picked team's avatar +
+                                          *  label so the editor matches the cell display.
+                                          *  Empty slug renders the "Inherit from epic" affordance
+                                          *  with a neutral avatar (no team color) so the planner
+                                          *  can tell at a glance that no override is set. */}
+                                        {(() => {
+                                          const selectedSlug = childEditingValue.trim();
+                                          const selectedLabel = MONTH_TEAM_COLUMNS.find((t) => t.id === selectedSlug)?.label
+                                            ?? (selectedSlug ? selectedSlug : "Inherit from epic");
+                                          return (
+                                            <button
+                                              type="button"
+                                              onClick={() => setTeamOptionsOpen((s) => !s)}
+                                              aria-haspopup="listbox"
+                                              aria-expanded={teamOptionsOpen}
+                                              className="inline-flex w-[10rem] items-center justify-between gap-1.5 rounded-md border bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                                            >
+                                              <span className="inline-flex min-w-0 items-center gap-1.5">
+                                                <TeamAvatar slug={selectedSlug || null} sizePx={14} />
+                                                <span className="truncate">{selectedLabel}</span>
+                                              </span>
+                                              <ChevronDown className="size-3 shrink-0 text-slate-400" aria-hidden />
+                                            </button>
+                                          );
+                                        })()}
+                                        {teamOptionsOpen ? (
+                                          <ul
+                                            role="listbox"
+                                            className="absolute left-0 top-full z-30 mt-1 max-h-72 min-w-[12rem] overflow-y-auto rounded-md border border-slate-200 bg-white py-0.5 shadow-md"
+                                          >
+                                            {/* Empty option = clear override → inherit from epic.team. */}
+                                            <li role="option" aria-selected={childEditingValue === ""}>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setChildEditingValue("");
+                                                  setTeamOptionsOpen(false);
+                                                }}
+                                                className={cn(
+                                                  "flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100",
+                                                  childEditingValue === "" && "bg-slate-50 font-medium",
+                                                )}
+                                              >
+                                                <TeamAvatar slug={null} sizePx={14} />
+                                                <span className="truncate">Inherit from epic</span>
+                                              </button>
+                                            </li>
+                                            {MONTH_TEAM_COLUMNS.map((t) => (
+                                              <li key={t.id} role="option" aria-selected={childEditingValue === t.id}>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setChildEditingValue(t.id);
+                                                    setTeamOptionsOpen(false);
+                                                  }}
+                                                  className={cn(
+                                                    "flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100",
+                                                    childEditingValue === t.id && "bg-slate-50 font-medium",
+                                                  )}
+                                                >
+                                                  <TeamAvatar slug={t.id} sizePx={14} />
+                                                  <span className="truncate">{t.label}</span>
+                                                </button>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        ) : null}
+                                      </div>
+                                      <button type="button" onClick={() => { setTeamOptionsOpen(false); void confirmChildCellEdit(story.id); }} className="shrink-0 rounded bg-white p-1 text-emerald-700 ring-1 ring-slate-200 hover:bg-emerald-50"><Check className="size-3.5" /></button>
+                                      <button type="button" onClick={() => { setTeamOptionsOpen(false); setChildEditingCell(null); }} className="shrink-0 rounded bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100"><X className="size-3.5" /></button>
                                     </div>
                                   ) : (
                                     <button

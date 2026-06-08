@@ -17,8 +17,12 @@ import { PrismaClient } from "@/lib/generated/prisma";
  *             delete. Live views must filter `deletedAt: null` via the
  *             `ACTIVE_RECORD` constant exported below; closed-period
  *             views read soft-deleted rows so history stays intact.
+ * Version 19: UserStory gained `team` (per-story team override). Old
+ *             cached clients would reject `data.team = ...` on update
+ *             with "Unknown argument 'team'" — bumping forces a fresh
+ *             client after `prisma generate`.
  */
-const PRISMA_CLIENT_CACHE_VERSION = 18;
+const PRISMA_CLIENT_CACHE_VERSION = 19;
 
 /**
  * Standard live-view filter. Every Prisma `findMany`, `findFirst`,
