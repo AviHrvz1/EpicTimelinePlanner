@@ -2511,7 +2511,26 @@ export function MonthAnalytics({
     // Pre-fill the Status column filter for the clicked slice. "All" opens
     // the table with no pre-cut so the planner sees every story.
     const colPrefill = statusName === "All" ? null : statusName;
-    setStatusDrilldownColFilter({ ...EMPTY_DRILLDOWN_FILTER, status: colPrefill });
+    // Story rows store the raw status KEY (`todo` / `inProgress` /
+    // `review` / `done`) — `applyDrilldownFilterSort` filters by exact
+    // string match against `r.status`, AND the dropdown's renderer
+    // (`renderStatusOption`) only paints an icon for those four keys.
+    // So setting the column filter to a display label (e.g.
+    // `"Review / Testing"`) silently broke BOTH: empty table + raw text
+    // without icon in the chip. Epic rows, on the other hand, store
+    // labels directly via `deriveEpicStatus`, so the epic filter still
+    // uses the slice's display name as-is.
+    const storyStatusKey = (() => {
+      if (colPrefill == null) return null;
+      switch (colPrefill) {
+        case "To do": return "todo";
+        case "In progress": return "inProgress";
+        case "Review / Testing": return "review";
+        case "Done": return "done";
+        default: return colPrefill;
+      }
+    })();
+    setStatusDrilldownColFilter({ ...EMPTY_DRILLDOWN_FILTER, status: storyStatusKey });
     setStatusDrilldownEpicFilter({ ...EMPTY_EPIC_DRILLDOWN_FILTER, status: colPrefill });
   };
   const clearStatusDrilldown = () => setStatusDrilldownFilter(null);
@@ -2722,24 +2741,55 @@ export function MonthAnalytics({
   const monthBurndownChartData = useMemo(() => {
     if (monthBurndownResolved.length === 0) return monthBurndownResolved;
     const epicIds = monthBurndownEpics.map((e) => e.id);
-    // First pass: find the snapshot-aware starting total (the sum of
-    // per-epic columns on the first non-null row). This is the value
-    // both the aggregate Actual and Ideal lines should anchor to —
-    // without it, the Ideal still came from buildQuarterBurndownSeries
-    // which only counts currently-open stories, so it started way
-    // below the snapshot-based Actual.
-    let startTotal = 0;
-    for (const row of monthBurndownResolved) {
-      let sum = 0;
-      let any = false;
-      for (const id of epicIds) {
-        const v = row[id];
-        if (typeof v === "number") { sum += v; any = true; }
-      }
-      if (any) { startTotal = sum; break; }
-    }
     const horizon = monthBurndownResolved.length;
-    const span = Math.max(1, horizon - 1);
+    // Per-epic plan window + scope, in QUARTER day-coordinates (1 =
+    // scope-start day). Plan start can be negative when the epic
+    // started before the quarter; plan end can exceed `horizon` when it
+    // ends after — both keep the slope true so a quarter-spanning epic
+    // shows the same daily delta across quarters.
+    const monthStart = new Date(planYear, scopeStartMonth - 1, 1);
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const planMeta = burndownScopedEpics.map((epic) => {
+      const allStories = epic.userStories ?? [];
+      const storyDaysSum = allStories.reduce((sum, s) => sum + (s.estimatedDays ?? s.daysLeft ?? 1), 0);
+      const epicScope =
+        metric === "storyCount"
+          ? allStories.length
+          : burndownBasis === "epicEst"
+            ? (epic.originalEstimateDays ?? storyDaysSum)
+            : storyDaysSum;
+      const startMonth = epic.planStartMonth ?? scopeStartMonth;
+      const startSprint = epic.planSprint === 2 ? 2 : 1;
+      const startDay = startSprint === 2 ? 16 : 1;
+      const startYear = epic.planYear ?? planYear;
+      const endMonth = epic.planEndMonth ?? startMonth;
+      const endSprint = epic.planEndSprint === 1 ? 1 : 2;
+      const endDay = endSprint === 1 ? 15 : new Date(startYear, endMonth, 0).getDate();
+      const planStartMs = new Date(startYear, startMonth - 1, startDay).getTime();
+      const planEndMs = new Date(startYear, endMonth - 1, endDay).getTime();
+      const planStartDayIdx = Math.floor((planStartMs - monthStart.getTime()) / msPerDay) + 1;
+      const planEndDayIdx = Math.floor((planEndMs - monthStart.getTime()) / msPerDay) + 1;
+      const span = Math.max(1, planEndDayIdx - planStartDayIdx);
+      // Fully overdue → plan ended before the quarter starts. These
+      // epics have no honest plan window in the visible quarter, so
+      // skip them from the aggregate ideal entirely (rather than
+      // letting them contribute a misleading "flat zero" baseline).
+      const isFullyOverdue = planEndDayIdx < 1;
+      return { id: epic.id, scope: epicScope, planStartDayIdx, planEndDayIdx, span, isFullyOverdue };
+    });
+    const idealAtDay = (dayIdx: number): number => {
+      let total = 0;
+      for (const m of planMeta) {
+        if (m.scope <= 0) continue;
+        if (m.isFullyOverdue) continue;                                    // fully-overdue: excluded — no plan in this Q
+        if (dayIdx < m.planStartDayIdx) { total += m.scope; continue; }    // 1a: flat at scope before start
+        if (dayIdx > m.planEndDayIdx) continue;                            // 3a: flat at zero after end
+        // 2a: per-epic ramp anchored at the true plan window
+        const raw = m.scope * (1 - (dayIdx - m.planStartDayIdx) / m.span);
+        total += Math.max(0, Math.min(m.scope, raw));
+      }
+      return total;
+    };
     return monthBurndownResolved.map((row, idx) => {
       let aggregate = 0;
       let anyValue = false;
@@ -2750,14 +2800,7 @@ export function MonthAnalytics({
           anyValue = true;
         }
       }
-      // Linear burndown anchored at startTotal across the visible
-      // window. Goes from startTotal at day 0 -> 0 at the last day,
-      // so the Ideal line lines up with the aggregate Actual at the
-      // visible start of the chart (matches the hero
-      // PortfolioBurndownChart behaviour).
-      const idealRaw = startTotal > 0
-        ? Math.max(0, startTotal * (1 - idx / span))
-        : 0;
+      const idealRaw = idealAtDay(idx + 1);
       const next: typeof row = {
         ...row,
         ideal: Number(idealRaw.toFixed(1)),
@@ -2768,19 +2811,29 @@ export function MonthAnalytics({
       if (anyValue) next.actual = Number(aggregate.toFixed(1));
       return next;
     }) as typeof monthBurndownResolved;
-  }, [monthBurndownResolved, monthBurndownEpics]);
+  }, [monthBurndownResolved, monthBurndownEpics, burndownScopedEpics, metric, burndownBasis, planYear, scopeStartMonth]);
   /** Aggregate scope total used by the burndown tooltip's "Total scope"
-   *  and "Completed" rows. First non-null `actual` reading in the
-   *  snapshot-aware aggregate = starting total. Null when there are
-   *  no rows yet (chart still hydrating) so the tooltip falls back to
-   *  the per-series view. */
+   *  and "Completed" rows. Sum of FULL per-epic scopes (independent of
+   *  plan windows) — matches the user's mental model: "180 stories total
+   *  in Q2". The ideal line may anchor lower for pre-quarter-started
+   *  epics (2a), but the total scope number always reflects what was
+   *  promised, not what's left at quarter-start. */
   const burndownAggregateStartTotal = useMemo<number | null>(() => {
-    for (const row of monthBurndownChartData) {
-      const v = (row as { actual?: number | null }).actual;
-      if (typeof v === "number") return v;
+    if (burndownScopedEpics.length === 0) return null;
+    let total = 0;
+    for (const epic of burndownScopedEpics) {
+      const allStories = epic.userStories ?? [];
+      const storyDaysSum = allStories.reduce((sum, s) => sum + (s.estimatedDays ?? s.daysLeft ?? 1), 0);
+      const epicScope =
+        metric === "storyCount"
+          ? allStories.length
+          : burndownBasis === "epicEst"
+            ? (epic.originalEstimateDays ?? storyDaysSum)
+            : storyDaysSum;
+      total += epicScope;
     }
-    return null;
-  }, [monthBurndownChartData]);
+    return total > 0 ? Number(total.toFixed(1)) : null;
+  }, [burndownScopedEpics, metric, burndownBasis]);
   const burndownFocusedEpicOption = useMemo(() => {
     if (selectedEpicOption) return selectedEpicOption;
     if (burndownVisibleKeys.length !== 1) return null;
@@ -2923,22 +2976,6 @@ export function MonthAnalytics({
     const dueDay = dueSprint === 1 ? 15 : new Date(dueYear, dueMonth, 0).getDate();
     return new Date(dueYear, dueMonth - 1, dueDay);
   }, [burndownFocusedEpicOption, scopeEndMonth, planYear]);
-  /** Symmetric to `selectedEpicDueDate` — the focused epic's effective
-   *  start. Prefers the OBSERVED start (first day a story moved per
-   *  snapshots) when it's earlier than the planned start, so the chart's
-   *  ideal line aligns with where the blue actual line begins. Falls
-   *  back to the planned start when no work has been recorded yet. */
-  const selectedEpicStartDate = useMemo(() => {
-    if (!burndownFocusedEpicOption) return null;
-    const epic = burndownFocusedEpicOption.epic;
-    const startSprint = epic.planSprint;
-    const startMonth = epic.planStartMonth ?? scopeStartMonth;
-    const startYear = epic.planYear ?? planYear;
-    const startDay = startSprint === 2 ? 16 : 1;
-    const plannedStart = new Date(startYear, startMonth - 1, startDay);
-    const observed = computeEpicObservedStart(epic);
-    return observed != null && observed < plannedStart ? observed : plannedStart;
-  }, [burndownFocusedEpicOption, scopeStartMonth, planYear]);
   /**
    * Truncate each burndown series after the first day it reaches 0 — once
    * an epic is fully burned down (or the aggregate hits 0) there's nothing
@@ -2984,12 +3021,10 @@ export function MonthAnalytics({
     if (!burndownFocusedEpicOption || selectedEpicDueDate == null) return monthBurndownTruncated;
     const totalDays = monthBurndownTruncated.length;
     if (totalDays === 0) return monthBurndownTruncated;
-    // Ideal line's starting value follows the basis so the chart matches
-    // what the user picked in the toggle:
-    //   - epicEst → epic.originalEstimateDays (linear burn against the epic
-    //     promise; falls back to story sum when no epic estimate exists)
-    //   - days → Σ child story estimated days (story burndown ideal)
-    //   - stories → total story count (story-count burndown ideal)
+    // Scope = full epic promise (per basis). Ramp uses the TRUE plan slope
+    // (epic.planStart → epic.planEnd), so an epic spanning two quarters
+    // shows the same daily delta on either side — only the visible portion
+    // changes when the user navigates between quarters.
     const stories = burndownFocusedEpicOption.epic.userStories ?? [];
     const storyDaysSum = stories.reduce((sum, s) => sum + (s.estimatedDays ?? s.daysLeft ?? 1), 0);
     const startValue =
@@ -3000,68 +3035,63 @@ export function MonthAnalytics({
           : storyDaysSum;
     const monthStart = new Date(planYear, scopeStartMonth - 1, 1);
     const msPerDay = 24 * 60 * 60 * 1000;
-    const dueDayIndex = Math.floor((selectedEpicDueDate.getTime() - monthStart.getTime()) / msPerDay) + 1;
-    const targetDayIndex = Math.max(1, dueDayIndex);
-    // Epic ideal stays flat at `startValue` until the epic actually
-    // begins (selectedEpicStartDate), then ramps down to 0 by the due
-    // day. Without this clamp the ramp spans the whole period — a
-    // quarter-wide chart visually shows "we've been burning since Jan 1"
-    // for an epic that only starts in July.
-    const startDayIndex = selectedEpicStartDate != null
-      ? Math.max(1, Math.floor((selectedEpicStartDate.getTime() - monthStart.getTime()) / msPerDay) + 1)
-      : 1;
-    const epicSpan = Math.max(1, targetDayIndex - startDayIndex);
-    const withIdeal = monthBurndownTruncated.map((row, idx) => {
-      const dayIdx = idx + 1;
-      // Same approach as the burnup: only draw the ideal between the
-      // epic's start and due. Outside that window we emit `null` so
-      // Recharts (with connectNulls=false on the epicIdeal Line) skips
-      // those segments — producing a single clean linear diagonal
-      // instead of a long flat plateau plus a ramp.
-      if (dayIdx > targetDayIndex || dayIdx < startDayIndex) {
-        return { ...row, epicIdeal: null };
-      }
-      let epicIdealRaw: number;
-      if (targetDayIndex <= 1) epicIdealRaw = 0;
-      else epicIdealRaw = startValue * (1 - (dayIdx - startDayIndex) / epicSpan);
-      const epicIdeal = metric === "storyCount"
-        ? Math.max(0, Math.round(epicIdealRaw))
-        : Number(Math.max(0, epicIdealRaw).toFixed(1));
-      return { ...row, epicIdeal };
-    });
-    if (targetDayIndex <= totalDays) return withIdeal;
-    const extended = [...withIdeal] as Array<Record<string, number | string | boolean | null | undefined>>;
-    for (let dayIdx = totalDays + 1; dayIdx <= targetDayIndex; dayIdx += 1) {
-      const dayDate = new Date(monthStart);
-      dayDate.setDate(dayIdx);
-      // Skip the pre-start tail in the EXTENDED region too — same
-      // option-A rule: ideal is null outside the epic's window.
-      if (dayIdx < startDayIndex) continue;
-      let epicIdealRaw: number;
-      if (targetDayIndex <= 1) epicIdealRaw = 0;
-      else epicIdealRaw = startValue * (1 - (dayIdx - startDayIndex) / epicSpan);
-      const epicIdeal =
-        metric === "storyCount"
-          ? Math.max(0, Math.round(epicIdealRaw))
-          : Number(Math.max(0, epicIdealRaw).toFixed(1));
-      const axisLabel = flowChartDayLabel(dayDate);
-      extended.push({
-        axisLabel,
-        dayLabel: axisLabel,
-        isToday: false,
-        [burndownFocusedEpicOption.epic.id]: null,
-        epicIdeal,
-      });
-    }
-    return extended as typeof monthBurndownResolved;
-  }, [monthBurndownTruncated, burndownFocusedEpicOption, selectedEpicDueDate, selectedEpicStartDate, metric, burndownBasis, planYear, month, scopeStartMonth]);
+    // Day indices in QUARTER coordinates (1 = scope-start day). The
+    // plan start can be NEGATIVE (epic started before quarter) and the
+    // plan end can be > totalDays (epic ends after quarter). Both are
+    // intentional — they keep the ramp slope true to the plan even
+    // when the visible window only shows a slice.
+    const planEndDayIdx = Math.floor((selectedEpicDueDate.getTime() - monthStart.getTime()) / msPerDay) + 1;
+    // Use planned start (not observed start) so the ideal line reflects
+    // the SCHEDULED promise — not where work actually began. Mirrors
+    // selectedEpicStartDate's plan branch.
+    const epic = burndownFocusedEpicOption.epic;
+    const planStartSprint = epic.planSprint;
+    const planStartMonth = epic.planStartMonth ?? scopeStartMonth;
+    const planStartYear = epic.planYear ?? planYear;
+    const planStartDayOfMonth = planStartSprint === 2 ? 16 : 1;
+    const plannedStartDate = new Date(planStartYear, planStartMonth - 1, planStartDayOfMonth);
+    const planStartDayIdx = Math.floor((plannedStartDate.getTime() - monthStart.getTime()) / msPerDay) + 1;
+    const epicSpan = Math.max(1, planEndDayIdx - planStartDayIdx);
+    // Fully-overdue (plan ended before quarter starts) — the plan window
+    // has no honest meaning in this quarter. A flat-at-zero line would
+    // read as "should already be done" instead of "no plan exists for
+    // this quarter — needs rescheduling". Return null so Recharts
+    // (connectNulls=false on the epicIdeal Line) skips drawing the line
+    // entirely; the legend label below switches to "Past plan — needs
+    // rescheduling" to explain the missing line.
+    const isFullyOverdue = planEndDayIdx < 1;
+    // Pinned to QUARTER window — never extend past totalDays. The ideal
+    // line outside the plan window stays flat (scope before start, zero
+    // after due) so the user always sees a baseline.
+    const idealAtDay = (dayIdx: number): number => {
+      if (startValue <= 0) return 0;
+      if (dayIdx < planStartDayIdx) return startValue; // 1a: flat at scope before epic plan start
+      if (dayIdx > planEndDayIdx) return 0;            // 3a: flat at zero after epic plan end
+      // 2a: partial ramp value at the visible day (works for pre-quarter
+      // starts because planStartDayIdx can be negative).
+      const raw = startValue * (1 - (dayIdx - planStartDayIdx) / epicSpan);
+      return Math.max(0, Math.min(startValue, raw));
+    };
+    const round = (v: number) => metric === "storyCount" ? Math.max(0, Math.round(v)) : Number(Math.max(0, v).toFixed(1));
+    return monthBurndownTruncated.map((row, idx) => ({
+      ...row,
+      epicIdeal: isFullyOverdue ? null : round(idealAtDay(idx + 1)),
+    })) as typeof monthBurndownResolved;
+  }, [monthBurndownTruncated, burndownFocusedEpicOption, selectedEpicDueDate, metric, burndownBasis, planYear, month, scopeStartMonth]);
   const selectedEpicDueMarker = useMemo(() => {
     if (!selectedEpicDueDate || !burndownFocusedEpicOption) return null;
     if (monthBurndownWithDueTarget.length === 0) return null;
     const monthStart = new Date(planYear, scopeStartMonth - 1, 1);
     const msPerDay = 24 * 60 * 60 * 1000;
     const dueDayIndex = Math.floor((selectedEpicDueDate.getTime() - monthStart.getTime()) / msPerDay) + 1;
-    const rowIndex = Math.max(0, Math.min(monthBurndownWithDueTarget.length - 1, dueDayIndex - 1));
+    // Hide the marker when the due date falls OUTSIDE the visible
+    // quarter window. The chart's X-axis is now strictly pinned to
+    // [quarter-start, quarter-end] (no more extension for past-due
+    // epics), so a "Due 31/7" label landing on the 30/6 right edge
+    // would be misleading. The ideal line itself stays flat-at-zero
+    // past quarter end inside the visible window.
+    if (dueDayIndex < 1 || dueDayIndex > monthBurndownWithDueTarget.length) return null;
+    const rowIndex = dueDayIndex - 1;
     const point = monthBurndownWithDueTarget[rowIndex] as
       | (Record<string, number | string | boolean | null | undefined> & { axisLabel?: string })
       | undefined;
@@ -3103,9 +3133,20 @@ export function MonthAnalytics({
   }, [monthBurndownWithDueTarget]);
   const burndownLegendItems = useMemo(() => {
     if (selectedEpicOption) {
+      // When the focused epic's plan ended BEFORE the current quarter
+      // starts, the ideal line is suppressed (no honest plan in this Q).
+      // Swap the legend label so the missing line is self-explanatory
+      // instead of looking like a render bug.
+      const monthStart = new Date(planYear, scopeStartMonth - 1, 1);
+      const dueMs = selectedEpicDueDate?.getTime() ?? Number.POSITIVE_INFINITY;
+      const isFullyOverdue = dueMs < monthStart.getTime();
       return [
         { key: selectedEpicOption.epic.id, label: selectedEpicOption.epic.title, color: LINE_PALETTE[0] },
-        { key: "epicIdeal", label: "Epic ideal to due", color: "#f97316" },
+        {
+          key: "epicIdeal",
+          label: isFullyOverdue ? "Past plan — needs rescheduling" : "Epic ideal to due",
+          color: isFullyOverdue ? "#94a3b8" : "#f97316",
+        },
       ];
     }
     return [
@@ -3115,7 +3156,7 @@ export function MonthAnalytics({
         color: LINE_PALETTE[idx % LINE_PALETTE.length],
       })),
     ];
-  }, [selectedEpicOption, monthBurndownEpics]);
+  }, [selectedEpicOption, monthBurndownEpics, selectedEpicDueDate, planYear, scopeStartMonth]);
   useEffect(() => {
     setBurndownVisibleKeys((prev) => {
       const available = new Set(burndownLegendItems.map((item) => item.key));
@@ -3482,42 +3523,6 @@ export function MonthAnalytics({
     return latestDate;
   }, [selectedEpicOption, monthEpics, burnUpVisibleKeys, scopeEndMonth, planYear]);
 
-  /** Earliest start across the in-scope epics. The ideal line should not
-   *  start ramping until the epic actually begins — before that, no work
-   *  is expected so the ideal stays at 0 (burnup) / totalScope (burndown).
-   *  Without this, the ideal line slope spans the entire insights period
-   *  (e.g. Jan→Dec) instead of just the epic's window (e.g. July 1→31),
-   *  making any partial pre-start progress look like a deficit and any
-   *  in-window progress look like it's flatly above the ideal. */
-  const burnUpStartDate = useMemo(() => {
-    const epicsToCheck = selectedEpicOption != null
-      ? [selectedEpicOption.epic]
-      : monthEpics
-          .map((r) => r.epic)
-          .filter((e) => burnUpVisibleKeys.length === 0 || burnUpVisibleKeys.includes(e.id));
-    if (epicsToCheck.length === 0) return null;
-    // Earliest EFFECTIVE start across visible epics. Each epic's
-    // effective start is min(observed, planned). Pre-start work pulls
-    // the ramp anchor backwards so the ideal aligns with where the
-    // blue actual line first moved.
-    let earliestMs = Infinity;
-    let earliestDate: Date | null = null;
-    for (const epic of epicsToCheck) {
-      const startMonth = epic.planStartMonth ?? scopeStartMonth;
-      const startYear = epic.planYear ?? planYear;
-      const startSprint = epic.planSprint;
-      const startDay = startSprint === 2 ? 16 : 1;
-      const plannedStart = new Date(startYear, startMonth - 1, startDay);
-      const observed = computeEpicObservedStart(epic);
-      const effective = observed != null && observed < plannedStart ? observed : plannedStart;
-      if (effective.getTime() < earliestMs) {
-        earliestMs = effective.getTime();
-        earliestDate = effective;
-      }
-    }
-    return earliestDate;
-  }, [selectedEpicOption, monthEpics, burnUpVisibleKeys, scopeStartMonth, planYear]);
-
   const burnUpData = useMemo(() => {
     // Use the same plan-overlap filter as burndownScopedEpics so the
     // burnup chart's series + aggregate sit on the same population as
@@ -3606,16 +3611,14 @@ export function MonthAnalytics({
 
     const periodStartDate = new Date(planYear, scopeStartMonth - 1, 1);
     const quarterEndDate = new Date(planYear, scopeEndMonth, 0);
-    // Extend the chart's right edge past quarter-end ONLY when the user
-    // is focused on a single epic with a due date beyond Q2. In the
-    // multi-epic "All" view we always pin to quarterEndDate so the
-    // burnup's X-axis matches the burndown's + CFD's — otherwise a
-    // single late-finishing epic stretches the burnup's axis and the
-    // three insights charts no longer line up tick-for-tick.
-    const isSingleEpicView = selectedEpicOption != null || burnUpVisibleKeys.length === 1;
-    const periodEndDate = isSingleEpicView && burnUpDueDate != null && burnUpDueDate.getTime() > quarterEndDate.getTime()
-      ? burnUpDueDate
-      : quarterEndDate;
+    // ALWAYS pin the burnup's right edge to quarter-end — even when a
+    // focused epic's due date falls outside the quarter. Keeps the
+    // burndown, burnup, and CFD sharing a single X-axis horizon
+    // (quarter-start → quarter-end) so the three insights charts line
+    // up tick-for-tick. Out-of-quarter portions of an epic's plan are
+    // handled by the per-epic ideal logic below (flat-at-scope past
+    // due, partial-ramp at quarter-start for pre-quarter starts).
+    const periodEndDate = quarterEndDate;
     // Use Math.round (not Math.floor) for ms→day so a DST hour shift can't
     // truncate a day. With Math.floor, going from a no-DST date to a DST
     // date subtracts one hour, dropping the floor by 1 → today gets treated
@@ -3633,18 +3636,39 @@ export function MonthAnalytics({
         ? 0
         : Math.max(1, Math.min(totalDays, msToDays(todayStart.getTime() - periodStartDate.getTime()) + 1));
 
-    const dueDate = burnUpDueDate;
-    const dueDayIndex = dueDate != null
-      ? Math.max(1, msToDays(dueDate.getTime() - periodStartDate.getTime()) + 1)
-      : totalDays;
-    // The ideal ramp should start at the epic's own start, not at the
-    // insights period start. burnUpStartDate is the earliest start
-    // across in-scope epics; if it's after periodStart we clamp the
-    // ideal to 0 before that day (no work expected pre-start).
-    const startDate = burnUpStartDate;
-    const startDayIndex = startDate != null
-      ? Math.max(1, msToDays(startDate.getTime() - periodStartDate.getTime()) + 1)
-      : 1;
+    // Per-epic plan window + scope (in quarter day-coordinates). The
+    // ideal is summed across epics — each epic's ramp respects its
+    // OWN planned start/due. So a quarter-spanning epic shows the
+    // same daily delta on either side of the quarter boundary;
+    // an epic that ends mid-quarter contributes a flat-at-scope tail
+    // (1b mirror) for the days past its due.
+    const epicIdealMeta = epicsInScope.map((epic) => {
+      const allStories = epic.userStories ?? [];
+      const storyDaysSumEpic = allStories.reduce((sum, s) => sum + storyValue(s), 0);
+      const epicScope =
+        useEpicEst && (epic.originalEstimateDays ?? 0) > 0
+          ? (epic.originalEstimateDays ?? storyDaysSumEpic)
+          : storyDaysSumEpic;
+      const startMonth = epic.planStartMonth ?? scopeStartMonth;
+      const startSprint = epic.planSprint === 2 ? 2 : 1;
+      const startDay = startSprint === 2 ? 16 : 1;
+      const startYearE = epic.planYear ?? planYear;
+      const endMonth = epic.planEndMonth ?? startMonth;
+      const endSprint = epic.planEndSprint === 1 ? 1 : 2;
+      const endDay = endSprint === 1 ? 15 : new Date(startYearE, endMonth, 0).getDate();
+      const planStartMs = new Date(startYearE, startMonth - 1, startDay).getTime();
+      const planEndMs = new Date(startYearE, endMonth - 1, endDay).getTime();
+      const planStartDayIdx = msToDays(planStartMs - periodStartDate.getTime()) + 1;
+      const planEndDayIdx = msToDays(planEndMs - periodStartDate.getTime()) + 1;
+      const span = Math.max(1, planEndDayIdx - planStartDayIdx);
+      // Fully overdue → plan ended before the quarter starts. Same
+      // treatment as the burndown: skip from the aggregate ideal so a
+      // slipped epic doesn't pin the line at full scope across all of Q
+      // ("should already be 100% done" — misleading; the true signal is
+      // "no plan exists in this quarter, reschedule").
+      const isFullyOverdue = planEndDayIdx < 1;
+      return { id: epic.id, scope: epicScope, planStartDayIdx, planEndDayIdx, span, isFullyOverdue };
+    });
 
     return Array.from({ length: totalDays }, (_, idx): { labelShort: string; isToday: boolean; completed: number | null; scope: number; ideal: number | null; [epicKey: string]: number | string | boolean | null } => {
       const dayIdx = idx + 1;
@@ -3769,19 +3793,26 @@ export function MonthAnalytics({
       }
 
       const scopeForRow = round(dayScopeAgg);
-      let ideal: number | null = null;
-      // Draw the ideal ramp ONLY inside the epic's actual window so it
-      // reads as a single clean linear segment. Days outside the window
-      // get `null` — Recharts honors `connectNulls={false}` on the ideal
-      // Line and simply doesn't paint those segments. This avoids the
-      // L-shape ("flat at 0 for months, then ramp") that arises when
-      // the chart's X axis is much longer than the epic's plan.
-      if (totalScope > 0 && dayIdx >= startDayIndex && dayIdx <= dueDayIndex) {
-        const span = Math.max(1, dueDayIndex - startDayIndex);
-        const progressInWindow = dayIdx - startDayIndex;
-        const raw = totalScope * (progressInWindow / span);
-        ideal = round(Math.max(0, Math.min(totalScope, raw)));
+      // Ideal = SUM of per-epic ideals at this day, where each epic
+      // follows its own plan window.
+      //   - dayIdx < epic.planStart   → contributes 0 (work hasn't begun)
+      //   - dayIdx > epic.planEnd     → contributes scope (plan finished)
+      //   - inside                    → linear ramp from 0 to scope
+      // 2a (pre-quarter starts): planStartDayIdx can be ≤ 0, so the
+      // ramp value at dayIdx=1 already reflects how far the plan is
+      // through its slope by the time the quarter starts.
+      let idealAgg = 0;
+      let anyIdeal = false;
+      for (const m of epicIdealMeta) {
+        if (m.scope <= 0) continue;
+        if (m.isFullyOverdue) continue;                    // fully-overdue: excluded — no plan in this Q
+        anyIdeal = true;
+        if (dayIdx < m.planStartDayIdx) continue;          // before start: 0
+        if (dayIdx > m.planEndDayIdx) { idealAgg += m.scope; continue; } // after end: scope (flat at top)
+        const raw = m.scope * ((dayIdx - m.planStartDayIdx) / m.span);
+        idealAgg += Math.max(0, Math.min(m.scope, raw));
       }
+      const ideal = anyIdeal ? round(idealAgg) : null;
 
       return { labelShort: flowChartDayLabel(dayDate), isToday, completed, scope: scopeForRow, ideal, ...perEpic };
     });
@@ -4785,7 +4816,18 @@ export function MonthAnalytics({
             <div
               className={`relative rounded-lg ${SPRINT_CHART_BOX}`}
             >
-              <div className="absolute inset-0 z-10">
+              {/* Chart container intentionally has NO `z-index` (was z-10
+               *  before). Setting a z-index here created a stacking
+               *  context that trapped the Recharts tooltip wrapper INSIDE
+               *  the chart's subtree, so the center button (z-10) painted
+               *  over the tooltip even though `wrapperStyle.zIndex` was
+               *  40. Without a stacking context on this wrapper, the
+               *  tooltip's z-40 bubbles up to the parent and correctly
+               *  paints above the center button (z-10). The center
+               *  button still wins click-capture vs the SVG because the
+               *  button's container is positioned later in DOM order
+               *  AND has a z-index ≥ 10. */}
+              <div className="absolute inset-0">
                 <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <defs>
@@ -4828,12 +4870,12 @@ export function MonthAnalytics({
                 </PieChart>
                 </ResponsiveContainer>
               </div>
-              {/* Sits ABOVE the PieChart container (which is z-10) so
-               *  clicks on the center button actually land on the
-               *  button rather than getting intercepted by the SVG.
-               *  Without this, the center "Σ Epics" click did nothing
-               *  even though the slice buttons next to it worked. */}
-              <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+              {/* Center "Σ Epics" / "Σ Stories" button — needs to capture
+               *  clicks above the SVG (which otherwise intercepts them).
+               *  z-10 is enough now that the chart container above no
+               *  longer creates a stacking context; the tooltip's z-40
+               *  paints above this button. */}
+              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
                 <button
                   type="button"
                   onClick={() => openStatusDrilldown("All")}

@@ -152,6 +152,102 @@ export function TimelineBarDragPreview({
   );
 }
 
+/**
+ * Visual decoration that surfaces overdue-epic slippage AS A LAYER ON
+ * TOP OF the plan bar, without modifying it. Renders two pieces, both
+ * absolutely positioned so the caller can drop this inside the bar's
+ * wrapper without affecting layout:
+ *
+ *   1. **Ghost extension** — a striped, semi-transparent strip extending
+ *      to the right of the bar's right edge. Length = how far the
+ *      projected real end overshoots the planned end. The stripe pattern
+ *      reads visually as "outside the plan" (not a regular bar).
+ *   2. **Slip icon (⚠)** — a small badge sitting at the far right of the
+ *      ghost (or at the bar's right edge if there's no ghost), centered
+ *      vertically. Hovering shows days past plan + projected ship.
+ *
+ * `ghostPct` is the ghost's width expressed as a PERCENTAGE OF THE
+ * BAR'S WRAPPER WIDTH. So `ghostPct=50` means "ghost is half as long
+ * as the planned bar." Caller computes this from
+ * `(projectedDaysLeft / barPlanDays) * 100` so each day visually scales
+ * the same regardless of the bar's column span.
+ *
+ * The bar wrapper MUST have `overflow: visible` (the default) for the
+ * ghost to extend past its right edge.
+ */
+export function OverdueSlipDecoration({
+  severity,
+  ghostPct,
+  daysPastPlan,
+  projectedDaysLeft,
+  compact = false,
+}: {
+  severity: "amber" | "red";
+  ghostPct: number;
+  daysPastPlan: number;
+  projectedDaysLeft: number;
+  /** Match the parent `EpicPlanTimelineBar`'s `compact` flag — drives
+   *  the bar's height (28px vs 30px) so the ghost + icon land at the
+   *  bar's true vertical center instead of the wrapper's (which is
+   *  taller when a badge row is rendered below the bar). */
+  compact?: boolean;
+}) {
+  const showGhost = ghostPct > 0;
+  const stripe = severity === "red"
+    ? "repeating-linear-gradient(135deg, rgba(239,68,68,0.55) 0 4px, rgba(254,226,226,0.65) 4px 8px)"
+    : "repeating-linear-gradient(135deg, rgba(245,158,11,0.55) 0 4px, rgba(254,243,199,0.65) 4px 8px)";
+  const iconColor = severity === "red" ? "#dc2626" : "#b45309";
+  const iconBorder = severity === "red" ? "#dc2626" : "#f59e0b";
+  const tooltip =
+    projectedDaysLeft > 0
+      ? `${daysPastPlan}d past plan · ~${projectedDaysLeft}d projected to ship`
+      : `${daysPastPlan}d past plan — no daysLeft on open stories`;
+  // Anchor everything to the BAR's top + height, not the wrapper's
+  // center. The wrapper can extend below the bar (Overdue / health
+  // pills are rendered as siblings beneath it) — `top: 50%` of the
+  // wrapper would land on that badge row, not the bar.
+  const barHeight = compact ? 28 : 30;
+  const barCenterPx = barHeight / 2;
+  return (
+    <>
+      {showGhost ? (
+        <div
+          aria-hidden
+          // Square corners on left/top/bottom so the ghost flows
+          // seamlessly out of the bar's right edge (no visible seam).
+          className="pointer-events-none absolute z-10 opacity-70"
+          style={{
+            left: "100%",
+            top: 0,
+            height: barHeight,
+            // Cap visual width to 3× the bar so a wildly-slipped epic
+            // doesn't push the icon off the visible roadmap area.
+            width: `${Math.min(300, ghostPct)}%`,
+            background: stripe,
+          }}
+        />
+      ) : null}
+      <span
+        title={tooltip}
+        aria-label={tooltip}
+        className="pointer-events-auto absolute z-30 inline-flex size-4 items-center justify-center rounded-full bg-white text-[10px] font-bold leading-none shadow-sm"
+        style={{
+          // Anchor at the END of the ghost (or bar's right edge when
+          // there's no ghost), then nudge a couple pixels further so
+          // the badge sits clear of any rounded corner.
+          left: `calc(100% + ${showGhost ? Math.min(300, ghostPct) : 0}%)`,
+          top: barCenterPx,
+          transform: "translate(2px, -50%)",
+          color: iconColor,
+          border: `1.5px solid ${iconBorder}`,
+        }}
+      >
+        ⚠
+      </span>
+    </>
+  );
+}
+
 type InitiativeTimelineBarProps = {
   id: string;
   title: string;
@@ -353,6 +449,11 @@ type EpicPlanTimelineBarProps = {
   /** True when today is past the epic's plan-end date AND `epicStatus` is
    *  not `done`. Renders an `Overdue` indicator next to the status pill. */
   isOverdue?: boolean;
+  /** Calendar days past the epic's plan-end. Drives the overdue-severity
+   *  border treatment: 0 = none; 1–7 = amber border; >7 = red border.
+   *  Independent of `isOverdue` so the bar can render the badge without
+   *  the border (or vice-versa). When omitted/0, no border is applied. */
+  daysPastPlan?: number;
   /** Pre-formatted "Mar 1 – Apr 15" range, shown on the hover tooltip. Use
    *  `buildGanttBarDateRange` from this module to format consistently. */
   tooltipDateRange?: string | null;
@@ -386,11 +487,21 @@ export function EpicPlanTimelineBar({
   healthTooltip,
   epicStatus = null,
   isOverdue = false,
+  daysPastPlan = 0,
   tooltipDateRange = null,
   dimmed = false,
 }: EpicPlanTimelineBarProps) {
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
   const lightBg = isLightColor(color);
+  // Severity-borne border for overdue bars:
+  //  - 1–7 days late → amber: "drifting"
+  //  - >7 days late  → red:   "deeply past plan"
+  // The default bar border is the existing soft-tint of `color`; we
+  // OVERRIDE it (not augment) so the slippage signal is visually
+  // dominant. `borderWidth: 2` lifts the line clear of the bar's
+  // background tint at small bar heights.
+  const overdueSeverity: "amber" | "red" | null =
+    daysPastPlan <= 0 ? null : daysPastPlan > 7 ? "red" : "amber";
   const dragData = {
     kind: "gantt-timeline-bar",
     title,
@@ -453,7 +564,8 @@ export function EpicPlanTimelineBar({
           emphasizeFlash
             ? "ring-1 ring-white/20"
             : "shadow-lg ring-1 ring-black/15",
-          showProgress && "border",
+          (showProgress || overdueSeverity != null) && "border",
+          overdueSeverity != null && "border-2",
           isResizing && "cursor-ew-resize",
         )}
         style={{
@@ -464,7 +576,17 @@ export function EpicPlanTimelineBar({
           backgroundImage: showProgress
             ? `linear-gradient(to right, transparent 0%, transparent ${Math.max(0, safeProgress - 0.5)}%, rgba(255,255,255,0.35) ${Math.min(100, safeProgress + 0.5)}%, rgba(255,255,255,0.35) 100%)`
             : undefined,
-          borderColor: showProgress ? `color-mix(in srgb, ${color} 78%, white)` : undefined,
+          // Border priority: overdue severity overrides the soft color
+          // tint so slippage reads at a glance. Amber for 1–7 days,
+          // red for >7 — same threshold the banner uses.
+          borderColor:
+            overdueSeverity === "red"
+              ? "#dc2626"
+              : overdueSeverity === "amber"
+                ? "#f59e0b"
+                : showProgress
+                  ? `color-mix(in srgb, ${color} 78%, white)`
+                  : undefined,
         }}
       >
         {emphasizeFlash ? (

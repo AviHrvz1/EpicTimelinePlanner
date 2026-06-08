@@ -53,7 +53,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
-import { EpicPlanTimelineBar, InitiativeTimelineBar, buildGanttBarDateRange } from "@/components/timeline/epic-timeline-bar";
+import { EpicPlanTimelineBar, InitiativeTimelineBar, OverdueSlipDecoration, buildGanttBarDateRange } from "@/components/timeline/epic-timeline-bar";
 import { RoadmapSelector } from "@/components/timeline/roadmap-selector";
 import { TeamAvatar } from "@/components/ui/team-avatar";
 import { UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
@@ -113,6 +113,7 @@ import {
   resolvedInitiativeYearSprintBounds,
   sprintEndDate,
   sprintStartDate,
+  yearSprintContainingInstant,
   YEAR_SPRINT_MAX,
 } from "@/lib/year-sprint";
 import { nowMs as clockNowMs } from "@/lib/clock";
@@ -795,6 +796,99 @@ function epicIsOverdueByPlan(epic: EpicItem, planYear: number): boolean {
 }
 
 /**
+ * Computes the days-past-plan + projected-real-end metadata for an epic
+ * whose `planEnd` is in the past. Returns null when the epic isn't
+ * overdue (plan still in the future, no plan, or already done). Used
+ * by the overdue banner + the Gantt's slip-icon / ghost-extension
+ * visuals — single source of truth so all surfaces agree on the math.
+ *
+ *  - `daysPastPlan`        — calendar days between `planEnd` and `today`
+ *  - `projectedDaysLeft`   — sum of `daysLeft` across all OPEN stories
+ *                            (status !== "done"). 0 when nothing is open.
+ *  - `projectedEndMs`      — today + projectedDaysLeft (in ms). When 0
+ *                            open work remains, equals today.
+ */
+function epicOverdueMeta(
+  epic: EpicItem,
+  planYear: number,
+): { daysPastPlan: number; projectedDaysLeft: number; projectedEndMs: number; planEndMs: number } | null {
+  if (!epicIsOverdueByPlan(epic, planYear)) return null;
+  if (epic.planEndMonth == null) return null;
+  const planEndGlobalSprint = globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2);
+  const planEndMs = sprintEndDate(planYear, planEndGlobalSprint).getTime();
+  const nowMs = clockNowMs();
+  const daysPastPlan = Math.max(0, Math.floor((nowMs - planEndMs) / 86400000));
+  const openStories = (epic.userStories ?? []).filter((s) => s.status !== "done");
+  const projectedDaysLeft = openStories.reduce((sum, s) => sum + Math.max(0, s.daysLeft ?? 0), 0);
+  const projectedEndMs = nowMs + projectedDaysLeft * 86400000;
+  return { daysPastPlan, projectedDaysLeft, projectedEndMs, planEndMs };
+}
+
+/**
+ * Effective right edge of an epic in year-sprint space, INCLUDING the
+ * ghost extension drawn past its planned end when the epic is overdue.
+ * Used by the row-packer to detect ghost-on-bar collisions inside the
+ * same row — non-overdue epics fall through to their normal `endS`.
+ */
+function epicVirtualEndS(epic: EpicItem, planYear: number, planEndS: number): number {
+  const meta = epicOverdueMeta(epic, planYear);
+  if (!meta || meta.projectedDaysLeft <= 0) return planEndS;
+  const projectedSprint = yearSprintContainingInstant(planYear, meta.projectedEndMs);
+  if (projectedSprint == null) return YEAR_SPRINT_MAX;
+  return Math.max(planEndS, projectedSprint);
+}
+
+/**
+ * Greedy first-fit row layout. Epics are tried in their stored
+ * `timelineRow` order; if the row is already occupied by an overlapping
+ * range (counting ghost extensions via `virtualEndS`), the epic is
+ * bumped to the next free row. This mirrors the visual effect the
+ * planner sees when dragging an epic onto a row that's already taken —
+ * but it's PURELY VIRTUAL (no API call, no `timelineRow` write). Drag
+ * the overdue epic past today (or close its open stories) and the
+ * displaced epic snaps back to its original row.
+ *
+ * Preserving the original `timelineRow` as the starting point is what
+ * keeps the manual layout intact when nothing is overdue (then
+ * `virtualEndS === endS` for every epic, no collisions, layout is a
+ * pure pass-through).
+ */
+function repackEpicRowsWithGhostCollisions<
+  T extends { epic: EpicItem; startS: number; endS: number },
+>(
+  items: T[],
+  planYear: number,
+): Array<{ timelineRow: number; items: (T & { virtualEndS: number })[] }> {
+  const sorted = [...items]
+    .map((item) => ({ ...item, virtualEndS: epicVirtualEndS(item.epic, planYear, item.endS) }))
+    .sort((a, b) => {
+      const r = (Number.isFinite(a.epic.timelineRow) ? a.epic.timelineRow : 0) -
+        (Number.isFinite(b.epic.timelineRow) ? b.epic.timelineRow : 0);
+      if (r !== 0) return r;
+      return a.startS - b.startS;
+    });
+  const placed = new Map<number, Array<T & { virtualEndS: number }>>();
+  for (const item of sorted) {
+    let row = Number.isFinite(item.epic.timelineRow) ? item.epic.timelineRow : 0;
+    while (true) {
+      const existing = placed.get(row);
+      const collides = existing
+        ? existing.some((e) => !(e.virtualEndS < item.startS || e.startS > item.virtualEndS))
+        : false;
+      if (!collides) {
+        if (existing) existing.push(item);
+        else placed.set(row, [item]);
+        break;
+      }
+      row += 1;
+    }
+  }
+  return [...placed.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([timelineRow, rowItems]) => ({ timelineRow, items: rowItems }));
+}
+
+/**
  * CSS `left` for a marker inside a `flex` (or `grid`) row of `columnCount` equal columns separated by `gapPx` gaps
  * (matches the Gantt layout's `gap-2` = 8px). `columnIndex` is 0-based; `withinColumnFraction` is in [0, 1].
  *
@@ -1395,6 +1489,7 @@ function EpicGanttLaneRow({
             healthTooltip={healthTooltip}
             epicStatus={deriveEpicStatusKey(epic)}
             isOverdue={planYear != null && epicIsOverdueByPlan(epic, planYear)}
+            daysPastPlan={planYear != null ? (epicOverdueMeta(epic, planYear)?.daysPastPlan ?? 0) : 0}
             onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
             onClick={() => onOpenEpic(epic.id)}
             onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", epic.id)}
@@ -1454,6 +1549,7 @@ function EpicGanttLaneRow({
             healthTooltip={healthTooltip}
             epicStatus={deriveEpicStatusKey(epic)}
             isOverdue={planYear != null && epicIsOverdueByPlan(epic, planYear)}
+            daysPastPlan={planYear != null ? (epicOverdueMeta(epic, planYear)?.daysPastPlan ?? 0) : 0}
             onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
             onClick={() => onOpenEpic(epic.id)}
             onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", epic.id)}
@@ -3475,17 +3571,13 @@ export function TimelineGrid({
       .map(([timelineRow, items]) => ({ timelineRow, items }));
   }, [quarterRoadmapInitiatives]);
   const quarterRoadmapEpicRows = useMemo(() => {
-    const byRow = new Map<number, Array<{ epic: EpicItem; initiative: InitiativeItem; startS: number; endS: number }>>();
-    for (const item of quarterRoadmapEpics) {
-      const row = Number.isFinite(item.epic.timelineRow) ? item.epic.timelineRow : 0;
-      const bucket = byRow.get(row);
-      if (bucket) bucket.push(item);
-      else byRow.set(row, [item]);
-    }
-    return [...byRow.entries()]
-      .sort((a, b) => a[0] - b[0])
-      .map(([timelineRow, items]) => ({ timelineRow, items }));
-  }, [quarterRoadmapEpics]);
+    // First-fit pass — overdue epics carry a virtual right-edge that
+    // includes their ghost extension, so any neighbour whose plan
+    // range falls inside that ghost is bumped to the next row. Same
+    // visual effect as the drag-and-drop "make space" behaviour,
+    // computed client-side without persisting anything.
+    return repackEpicRowsWithGhostCollisions(quarterRoadmapEpics, currentYear);
+  }, [quarterRoadmapEpics, currentYear]);
   const filteredQuarterRoadmapEpicRows = useMemo(() => {
     if (!ganttTeamIds.length) return quarterRoadmapEpicRows;
     return quarterRoadmapEpicRows
@@ -3493,17 +3585,8 @@ export function TimelineGrid({
       .filter((group) => group.items.length > 0);
   }, [quarterRoadmapEpicRows, ganttTeamIds]);
   const yearRoadmapEpicRows = useMemo(() => {
-    const byRow = new Map<number, Array<{ epic: EpicItem; initiative: InitiativeItem; startS: number; endS: number }>>();
-    for (const item of yearRoadmapEpics) {
-      const row = Number.isFinite(item.epic.timelineRow) ? item.epic.timelineRow : 0;
-      const bucket = byRow.get(row);
-      if (bucket) bucket.push(item);
-      else byRow.set(row, [item]);
-    }
-    return [...byRow.entries()]
-      .sort((a, b) => a[0] - b[0])
-      .map(([timelineRow, items]) => ({ timelineRow, items }));
-  }, [yearRoadmapEpics]);
+    return repackEpicRowsWithGhostCollisions(yearRoadmapEpics, currentYear);
+  }, [yearRoadmapEpics, currentYear]);
   const filteredYearRoadmapEpicRows = useMemo(() => {
     if (!ganttTeamIds.length) return yearRoadmapEpicRows;
     return yearRoadmapEpicRows
@@ -7313,6 +7396,12 @@ export function TimelineGrid({
                               // risk). The Overdue pill still appears via HealthBadge
                               // when `healthFilter.size > 0` and the epic is overdue.
                               isOverdue={false}
+                              // Pass `daysPastPlan` to the bar so the
+                              // amber/red border fires even in the
+                              // year-roadmap (where the Overdue pill is
+                              // suppressed). Border is a separate signal
+                              // from the badge — peripheral vs focal.
+                              daysPastPlan={epicOverdueMeta(row.epic, currentYear)?.daysPastPlan ?? 0}
                               onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                               onClick={() => onOpenEpic(row.epic.id)}
                               onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", row.epic.id)}
@@ -7325,6 +7414,31 @@ export function TimelineGrid({
                               }
                               dimmed={isHighlightActive && !highlightedEpicIds!.has(row.epic.id)}
                             />
+                            {(() => {
+                              // Overdue decorations — drawn AS A LAYER over
+                              // the plan bar (no positional change to the
+                              // bar itself). Skipped during a resize drag
+                              // because the live preview is rewriting the
+                              // bar's window — the moment the planner drags
+                              // past today, the slip should vanish.
+                              if (rz != null) return null;
+                              const meta = epicOverdueMeta(row.epic, currentYear);
+                              if (meta == null) return null;
+                              const planStartMs = sprintStartDate(currentYear, previewStart).getTime();
+                              const planEndMs = sprintEndDate(currentYear, previewEnd).getTime();
+                              const barPlanDays = Math.max(1, (planEndMs - planStartMs) / 86400000);
+                              const ghostPct = (meta.projectedDaysLeft / barPlanDays) * 100;
+                              const severity: "amber" | "red" = meta.daysPastPlan > 7 ? "red" : "amber";
+                              return (
+                                <OverdueSlipDecoration
+                                  severity={severity}
+                                  ghostPct={ghostPct}
+                                  daysPastPlan={meta.daysPastPlan}
+                                  projectedDaysLeft={meta.projectedDaysLeft}
+                                  compact
+                                />
+                              );
+                            })()}
                             {onResizeEpicPlanRange ? (
                               <>
                                 <div
@@ -9842,12 +9956,35 @@ export function TimelineGrid({
                                       // See year-roadmap branch — Overdue lives in the health-
                                       // verdict pill exclusively, never alongside the status pill.
                                       isOverdue={false}
+                                      // Border severity — same source of
+                                      // truth as the banner.
+                                      daysPastPlan={epicOverdueMeta(row.epic, currentYear)?.daysPastPlan ?? 0}
                                       onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(row.epic.id) : undefined}
                                       onClick={() => onOpenEpic(row.epic.id)}
                                       onInsightsClick={() => (onOpenInsights ?? openInsightsTab)("epic", row.epic.id)}
                                       teamAssignmentChip={showGanttTeamChips ? epicDeliveryTeamAssignmentChip(row.epic.team) : null}
                                       dimmed={isHighlightActive && !highlightedEpicIds!.has(row.epic.id)}
                                     />
+                                    {(() => {
+                                      // Mirror of the year-roadmap branch above. Same source of truth (`epicOverdueMeta`)
+                                      // so the banner, the bar's border, and the ghost+icon all agree on the math.
+                                      if (rz != null) return null;
+                                      const meta = epicOverdueMeta(row.epic, currentYear);
+                                      if (meta == null) return null;
+                                      const planStartMs = sprintStartDate(currentYear, previewStart).getTime();
+                                      const planEndMs = sprintEndDate(currentYear, previewEnd).getTime();
+                                      const barPlanDays = Math.max(1, (planEndMs - planStartMs) / 86400000);
+                                      const ghostPct = (meta.projectedDaysLeft / barPlanDays) * 100;
+                                      const severity: "amber" | "red" = meta.daysPastPlan > 7 ? "red" : "amber";
+                                      return (
+                                        <OverdueSlipDecoration
+                                          severity={severity}
+                                          ghostPct={ghostPct}
+                                          daysPastPlan={meta.daysPastPlan}
+                                          projectedDaysLeft={meta.projectedDaysLeft}
+                                        />
+                                      );
+                                    })()}
                                     {onResizeEpicPlanRange ? (
                                       <>
                                         <div
