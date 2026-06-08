@@ -1034,15 +1034,12 @@ function ParentTeamEditor({
 }
 
 /**
- * Inline team picker for backlog story rows. Visually mirrors the
- * Child User Stories team editor in the epic popup:
- *   - Trigger button shows `<TeamAvatar />` + label + chevron
- *   - Listbox below shows the avatars + labels so the planner picks
- *     visually instead of reading text-only chips
- *   - A search input at the top of the listbox filters by label/slug —
- *     hits the "autocomplete but show all when opened" UX
- *   - "Inherit from epic" sits at the top of the list as the
- *     clear-override option
+ * Inline team picker for backlog story rows. Visually + behaviorally
+ * identical to the team field in the Child User Stories table in the
+ * epic popup:
+ *   - Trigger button: `<TeamAvatar />` + label + chevron
+ *   - Listbox: every team's avatar + label (no subtitles, no search)
+ *   - "Inherit from epic" sits at the top as the clear-override
  *
  * The popover opens automatically on mount (the cell entered edit
  * mode) so the planner doesn't have to click the trigger first.
@@ -1055,22 +1052,9 @@ function StoryTeamPickEditor({
   onChange: (next: string) => void;
 }) {
   const [open, setOpen] = useState(true);
-  const [query, setQuery] = useState("");
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  // Focus the filter input as soon as the dropdown shows so the
-  // planner can start typing immediately.
-  useEffect(() => {
-    if (open) inputRef.current?.focus();
-  }, [open]);
   const selectedLabel = value
     ? monthTeamLabelForId(value) ?? teamLabelForWorkspaceUser(value) ?? value
     : "Inherit from epic";
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const rows = MONTH_TEAM_COLUMNS.map((t) => ({ id: t.id, label: t.label }));
-    if (!q) return rows;
-    return rows.filter((r) => r.label.toLowerCase().includes(q) || r.id.toLowerCase().includes(q));
-  }, [query]);
   return (
     <span data-cell-editing className="relative inline-flex items-center" onMouseDown={(event) => event.stopPropagation()}>
       <button
@@ -1087,54 +1071,45 @@ function StoryTeamPickEditor({
         <ChevronDown className="size-3 shrink-0 text-slate-400" aria-hidden />
       </button>
       {open ? (
-        <div className="absolute left-0 top-full z-30 mt-1 min-w-[14rem] overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-md">
-          <div className="px-1.5 pb-1">
-            <input
-              ref={inputRef}
-              type="text"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search teams…"
-              className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-slate-300"
-            />
-          </div>
-          <ul role="listbox" className="max-h-72 overflow-y-auto py-0.5">
-            <li role="option" aria-selected={value === ""}>
+        <ul
+          role="listbox"
+          className="absolute left-0 top-full z-30 mt-1 max-h-72 min-w-[12rem] overflow-y-auto rounded-md border border-slate-200 bg-white py-0.5 shadow-md"
+        >
+          <li role="option" aria-selected={value === ""}>
+            <button
+              type="button"
+              onClick={() => {
+                onChange("");
+                setOpen(false);
+              }}
+              className={cn(
+                "flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100",
+                value === "" && "bg-slate-50 font-medium",
+              )}
+            >
+              <TeamAvatar slug={null} sizePx={14} />
+              <span className="truncate">Inherit from epic</span>
+            </button>
+          </li>
+          {MONTH_TEAM_COLUMNS.map((t) => (
+            <li key={t.id} role="option" aria-selected={value === t.id}>
               <button
                 type="button"
                 onClick={() => {
-                  onChange("");
+                  onChange(t.id);
                   setOpen(false);
                 }}
                 className={cn(
                   "flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100",
-                  value === "" && "bg-slate-50 font-medium",
+                  value === t.id && "bg-slate-50 font-medium",
                 )}
               >
-                <TeamAvatar slug={null} sizePx={14} />
-                <span className="truncate">Inherit from epic</span>
+                <TeamAvatar slug={t.id} sizePx={14} />
+                <span className="truncate">{t.label}</span>
               </button>
             </li>
-            {filtered.map((t) => (
-              <li key={t.id} role="option" aria-selected={value === t.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onChange(t.id);
-                    setOpen(false);
-                  }}
-                  className={cn(
-                    "flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100",
-                    value === t.id && "bg-slate-50 font-medium",
-                  )}
-                >
-                  <TeamAvatar slug={t.id} sizePx={14} />
-                  <span className="truncate">{t.label}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
+          ))}
+        </ul>
       ) : null}
     </span>
   );
