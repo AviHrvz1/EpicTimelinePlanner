@@ -207,7 +207,7 @@ type BacklogColumnKey =
   | "progress";
 type GroupLevel = "roadmap" | "year" | "quarter" | "month" | "sprint";
 type WorkflowStatus = "todo" | "inProgress" | "review" | "done";
-type InlineEditableStoryField = "status" | "sprint" | "assignee" | "team" | "labels" | "estimatedDays" | "daysLeft";
+type InlineEditableStoryField = "status" | "sprint" | "assignee" | "team" | "priority" | "labels" | "estimatedDays" | "daysLeft";
 type WorkItemKindFilter = "initiative" | "epic" | "story";
 
 type BacklogSortBy = "titleAsc" | "titleDesc" | "assigneeAsc" | "estDesc" | "leftDesc" | "status";
@@ -466,19 +466,21 @@ type StoryCellEditSnapshot = {
   assignee: string | null;
   /** Story-level team override (slug). NULL = inherit parent epic.team. */
   team: string | null;
+  priority: string | null;
   estimatedDays: number | null;
   daysLeft: number | null;
   labels: string | null;
 };
 
 function storyEditSnapshotFromFlat(
-  story: Pick<UserStoryItem, "status" | "sprint" | "assignee" | "team" | "estimatedDays" | "daysLeft" | "labels">,
+  story: Pick<UserStoryItem, "status" | "sprint" | "assignee" | "team" | "priority" | "estimatedDays" | "daysLeft" | "labels">,
 ): StoryCellEditSnapshot {
   return {
     status: story.status,
     sprint: story.sprint,
     assignee: story.assignee?.trim() || null,
     team: story.team?.trim() || null,
+    priority: story.priority?.trim() || null,
     estimatedDays: story.estimatedDays,
     daysLeft: story.daysLeft,
     labels: story.labels,
@@ -492,6 +494,7 @@ type BacklogGroupedStoryRowForSnapshot = {
   /** Story-level team override (effective for display). Mirror of
    *  story.team — empty string means "inherit from epic". */
   storyTeamOverride?: string | null;
+  storyPriority?: string | null;
   storyEstimatedDays: number;
   storyDaysLeft: number;
   storyLabels: string | null;
@@ -503,6 +506,7 @@ function storyEditSnapshotFromGroupedRow(row: BacklogGroupedStoryRowForSnapshot)
     sprint: row.storySprintNum,
     assignee: row.storyAssignee === "Unassigned" ? null : row.storyAssignee,
     team: row.storyTeamOverride?.trim() || null,
+    priority: row.storyPriority?.trim() || null,
     estimatedDays: row.storyEstimatedDays,
     daysLeft: row.storyDaysLeft,
     labels: row.storyLabels,
@@ -3455,31 +3459,51 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
             {row.storyEndDateLabel}
           </span>
         ),
-        status: (
+        status: isEditingCell && editingCellField === "status" ? (
+          // Overlay editor — same frame the assignee editor uses
+          // everywhere else (rounded white pill + ring + shadow + nowrap).
+          // Picking an option in the popover updates the DRAFT value
+          // shown in the anchor; planner commits via ✓ (no auto-save)
+          // or backs out via ✕.
+          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
+            <StoryStatusEditor
+              currentValue={editingCellValue as WorkflowStatus}
+              onSelect={(v) => ctx.setEditingStoryCell((prev: any) => (prev ? { ...prev, value: v } : prev))}
+              onCancel={ctx.cancelStoryCellEdit}
+            />
+            <button
+              type="button"
+              onClick={() => void ctx.confirmStoryCellEdit(row.storyId, "status", storyEditSnapshotFromGroupedRow(row))}
+              title="Save"
+              aria-label="Save status"
+              className="inline-flex h-6 w-6 items-center justify-center rounded text-emerald-700 hover:bg-emerald-50"
+            >
+              <Check className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={ctx.cancelStoryCellEdit}
+              title="Cancel"
+              aria-label="Cancel"
+              className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100"
+            >
+              <X className="size-3.5" />
+            </button>
+          </span>
+        ) : (
           <span className={cn("relative inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(row.storyStatus))}>
-            {isEditingCell && editingCellField === "status" ? (
-              <StoryStatusEditor
-                currentValue={editingCellValue as WorkflowStatus}
-                onSelect={(v) => {
-                  ctx.setEditingStoryCell((prev: any) => (prev ? { ...prev, value: v } : prev));
-                  void ctx.confirmStoryCellEdit(row.storyId, "status", storyEditSnapshotFromGroupedRow(row), v);
-                }}
-                onCancel={ctx.cancelStoryCellEdit}
-              />
-            ) : (
-              <button
-                type="button"
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  ctx.beginStoryCellEdit(row.storyId, "status", row.storyStatus);
-                }}
-                title="Click to change status"
-                className="inline-flex items-center gap-1.5 font-semibold transition hover:ring-2 hover:ring-slate-300 focus-visible:ring-2 focus-visible:ring-slate-300 cursor-pointer rounded-full -mx-3 -my-[3px] px-3 py-[3px]"
-              >
-                {statusIcon(row.storyStatus)}
-                {workflowStatusLabel(row.storyStatus as WorkflowStatus)}
-              </button>
-            )}
+            <button
+              type="button"
+              onMouseDown={(event) => {
+                event.preventDefault();
+                ctx.beginStoryCellEdit(row.storyId, "status", row.storyStatus);
+              }}
+              title="Click to change status"
+              className="inline-flex items-center gap-1.5 font-semibold transition hover:ring-2 hover:ring-slate-300 focus-visible:ring-2 focus-visible:ring-slate-300 cursor-pointer rounded-full -mx-3 -my-[3px] px-3 py-[3px]"
+            >
+              {statusIcon(row.storyStatus)}
+              {workflowStatusLabel(row.storyStatus as WorkflowStatus)}
+            </button>
           </span>
         ),
         sprint: (
@@ -3589,27 +3613,54 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
             )}
           </div>
         ),
-        priority: (
+        priority: isEditingCell && editingCellField === "priority" ? (
+          // Overlay editor — same frame as status/team/assignee.
+          // PriorityPopover updates the DRAFT only; commit via ✓.
+          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
+            <span
+              ref={priorityTriggerRef}
+              data-cell-editing
+              className="inline-flex items-center rounded px-1 py-0.5"
+            >
+              <PriorityPill priority={editingCellValue} />
+            </span>
+            <PriorityPopover
+              value={(editingCellValue.toUpperCase() as Priority)}
+              triggerRef={priorityTriggerRef}
+              onCancel={ctx.cancelStoryCellEdit}
+              onSelect={(next) => ctx.setEditingStoryCell((prev: any) => (prev ? { ...prev, value: next ?? "" } : prev))}
+            />
+            <button
+              type="button"
+              onClick={() => void ctx.confirmStoryCellEdit(row.storyId, "priority", storyEditSnapshotFromGroupedRow(row))}
+              title="Save"
+              aria-label="Save priority"
+              className="inline-flex h-6 w-6 items-center justify-center rounded text-emerald-700 hover:bg-emerald-50"
+            >
+              <Check className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={ctx.cancelStoryCellEdit}
+              title="Cancel"
+              aria-label="Cancel"
+              className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100"
+            >
+              <X className="size-3.5" />
+            </button>
+          </span>
+        ) : (
           <div className="relative w-full text-center">
             <button
-              ref={priorityTriggerRef}
               type="button"
-              onClick={() => setPriorityOpen((o) => !o)}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                ctx.beginStoryCellEdit(row.storyId, "priority", row.storyPriority ?? "");
+              }}
               className="rounded px-1 py-0.5 hover:bg-slate-100"
             >
               <PriorityPill priority={row.storyPriority ?? ""} />
             </button>
-            {priorityOpen ? (
-              <PriorityPopover
-                value={((row.storyPriority ?? "").toUpperCase() as Priority)}
-                triggerRef={priorityTriggerRef}
-                onCancel={() => setPriorityOpen(false)}
-                onSelect={(next) => {
-                  setPriorityOpen(false);
-                  void ctx.patchStoryInline(row.storyId, { priority: next ? next : null });
-                }}
-              />
-            ) : null}
           </div>
         ),
         estDays: (
@@ -3689,7 +3740,7 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
         sprint: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "sprint", row.storySprintNum == null ? "unscheduled" : String(row.storySprintNum)) },
         assignee: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "assignee", row.storyAssignee === "Unassigned" ? "" : row.storyAssignee) },
         labels: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "labels", ctx.formatStoryLabelsForEditInput(row.storyLabels)) },
-        priority: { kind: "edit", onEdit: () => setPriorityOpen(true) },
+        priority: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "priority", row.storyPriority ?? "") },
         estDays: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "estimatedDays", String(row.storyEstimatedDays)) },
         daysLeft: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "daysLeft", String(row.storyDaysLeft)) },
         year: { kind: "lock" },
@@ -4185,6 +4236,10 @@ export function BacklogPlanningPanel({
       const next = nextRaw === "" ? null : nextRaw;
       const currentValue = current.team?.trim() || null;
       if (next !== currentValue) await patchStoryInline(storyId, { team: next });
+    } else if (field === "priority") {
+      const next = nextRaw === "" ? null : nextRaw;
+      const currentValue = current.priority?.trim() || null;
+      if (next !== currentValue) await patchStoryInline(storyId, { priority: next });
     } else if (field === "labels") {
       const nextLabs = parseStoryLabels(nextRaw.replace(/\r?\n/g, ","));
       const nextSerialized = nextLabs.length > 0 ? nextLabs.join(", ") : null;
@@ -4504,29 +4559,43 @@ export function BacklogPlanningPanel({
       />
     );
   }
-  /** Story-level team editor. Reuses the same ParentTeamEditor visual
-   *  (a list of team chips with "Not set" as the clear option) but
-   *  writes to `story.team` instead of `epic.team`. The snapshot is
-   *  passed so the confirm path can no-op when nothing changed. */
+  /** Story-level team editor. Same frame the assignee editor uses
+   *  (rounded white pill + ring + shadow + ✓/✕), so every editable
+   *  cell in this column reads consistently. Picking a chip in the
+   *  popover only updates the DRAFT; the planner commits via ✓ (no
+   *  auto-save) or backs out via ✕. */
   function renderStoryTeamEditor(args: {
     storyId: string;
     currentSlug: string;
     snapshot: StoryCellEditSnapshot;
   }): ReactNode {
     return (
-      <ParentTeamEditor
-        kind="epic"
-        editingValue={args.currentSlug}
-        onSelect={(v) => {
-          // Update the in-flight editing value optimistically, then
-          // commit through the same story-cell path everything else
-          // uses (so the toast + save indicator + error handling all
-          // match the other backlog inline edits).
-          setEditingStoryCell((prev) => (prev ? { ...prev, value: v } : prev));
-          void confirmStoryCellEdit(args.storyId, "team", args.snapshot, v);
-        }}
-        onCancel={cancelStoryCellEdit}
-      />
+      <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
+        <ParentTeamEditor
+          kind="epic"
+          editingValue={args.currentSlug}
+          onSelect={(v) => setEditingStoryCell((prev) => (prev ? { ...prev, value: v } : prev))}
+          onCancel={cancelStoryCellEdit}
+        />
+        <button
+          type="button"
+          onClick={() => void confirmStoryCellEdit(args.storyId, "team", args.snapshot)}
+          title="Save"
+          aria-label="Save team"
+          className="inline-flex h-6 w-6 items-center justify-center rounded text-emerald-700 hover:bg-emerald-50"
+        >
+          <Check className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={cancelStoryCellEdit}
+          title="Cancel"
+          aria-label="Cancel"
+          className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100"
+        >
+          <X className="size-3.5" />
+        </button>
+      </span>
     );
   }
 
