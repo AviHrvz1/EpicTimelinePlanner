@@ -840,10 +840,12 @@ function epicLatestLateSprint(
 ): number | null {
   const contextMonth = epic.planStartMonth ?? 1;
   let latest = -Infinity;
+  const openStorySprints: number[] = [];
   for (const story of epic.userStories ?? []) {
     if (story.status === "done") continue;
     const s = resolveStoryYearSprint(story, contextMonth);
     if (s == null) continue;
+    openStorySprints.push(s);
     if (s <= planEndGlobalSprint) continue;
     if (s > latest) latest = s;
   }
@@ -10039,8 +10041,22 @@ export function TimelineGrid({
                                 if (rz.side === "right") previewEnd = Math.min(qHi, Math.max(row.startS, row.endS + rz.deltaSteps));
                                 else previewStart = Math.max(qLo, Math.min(row.endS, row.startS + rz.deltaSteps));
                               }
-                              const columnStart = Math.max(1, previewStart - qLo + 1);
-                              const span = Math.max(previewEnd - previewStart + 1, 1);
+                              // Clamp to the visible Q window so the
+                              // cell only spans the VISIBLE portion of
+                              // the plan. Without this, an epic whose
+                              // plan starts BEFORE the focused Q (e.g.
+                              // S6 → S9 viewed in Q2: qLo=7) computes
+                              // span = 9-6+1 = 4 and the cell extends
+                              // one column PAST where the plan ends —
+                              // pushing the bar's right edge into the
+                              // wrong sprint and inflating the ghost
+                              // width (the ghost would visually end
+                              // sprint-units further right than the
+                              // late-story rule intends).
+                              const visStartS = Math.max(previewStart, qLo);
+                              const visEndS = Math.min(previewEnd, qHi);
+                              const columnStart = Math.max(1, visStartS - qLo + 1);
+                              const span = Math.max(visEndS - visStartS + 1, 1);
                               const epicStoriesQ = row.epic.userStories ?? [];
                               // Resize drag → use previewed window;
                               // normal render → shared verdict helper.
@@ -10179,13 +10195,19 @@ export function TimelineGrid({
                                         />
                                         {(() => {
                                           // Mirror of the year-roadmap branch above — same late-sprint rule.
+                                          // The bar wrapper VISUALLY spans the visible Q
+                                          // window (visStartS..visEndS), NOT the full
+                                          // plan window. ghostPct is a percentage of the
+                                          // wrapper's pixel width, so the math has to
+                                          // use the same visual basis — otherwise the
+                                          // ghost overshoots its sprint target (and the
+                                          // slip icon ends up past `overflow-x-clip`).
                                           if (rz != null) return null;
                                           const meta = epicOverdueMeta(row.epic, currentYear);
                                           if (meta == null) return null;
-                                          const planStartMs = sprintStartDate(currentYear, previewStart).getTime();
-                                          const planEndMs = epicPlannedEndMs(row.epic, currentYear)
-                                            ?? sprintEndDate(currentYear, previewEnd).getTime();
-                                          const barPlanDays = Math.max(1, (planEndMs - planStartMs) / 86400000);
+                                          const wrapperStartMs = sprintStartDate(currentYear, visStartS).getTime();
+                                          const wrapperEndMs = sprintEndDate(currentYear, visEndS).getTime();
+                                          const wrapperVisualDays = Math.max(1, (wrapperEndMs - wrapperStartMs) / 86400000);
                                           const planEndGS = globalSprintFromMonthLane(
                                             row.epic.planEndMonth ?? 1,
                                             row.epic.planEndSprint === 1 ? 1 : 2,
@@ -10194,8 +10216,8 @@ export function TimelineGrid({
                                           let ghostPct = 0;
                                           if (latestLateSprint != null) {
                                             const ghostEndMs = sprintEndDate(currentYear, latestLateSprint).getTime();
-                                            const ghostExtraDays = Math.max(0, (ghostEndMs - planEndMs) / 86400000);
-                                            ghostPct = (ghostExtraDays / barPlanDays) * 100;
+                                            const ghostExtraDays = Math.max(0, (ghostEndMs - wrapperEndMs) / 86400000);
+                                            ghostPct = (ghostExtraDays / wrapperVisualDays) * 100;
                                           }
                                           const severity: "amber" | "red" = meta.daysPastPlan > 7 ? "red" : "amber";
                                           return (
