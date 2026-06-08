@@ -27,7 +27,6 @@ import {
   ListTodo,
   Lock,
   Map as MapIcon,
-  Pencil,
   PlayCircle,
   Plus,
   Save,
@@ -5363,17 +5362,31 @@ export function BacklogPlanningPanel({
             // that it's clickable. All other editable cells still rely
             // on the cell content itself being a click target.
             (key === "status" || key === "team") ? (
+              // Same SquarePen used by `EditRowIconButton` everywhere
+              // else in the app, so the affordance reads identically
+              // across surfaces. We can't reuse the component itself
+              // here because it doesn't compose with the absolute-
+              // positioned hover-reveal pattern this cell needs.
+              //
+              // `onClick` (instead of onMouseDown) + stopPropagation:
+              // the cell content underneath has its own onMouseDown
+              // that begins-edits, and the cell-row above has the
+              // create-selection anchor. Without these, the pencil
+              // click fired begin-edit AND was immediately swallowed
+              // by the row's handler, so the editor flashed open and
+              // closed on the same click.
               <button
                 type="button"
-                onMouseDown={(event) => {
-                  event.preventDefault();
+                onClick={(event) => {
+                  event.stopPropagation();
                   hint.onEdit();
                 }}
+                onMouseDown={(event) => event.stopPropagation()}
                 title="Edit"
                 aria-label="Edit"
-                className="pointer-events-auto absolute right-1 top-1/2 z-20 shrink-0 -translate-y-1/2 inline-flex size-7 items-center justify-center rounded-lg bg-white text-slate-500 ring-1 ring-slate-200/80 opacity-0 transition-opacity hover:bg-slate-50 hover:text-slate-700 group-hover/cell:opacity-100 group-has-[input]/cell:hidden group-has-[select]/cell:hidden group-has-[textarea]/cell:hidden group-has-[[data-cell-editing]]/cell:hidden"
+                className="pointer-events-auto absolute right-1 top-1/2 z-20 shrink-0 -translate-y-1/2 inline-flex size-7 items-center justify-center rounded-lg bg-white text-slate-500 ring-1 ring-transparent transition-[color,background-color,box-shadow] opacity-0 hover:bg-indigo-50/95 hover:text-indigo-700 hover:shadow-sm hover:ring-indigo-200/70 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/45 group-hover/cell:opacity-100 group-has-[input]/cell:hidden group-has-[select]/cell:hidden group-has-[textarea]/cell:hidden group-has-[[data-cell-editing]]/cell:hidden"
               >
-                <Pencil className="size-3.5" strokeWidth={2} aria-hidden />
+                <SquarePen className="size-3.5" strokeWidth={2} aria-hidden />
               </button>
             ) : null
           ) : (
