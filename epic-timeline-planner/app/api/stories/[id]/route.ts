@@ -13,6 +13,9 @@ const updateStorySchema = z.object({
   icon: z.string().trim().min(1).max(4).optional(),
   description: z.string().trim().max(2000).optional().nullable(),
   assignee: z.string().trim().max(120).optional().nullable(),
+  /** Delivery team override (slug). NULL clears any per-story override so
+   *  the story inherits the parent epic's team again. */
+  team: z.string().trim().max(60).optional().nullable(),
   labels: z.string().trim().max(500).optional().nullable(),
   priority: z.string().trim().max(60).optional().nullable(),
   /** Year sprint 1–24, or legacy 1–2 (month lane) per `resolveStoryYearSprint`. */
@@ -61,6 +64,7 @@ export async function PATCH(
       icon: true,
       description: true,
       assignee: true,
+      team: true,
       labels: true,
       priority: true,
       sprint: true,
@@ -106,6 +110,7 @@ export async function PATCH(
   if (patch.description !== undefined && patch.description !== existing.description)
     changes.push("Description updated");
   if (patch.assignee !== undefined && patch.assignee !== existing.assignee) changes.push("Assignee updated");
+  if (patch.team !== undefined && patch.team !== existing.team) changes.push("Team updated");
   if (patch.labels !== undefined && patch.labels !== existing.labels) changes.push("Labels updated");
   if (patch.priority !== undefined && patch.priority !== existing.priority) changes.push("Priority updated");
   if (patch.sprint !== undefined && patch.sprint !== existing.sprint) {
@@ -149,6 +154,7 @@ export async function PATCH(
       ...(patch.icon !== undefined ? { icon: patch.icon } : {}),
       ...(patch.description !== undefined ? { description: patch.description } : {}),
       ...(patch.assignee !== undefined ? { assignee: patch.assignee } : {}),
+      ...(patch.team !== undefined ? { team: patch.team } : {}),
       ...(patch.labels !== undefined ? { labels: patch.labels } : {}),
       ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
       ...(patch.sprint !== undefined ? { sprint: patch.sprint } : {}),

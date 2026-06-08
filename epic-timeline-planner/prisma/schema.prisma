@@ -167,6 +167,11 @@ model UserStory {
   icon          String         @default("📄")
   description   String?
   assignee      String?
+  /** Delivery team override — when NULL the story inherits the parent
+   *  `epic.team` for display + aggregation. When set, it takes precedence
+   *  over the epic's team. Lets a planner pull a single story onto a
+   *  cross-team handoff without splitting the epic. */
+  team          String?
   labels        String?
   priority      String?
   roadmapId     String?

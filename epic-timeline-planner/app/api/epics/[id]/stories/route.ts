@@ -12,6 +12,8 @@ const createStorySchema = z.object({
   icon: z.string().trim().min(1).max(4).optional(),
   description: z.string().trim().max(2000).optional().nullable(),
   assignee: z.string().trim().max(120).optional().nullable(),
+  /** Delivery team override (slug). NULL = inherit parent epic.team. */
+  team: z.string().trim().max(60).optional().nullable(),
   labels: z.string().trim().max(500).optional().nullable(),
   priority: z.string().trim().max(60).optional().nullable(),
   sprint: z.number().int().min(YEAR_SPRINT_MIN).max(YEAR_SPRINT_MAX).optional().nullable(),
@@ -86,6 +88,7 @@ export async function POST(
       icon: parsed.data.icon ?? "📄",
       description: parsed.data.description ?? null,
       assignee: parsed.data.assignee ?? null,
+      team: parsed.data.team ?? null,
       labels: parsed.data.labels ?? null,
       priority: parsed.data.priority ?? null,
       sprint: parsed.data.sprint ?? null,

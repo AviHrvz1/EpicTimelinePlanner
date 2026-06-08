@@ -112,6 +112,9 @@ export type UserStoryItem = {
   icon: string;
   description: string | null;
   assignee: string | null;
+  /** Delivery team override. NULL means inherit the parent `epic.team`;
+   *  any other value takes precedence for display + capacity rollups. */
+  team: string | null;
   labels: string | null;
   priority: string | null;
   roadmapId: string | null;
