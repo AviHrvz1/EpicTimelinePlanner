@@ -2076,9 +2076,9 @@ export function EpicFormDialog({
                                     </button>
                                   )}
                                 </td>
-                                <td className="px-2 py-1.5 text-slate-600">
+                                <td className="relative px-2 py-1.5 text-slate-600">
                                   {childEditingCell?.rowId === story.id && childEditingCell.field === "sprint" ? (
-                                    <div className="relative z-20 flex items-center gap-1">
+                                    <div className="absolute left-2 top-1/2 z-30 flex -translate-y-1/2 items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
                                       <div className="relative w-40">
                                         <Flag
                                           className="pointer-events-none absolute left-1.5 top-1/2 size-3.5 -translate-y-1/2 text-rose-500"
@@ -2136,9 +2136,9 @@ export function EpicFormDialog({
                                     </button>
                                   )}
                                 </td>
-                                <td className="px-3 py-2">
+                                <td className="relative px-3 py-2">
                                   {childEditingCell?.rowId === story.id && childEditingCell.field === "status" ? (
-                                    <div className="relative z-20 flex items-center gap-1">
+                                    <div className="absolute left-3 top-1/2 z-30 flex -translate-y-1/2 items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
                                       <div className="relative">
                                         {/* Custom trigger — shows the current status with its
                                          *  icon + colored pill so the editor matches the
@@ -2244,9 +2244,9 @@ export function EpicFormDialog({
                                     </button>
                                   )}
                                 </td>
-                                <td className="px-3 py-2 text-slate-600">
+                                <td className="relative px-3 py-2 text-slate-600">
                                   {childEditingCell?.rowId === story.id && childEditingCell.field === "team" ? (
-                                    <div className="relative z-20 flex items-center gap-1">
+                                    <div className="absolute left-3 top-1/2 z-30 flex -translate-y-1/2 items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
                                       <div className="relative">
                                         {/* Custom trigger — shows the picked team's avatar +
                                           *  label so the editor matches the cell display.
@@ -2349,9 +2349,9 @@ export function EpicFormDialog({
                                     </button>
                                   )}
                                 </td>
-                                <td className="px-2 py-1.5 text-slate-600">
+                                <td className="relative px-2 py-1.5 text-slate-600">
                                   {childEditingCell?.rowId === story.id && childEditingCell.field === "priority" ? (
-                                    <div className="relative z-20 flex items-center gap-1">
+                                    <div className="absolute left-2 top-1/2 z-30 flex -translate-y-1/2 items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
                                       {/* Trigger pill mirrors the closed-cell appearance —
                                         *  clicking it opens the priority popover. The
                                         *  popover NO LONGER auto-saves on pick; selecting
