@@ -3524,7 +3524,11 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
         assignee: (
           <span className="text-center text-[16px] text-slate-700">
             {isEditingCell && editingCellField === "assignee" ? (
-              <span className="inline-flex items-center gap-1">
+              // Same overlay polish as the epic-popup editors: a
+              // rounded white pill with a subtle ring + shadow + nowrap
+              // so the combobox + ✓ + ✕ buttons always render side by
+              // side, distinct from the row background behind them.
+              <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
                 <AssigneeCombobox
                   value={editingCellValue}
                   onChange={(v) => ctx.setEditingStoryCell((prev: any) => (prev ? { ...prev, value: v } : prev))}
