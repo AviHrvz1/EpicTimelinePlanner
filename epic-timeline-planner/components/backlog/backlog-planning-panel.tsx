@@ -3434,14 +3434,6 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
             className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
           >
             {ctx.renderBacklogTeamCell(row.teamId)}
-            {row.storyTeamOverride == null && row.teamId ? (
-              <span
-                className="shrink-0 rounded bg-slate-100 px-1 text-[9px] font-medium uppercase tracking-wide text-slate-500"
-                title="Inherited from the parent epic"
-              >
-                epic
-              </span>
-            ) : null}
           </button>
         ),
         year: <span className="text-center text-[16px] text-slate-700">{row.initiativeYear}</span>,

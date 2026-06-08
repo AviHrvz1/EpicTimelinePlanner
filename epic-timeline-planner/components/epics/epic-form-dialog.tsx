@@ -2333,16 +2333,10 @@ export function EpicFormDialog({
                                         const epicTeamRaw = teamDraft.trim() || persistedTeam;
                                         const effectiveSlug = storyTeamRaw || epicTeamRaw;
                                         const label = MONTH_TEAM_COLUMNS.find((t) => t.id === effectiveSlug)?.label ?? effectiveSlug ?? "Not set";
-                                        const inherited = storyTeamRaw === "";
                                         return (
                                           <>
                                             <TeamAvatar slug={effectiveSlug || null} sizePx={16} />
                                             <span className="min-w-0 truncate">{label}</span>
-                                            {inherited && effectiveSlug ? (
-                                              <span className="shrink-0 rounded bg-slate-100 px-1 text-[9px] font-medium uppercase tracking-wide text-slate-500" title="Inherited from epic — set a story-specific team to override">
-                                                epic
-                                              </span>
-                                            ) : null}
                                           </>
                                         );
                                       })()}
