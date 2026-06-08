@@ -1348,7 +1348,6 @@ function collectPeriodStories(
     // count the same population.
     if (filterInitiativeId && initiative.id !== filterInitiativeId) continue;
     for (const epic of initiative.epics ?? []) {
-      if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(epic.team ?? "")) continue;
       const startMonth = epic.planStartMonth ?? initiative.startMonth;
       const endMonth = epic.planEndMonth ?? initiative.endMonth;
       const planInScope =
@@ -1358,7 +1357,17 @@ function collectPeriodStories(
       const contextMonth = startMonth ?? initiative.startMonth ?? minMonth;
       const deliveryInScope = planInScope ? true : epicHasStoryInPeriodMonths(epic, monthsSet, contextMonth);
       if (!planInScope && !deliveryInScope) continue;
-      rows.push(...(epic.userStories ?? []));
+      // Per-story team override resolution: a story with its own team
+      // override may belong to a different team than its epic, so we
+      // filter at the STORY level instead of pre-filtering the whole
+      // epic away.
+      if (!filterEpicTeamIds?.length) {
+        rows.push(...(epic.userStories ?? []));
+      } else {
+        for (const s of epic.userStories ?? []) {
+          if (filterEpicTeamIds.includes((s.team ?? epic.team) ?? "")) rows.push(s);
+        }
+      }
     }
   }
   return rows;
@@ -2378,7 +2387,10 @@ export function MonthAnalytics({
     for (const initiative of initiatives) {
       for (const epic of initiative.epics ?? []) {
         for (const story of epic.userStories ?? []) {
-          map.set(story.id, epic.team ?? null);
+          // Per-story override wins; null falls back to epic team.
+          // Name kept as `epicTeamByStoryId` for stability, but the
+          // resolved value is the story's EFFECTIVE team now.
+          map.set(story.id, story.team ?? epic.team ?? null);
         }
       }
     }

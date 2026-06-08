@@ -148,16 +148,25 @@ function collectWorkloadStories(
     for (const epic of initiative.epics ?? []) {
       const epicTeamInFilter =
         !filterEpicTeamIds?.length || filterEpicTeamIds.includes(epic.team ?? "");
-      if (epicTeamInFilter) {
-        rows.push(...(epic.userStories ?? []));
-        continue;
-      }
-      // Cross-team fallback: include stories whose assignee belongs to the
-      // filtered team. Skip when there's no directory or no matches at all.
-      if (teamMemberNames.size === 0) continue;
       for (const story of epic.userStories ?? []) {
-        const a = (story.assignee ?? "").trim().toLowerCase();
-        if (a && teamMemberNames.has(a)) rows.push(story);
+        // Per-story team override wins; null falls back to the epic's
+        // team. Lets a planner pull a single story out of the epic's
+        // default team without splitting the epic.
+        const effectiveTeam = story.team ?? epic.team;
+        const storyTeamInFilter =
+          !filterEpicTeamIds?.length || filterEpicTeamIds.includes(effectiveTeam ?? "");
+        if (storyTeamInFilter) {
+          rows.push(story);
+          continue;
+        }
+        // Cross-team fallback: include stories whose assignee belongs
+        // to the filtered team. Skip when there's no directory or no
+        // matches at all. The epic-team check earlier sets the broad
+        // scope; this widens it to assignee-by-membership.
+        if (!epicTeamInFilter && teamMemberNames.size > 0) {
+          const a = (story.assignee ?? "").trim().toLowerCase();
+          if (a && teamMemberNames.has(a)) rows.push(story);
+        }
       }
     }
   }
@@ -201,13 +210,20 @@ export function collectMonthStories(
   const rows: UserStoryItem[] = [];
   for (const initiative of initiatives) {
     for (const epic of initiative.epics ?? []) {
-      if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(epic.team ?? "")) continue;
       const stories = epic.userStories ?? [];
+      // Per-story team override resolution: keep a story when EITHER
+      // the epic's team or the story's own team is in the filter. We
+      // can't pre-filter the whole epic away anymore because a single
+      // override could land it in a different team's bucket.
+      const filteredStories = !filterEpicTeamIds?.length
+        ? stories
+        : stories.filter((s) => filterEpicTeamIds.includes((s.team ?? epic.team) ?? ""));
+      if (filteredStories.length === 0) continue;
       const storySum = epicStoryEstimateDaysSum(epic);
       const useOriginal = estimateSource === "original" || (estimateSource === "auto" && storySum <= 0);
       const perStoryOriginal = stories.length > 0 ? epicOriginalEstimateDays(epic) / stories.length : 0;
       rows.push(
-        ...stories.map((story) => {
+        ...filteredStories.map((story) => {
           if (estimateSource === "stories") return story;
           if (!useOriginal) return story;
           const nextEst = Math.max(0, Math.round(perStoryOriginal));
@@ -560,17 +576,19 @@ function buildWorkloadByTeam(
   for (const initiative of initiatives) {
     for (const epic of initiative.epics ?? []) {
       const epicTeamId = epic.team ?? null;
-      const epicTeamInFilter =
-        !filterTeamIds?.length || filterTeamIds.includes(epicTeamId ?? "");
       for (const story of epic.userStories ?? []) {
         if (!storyMatchesYearSprint(story, month, yearSprint)) continue;
       // Resolve which team's bar this story should land on.
-      //  - Epic team in filter (or no filter at all) → bucket by epic team.
+      //  - Story override > epic team (per-story override wins).
+      //  - Effective team in filter (or no filter at all) → bucket by it.
       //  - Otherwise, if the assignee is on a filter team → bucket there.
       //  - Otherwise → skip (excluded by filter).
+      const effectiveTeamId = story.team ?? epicTeamId;
+      const effectiveTeamInFilter =
+        !filterTeamIds?.length || filterTeamIds.includes(effectiveTeamId ?? "");
       let bucketTeamId: string | null;
-      if (epicTeamInFilter) {
-        bucketTeamId = epicTeamId;
+      if (effectiveTeamInFilter) {
+        bucketTeamId = effectiveTeamId;
       } else {
         const a = (story.assignee ?? "").trim().toLowerCase();
         const assigneeTeam = a ? memberToTeam.get(a) : undefined;

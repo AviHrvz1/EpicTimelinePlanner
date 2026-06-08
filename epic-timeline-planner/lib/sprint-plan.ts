@@ -112,15 +112,17 @@ export function collectStoriesForSprintBoard(
   initiatives: InitiativeItem[],
   month: number,
   yearSprint: number,
-  /** When set, only stories under epics assigned to one of these teams. */
+  /** When set, only stories whose effective team (story.team ?? epic.team)
+   *  is one of these. Per-story override lets a planner pull a single
+   *  story across team boundaries without splitting the epic. */
   filterEpicTeamIds?: string[] | null,
 ): BoardStoryRow[] {
   const out: BoardStoryRow[] = [];
   for (const initiative of initiatives) {
     for (const epic of initiative.epics ?? []) {
-      if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(epic.team ?? "")) continue;
       for (const story of epic.userStories ?? []) {
         if (!storyMatchesYearSprint(story, month, yearSprint)) continue;
+        if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes((story.team ?? epic.team) ?? "")) continue;
         out.push({ story, epic, initiative });
       }
     }
@@ -154,9 +156,16 @@ export function collectEpicsForSprintKanban(
   const rows = new Map<string, BoardEpicRow>();
   for (const initiative of initiatives) {
     for (const epic of initiative.epics ?? []) {
-      if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(epic.team ?? "")) continue;
-      const hasSprintStory = (epic.userStories ?? []).some((s) => storyMatchesYearSprint(s, month, yearSprint));
-      if (!hasSprintStory) continue;
+      // Include the epic when AT LEAST ONE of its sprint-active stories
+      // has an effective team in the filter (story override > epic.team).
+      // This way an epic whose stories all moved to another team via
+      // override still shows under that team's column.
+      const hasFilterMatch = (epic.userStories ?? []).some((s) => {
+        if (!storyMatchesYearSprint(s, month, yearSprint)) return false;
+        if (!filterEpicTeamIds?.length) return true;
+        return filterEpicTeamIds.includes((s.team ?? epic.team) ?? "");
+      });
+      if (!hasFilterMatch) continue;
       rows.set(epic.id, {
         epic,
         initiative,
@@ -189,9 +198,10 @@ export function computeSprintKanbanSummaryStats(
   let storyTotal = 0;
   for (const initiative of initiatives) {
     for (const epic of initiative.epics ?? []) {
-      if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes(epic.team ?? "")) continue;
       let epicHasStoryOnSprint = false;
       for (const story of epic.userStories ?? []) {
+        // Per-story team filter: use effective team (story.team ?? epic.team).
+        if (filterEpicTeamIds?.length && !filterEpicTeamIds.includes((story.team ?? epic.team) ?? "")) continue;
         storyTotal += 1;
         if (storyMatchesYearSprint(story, month, yearSprint)) {
           storyScheduledOnKanban += 1;
