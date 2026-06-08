@@ -1033,6 +1033,113 @@ function ParentTeamEditor({
   );
 }
 
+/**
+ * Inline team picker for backlog story rows. Visually mirrors the
+ * Child User Stories team editor in the epic popup:
+ *   - Trigger button shows `<TeamAvatar />` + label + chevron
+ *   - Listbox below shows the avatars + labels so the planner picks
+ *     visually instead of reading text-only chips
+ *   - A search input at the top of the listbox filters by label/slug —
+ *     hits the "autocomplete but show all when opened" UX
+ *   - "Inherit from epic" sits at the top of the list as the
+ *     clear-override option
+ *
+ * The popover opens automatically on mount (the cell entered edit
+ * mode) so the planner doesn't have to click the trigger first.
+ */
+function StoryTeamPickEditor({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const [open, setOpen] = useState(true);
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  // Focus the filter input as soon as the dropdown shows so the
+  // planner can start typing immediately.
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
+  const selectedLabel = value
+    ? monthTeamLabelForId(value) ?? teamLabelForWorkspaceUser(value) ?? value
+    : "Inherit from epic";
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const rows = MONTH_TEAM_COLUMNS.map((t) => ({ id: t.id, label: t.label }));
+    if (!q) return rows;
+    return rows.filter((r) => r.label.toLowerCase().includes(q) || r.id.toLowerCase().includes(q));
+  }, [query]);
+  return (
+    <span data-cell-editing className="relative inline-flex items-center" onMouseDown={(event) => event.stopPropagation()}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="inline-flex w-[10rem] items-center justify-between gap-1.5 rounded-md border bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+      >
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          <TeamAvatar slug={value || null} sizePx={14} />
+          <span className="truncate">{selectedLabel}</span>
+        </span>
+        <ChevronDown className="size-3 shrink-0 text-slate-400" aria-hidden />
+      </button>
+      {open ? (
+        <div className="absolute left-0 top-full z-30 mt-1 min-w-[14rem] overflow-hidden rounded-md border border-slate-200 bg-white py-1 shadow-md">
+          <div className="px-1.5 pb-1">
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search teams…"
+              className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-slate-300"
+            />
+          </div>
+          <ul role="listbox" className="max-h-72 overflow-y-auto py-0.5">
+            <li role="option" aria-selected={value === ""}>
+              <button
+                type="button"
+                onClick={() => {
+                  onChange("");
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100",
+                  value === "" && "bg-slate-50 font-medium",
+                )}
+              >
+                <TeamAvatar slug={null} sizePx={14} />
+                <span className="truncate">Inherit from epic</span>
+              </button>
+            </li>
+            {filtered.map((t) => (
+              <li key={t.id} role="option" aria-selected={value === t.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange(t.id);
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100",
+                    value === t.id && "bg-slate-50 font-medium",
+                  )}
+                >
+                  <TeamAvatar slug={t.id} sizePx={14} />
+                  <span className="truncate">{t.label}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </span>
+  );
+}
+
 // Single uniform style for every label chip — no per-text hash-coloring so
 // users don't have to read meaning into the color of a chip.
 const LABEL_CHIP_CLASS = "border-indigo-200/70 bg-indigo-50 text-indigo-700";
@@ -4559,11 +4666,10 @@ export function BacklogPlanningPanel({
       />
     );
   }
-  /** Story-level team editor. Same frame the assignee editor uses
-   *  (rounded white pill + ring + shadow + ✓/✕), so every editable
-   *  cell in this column reads consistently. Picking a chip in the
-   *  popover only updates the DRAFT; the planner commits via ✓ (no
-   *  auto-save) or backs out via ✕. */
+  /** Story-level team editor. Uses the same trigger + listbox-with-
+   *  avatars + search-input layout as the team field in the epic
+   *  popup's Child Stories table, so the visual language is identical
+   *  across the two surfaces. Pick → updates DRAFT; commit via ✓. */
   function renderStoryTeamEditor(args: {
     storyId: string;
     currentSlug: string;
@@ -4571,11 +4677,9 @@ export function BacklogPlanningPanel({
   }): ReactNode {
     return (
       <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
-        <ParentTeamEditor
-          kind="epic"
-          editingValue={args.currentSlug}
-          onSelect={(v) => setEditingStoryCell((prev) => (prev ? { ...prev, value: v } : prev))}
-          onCancel={cancelStoryCellEdit}
+        <StoryTeamPickEditor
+          value={args.currentSlug}
+          onChange={(next) => setEditingStoryCell((prev) => (prev ? { ...prev, value: next } : prev))}
         />
         <button
           type="button"
@@ -5430,7 +5534,7 @@ export function BacklogPlanningPanel({
             // chip / avatar — without a pencil, the planner can miss
             // that it's clickable. All other editable cells still rely
             // on the cell content itself being a click target.
-            (key === "status" || key === "team") ? (
+            (key === "status" || key === "team" || key === "priority" || key === "sprint") ? (
               // Same SquarePen used by `EditRowIconButton` everywhere
               // else in the app, so the affordance reads identically
               // across surfaces. We can't reuse the component itself
