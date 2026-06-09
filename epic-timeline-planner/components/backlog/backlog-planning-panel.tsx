@@ -5419,18 +5419,27 @@ export function BacklogPlanningPanel({
     const epicForCommit = epicById.get(editingParentDate.id);
     const currentPlanYear = epicForCommit?.planYear ?? null;
     const yearChanged = currentPlanYear !== null && currentPlanYear !== year;
-    const baseDatePatch =
-      editingParentDate.field === "start"
-        ? { planStartMonth: month, planStartDay: day }
-        : { planEndMonth: month, planEndDay: day };
+    const isStart = editingParentDate.field === "start";
+    const baseDatePatch = isStart
+      ? { planStartMonth: month, planStartDay: day }
+      : { planEndMonth: month, planEndDay: day };
     const patch = yearChanged ? { ...baseDatePatch, planYear: year } : baseDatePatch;
+    // Build "before → after" text for the toast so the planner sees
+    // exactly what changed without re-opening the editor. The old
+    // value comes from the epic snapshot in `epicById` (which is the
+    // pre-patch state); the new value is what they just picked.
+    const oldMonth = isStart ? epicForCommit?.planStartMonth ?? null : epicForCommit?.planEndMonth ?? null;
+    const oldDay = isStart ? epicForCommit?.planStartDay ?? null : epicForCommit?.planEndDay ?? null;
+    const oldDateStr = oldMonth != null
+      ? formatBacklogPlanDate(new Date(currentPlanYear ?? year, oldMonth - 1, oldDay ?? 1))
+      : "—";
+    const newDateStr = formatBacklogPlanDate(new Date(year, month - 1, day));
+    const fieldLabel = isStart ? "start" : "end";
+    const epicTitle = epicForCommit?.title ?? "Epic";
     try {
       await onPatchEpicQuick(editingParentDate.id, patch);
-      if (yearChanged) {
-        toast.success(`Epic moved to ${year}`);
-      } else {
-        toast.success("Epic updated");
-      }
+      const yearSuffix = yearChanged ? ` (moved to ${year})` : "";
+      toast.success(`${epicTitle} ${fieldLabel} date: ${oldDateStr} → ${newDateStr}${yearSuffix}`);
     } catch {
       reportParentDateValidationError("Failed to update epic");
       return;
@@ -5451,10 +5460,17 @@ export function BacklogPlanningPanel({
       reportParentDateValidationError("Month must be 1-12");
       return;
     }
-    const patch = editingParentDate.field === "start" ? { startMonth: month } : { endMonth: month };
+    const isStart = editingParentDate.field === "start";
+    const patch = isStart ? { startMonth: month } : { endMonth: month };
+    const initForCommit = initiativeById.get(editingParentDate.id);
+    const oldMonth = isStart ? initForCommit?.startMonth ?? null : initForCommit?.endMonth ?? null;
+    const oldMonthStr = oldMonth != null ? monthLabel(oldMonth) : "—";
+    const newMonthStr = monthLabel(month);
+    const fieldLabel = isStart ? "start" : "end";
+    const initTitle = initForCommit?.title ?? "Initiative";
     try {
       await onPatchInitiativeQuick(editingParentDate.id, patch);
-      toast.success("Initiative updated");
+      toast.success(`${initTitle} ${fieldLabel} month: ${oldMonthStr} → ${newMonthStr}`);
     } catch {
       reportParentDateValidationError("Failed to update initiative");
       return;
@@ -5475,19 +5491,20 @@ export function BacklogPlanningPanel({
   }
   /** Inline editor for epic (date) and initiative (month). Picking a day in
    *  the calendar commits immediately; closing/Escape cancels. */
-  /** Per-render guard so the editor mounts at most once even when the same
-   *  initiative/epic row appears in multiple group buckets (e.g. an initiative
-   *  that spans Q1+Q2 renders in both quarter folders — without this, two
-   *  popovers would stack on top of each other). Reset on every render. */
-  const renderedDateEditorRef = useRef(false);
-  renderedDateEditorRef.current = false;
   function renderParentDateEditor(args: {
     kind: "epic" | "initiative";
     id: string;
     field: "start" | "end";
   }): ReactNode {
-    if (renderedDateEditorRef.current) return null;
-    renderedDateEditorRef.current = true;
+    // We used to short-circuit the second call via a render-time ref
+    // guard (so an epic that mounts in multiple group buckets — e.g.
+    // Q1 + Q2 grouping — didn't open two popovers). That broke the
+    // common case: the first call landed in a bucket whose row never
+    // committed (offscreen / collapsed), so the visible cell got
+    // `null` and no popover ever opened. Letting every matching cell
+    // render the editor is fine — React skips useEffect for branches
+    // it doesn't commit, so dead instances stay silent; only the row
+    // actually painted on screen ends up registering the popover.
     const isEpic = args.kind === "epic";
     const initial = editingParentDate?.value ?? "";
     // The popover needs a year fallback for the case the value is blank.
@@ -6525,9 +6542,6 @@ export function BacklogPlanningPanel({
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  if (typeof window !== "undefined") {
-                    console.log("[BacklogPencilClick]", { column: key, kind: hint.kind });
-                  }
                   hint.onEdit();
                 }}
                 onMouseDown={(event) => event.stopPropagation()}
