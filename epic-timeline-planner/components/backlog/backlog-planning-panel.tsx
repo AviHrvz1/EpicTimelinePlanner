@@ -6500,11 +6500,14 @@ export function BacklogPlanningPanel({
           {hint.kind === "edit" ? (
             // Edit-able cells were previously bare (the per-column pencil
             // was retired for being noisy on every cell). Reinstated for
-            // `status` + `team` only, where the cell content reads as a
-            // chip / avatar — without a pencil, the planner can miss
-            // that it's clickable. All other editable cells still rely
-            // on the cell content itself being a click target.
-            (key === "status" || key === "team" || key === "priority" || key === "sprint") ? (
+            // the cells whose content reads as a chip / avatar / plain
+            // text — without a pencil, the planner can miss that they're
+            // clickable. The Start / End date cells especially: today
+            // they show a calendar icon + a date string and the click
+            // target is the whole row; a pencil makes the "click to edit"
+            // affordance obvious. All other editable cells still rely on
+            // the cell content itself being a click target.
+            (key === "status" || key === "team" || key === "priority" || key === "sprint" || key === "startDate" || key === "endDate") ? (
               // Same SquarePen used by `EditRowIconButton` everywhere
               // else in the app, so the affordance reads identically
               // across surfaces. We can't reuse the component itself
