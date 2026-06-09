@@ -2,7 +2,6 @@
 
 import { Fragment, useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
-  Activity,
   AlertOctagon,
   AlertTriangle,
   Bell,
@@ -10,16 +9,20 @@ import {
   Check,
   CheckCheck,
   ChevronDown,
+  Circle,
   CircleDashed,
   CircleDotDashed,
   Clock,
+  Eye,
   FileWarning,
   Flag,
   Folder,
   FolderOpen,
   HeartPulse,
   HelpCircle,
+  Inbox,
   Info,
+  PlayCircle,
   Ruler,
   ShieldCheck,
   Sigma,
@@ -31,7 +34,6 @@ import {
 import { UserChip } from "@/components/auth/user-chip";
 import { HealthExplainerPopover } from "@/components/dashboard/health-explainer-popover";
 import { RoadmapSelector } from "@/components/timeline/roadmap-selector";
-import { PortfolioBurndownChart } from "@/components/dashboard/charts/portfolio-burndown-chart";
 import { computeProgress, type HealthStatus } from "@/lib/progress";
 import { computeEpicHealthVerdict } from "@/lib/epic-health";
 import { now as clockNow } from "@/lib/clock";
@@ -427,26 +429,61 @@ export function RoadmapHealthHero({
             onRowClick={(teamId, label) => setDrilldownTeam({ teamId, label })}
             panelClassName="bg-emerald-50/60 ring-emerald-100"
           />
-          {/* Portfolio Burndown — replaces the legacy "Work Progress"
-           *  status donut that lived here. Same slot, same sky-tinted
-           *  panel chrome, but now answers a trajectory question
-           *  ("Will we hit this quarter? When?") instead of a snapshot
-           *  one. The two retained donuts (Health Distribution, Epic
-           *  Estimates) plus the Team Progress card cover the status /
-           *  verdict / coverage angles the old donut was loosely
-           *  speaking to.
-           *
-           *  Scope is deliberately portfolio-wide and pinned to the
-           *  current calendar quarter — no team filter, no quarter
-           *  picker. Per-team / per-quarter burnups live on the
-           *  customizable Dashboard as configurable chart cards. */}
-          <PortfolioBurndownHeroCard
-            initiatives={initiatives}
-            year={selectedYear}
-            quarter={Math.ceil((clockNow().getMonth() + 1) / 3)}
-            progressBasis={progressBasis}
-            onSelectLaggards={onSelectLaggards}
+          {/* Work Progress donut — story execution-state distribution
+           *  (Backlog epic / To do / In progress / Review / Done). Took
+           *  this slot back from the Portfolio Burndown card after the
+           *  planner audience told us they want a snapshot bottleneck
+           *  view here, not a trajectory chart: the donut clicks
+           *  straight into the backlog table filter via
+           *  `onStatusFilterChange`, which the burndown couldn't do.
+           *  Trajectory still lives elsewhere — the Health Distribution
+           *  donut covers epic-level verdict (`On Track / Watch / At
+           *  Risk / Overdue`), and deeper burnup/burndown views live on
+           *  the dedicated Dashboard page. */}
+          {(() => {
+            // Sum once so the title and the donut center stay in lockstep.
+            const workProgressTotal =
+              stats.workProgress.backlogEpic +
+              stats.workProgress.todo +
+              stats.workProgress.inProgress +
+              stats.workProgress.review +
+              stats.workProgress.done;
+            return (
+          <DonutCard
+            panelClassName="bg-sky-50/60 ring-sky-100"
+            title={`Work Progress · Stories · ${workProgressTotal}`}
+            titleIcon={<PlayCircle className="size-3.5 text-sky-500" strokeWidth={2.1} aria-hidden />}
+            centerCount={workProgressTotal}
+            centerLabel="Stories"
+            slices={[
+              { label: "Done", value: stats.workProgress.done, color: "#10b981", icon: <CheckCheck className="size-3.5" strokeWidth={2} />, valueSuffix: "stories" },
+              { label: "Review / testing", value: stats.workProgress.review, color: "#6366f1", icon: <Eye className="size-3.5" strokeWidth={2} />, valueSuffix: "stories" },
+              { label: "In progress", value: stats.workProgress.inProgress, color: "#3b82f6", icon: <PlayCircle className="size-3.5" strokeWidth={2} />, valueSuffix: "stories" },
+              { label: "To do", value: stats.workProgress.todo, color: "#f59e0b", icon: <Circle className="size-3.5" strokeWidth={2} />, valueSuffix: "stories" },
+              { label: "Backlog epic", value: stats.workProgress.backlogEpic, color: "#94a3b8", icon: <Inbox className="size-3.5" strokeWidth={2} />, valueSuffix: "stories" },
+            ]}
+            onSliceClick={
+              onStatusFilterChange
+                ? (label) => {
+                    const status = STATUS_LABEL_TO_VALUE[label];
+                    if (!status) return;
+                    const next = new Set(statusFilter ?? []);
+                    if (next.has(status)) next.delete(status);
+                    else next.add(status);
+                    onStatusFilterChange(next);
+                  }
+                : undefined
+            }
+            activeLabels={
+              statusFilter && statusFilter.size > 0
+                ? new Set(
+                    Array.from(statusFilter).map((s) => STATUS_VALUE_TO_LABEL[s]).filter(Boolean) as string[],
+                  )
+                : undefined
+            }
           />
+            );
+          })()}
           <DonutCard
             panelClassName="bg-orange-50/60 ring-orange-100"
             title={`Health Distribution · Epics · ${basisLabel}`}
@@ -1121,80 +1158,6 @@ function TeamProgressCard({
   );
 }
 
-/**
- * Hero card that wraps the Portfolio Burndown chart with the same 520px
- * panel chrome as the donut cards next to it. Sits in the slot the
- * legacy "Work Progress" status donut used to occupy — same width, same
- * sky-tint background — so the four-card row stays visually aligned.
- *
- * The chart itself owns its KPI strip, ideal/actual/forecast lines, and
- * contributor popover. We just give it a fixed-height container, a title
- * banner, and a small basis-label so the planner can see what unit the
- * chart is in (Stories / Days / Epic Est) at a glance.
- */
-function PortfolioBurndownHeroCard({
-  initiatives,
-  year,
-  quarter,
-  progressBasis,
-  onSelectLaggards,
-}: {
-  initiatives: readonly InitiativeItem[];
-  year: number;
-  quarter: number;
-  progressBasis: "days" | "stories" | "epicEst";
-  onSelectLaggards?: (epicIds: string[], label: string) => void;
-}) {
-  const basisLabel =
-    progressBasis === "epicEst"
-      ? "Epic Est (d)"
-      : progressBasis === "days"
-        ? "Σ | Child Est (d)"
-        : "Stories Completed (%)";
-  return (
-    <div
-      className={cn(
-        // Vertical chrome matches the donut + Team Progress cards
-        // exactly (py-3, gap-2) so the four hero widgets sit on the
-        // same baseline. Horizontal padding is tightened to px-3
-        // (donuts keep px-7) — the burndown is a line chart with
-        // no long legend labels to crash into the rim, and the
-        // reclaimed 32px goes to the plot area so the y-axis
-        // caption + "End 30/6" tail both have room.
-        "flex w-[520px] min-w-[520px] max-w-[520px] shrink-0 flex-col gap-2 rounded-2xl px-3 py-3 ring-1 ring-inset transition-shadow",
-        "bg-sky-50/60 ring-sky-100",
-      )}
-    >
-      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500">
-        <Activity className="size-3.5 shrink-0 text-blue-500" strokeWidth={2.1} aria-hidden />
-        Portfolio Burndown · Q{quarter} {year} · {basisLabel}
-      </span>
-      {/* Chart-only mode (`kpiPlacement="hidden"`) — no side column, no
-       *  floating chip. The chart fills the full card width and the
-       *  full slot height; the KPI strip and contributor popover
-       *  affordance are deliberately dropped from the Hero so the
-       *  trajectory line gets every available pixel. (To see Done /
-       *  pace / ETA / contributor list, add the same chart to a
-       *  customizable Dashboard card where it renders with the
-       *  floating chip.)
-       *
-       *  Slot height matches the Team Progress card's `max-h-[130px]`
-       *  rows area so the four hero widgets sit on a single
-       *  baseline. */}
-      <div className="h-[130px] w-full">
-        <PortfolioBurndownChart
-          initiatives={initiatives as InitiativeItem[]}
-          year={year}
-          quarter={quarter}
-          progressBasis={progressBasis}
-          onSelectLaggards={onSelectLaggards}
-          kpiPlacement="hidden"
-        />
-      </div>
-    </div>
-  );
-}
-
 function DonutCard({
   title,
   titleIcon,
@@ -1663,31 +1626,38 @@ function computeRoadmapStats(
         if (!(story.description ?? "").trim()) storiesWithoutDescCount += 1;
         if (story.sprint != null) sprintIds.add(story.sprint);
         const estDaysStory = Math.max(0, Number(story.estimatedDays ?? 0));
-        // Work Progress slice values respect the basis:
-        //  - stories: count of stories per status
-        //  - days / epicEst: SUM of story estimatedDays per status
-        const wpAdd = progressBasis === "stories" ? 1 : estDaysStory;
+        // Work Progress donut is a story-COUNT snapshot — always
+        // increment by 1 regardless of `progressBasis`. The basis
+        // toggle makes sense for "what % of work is done?" cards
+        // (Epic Estimates, Team Progress) but not here: the donut's
+        // job is to show WHERE stories are sitting so the planner can
+        // spot bottlenecks ("18 in Review → review queue"), and an
+        // effort-weighted slice can drown out a queue of small
+        // stories behind a handful of big ones. The center total
+        // (`447 + 149 + 2 + 1052 + 0`) also needs to match the
+        // workspace's actual story count shown in the KPI strip,
+        // which the old basis-weighted math broke.
         // Backlog epic trumps the underlying story status — any
         // story inside an epic that has no Gantt position (i.e. the
         // whole epic is still in the backlog) rolls up under
         // "Backlog epic". Once the epic is scheduled, normal status
         // bucketing takes over.
         if (epic.planStartMonth == null) {
-          workProgress.backlogEpic += wpAdd;
+          workProgress.backlogEpic += 1;
         } else {
           switch (story.status) {
             case "inProgress":
-              workProgress.inProgress += wpAdd;
+              workProgress.inProgress += 1;
               break;
             case "done":
-              workProgress.done += wpAdd;
+              workProgress.done += 1;
               break;
             case "review":
-              workProgress.review += wpAdd;
+              workProgress.review += 1;
               break;
             case "todo":
             default:
-              workProgress.todo += wpAdd;
+              workProgress.todo += 1;
           }
         }
         // Epic Estimates donut, when basis is days/stories, splits at the
