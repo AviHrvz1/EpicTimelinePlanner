@@ -1408,6 +1408,387 @@ function BacklogAssigneePickEditor({
   );
 }
 
+/**
+ * Inline sprint picker for backlog story rows. Mirrors
+ * `BacklogTeamPickEditor`:
+ *   - Trigger button: `Flag` + sprint label + chevron
+ *   - Listbox: portaled to `document.body` with a sticky search input,
+ *     "Unscheduled" as the clear-sprint option, then every assignable
+ *     sprint for the row's year
+ *   - Picks update the DRAFT via `onChange`; the surrounding cell
+ *     owns commit (✓) and cancel (✕)
+ *
+ * `value` is the inflight string draft kept in `editingStoryCell`:
+ * either `"unscheduled"` or a stringified sprint number.
+ */
+function BacklogSprintPickEditor({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  options: number[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number; minWidth: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPopoverPos(null);
+      return;
+    }
+    function reposition() {
+      const btn = triggerRef.current;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      setPopoverPos({
+        top: rect.bottom + 4,
+        left: rect.left,
+        minWidth: Math.max(rect.width, 192),
+      });
+    }
+    reposition();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      setQuery("");
+      return;
+    }
+    const id = requestAnimationFrame(() => searchRef.current?.focus());
+    return () => cancelAnimationFrame(id);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (triggerRef.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const q = query.trim().toLowerCase();
+  const unscheduledMatches = q === "" || "unscheduled".includes(q);
+  const filteredOptions = useMemo(() => {
+    if (!q) return options;
+    return options.filter((n) => `sprint ${n}`.includes(q) || String(n).includes(q));
+  }, [options, q]);
+
+  const triggerLabel = value === "unscheduled" || value === "" ? "Unscheduled" : `Sprint ${value}`;
+
+  return (
+    <span data-cell-editing className="relative inline-flex items-center" onMouseDown={(event) => event.stopPropagation()}>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="inline-flex w-[10rem] items-center justify-between gap-1.5 rounded-md border bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+      >
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          <Flag className={cn("size-3.5 shrink-0", value === "unscheduled" || value === "" ? "text-slate-400" : "text-rose-500")} aria-hidden />
+          <span className="truncate">{triggerLabel}</span>
+        </span>
+        <ChevronDown className="size-3 shrink-0 text-slate-400" aria-hidden />
+      </button>
+      {open && popoverPos
+        ? createPortal(
+            <div
+              ref={popoverRef}
+              style={{
+                position: "fixed",
+                top: popoverPos.top,
+                left: popoverPos.left,
+                minWidth: popoverPos.minWidth,
+                zIndex: 1000,
+              }}
+              className="max-h-72 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-md"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <div className="sticky top-0 z-10 border-b border-slate-200 bg-white px-2 py-1.5">
+                <input
+                  ref={searchRef}
+                  type="text"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search sprint…"
+                  className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 placeholder:text-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      const candidates: string[] = [];
+                      if (unscheduledMatches) candidates.push("unscheduled");
+                      filteredOptions.forEach((n) => candidates.push(String(n)));
+                      if (candidates.length === 1) {
+                        onChange(candidates[0]);
+                        setOpen(false);
+                      }
+                    }
+                  }}
+                />
+              </div>
+              <ul role="listbox" className="py-0.5">
+                {unscheduledMatches ? (
+                  <li role="option" aria-selected={value === "unscheduled" || value === ""}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onChange("unscheduled");
+                        setOpen(false);
+                      }}
+                      className={cn(
+                        "flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100",
+                        (value === "unscheduled" || value === "") && "bg-slate-50 font-medium",
+                      )}
+                    >
+                      <Flag className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+                      <span className="truncate">Unscheduled</span>
+                    </button>
+                  </li>
+                ) : null}
+                {filteredOptions.map((n) => (
+                  <li key={n} role="option" aria-selected={value === String(n)}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onChange(String(n));
+                        setOpen(false);
+                      }}
+                      className={cn(
+                        "flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100",
+                        value === String(n) && "bg-slate-50 font-medium",
+                      )}
+                    >
+                      <Flag className="size-3.5 shrink-0 text-rose-500" aria-hidden />
+                      <span className="truncate">Sprint {n}</span>
+                    </button>
+                  </li>
+                ))}
+                {!unscheduledMatches && filteredOptions.length === 0 ? (
+                  <li className="px-2 py-1.5 text-xs text-slate-400">No sprints match</li>
+                ) : null}
+              </ul>
+            </div>,
+            document.body,
+          )
+        : null}
+    </span>
+  );
+}
+
+/**
+ * Inline parent (re-parent) picker for backlog rows. Story rows pick a
+ * new epic; epic rows pick a new initiative. Trigger shows the current
+ * parent (icon + title), listbox is portaled with a sticky search and
+ * each option shows the same icon + title (+ optional subtitle for
+ * story re-parent's "epic · initiative" disambiguation).
+ *
+ * Re-parenting is a meaningful structural change, so picking commits
+ * immediately via `onSelect` (no draft + ✓). The cell still wraps the
+ * editor in the standard overlay frame + ✕ so the planner can bail
+ * without changing anything.
+ */
+function BacklogParentPickEditor({
+  options,
+  currentParentId,
+  isEpicTarget,
+  onSelect,
+}: {
+  options: { id: string; title: string; subtitle?: string }[];
+  currentParentId: string | null;
+  isEpicTarget: boolean;
+  onSelect: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number; minWidth: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPopoverPos(null);
+      return;
+    }
+    function reposition() {
+      const btn = triggerRef.current;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      setPopoverPos({
+        top: rect.bottom + 4,
+        left: rect.left,
+        minWidth: Math.max(rect.width, 240),
+      });
+    }
+    reposition();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      setQuery("");
+      return;
+    }
+    const id = requestAnimationFrame(() => searchRef.current?.focus());
+    return () => cancelAnimationFrame(id);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (triggerRef.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options.slice(0, 100);
+    return options
+      .filter(
+        (o) =>
+          o.title.toLowerCase().includes(q) ||
+          (o.subtitle ? o.subtitle.toLowerCase().includes(q) : false),
+      )
+      .slice(0, 100);
+  }, [options, query]);
+
+  const currentOption = useMemo(
+    () => (currentParentId ? options.find((o) => o.id === currentParentId) : null),
+    [options, currentParentId],
+  );
+  const TriggerIcon = isEpicTarget ? Zap : Folder;
+
+  return (
+    <span data-cell-editing className="relative inline-flex items-center" onMouseDown={(event) => event.stopPropagation()}>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="inline-flex w-[14rem] items-center justify-between gap-1.5 rounded-md border bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+      >
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          <TriggerIcon className="size-3.5 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
+          <span className="truncate">
+            {currentOption?.title ?? (isEpicTarget ? "Pick initiative…" : "Pick epic…")}
+          </span>
+        </span>
+        <ChevronDown className="size-3 shrink-0 text-slate-400" aria-hidden />
+      </button>
+      {open && popoverPos
+        ? createPortal(
+            <div
+              ref={popoverRef}
+              style={{
+                position: "fixed",
+                top: popoverPos.top,
+                left: popoverPos.left,
+                minWidth: popoverPos.minWidth,
+                zIndex: 1000,
+              }}
+              className="max-h-72 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-md"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <div className="sticky top-0 z-10 border-b border-slate-200 bg-white px-2 py-1.5">
+                <input
+                  ref={searchRef}
+                  type="text"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={isEpicTarget ? "Search initiative…" : "Search epic…"}
+                  className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 placeholder:text-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && filtered.length === 1) {
+                      event.preventDefault();
+                      onSelect(filtered[0].id);
+                      setOpen(false);
+                    }
+                  }}
+                />
+              </div>
+              <ul role="listbox" className="py-0.5">
+                {filtered.map((opt) => {
+                  const isCurrent = opt.id === currentParentId;
+                  return (
+                    <li key={opt.id} role="option" aria-selected={isCurrent}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSelect(opt.id);
+                          setOpen(false);
+                        }}
+                        className={cn(
+                          "flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100",
+                          isCurrent && "bg-slate-50 font-medium",
+                        )}
+                      >
+                        <TriggerIcon className="size-3.5 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
+                        <span className="flex min-w-0 flex-col">
+                          <span className="truncate">{opt.title}</span>
+                          {opt.subtitle ? (
+                            <span className="truncate text-[11px] text-slate-500">{opt.subtitle}</span>
+                          ) : null}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+                {filtered.length === 0 ? (
+                  <li className="px-2 py-1.5 text-xs text-slate-400">No matches</li>
+                ) : null}
+              </ul>
+            </div>,
+            document.body,
+          )
+        : null}
+    </span>
+  );
+}
+
 // Single uniform style for every label chip — no per-text hash-coloring so
 // users don't have to read meaning into the color of a chip.
 const LABEL_CHIP_CLASS = "border-indigo-200/70 bg-indigo-50 text-indigo-700";
@@ -1447,54 +1828,6 @@ function StoryStatusEditor({
         onSelect={(v) => onSelect(v as WorkflowStatus)}
         onCancel={onCancel}
         widthClass="w-[180px]"
-        triggerRef={anchorRef}
-      />
-    </>
-  );
-}
-
-/**
- * Inline editor for a story's sprint assignment. Mirrors StoryStatusEditor:
- * an anchor span (marked with data-cell-editing so the row pencil icon hides)
- * plus a portaled CellOptionPopover listing "Unscheduled" + the year's
- * assignable sprints. Each option shows a Flag icon to match the cell display.
- */
-function SprintSelectEditor({
-  currentValue,
-  options,
-  onSelect,
-  onCancel,
-}: {
-  currentValue: string;
-  options: number[];
-  onSelect: (v: string) => void;
-  onCancel: () => void;
-}) {
-  const anchorRef = useRef<HTMLSpanElement | null>(null);
-  const popoverOptions = [
-    {
-      value: "unscheduled",
-      label: "Unscheduled",
-      icon: <Flag className="size-3.5 text-slate-400" aria-hidden />,
-    },
-    ...options.map((n) => ({
-      value: String(n),
-      label: `Sprint ${n}`,
-      icon: <Flag className="size-3.5 text-rose-500" aria-hidden />,
-    })),
-  ];
-  return (
-    <>
-      <span ref={anchorRef} data-cell-editing className="inline-flex items-center gap-1.5 text-[15px]">
-        <Flag className="size-3.5 text-rose-500" aria-hidden />
-        {currentValue === "unscheduled" ? "Unscheduled" : `Sprint ${currentValue}`}
-      </span>
-      <CellOptionPopover
-        value={currentValue}
-        options={popoverOptions}
-        onSelect={onSelect}
-        onCancel={onCancel}
-        widthClass="w-[200px]"
         triggerRef={anchorRef}
       />
     </>
@@ -2758,100 +3091,6 @@ type BacklogParentFilterTree = ReadonlyArray<{
   epics: ReadonlyArray<{ epicId: string; epicTitle: string }>;
 }>;
 
-/** Inline autocomplete used in the Parent column to re-parent an epic (to
- *  a different initiative) or a user story (to a different epic). Owns its
- *  own input state so typing doesn't re-render the whole panel. Picking a
- *  row fires `onSelect(id)`; click-outside / Escape fires `onCancel`. */
-function ParentLinkAutocompleteEditor({
-  options,
-  isEpicTarget,
-  onSelect,
-  onCancel,
-}: {
-  options: { id: string; title: string; subtitle?: string }[];
-  /** When true, options represent initiatives (`Zap` icon); else epics (`Folder`). */
-  isEpicTarget: boolean;
-  onSelect: (id: string) => void;
-  onCancel: () => void;
-}) {
-  const [query, setQuery] = useState("");
-  const wrapRef = useRef<HTMLDivElement | null>(null);
-
-  // Outside click + Escape → cancel.
-  useEffect(() => {
-    function onDown(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) onCancel();
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onCancel();
-    }
-    document.addEventListener("mousedown", onDown);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [onCancel]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return options.slice(0, 100);
-    return options
-      .filter(
-        (o) =>
-          o.title.toLowerCase().includes(q) ||
-          (o.subtitle ? o.subtitle.toLowerCase().includes(q) : false),
-      )
-      .slice(0, 100);
-  }, [options, query]);
-
-  return (
-    <div
-      ref={wrapRef}
-      className="relative w-full"
-      onMouseDown={(event) => event.stopPropagation()}
-    >
-      <input
-        type="text"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-        placeholder={isEpicTarget ? "Search initiative…" : "Search epic…"}
-        autoFocus
-        className="h-7 w-full rounded-md bg-white px-2 text-[13px] ring-1 ring-slate-200 outline-none focus:ring-2 focus:ring-ring/40"
-      />
-      <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
-        {filtered.length === 0 ? (
-          <div className="px-2 py-2 text-[12px] text-slate-400">No matches</div>
-        ) : (
-          filtered.map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              onMouseDown={(event) => {
-                event.preventDefault();
-                onSelect(opt.id);
-              }}
-              className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-[13px] hover:bg-indigo-50"
-            >
-              {isEpicTarget ? (
-                <Zap className="size-3.5 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
-              ) : (
-                <Folder className="size-3.5 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
-              )}
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate font-medium text-slate-800">{opt.title}</span>
-                {opt.subtitle ? (
-                  <span className="truncate text-[11px] text-slate-500">{opt.subtitle}</span>
-                ) : null}
-              </span>
-            </button>
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
-
 function BacklogParentFilterControl({
   tree,
   selected,
@@ -3884,15 +4123,25 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
         sprint: (
           <span className="text-center text-[16px] text-slate-700">
             {isEditingCell && editingCellField === "sprint" ? (
-              <SprintSelectEditor
-                currentValue={editingCellValue}
-                options={ctx.assignableSprintsForYear(Number(row.initiativeYear))}
-                onSelect={(v) => {
-                  ctx.setEditingStoryCell((prev: any) => (prev ? { ...prev, value: v } : prev));
-                  void ctx.confirmStoryCellEdit(row.storyId, "sprint", storyEditSnapshotFromGroupedRow(row), v);
-                }}
-                onCancel={ctx.cancelStoryCellEdit}
-              />
+              <span className="relative z-40 inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
+                <BacklogSprintPickEditor
+                  value={editingCellValue}
+                  onChange={(v) => ctx.setEditingStoryCell((prev: any) => (prev ? { ...prev, value: v } : prev))}
+                  options={ctx.assignableSprintsForYear(Number(row.initiativeYear))}
+                />
+                <button
+                  type="button"
+                  onClick={ctx.cancelStoryCellEdit}
+                  title="Cancel"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100"
+                ><X className="size-3.5" /></button>
+                <button
+                  type="button"
+                  onClick={() => void ctx.confirmStoryCellEdit(row.storyId, "sprint", storyEditSnapshotFromGroupedRow(row))}
+                  title="Save"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded text-emerald-700 hover:bg-emerald-50"
+                ><Check className="size-3.5" /></button>
+              </span>
             ) : (
               <button
                 type="button"
@@ -5672,29 +5921,37 @@ export function BacklogPlanningPanel({
           })),
         );
     return (
-      <ParentLinkAutocompleteEditor
-        options={options}
-        isEpicTarget={isEpic}
-        onCancel={() => setEditingParentLink(null)}
-        onSelect={async (newParentId) => {
-          if (newParentId === args.currentParentId) {
-            setEditingParentLink(null);
-            return;
-          }
-          try {
-            if (isEpic) {
-              await onPatchEpicQuick(args.id, { initiativeId: newParentId });
-              toast.success("Epic re-parented");
-            } else {
-              await onPatchStoryQuick(args.id, { epicId: newParentId });
-              toast.success("Story re-parented");
+      <span className="relative z-40 inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
+        <BacklogParentPickEditor
+          options={options}
+          currentParentId={args.currentParentId}
+          isEpicTarget={isEpic}
+          onSelect={async (newParentId) => {
+            if (newParentId === args.currentParentId) {
+              setEditingParentLink(null);
+              return;
             }
-          } catch {
-            toast.error("Failed to update parent");
-          }
-          setEditingParentLink(null);
-        }}
-      />
+            try {
+              if (isEpic) {
+                await onPatchEpicQuick(args.id, { initiativeId: newParentId });
+                toast.success("Epic re-parented");
+              } else {
+                await onPatchStoryQuick(args.id, { epicId: newParentId });
+                toast.success("Story re-parented");
+              }
+            } catch {
+              toast.error("Failed to update parent");
+            }
+            setEditingParentLink(null);
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => setEditingParentLink(null)}
+          title="Cancel"
+          className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100"
+        ><X className="size-3.5" /></button>
+      </span>
     );
   }
 
@@ -10821,15 +11078,20 @@ export function BacklogPlanningPanel({
                                       sprint: (
                                     <span className="text-center text-[16px] text-slate-700">
                                       {editingStoryCell?.storyId === story.id && editingStoryCell.field === "sprint" ? (
-                                        <SprintSelectEditor
-                                          currentValue={editingStoryCell.value}
-                                          options={assignableSprintsForYear(Number(initiative.year))}
-                                          onSelect={(v) => {
-                                            setEditingStoryCell((prev) => (prev ? { ...prev, value: v } : prev));
-                                            void confirmStoryCellEdit(story.id, "sprint", storyEditSnapshotFromFlat(story), v);
-                                          }}
-                                          onCancel={cancelStoryCellEdit}
-                                        />
+                                        <span className="relative z-40 inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
+                                          <BacklogSprintPickEditor
+                                            value={editingStoryCell.value}
+                                            onChange={(v) => setEditingStoryCell((prev) => (prev ? { ...prev, value: v } : prev))}
+                                            options={assignableSprintsForYear(Number(initiative.year))}
+                                          />
+                                          <button type="button" onClick={cancelStoryCellEdit} title="Cancel" className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button>
+                                          <button
+                                            type="button"
+                                            onClick={() => void confirmStoryCellEdit(story.id, "sprint", storyEditSnapshotFromFlat(story))}
+                                            title="Save"
+                                            className="inline-flex h-6 w-6 items-center justify-center rounded text-emerald-700 hover:bg-emerald-50"
+                                          ><Check className="size-3.5" /></button>
+                                        </span>
                                       ) : (
                                         <button
                                           type="button"
