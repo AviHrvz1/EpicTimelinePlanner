@@ -954,7 +954,7 @@ function sprintLane(yearSprint: number): 1 | 2 {
 }
 
 /** Calendar days in the sprint half-month for the roadmap `month` + global `yearSprint`. */
-function sprintDayDates(planYear: number, month: number, yearSprint: number): Date[] {
+export function sprintDayDates(planYear: number, month: number, yearSprint: number): Date[] {
   const lane = sprintLane(yearSprint);
   const lastDay = new Date(planYear, month, 0).getDate();
   const startDay = lane === 1 ? 1 : 16;
@@ -967,7 +967,7 @@ function sprintDayDates(planYear: number, month: number, yearSprint: number): Da
 }
 
 /** Count of calendar days from the start of today through the end of the sprint (inclusive), or 0 if the sprint has ended. */
-function sprintCalendarDaysRemaining(planYear: number, month: number, yearSprint: number): number {
+export function sprintCalendarDaysRemaining(planYear: number, month: number, yearSprint: number): number {
   const dayDates = sprintDayDates(planYear, month, yearSprint);
   if (dayDates.length === 0) return 0;
   const today = startOfDay(clockNow());

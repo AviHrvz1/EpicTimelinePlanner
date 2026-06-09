@@ -86,7 +86,12 @@ import { defaultMembersForTeam } from "@/lib/sprint-capacity";
 import { EpicItem, InitiativeItem, RoadmapItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { teamLabelForWorkspaceUser } from "@/lib/workspace-users";
-import { monthLaneFromGlobalSprint, sprintEndDate, YEAR_SPRINT_MAX } from "@/lib/year-sprint";
+import { monthLaneFromGlobalSprint, resolveStoryYearSprint, sprintEndDate, YEAR_SPRINT_MAX } from "@/lib/year-sprint";
+import { sprintCalendarDaysRemaining, sprintDayDates } from "@/lib/sprint-analytics";
+import { sprintStoryVerdict, type SprintLoadStoryProjection } from "@/components/timeline/sprint-analytics";
+import { HealthBadge } from "@/components/timeline/health-badge";
+import { computeEpicHealthVerdict, computeInitiativeHealthVerdict } from "@/lib/epic-health";
+import type { HealthStatus, ProgressBasis } from "@/lib/progress";
 
 /** Softer than shared table zebra -- long wide rows read cleaner with lower-contrast bands. */
 const BACKLOG_TABLE_STRIPE_BG = "#f4f7fc";
@@ -107,6 +112,65 @@ function aggregateInitiativeTeamId(initiative: InitiativeItem): string | null {
   }
   if (teams.size === 1) return [...teams][0]!;
   return null;
+}
+
+/**
+ * Per-story health verdict for the backlog's Health column. Uses the
+ * SAME formula `SprintLoadHealthBadge` uses on the sprint kanban —
+ * `sprintStoryVerdict` against the calendar days remaining in the
+ * story's sprint half-month — so the backlog never paints a verdict
+ * that disagrees with the sprint board.
+ *
+ * Returns null (caller renders an em-dash) when there's nothing
+ * meaningful to bucket:
+ *   - the story is unscheduled (no sprint)
+ *   - the story has no estimate, so there's no burndown ideal to
+ *     compare days-left against
+ *   - the sprint resolves to a zero-day window (shouldn't happen, but
+ *     guards a div-by-zero in the burndown math)
+ */
+function computeStoryHealthForBacklog(
+  story: UserStoryItem,
+  parentEpic: EpicItem,
+  planYear: number,
+): { status: HealthStatus } | null {
+  // `resolveStoryYearSprint` falls back to the epic's plan window
+  // when the story has no explicit sprint — pass the epic's start
+  // month as the context anchor.
+  const contextMonth = parentEpic.planStartMonth ?? 1;
+  const globalSprint = resolveStoryYearSprint(story, contextMonth);
+  if (globalSprint == null) return null;
+  const est = Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
+  if (est <= 0) return null;
+  const { month } = monthLaneFromGlobalSprint(globalSprint);
+  const total = sprintDayDates(planYear, month, globalSprint).length;
+  if (total <= 0) return null;
+  const left = sprintCalendarDaysRemaining(planYear, month, globalSprint);
+  const projection: SprintLoadStoryProjection = {
+    id: story.id,
+    title: story.title,
+    estimatedDays: story.estimatedDays,
+    daysLeft: story.daysLeft,
+    statusKey: story.status,
+  };
+  const { status } = sprintStoryVerdict(projection, left, total);
+  return { status };
+}
+
+/**
+ * Tiny shared renderer so every row variant — story / epic /
+ * initiative / folder — paints the Health cell the same way. Passing
+ * `null` shows the same em-dash every other "no data" cell uses.
+ */
+function renderBacklogHealthCell(verdict: { status: HealthStatus } | null): ReactNode {
+  if (verdict == null) {
+    return <span className="text-[16px] text-slate-400">—</span>;
+  }
+  return (
+    <span className="inline-flex items-center justify-center">
+      <HealthBadge status={verdict.status} size="sm" />
+    </span>
+  );
 }
 
 type BacklogPlanningPanelProps = {
@@ -180,6 +244,10 @@ type BacklogPlanningPanelProps = {
    *  autocomplete (otherwise newly-added users with no assignment yet never
    *  appear) and lets the picker show their photo when present. */
   workspaceDirectoryUsers?: readonly { name: string; team?: string; image?: string | null }[];
+  /** Same progress-basis the dashboard / charts / Gantt already use. Drives
+   *  the Health column verdict so every surface stays in agreement (`epicEst`
+   *  default mirrors `epic-planner-app.tsx`). */
+  progressBasis?: ProgressBasis;
 };
 
 type OptionItem = { id: string; label: string };
@@ -195,6 +263,7 @@ type BacklogColumnKey =
   | "startDate"
   | "endDate"
   | "status"
+  | "health"
   | "sprint"
   | "assignee"
   | "parent"
@@ -516,6 +585,7 @@ const BACKLOG_COLUMN_ORDER: BacklogColumnKey[] = [
   "workItem",
   "roadmap",
   "status",
+  "health",
   "team",
   "assignee",
   "parent",
@@ -552,6 +622,7 @@ const BACKLOG_COLUMN_LABELS: Record<BacklogColumnKey, string> = {
   startDate: "Start",
   endDate: "End",
   status: "Status",
+  health: "Health",
   sprint: "Sprint",
   assignee: "Assignee",
   parent: "Parent",
@@ -573,6 +644,7 @@ const BACKLOG_COLUMN_MIN_WIDTHS: Record<BacklogColumnKey, number> = {
   startDate: 96,
   endDate: 96,
   status: 100,
+  health: 90,
   sprint: 90,
   assignee: 120,
   parent: 200,
@@ -596,6 +668,7 @@ const BACKLOG_COLUMN_DEFAULT_WIDTHS: Record<BacklogColumnKey, number> = {
   startDate: 150,
   endDate: 150,
   status: 168,
+  health: 120,
   sprint: 148,
   assignee: 190,
   parent: 260,
@@ -611,7 +684,7 @@ const BACKLOG_COLUMN_WIDTHS_STORAGE_KEY = "epic-planner.backlog.column-widths.v1
 const BACKLOG_VIEW_STATE_STORAGE_KEY = "epic-planner.backlog.view-state.v1";
 const BACKLOG_TABLE_LAYOUT_STORAGE_KEY = "epic-planner.backlog.table-layout.v1";
 /** Bump when default visibility for columns changes so stored layout can migrate once. */
-const BACKLOG_TABLE_LAYOUT_DEFAULTS_VERSION = 13;
+const BACKLOG_TABLE_LAYOUT_DEFAULTS_VERSION = 14;
 const BACKLOG_SAVED_FILTERS_STORAGE_KEY = "epic-planner.backlog.saved-filters.v1";
 const BACKLOG_SAVED_VIEWS_STORAGE_KEY = "epic-planner.backlog.saved-views.v1";
 
@@ -626,6 +699,10 @@ const DEFAULT_BACKLOG_COLUMN_VISIBILITY: Record<BacklogColumnKey, boolean> = {
   startDate: true,
   endDate: true,
   status: true,
+  /** Read-only verdict pill — same `onTrack | watch | atRisk | overdue | done`
+   *  the dashboard donut and Gantt bars paint. Visible by default so it shows
+   *  up automatically after the layout-version bump (13 → 14). */
+  health: true,
   sprint: true,
   assignee: true,
   parent: true,
@@ -646,6 +723,7 @@ const CENTER_ALIGNED_BACKLOG_COLUMNS = new Set<BacklogColumnKey>([
   "startDate",
   "endDate",
   "status",
+  "health",
   "sprint",
   "assignee",
   "labels",
@@ -4129,6 +4207,10 @@ type BacklogStoryRowData = {
   /** Parent epic's own team slug — kept so the row can render the
    *  fallback even when the story override is set + later cleared. */
   epicTeamSlug: string | null;
+  /** Sprint-burndown verdict for the Health column. NULL when the
+   *  story has no sprint, no estimate, or the sprint window resolves
+   *  to zero days — the cell renderer paints an em-dash. */
+  storyHealth: { status: HealthStatus } | null;
 };
 
 type BacklogStoryRowCtx = {
@@ -4369,6 +4451,7 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
             </button>
           </span>
         ),
+        health: renderBacklogHealthCell(row.storyHealth),
         sprint: (
           <span className="text-center text-[16px] text-slate-700">
             {isEditingCell && editingCellField === "sprint" ? (
@@ -4611,6 +4694,11 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
         // stay in sync.
         team: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "team", row.storyTeamOverride ?? "") },
         status: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "status", row.storyStatus) },
+        // Health is a derived read-only verdict (see Health column in
+        // the column registry). The lock affordance reinforces that
+        // the planner can't toggle it directly — change the underlying
+        // sprint / estimate / epic dates and the verdict updates.
+        health: { kind: "lock" },
         sprint: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "sprint", row.storySprintNum == null ? "unscheduled" : String(row.storySprintNum)) },
         assignee: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "assignee", row.storyAssignee === "Unassigned" ? "" : row.storyAssignee) },
         labels: { kind: "edit", onEdit: () => ctx.beginStoryCellEdit(row.storyId, "labels", ctx.formatStoryLabelsForEditInput(row.storyLabels)) },
@@ -4772,6 +4860,7 @@ export function BacklogPlanningPanel({
   summaryBarPortalElement,
   suppressInlineChips,
   workspaceDirectoryUsers,
+  progressBasis = "epicEst",
 }: BacklogPlanningPanelProps) {
   // Render-time diagnostic: count + time every commit to help spot whether
   // slowness is the mount itself, re-renders from a parent, or some heavy
@@ -6453,6 +6542,11 @@ export function BacklogPlanningPanel({
             storyEndDateLabel: formatBacklogPlanDate(workPlan.end),
             workPlanStart: workPlan.start,
             workPlanEnd: workPlan.end,
+            // Sprint-burndown verdict for the Health column. Computed
+            // here (where we still have full epic context) instead of
+            // inside the row, so the row component stays oblivious to
+            // initiative.year / epic.planStartMonth.
+            storyHealth: computeStoryHealthForBacklog(story, epic, Number(initiative.year)),
           };
         }),
       ),
@@ -7136,6 +7230,7 @@ export function BacklogPlanningPanel({
             startDate: <span className="text-center text-[16px] text-slate-400">-</span>,
             endDate: <span className="text-center text-[16px] text-slate-400">-</span>,
             status: <span className="text-center text-[16px] text-slate-400">-</span>,
+            health: renderBacklogHealthCell(null),
             sprint: <span className="text-center text-[16px] text-slate-400">-</span>,
             assignee: <span className="text-center text-[16px] text-slate-400">-</span>,
             parent: <span className="text-[16px] text-slate-400">-</span>,
@@ -7152,6 +7247,7 @@ export function BacklogPlanningPanel({
             startDate: { kind: "lock" },
             endDate: { kind: "lock" },
             status: { kind: "lock" },
+            health: { kind: "lock" },
             sprint: { kind: "lock" },
             assignee: { kind: "lock" },
             labels: { kind: "lock" },
@@ -7675,6 +7771,11 @@ export function BacklogPlanningPanel({
                 {workflowStatusLabel(initiativeStatus)}
               </span>
             ),
+            health: renderBacklogHealthCell(
+              initModelForRow
+                ? computeInitiativeHealthVerdict(initModelForRow, Number(initiativeYear), progressBasis)
+                : null,
+            ),
             sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
             assignee: (
               <span className="text-center text-[16px] text-slate-700">
@@ -7752,6 +7853,7 @@ export function BacklogPlanningPanel({
             startDate: { kind: "lock" },
             endDate: { kind: "lock" },
             status: { kind: "lock" },
+            health: { kind: "lock" },
             sprint: { kind: "lock" },
             labels: { kind: "edit", onEdit: () => beginInitiativeLabelsEdit({ id: initiativeId, labels: initModelForRow?.labels ?? null }) },
             estDays: { kind: "lock" },
@@ -8734,6 +8836,7 @@ export function BacklogPlanningPanel({
                   // instead — no stories = no status to report.
                   <span className="inline-flex min-w-[104px] items-center justify-center text-[14px] text-slate-400">—</span>
                 ),
+                health: renderBacklogHealthCell(null),
                 sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
                 assignee: (
                   <span className="inline-flex items-center justify-center gap-1.5 text-center text-[16px] text-slate-700">
@@ -8794,6 +8897,7 @@ export function BacklogPlanningPanel({
                 startDate: { kind: "lock" },
                 endDate: { kind: "lock" },
                 status: { kind: "lock" },
+                health: { kind: "lock" },
                 sprint: { kind: "lock" },
                 assignee: { kind: "lock" },
                 labels: { kind: "edit", onEdit: () => beginInitiativeLabelsEdit({ id: initiative.initiativeId, labels: standInitModel?.labels ?? null }) },
@@ -8954,6 +9058,11 @@ export function BacklogPlanningPanel({
                             To do
                           </span>
                         ),
+                        health: renderBacklogHealthCell(
+                          standEpicModel
+                            ? computeEpicHealthVerdict(standEpicModel, Number(initiative.initiativeYear), progressBasis)
+                            : null,
+                        ),
                         sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
                         assignee: (
                           <span className="inline-flex items-center justify-center gap-1.5 text-center text-[16px] text-slate-700">
@@ -9049,6 +9158,7 @@ export function BacklogPlanningPanel({
                             ),
                         },
                         status: { kind: "lock" },
+                        health: { kind: "lock" },
                         sprint: { kind: "lock" },
                         assignee: { kind: "lock" },
                         labels: { kind: "edit", onEdit: () => beginEpicLabelsEdit({ id: epic.epicId, labels: standEpicModel?.labels ?? null }) },
@@ -10669,6 +10779,9 @@ export function BacklogPlanningPanel({
                           {workflowStatusLabel(initiativeWorkflowStatus)}
                         </span>
                       ),
+                      health: renderBacklogHealthCell(
+                        computeInitiativeHealthVerdict(initiative, Number(initiative.year), progressBasis),
+                      ),
                       sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
                       assignee: (
                         <span className="text-center text-[16px] text-slate-700">
@@ -10771,6 +10884,7 @@ export function BacklogPlanningPanel({
                       startDate: { kind: "lock" },
                       endDate: { kind: "lock" },
                       status: { kind: "lock" },
+                      health: { kind: "lock" },
                       sprint: { kind: "lock" },
                       assignee: { kind: "edit", onEdit: () => setEditingParentAssignee({ kind: "initiative", id: initiative.id, value: initiative.assignee?.trim() || "" }) },
                       labels: { kind: "edit", onEdit: () => beginInitiativeLabelsEdit({ id: initiative.id, labels: initiative.labels ?? null }) },
@@ -11002,6 +11116,9 @@ export function BacklogPlanningPanel({
                                     {workflowStatusLabel(epicWorkflowStatus)}
                                   </span>
                                 ),
+                                health: renderBacklogHealthCell(
+                                  computeEpicHealthVerdict(epic, Number(initiative.year), progressBasis),
+                                ),
                                 sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
                                 assignee: (
                                   <span className="text-center text-[16px] text-slate-700">
@@ -11145,6 +11262,7 @@ export function BacklogPlanningPanel({
                                     ),
                                 },
                                 status: { kind: "lock" },
+                                health: { kind: "lock" },
                                 sprint: { kind: "lock" },
                                 assignee: { kind: "edit", onEdit: () => setEditingParentAssignee({ kind: "epic", id: epic.id, value: epic.assignee?.trim() || "" }) },
                                 labels: { kind: "edit", onEdit: () => beginEpicLabelsEdit({ id: epic.id, labels: epic.labels ?? null }) },
@@ -11343,6 +11461,9 @@ export function BacklogPlanningPanel({
                                         </button>
                                       )}
                                     </span>
+                                      ),
+                                      health: renderBacklogHealthCell(
+                                        computeStoryHealthForBacklog(story, epic, Number(initiative.year)),
                                       ),
                                       sprint: (
                                     <span className="text-center text-[16px] text-slate-700">
@@ -11558,6 +11679,7 @@ export function BacklogPlanningPanel({
                                     }, {
                                       team: { kind: "edit", onEdit: () => beginEpicTeamEdit({ id: epic.id, team: epic.team ?? null }) },
                                       status: { kind: "edit", onEdit: () => beginStoryCellEdit(story.id, "status", story.status) },
+                                      health: { kind: "lock" },
                                       sprint: { kind: "edit", onEdit: () => beginStoryCellEdit(story.id, "sprint", story.sprint == null ? "unscheduled" : String(story.sprint)) },
                                       assignee: { kind: "edit", onEdit: () => beginStoryCellEdit(story.id, "assignee", story.assignee?.trim() || "") },
                                       labels: { kind: "edit", onEdit: () => beginStoryCellEdit(story.id, "labels", formatStoryLabelsForEditInput(story.labels)) },

@@ -61,7 +61,7 @@ import { HealthBadge, formatHealthTooltip } from "@/components/timeline/health-b
 import { RoadmapHealthPopover, type ProgressBasis } from "@/components/timeline/roadmap-health-popover";
 import { computeInitiativeProgress, computeProgress, type HealthStatus } from "@/lib/progress";
 import { effectiveEpicStart } from "@/lib/epic-observed-start";
-import { computeEpicHealthVerdict } from "@/lib/epic-health";
+import { computeEpicHealthVerdict, computeInitiativeHealthVerdict } from "@/lib/epic-health";
 import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
 import { MonthAnalytics, MonthAnalyticsSkeleton } from "@/components/timeline/month-analytics";
 import { CapacityPlanTeamCombobox } from "@/components/timeline/capacity-plan-team-combobox";
@@ -1133,48 +1133,19 @@ function ganttSearchEpicHealth(
   return { status: v.status, tooltip: formatHealthTooltip(v.result) };
 }
 
-/** Same as {@link ganttSearchEpicHealth} but for initiatives — rolls up
- *  child epic statuses (matches `computeInitiativeProgress`). */
+/** Same as {@link ganttSearchEpicHealth} but for initiatives — defers
+ *  to {@link computeInitiativeHealthVerdict} (the shared
+ *  worst-of-children rollup) so the Gantt search filter, dashboard
+ *  donut, and backlog Health column all agree about which initiative
+ *  is at risk. */
 function ganttSearchInitiativeHealth(
   init: InitiativeItem,
   planYear: number,
   basis: ProgressBasis,
 ): { status: HealthStatus; tooltip: string } | null {
-  const epics = init.epics ?? [];
-  if (epics.length === 0) return null;
-  const aggregateStories = epics.flatMap((e) => e.userStories ?? []);
-  // epicEst rollup is the sum of child epics' estimates — works without
-  // any stories, so don't bail in that mode.
-  if (basis !== "epicEst" && aggregateStories.length === 0) return null;
-  const childStatuses: HealthStatus[] = [];
-  for (const epic of epics) {
-    const v = computeEpicHealthVerdict(epic, planYear, basis);
-    if (v != null) childStatuses.push(v.status);
-  }
-  // Union bounds for the initiative; fall back to the planning year when no
-  // child has dates (rare but possible for newly-created initiatives).
-  const scheduled = epics.filter((e) => e.planStartMonth != null && e.planEndMonth != null);
-  const startMonth = scheduled.length > 0
-    ? Math.min(...scheduled.map((e) => e.planStartMonth as number))
-    : 1;
-  const endMonth = scheduled.length > 0
-    ? Math.max(...scheduled.map((e) => e.planEndMonth as number))
-    : 12;
-  const initStart = sprintStartDate(planYear, globalSprintFromMonthLane(startMonth, 1));
-  const initEnd = sprintEndDate(planYear, globalSprintFromMonthLane(endMonth, 2));
-  const initiativeOriginalEstSum = epics.reduce(
-    (sum, e) => sum + (e.originalEstimateDays ?? 0),
-    0,
-  );
-  const h = computeInitiativeProgress({
-    stories: aggregateStories,
-    childStatuses,
-    start: initStart,
-    end: initEnd,
-    basis,
-    epicOriginalEstimateDays: initiativeOriginalEstSum > 0 ? initiativeOriginalEstSum : null,
-  });
-  return { status: h.status, tooltip: formatHealthTooltip(h) };
+  const v = computeInitiativeHealthVerdict(init, planYear, basis);
+  if (v == null) return null;
+  return { status: v.status, tooltip: formatHealthTooltip(v.result) };
 }
 
 type TodayBadgePlacement = "above" | "inside";

@@ -36,10 +36,10 @@
  * should treat null as "skip this epic" — don't count it in
  * distributions, don't paint a badge.
  */
-import { computeProgress, type HealthStatus, type ProgressBasis, type ProgressResult } from "@/lib/progress";
+import { computeInitiativeProgress, computeProgress, type HealthStatus, type ProgressBasis, type ProgressResult } from "@/lib/progress";
 import { effectiveEpicStart } from "@/lib/epic-observed-start";
 import { sprintStartDate, sprintEndDate, globalSprintFromMonthLane } from "@/lib/year-sprint";
-import type { EpicItem } from "@/lib/types";
+import type { EpicItem, InitiativeItem } from "@/lib/types";
 
 export function computeEpicHealthVerdict(
   epic: EpicItem,
@@ -78,4 +78,78 @@ export function computeEpicHealthVerdict(
   const hasData = basis === "stories" ? stories.length > 0 : result.totalEffort > 0;
   if (!hasData) return null;
   return { status: result.status, result, start, end };
+}
+
+/**
+ * Single source of truth for an initiative's health verdict — the
+ * sibling of {@link computeEpicHealthVerdict} for the next level up
+ * the tree.
+ *
+ * Aggregation rule (matches every surface that paints an initiative
+ * pill today: year-Roadmap Gantt bars, dashboard donut, Burnup /
+ * Burndown corner badges, Insights scope picker, initiative list
+ * panel):
+ *   1. Flatten every child epic's stories into one pool and run the
+ *      effort-weighted burndown — that gives a `flat.status`.
+ *   2. Override `flat.status` with the WORST of itself and every
+ *      child epic's verdict (`done`/`onTrack` < `watch` < `atRisk` <
+ *      `overdue`). One at-risk epic is enough to make the whole
+ *      initiative at risk — same rule the planner sees on the Gantt.
+ *
+ * Returns null when no meaningful verdict can be produced:
+ *   - The initiative has zero child epics.
+ *   - `stories` / `days` bases need at least one story; `epicEst`
+ *     basis can produce a verdict from epic-level estimates alone, so
+ *     we don't bail there even when there are zero stories.
+ *
+ * Callers should treat null as "skip — paint a dash."
+ */
+export function computeInitiativeHealthVerdict(
+  init: InitiativeItem,
+  planYear: number,
+  basis: ProgressBasis,
+): { status: HealthStatus; result: ProgressResult } | null {
+  const epics = init.epics ?? [];
+  if (epics.length === 0) return null;
+  const aggregateStories = epics.flatMap((e) => e.userStories ?? []);
+  // Same rule as `ganttSearchInitiativeHealth`: stories / days bases
+  // need real stories; epicEst can stand on epic-level estimates.
+  if (basis !== "epicEst" && aggregateStories.length === 0) return null;
+  const childStatuses: HealthStatus[] = [];
+  for (const epic of epics) {
+    const v = computeEpicHealthVerdict(epic, planYear, basis);
+    if (v != null) childStatuses.push(v.status);
+  }
+  // Union bounds across scheduled child epics; fall back to the full
+  // planning year when no child has dates (rare — newly-created
+  // initiative with empty epics).
+  const scheduled = epics.filter((e) => e.planStartMonth != null && e.planEndMonth != null);
+  const startMonth = scheduled.length > 0
+    ? Math.min(...scheduled.map((e) => e.planStartMonth as number))
+    : 1;
+  const endMonth = scheduled.length > 0
+    ? Math.max(...scheduled.map((e) => e.planEndMonth as number))
+    : 12;
+  const initStart = sprintStartDate(planYear, globalSprintFromMonthLane(startMonth, 1));
+  const initEnd = sprintEndDate(planYear, globalSprintFromMonthLane(endMonth, 2));
+  const initiativeOriginalEstSum = epics.reduce(
+    (sum, e) => sum + (e.originalEstimateDays ?? 0),
+    0,
+  );
+  const result = computeInitiativeProgress({
+    stories: aggregateStories,
+    childStatuses,
+    start: initStart,
+    end: initEnd,
+    basis,
+    epicOriginalEstimateDays: initiativeOriginalEstSum > 0 ? initiativeOriginalEstSum : null,
+  });
+  // Final data-validity guard (mirrors `computeEpicHealthVerdict`):
+  // without measurable effort, the verdict math would collapse to a
+  // degenerate "On Track" — return null instead.
+  const hasData = basis === "stories"
+    ? aggregateStories.length > 0
+    : result.totalEffort > 0;
+  if (!hasData) return null;
+  return { status: result.status, result };
 }

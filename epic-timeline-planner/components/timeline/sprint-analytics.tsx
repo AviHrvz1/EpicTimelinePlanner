@@ -187,7 +187,7 @@ function sprintBurndownVerdict({
 
 /** Lean shape consumed by `sprintStoryVerdict` / `SprintLoadHealthBadge` —
  *  matches what the local `sprintStories` projection carries. */
-type SprintLoadStoryProjection = {
+export type SprintLoadStoryProjection = {
   id: string;
   title: string;
   estimatedDays: number | null;
@@ -199,7 +199,7 @@ type SprintLoadStoryProjection = {
  *  remaining work against an ideal sprint burndown so we can list flagged
  *  stories in the Sprint Load badge popover. Stories that are review or have
  *  no estimate are reported as `onTrack` so the popover skips them. */
-function sprintStoryVerdict(
+export function sprintStoryVerdict(
   story: SprintLoadStoryProjection,
   sprintDaysLeft: number,
   sprintDaysTotal: number,

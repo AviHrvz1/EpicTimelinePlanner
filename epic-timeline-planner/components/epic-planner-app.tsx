@@ -6778,6 +6778,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 roadmaps={roadmaps}
                 storyRefById={storyRefMaps.byId}
                 workspaceDirectoryUsers={workspaceDirectoryUsers}
+                progressBasis={progressBasis}
                 onOpenInitiative={backlogOpenInitiative}
                 onOpenEpic={backlogOpenEpic}
                 onOpenStory={backlogOpenStory}
