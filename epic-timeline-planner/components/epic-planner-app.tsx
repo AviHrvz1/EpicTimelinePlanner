@@ -2,7 +2,7 @@
 
 import { DragEndEvent } from "@dnd-kit/core";
 import { InitiativeStatus, StoryStatus } from "@/lib/generated/prisma";
-import { AlertTriangle, Archive, Clock, FileText, LayoutDashboard, Map as MapIcon, PanelLeftOpen, Sparkles, Users, X as XIcon } from "lucide-react";
+import { AlertTriangle, Archive, Clock, FileText, LayoutDashboard, ListTodo, Map as MapIcon, PanelLeftOpen, Sparkles, Users, X as XIcon } from "lucide-react";
 import { useMemo, useEffect, useRef, useState, useCallback } from "react";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -5863,6 +5863,29 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           selectedYear={selectedYear}
           progressBasis={progressBasis}
           onProgressBasisChange={setProgressBasis}
+          title={
+            topMode === "backlog"
+              ? "Backlog Workspace"
+              : topMode === "roadmap"
+                ? "Roadmap Planning"
+                : topMode === "users"
+                  ? "Users Directory"
+                  : "Roadmap Health"
+          }
+          titleIcon={
+            topMode === "backlog"
+              ? ListTodo
+              : topMode === "roadmap"
+                ? MapIcon
+                : topMode === "users"
+                  ? Users
+                  : undefined
+          }
+          /* Users Directory has no relevant dashboard body — just use
+             the hero as a title bar and lock the accordion closed so
+             the planner can't open it. */
+          defaultExpanded={topMode !== "users"}
+          hideExpandToggle={topMode === "users"}
           barMode={roadmapBarModeCtrl}
           onBarModeChange={setRoadmapBarModeCtrl}
           showTeamChips={showGanttTeamChipsCtrl}
@@ -5914,7 +5937,17 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             // hero+body overflow, and the Gantt's inner scroll area
             // shows its own scrollbar when rows exceed the panel height.
             topMode === "roadmap" && "min-h-[calc(100vh-200px)]",
-            (topMode === "backlog" || topMode === "dashboard" || topMode === "users") && "min-h-[100vh]",
+            // Dashboard still wants 100vh as a floor — its hero IS the
+            // dashboard, and the body row below is sparse. Backlog and
+            // Users intentionally drop the 100vh floor so the table panel
+            // ends at the viewport bottom instead of pushing past it:
+            //   - Users: hero locked collapsed (~80px), reserve the rest.
+            //   - Backlog: hero collapsible; `main` is `h-screen` with
+            //     `overflow-y-auto`, so `flex-1 min-h-0` lets the body fill
+            //     whatever space the hero leaves. When the planner expands
+            //     the hero, the page-level scrollbar handles overflow.
+            topMode === "dashboard" && "min-h-[100vh]",
+            topMode === "users" && "min-h-[calc(100vh-80px)]",
             topMode !== "backlog" && (isModeRailExpanded ? "overflow-x-visible" : "overflow-x-clip"),
           )}
         >
@@ -6905,11 +6938,13 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
               />
                 )}
               </div>
-              {/* Slimmed-down mirror of rightEdgeSeparator for backlog mode —
-                  same visual treatment but ~18px instead of 24px so the table
-                  gets a touch more horizontal room. */}
+              {/* 6px right gutter — exactly matches the hero's `pr-[6px]`
+                  (see `roadmap-health-hero.tsx`) so the white panel's
+                  right edge lines up with the bordered hero card above
+                  it. The previous 18px gutter left a visible step on the
+                  right (~12px short of the hero). */}
               <div
-                className="pointer-events-none relative flex h-full min-h-0 w-[18px] shrink-0 items-center justify-center self-stretch"
+                className="pointer-events-none relative flex h-full min-h-0 w-[6px] shrink-0 items-center justify-center self-stretch"
                 aria-hidden
               />
             </div>

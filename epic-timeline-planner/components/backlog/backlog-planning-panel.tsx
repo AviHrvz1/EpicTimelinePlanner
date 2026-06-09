@@ -9767,61 +9767,15 @@ export function BacklogPlanningPanel({
 
   return (
     <section className="ml-1 mr-0 flex h-full min-h-0 w-full max-w-full min-w-0 flex-1 flex-col overflow-x-hidden rounded-2xl bg-white p-5 pb-2.5 shadow-sm ring-1 ring-slate-200/60">
-      <div className="mb-3 flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/90 pb-4 pt-4">
-        <div className="flex items-center gap-2.5">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-500">
-            <ListTodo className="size-4.5" strokeWidth={2} aria-hidden />
-          </span>
-          <h2 className="text-[27px] font-bold tracking-tight text-slate-900">Backlog Workspace</h2>
-        </div>
-        <div className="ml-auto flex items-center gap-3">
-          {!(suppressInlineChips || summaryBarPortalElement) && (
-            <div className="flex flex-wrap items-center gap-1.5">{summaryChipsJsx}</div>
-          )}
-          {onCreateRoadmapQuick ? (
-            <button
-              type="button"
-              onClick={() => openCreateComposer({ anchorKey: "header:roadmap", scope: "initiative", kind: "initiative" })}
-              /* Soft tinted background matching the indigo accent, with the
-               * same `--ring`-tinted outline. Hover deepens the tint a touch. */
-              className="inline-flex h-8 w-[7.25rem] items-center justify-center gap-1.5 rounded-lg bg-indigo-50/80 px-3 text-[13px] font-semibold text-indigo-700 outline-1 outline-offset-[-1px] [outline-color:color-mix(in_oklab,var(--ring)_25%,transparent)] transition hover:bg-indigo-100 focus-visible:outline-2 focus-visible:[outline-color:var(--ring)]"
-              aria-label="Add roadmap"
-              title="Add roadmap"
-            >
-              <Plus className="size-3.5 shrink-0" strokeWidth={2.4} aria-hidden />
-              <MapIcon className="size-3.5 shrink-0" strokeWidth={2} aria-hidden />
-              <span>Roadmap</span>
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={handleExcelExport}
-            /* Same visual shape as the "+ Roadmap" button — soft tinted
-             * emerald background with the `--ring`-tinted outline, icon on
-             * the left, label on the right. */
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-emerald-50/80 pl-3 pr-4 text-[13px] font-semibold text-emerald-700 outline-1 outline-offset-[-1px] [outline-color:color-mix(in_oklab,var(--ring)_25%,transparent)] transition hover:bg-emerald-100 focus-visible:outline-2 focus-visible:[outline-color:var(--ring)]"
-            aria-label="Export backlog to Excel"
-            title="Export to Excel (preview, then download .xls)"
-          >
-            <Image
-              src="/export-to-excel-icon.png"
-              alt=""
-              width={28}
-              height={28}
-              /* `unoptimized` skips Next's image optimizer so the source PNG
-               * is served as-is. The optimizer caches derived webp files in
-               * `.next/dev/cache/images/`, and that cache doesn't invalidate
-               * when the source file changes — every icon swap would
-               * silently keep showing the old version until manual cleanup. */
-              unoptimized
-              /* size-3.5 (14px) matches the Roadmap button's MapIcon. */
-              className="size-3.5 shrink-0 select-none"
-              aria-hidden
-            />
-            <span>Export Excel</span>
-          </button>
-        </div>
-      </div>
+      {/* The Backlog Workspace title + icon used to live here in a
+          section-level header. It now lives in `RoadmapHealthHero`
+          (the top bar above this panel) — mounted by `epic-planner-app`
+          with `title="Backlog Workspace"` + `titleIcon={ListTodo}` when
+          the backlog mode is active — so the title appears once at the
+          top of the page instead of twice. The two action buttons
+          ("+ Roadmap" and "Export Excel") that used to sit in this
+          header now live inside the slim toolbar's right cluster (next
+          to the Clear-all button). */}
       {summaryBarPortalElement ? createPortal(summaryChipsJsx, summaryBarPortalElement) : null}
 
       {/* Slim global toolbar — only the controls that don't belong to a
@@ -10059,8 +10013,43 @@ export function BacklogPlanningPanel({
               </div>
             ) : null}
           </div>
-          {/* Clear All — rightmost in the slim toolbar. */}
-          <div className="ml-auto flex shrink-0 items-center">
+          {/* Right cluster — page-level actions (+ Roadmap / Export
+              Excel) followed by Clear-all. Used to live in a separate
+              section header above the toolbar; folded in here so the
+              actions sit alongside Filters / Views / Group-by instead
+              of duplicating the header bar. */}
+          <div className="ml-auto flex shrink-0 items-center gap-3">
+            {onCreateRoadmapQuick ? (
+              <button
+                type="button"
+                onClick={() => openCreateComposer({ anchorKey: "header:roadmap", scope: "initiative", kind: "initiative" })}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-indigo-50/80 px-3 text-[13px] font-semibold text-indigo-700 outline-1 outline-offset-[-1px] [outline-color:color-mix(in_oklab,var(--ring)_25%,transparent)] shadow-sm transition hover:bg-indigo-100 focus-visible:outline-2 focus-visible:[outline-color:var(--ring)]"
+                aria-label="Add roadmap"
+                title="Add roadmap"
+              >
+                <Plus className="size-3.5 shrink-0" strokeWidth={2.4} aria-hidden />
+                <MapIcon className="size-3.5 shrink-0" strokeWidth={2} aria-hidden />
+                <span>Roadmap</span>
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={handleExcelExport}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-emerald-50/80 pl-3 pr-4 text-[13px] font-semibold text-emerald-700 outline-1 outline-offset-[-1px] [outline-color:color-mix(in_oklab,var(--ring)_25%,transparent)] shadow-sm transition hover:bg-emerald-100 focus-visible:outline-2 focus-visible:[outline-color:var(--ring)]"
+              aria-label="Export backlog to Excel"
+              title="Export to Excel (preview, then download .xls)"
+            >
+              <Image
+                src="/export-to-excel-icon.png"
+                alt=""
+                width={28}
+                height={28}
+                unoptimized
+                className="size-3.5 shrink-0 select-none"
+                aria-hidden
+              />
+              <span>Export Excel</span>
+            </button>
             <span className="group relative inline-flex h-9 w-9 shrink-0">
               <button
                 type="button"

@@ -126,6 +126,10 @@ export function RoadmapHealthHero({
   onStatusFilterChange,
   onOpenEpicEstimatePanel,
   onSelectLaggards,
+  title = "Roadmap Health",
+  titleIcon: TitleIcon = ShieldCheck,
+  defaultExpanded = true,
+  hideExpandToggle = false,
 }: {
   initiatives: readonly InitiativeItem[];
   roadmaps: RoadmapItem[];
@@ -175,13 +179,43 @@ export function RoadmapHealthHero({
    *  planner picks a contributor row or "Highlight on Roadmap". Inert
    *  when omitted; the chart's popover still works as a read-only list. */
   onSelectLaggards?: (epicIds: string[], label: string) => void;
+  /** Header title — overrides the default "Roadmap Health" so the same hero
+   *  can act as the top bar for other modes (e.g. "Backlog Workspace" when
+   *  the backlog panel is active). */
+  title?: string;
+  /** Icon component (Lucide-style) shown next to the title. Defaults to
+   *  `ShieldCheck` to match the original Roadmap Health look. */
+  titleIcon?: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  /** Initial expand/collapse state of the dashboard body below the
+   *  header row. Defaults to `true` so the Roadmap Health view still
+   *  opens with the donuts visible; modes that use the hero strictly
+   *  as a top bar (e.g. Users Directory) pass `false`. */
+  defaultExpanded?: boolean;
+  /** When true, the chevron button on the left of the title is not
+   *  rendered — the dashboard body stays in whatever state
+   *  `defaultExpanded` set, and the planner can't toggle it. Used by
+   *  modes where the body is irrelevant and the hero is just a title
+   *  bar (e.g. Users Directory). */
+  hideExpandToggle?: boolean;
 }) {
   const stats = useMemo(() => computeRoadmapStats(initiatives, selectedYear, progressBasis), [
     initiatives,
     selectedYear,
     progressBasis,
   ]);
-  const [isPanelExpanded, setIsPanelExpanded] = useState(true);
+  // When the chevron is hidden (e.g. Users Directory), the planner has
+  // no way to toggle the panel, so we just mirror `defaultExpanded`
+  // verbatim — navigating into the mode collapses the body, navigating
+  // out lets the next mode's default take over. When the chevron is
+  // visible (Roadmap Health / Roadmap Planning / Backlog), keep the
+  // user's manual choice in internal state so a deliberate collapse
+  // isn't reset every time the panel re-renders.
+  const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
+  const isPanelExpanded = hideExpandToggle ? defaultExpanded : internalExpanded;
+  const setIsPanelExpanded: typeof setInternalExpanded = (value) => {
+    if (hideExpandToggle) return;
+    setInternalExpanded(value);
+  };
   const [healthExplainerOpen, setHealthExplainerOpen] = useState(false);
   /** Human label for the active basis — folded into chart titles so the
    *  planner can see at a glance which Health calculation mode drove
@@ -237,27 +271,29 @@ export function RoadmapHealthHero({
       <div className="flex w-full items-start gap-5 pl-6 pr-6 py-3">
         <div className="min-w-0 shrink-0">
           <h1 className="inline-flex items-center gap-2 text-[22px] font-semibold leading-tight tracking-tight text-slate-900">
-            <button
-              type="button"
-              onClick={() => setIsPanelExpanded((v) => !v)}
-              title={isPanelExpanded ? "Collapse Roadmap Health" : "Expand Roadmap Health"}
-              aria-label={isPanelExpanded ? "Collapse Roadmap Health" : "Expand Roadmap Health"}
-              aria-expanded={isPanelExpanded}
-              className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
-            >
-              <ChevronDown
-                className={cn(
-                  "size-5 transition-transform duration-200",
-                  isPanelExpanded ? "rotate-0" : "-rotate-90",
-                )}
-                strokeWidth={2.2}
-                aria-hidden
-              />
-            </button>
+            {hideExpandToggle ? null : (
+              <button
+                type="button"
+                onClick={() => setIsPanelExpanded((v) => !v)}
+                title={isPanelExpanded ? `Collapse ${title}` : `Expand ${title}`}
+                aria-label={isPanelExpanded ? `Collapse ${title}` : `Expand ${title}`}
+                aria-expanded={isPanelExpanded}
+                className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+              >
+                <ChevronDown
+                  className={cn(
+                    "size-5 transition-transform duration-200",
+                    isPanelExpanded ? "rotate-0" : "-rotate-90",
+                  )}
+                  strokeWidth={2.2}
+                  aria-hidden
+                />
+              </button>
+            )}
             <span className="inline-flex size-8 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600">
-              <ShieldCheck className="size-[18px]" aria-hidden />
+              <TitleIcon className="size-[18px]" aria-hidden />
             </span>
-            Roadmap Health
+            {title}
           </h1>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">

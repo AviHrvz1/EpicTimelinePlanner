@@ -2344,40 +2344,41 @@ export function UsersWorkspacePanel() {
           className="box-border flex h-full min-h-0 w-full min-w-full flex-col gap-5 p-6 pb-0.5 sm:p-8 sm:pb-1"
           style={{ minWidth: `max(100%, ${USER_DIRECTORY_MIN_LAYOUT_WIDTH_PX}px)` }}
         >
-      <header className="flex shrink-0 flex-col gap-4 border-b border-slate-200/90 pb-6 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight text-slate-900">
-            <span
-              className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 ring-1 ring-violet-200/80"
-              aria-hidden
-            >
-              <Users className="size-5" />
-            </span>
-            Users Directory
-          </h1>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setTeamForm(emptyTeamForm);
-              setTeamPanel({ kind: "add" });
-            }}
-            className="h-8 shrink-0 gap-1.5 px-3 text-[13px] font-semibold"
-          >
-            <Users className="size-3.5" aria-hidden />
-            Add Team
-          </Button>
-          <Button type="button" size="sm" onClick={openCreate} className="h-8 shrink-0 gap-1.5 px-3 text-[13px] font-bold">
-            <User className="size-3.5" aria-hidden />
-            Add User
-          </Button>
-        </div>
-      </header>
+      {/* The "Users Directory" title + icon used to live here in a
+          section-level header. It now lives in `RoadmapHealthHero`
+          (the top bar mounted by `epic-planner-app` with
+          `title="Users Directory"` + `titleIcon={Users}` + the
+          collapsed-no-chevron pair) so the title appears once at the
+          top of the page instead of twice. The Add Team / Add User
+          action buttons that used to sit in this header now live in
+          the slim toolbar's right cluster below. */}
 
       <div className="shrink-0 rounded-t-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-4 pb-7 pt-7 shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
+      {/* Top row — Add Team / Add User pinned to the right edge of the
+          toolbar regardless of viewport width. Previously these lived
+          inside the search/filters flex row with `ml-auto`, which broke
+          on narrow viewports where the row stacked column. Pulling them
+          out into their own justify-end row keeps the "float right"
+          intent explicit at every width. */}
+      <div className="mb-3 flex justify-end gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setTeamForm(emptyTeamForm);
+            setTeamPanel({ kind: "add" });
+          }}
+          className="h-8 shrink-0 gap-1.5 px-3 text-[13px] font-semibold"
+        >
+          <Users className="size-3.5" aria-hidden />
+          Add Team
+        </Button>
+        <Button type="button" size="sm" onClick={openCreate} className="h-8 shrink-0 gap-1.5 px-3 text-[13px] font-bold">
+          <User className="size-3.5" aria-hidden />
+          Add User
+        </Button>
+      </div>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-3">
         <div className="flex min-w-0 w-full flex-1 flex-col gap-1.5 lg:max-w-md">
           <div ref={searchFieldWrapRef} className="relative min-w-0 w-full">
