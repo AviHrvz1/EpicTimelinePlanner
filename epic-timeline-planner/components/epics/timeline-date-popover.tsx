@@ -11,6 +11,10 @@ type Props = {
   value: string;
   /** Earliest date the user can pick; empty string disables the lower bound. */
   min?: string;
+  /** Latest date the user can pick; empty string disables the upper bound.
+   *  Used by the backlog roadmap-bounds enforcement so the picker can't
+   *  drift into a year that isn't on the roadmap. */
+  max?: string;
   /** Anchor element the popover positions itself under. */
   anchorRef: React.RefObject<HTMLElement | null>;
   open: boolean;
@@ -57,6 +61,7 @@ function quarterOfMonth(month1: number): 1 | 2 | 3 | 4 {
 export function TimelineDatePopover({
   value,
   min,
+  max,
   anchorRef,
   open,
   onChange,
@@ -66,6 +71,7 @@ export function TimelineDatePopover({
 }: Props) {
   const selected = useMemo(() => parseIso(value), [value]);
   const minDate = useMemo(() => (min ? parseIso(min) : null), [min]);
+  const maxDate = useMemo(() => (max ? parseIso(max) : null), [max]);
 
   // Which month the calendar is currently displaying. Initialized from value
   // when open, then user can navigate freely.
@@ -159,6 +165,7 @@ export function TimelineDatePopover({
   const quarter = quarterOfMonth(view.month0 + 1);
   const selectedIso = selected ? isoOf(selected) : null;
   const minIso = minDate ? isoOf(minDate) : null;
+  const maxIso = maxDate ? isoOf(maxDate) : null;
 
   function goto(deltaMonths: number) {
     setView((prev) => {
@@ -168,9 +175,19 @@ export function TimelineDatePopover({
   }
 
   function isDisabled(iso: string | null) {
-    if (!iso || !minIso) return false;
-    return iso < minIso;
+    if (!iso) return false;
+    if (minIso && iso < minIso) return true;
+    if (maxIso && iso > maxIso) return true;
+    return false;
   }
+
+  // Navigation greys out when the viewed month already sits on the
+  // outer boundary of the allowed range — keeps the planner inside
+  // the roadmap's years without an extra "you can't go there" toast.
+  const lastDayOfViewMonth = new Date(view.year, view.month0, daysInMonth(view.year, view.month0));
+  const firstDayOfViewMonth = new Date(view.year, view.month0, 1);
+  const prevDisabled = !!minDate && firstDayOfViewMonth.getTime() <= minDate.getTime();
+  const nextDisabled = !!maxDate && lastDayOfViewMonth.getTime() >= maxDate.getTime();
 
   return createPortal(
     <div
@@ -184,8 +201,9 @@ export function TimelineDatePopover({
         <button
           type="button"
           onClick={() => goto(-1)}
+          disabled={prevDisabled}
           aria-label="Previous month"
-          className="rounded-md p-1 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+          className="rounded-md p-1 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
         >
           <ChevronLeft className="size-4" aria-hidden />
         </button>
@@ -195,8 +213,9 @@ export function TimelineDatePopover({
         <button
           type="button"
           onClick={() => goto(1)}
+          disabled={nextDisabled}
           aria-label="Next month"
-          className="rounded-md p-1 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+          className="rounded-md p-1 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
         >
           <ChevronRight className="size-4" aria-hidden />
         </button>

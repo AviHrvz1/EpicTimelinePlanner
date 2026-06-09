@@ -230,6 +230,10 @@ type BacklogPlanningPanelProps = {
       planStartDay?: number | null;
       planEndMonth?: number | null;
       planEndDay?: number | null;
+      /** Explicit year flip — supplied only when the date picker lands on
+       *  a different roadmap year than the epic's current `planYear`. The
+       *  API treats undefined as "inherit from parent initiative". */
+      planYear?: number | null;
       team?: string | null;
       labels?: string | null;
       priority?: string | null;
@@ -2168,16 +2172,33 @@ function StoryStatusEditor({
 function ParentDateEditorOverlay({
   initialValue,
   fallbackYear,
+  allowedYears,
   onCommit,
   onCancel,
 }: {
   initialValue: string;
   fallbackYear: number;
+  /** Year-span the picker is allowed to roam in (the parent roadmap's
+   *  `years` list). When provided, derives `min` = Jan 1 of the
+   *  earliest year and `max` = Dec 31 of the latest, then hands them
+   *  to `TimelineDatePopover` so the chevrons grey out at the boundary
+   *  and out-of-range dates can't be clicked. Empty array / undefined
+   *  leaves the popover unbounded — matches today's behaviour. */
+  allowedYears?: readonly number[];
   onCommit: (next: string) => void;
   onCancel: () => void;
 }) {
   // Tiny anchor placed where the cell sits so the popover positions under it.
   const hostRef = useRef<HTMLSpanElement | null>(null);
+  const { min, max } = useMemo(() => {
+    if (!allowedYears || allowedYears.length === 0) return { min: undefined, max: undefined };
+    const minYear = Math.min(...allowedYears);
+    const maxYear = Math.max(...allowedYears);
+    return {
+      min: `${minYear}-01-01`,
+      max: `${maxYear}-12-31`,
+    };
+  }, [allowedYears]);
   return (
     <>
       <span
@@ -2190,6 +2211,8 @@ function ParentDateEditorOverlay({
         open
         anchorRef={hostRef}
         value={initialValue}
+        min={min}
+        max={max}
         fallbackYear={fallbackYear}
         fallbackMonth1={1}
         onChange={(next) => onCommit(next)}
@@ -5372,8 +5395,13 @@ export function BacklogPlanningPanel({
       reportParentDateValidationError("Enter a valid date (YYYY-MM-DD)");
       return;
     }
+    const year = Number(m[1]);
     const month = Number(m[2]);
     const day = Number(m[3]);
+    if (!Number.isFinite(year) || year < 2020 || year > 2100) {
+      reportParentDateValidationError("Year is out of range");
+      return;
+    }
     if (!Number.isFinite(month) || month < 1 || month > 12) {
       reportParentDateValidationError("Month must be 1-12");
       return;
@@ -5382,13 +5410,27 @@ export function BacklogPlanningPanel({
       reportParentDateValidationError("Day must be 1-31");
       return;
     }
-    const patch =
+    // The epic schema has ONE `planYear` — when the user picks a date in
+    // a different year (i.e. the PM postpones the epic into the next
+    // year of the same roadmap), we flip the whole epic's planYear to
+    // match. Same year → planYear is undefined in the patch so the API
+    // keeps its current inheritance behaviour (the rule the Gantt drag
+    // also relies on).
+    const epicForCommit = epicById.get(editingParentDate.id);
+    const currentPlanYear = epicForCommit?.planYear ?? null;
+    const yearChanged = currentPlanYear !== null && currentPlanYear !== year;
+    const baseDatePatch =
       editingParentDate.field === "start"
         ? { planStartMonth: month, planStartDay: day }
         : { planEndMonth: month, planEndDay: day };
+    const patch = yearChanged ? { ...baseDatePatch, planYear: year } : baseDatePatch;
     try {
       await onPatchEpicQuick(editingParentDate.id, patch);
-      toast.success("Epic updated");
+      if (yearChanged) {
+        toast.success(`Epic moved to ${year}`);
+      } else {
+        toast.success("Epic updated");
+      }
     } catch {
       reportParentDateValidationError("Failed to update epic");
       return;
@@ -5451,10 +5493,27 @@ export function BacklogPlanningPanel({
     // The popover needs a year fallback for the case the value is blank.
     const yearFromValue = /^(\d{4})-/.exec(initial)?.[1];
     const fallbackYear = yearFromValue ? Number(yearFromValue) : new Date().getFullYear();
+    // Walk row → parent initiative → roadmap to get the allowed years.
+    // For epics: epic.initiativeId → initiative.roadmapId → roadmap.years.
+    // For initiatives: the row IS the initiative.
+    // When any link is missing (e.g. an initiative without a roadmap),
+    // we hand `undefined` and the popover stays unbounded — same as
+    // today's behaviour, so we never accidentally lock the user out.
+    let allowedYears: readonly number[] | undefined;
+    const initiativeRow = isEpic
+      ? initiativeById.get(epicById.get(args.id)?.initiativeId ?? "")
+      : initiativeById.get(args.id);
+    const roadmap = initiativeRow?.roadmapId
+      ? (roadmaps ?? []).find((r) => r.id === initiativeRow.roadmapId)
+      : undefined;
+    if (roadmap?.years && roadmap.years.length > 0) {
+      allowedYears = roadmap.years;
+    }
     return (
       <ParentDateEditorOverlay
         initialValue={initial}
         fallbackYear={fallbackYear}
+        allowedYears={allowedYears}
         onCommit={(next) => {
           if (isEpic) void commitEpicDateEdit(next);
           else void commitInitiativeDateEdit(next);

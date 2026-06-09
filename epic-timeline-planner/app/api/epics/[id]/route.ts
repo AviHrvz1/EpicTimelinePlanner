@@ -20,6 +20,11 @@ const updateEpicSchema = z.object({
   planEndMonth: z.number().int().min(1).max(12).optional().nullable(),
   planStartDay: z.number().int().min(1).max(31).optional().nullable(),
   planEndDay: z.number().int().min(1).max(31).optional().nullable(),
+  /** Multi-year roadmaps need the epic to be movable across years (PM
+   *  postpones a Q4 epic to Q1 next year). The client picker enforces
+   *  that the chosen year is one of the parent roadmap's years; the
+   *  server trusts that constraint and just persists what's sent. */
+  planYear: z.number().int().min(2020).max(2100).optional().nullable(),
   timelineRow: z.number().int().min(0).max(100000).optional(),
   team: epicTeamIdSchema.optional().nullable(),
   labels: z.string().trim().max(500).optional().nullable(),
@@ -97,6 +102,8 @@ export async function PATCH(
       changes.push("Quarter plan start month updated");
     if (patch.planEndMonth !== undefined && patch.planEndMonth !== existing.planEndMonth)
       changes.push("Quarter plan end month updated");
+    if (patch.planYear !== undefined && patch.planYear !== existing.planYear)
+      changes.push("Plan year updated");
     if (patch.timelineRow !== undefined && patch.timelineRow !== existing.timelineRow)
       changes.push("Gantt row updated");
     if (patch.team !== undefined && patch.team !== existing.team) changes.push("Delivery team updated");
@@ -116,7 +123,19 @@ export async function PATCH(
       patch.planStartMonth !== undefined
         ? patch.planStartMonth
         : existing.planStartMonth ?? initiative?.startMonth ?? null;
-    const nextPlanYear = initiative?.year ?? existing.planYear ?? null;
+    // Year resolution precedence:
+    //   1. Explicit `planYear` in the patch (cross-year edits from the
+    //      backlog / Gantt picker — only sent when the user actually
+    //      changes the year).
+    //   2. Parent initiative's year (still the common case; the epic
+    //      inherits when no explicit year was sent and the parent's
+    //      year is set).
+    //   3. The epic's existing planYear (e.g. when initiative.year is
+    //      null on a not-yet-scheduled initiative).
+    const nextPlanYear =
+      patch.planYear !== undefined
+        ? patch.planYear
+        : initiative?.year ?? existing.planYear ?? null;
     const nextPlanQuarter = quarterFromMonth(nextPlanStartMonth);
 
     const epic = await db.epic.update({
