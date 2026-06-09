@@ -7466,8 +7466,8 @@ export function BacklogPlanningPanel({
               </span>
             ),
             health: renderBacklogHealthCell(
-              epicModelForRow
-                ? computeEpicHealthVerdict(epicModelForRow, Number(initiativeYear), progressBasis)
+              epicModelForRow && Number.isFinite(planYearForEpic)
+                ? computeEpicHealthVerdict(epicModelForRow, planYearForEpic, progressBasis)
                 : null,
             ),
             sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
