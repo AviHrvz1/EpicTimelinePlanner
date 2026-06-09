@@ -413,6 +413,44 @@ function formatStoryLabelsForEditInput(raw: string | null | undefined): string {
   return parseStoryLabels(raw).join(", ");
 }
 
+/**
+ * Render `text` with every case-insensitive occurrence of `query`
+ * wrapped in a yellow `<mark>` highlight. Returns the raw string
+ * when there's no query (zero-cost short-circuit) so callers can
+ * unconditionally swap `{title}` for `{highlightQueryInText(...)}`
+ * without an extra branch.
+ *
+ * Used by the backlog's top-level search to make matched substrings
+ * visible inside otherwise unchanged row titles. Pairs with the
+ * scaffold-row muting (`isScaffoldRow ? "opacity-70 text-slate-500"`)
+ * applied where parent rows render — together they keep a planner's
+ * eye on the matches and quietly carry context above them.
+ */
+function highlightQueryInText(text: string | null | undefined, query: string): ReactNode {
+  const s = text ?? "";
+  if (!query) return s;
+  const lower = s.toLowerCase();
+  const q = query.toLowerCase();
+  if (q.length === 0) return s;
+  const parts: ReactNode[] = [];
+  let i = 0;
+  while (i < s.length) {
+    const idx = lower.indexOf(q, i);
+    if (idx === -1) {
+      parts.push(s.slice(i));
+      break;
+    }
+    if (idx > i) parts.push(s.slice(i, idx));
+    parts.push(
+      <mark key={idx} className="rounded-sm bg-yellow-100 px-0.5 text-slate-900">
+        {s.slice(idx, idx + q.length)}
+      </mark>,
+    );
+    i = idx + q.length;
+  }
+  return <>{parts}</>;
+}
+
 /** Read-only labels cell: chips inside a light panel; click to edit. */
 function BacklogLabelsChipPanel({
   labelsSerialized,
@@ -4249,6 +4287,15 @@ type BacklogStoryRowCtx = {
    *  planner sees existing tags first, then can still add brand-new
    *  ones via the "Add 'xxx'" row. */
   storyLabelSuggestions: readonly string[];
+  /** Top-level search box value (lowercased / trimmed). When non-empty,
+   *  the story-title renderer wraps matching substrings in a `<mark>`
+   *  and the row's wrapper gets muted styling when the story isn't in
+   *  `queryMatchIds` (scaffold row only carried for hierarchy). */
+  searchQuery: string;
+  /** Set of IDs (initiative + epic + story) that themselves match the
+   *  current search query. Null = no active search. The row uses it to
+   *  decide whether to render as a match or a scaffold-parent. */
+  queryMatchIds: ReadonlySet<string> | null;
   /** Sprint options for the year of the story currently being edited.
    *  Kept as a function so the row only resolves them when actually
    *  rendering the editor for itself. */
@@ -4371,7 +4418,7 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
                     className="min-w-0 truncate text-left hover:underline hover:decoration-slate-400 hover:underline-offset-2"
                     onClick={() => ctx.onOpenStory(row.storyId)}
                   >
-                    {row.storyTitle}
+                    {highlightQueryInText(row.storyTitle, ctx.searchQuery)}
                   </button>
                   <span className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100">
                     <EditRowIconButton
@@ -5793,20 +5840,34 @@ export function BacklogPlanningPanel({
   }
 
   const q = query.trim().toLowerCase();
+  /**
+   * Search filter — Option B ("match + parent scaffold").
+   *
+   * Previously a matching initiative auto-included its entire subtree
+   * and a matching epic auto-included all its stories. The planner
+   * searching for `auth` would get pages of unrelated rows just because
+   * their parent's title matched. The new rule:
+   *
+   *   - Each level filters INDEPENDENTLY: a story is only kept when
+   *     IT matches; an epic is only kept when IT matches OR it has
+   *     surviving (matching) children; an initiative same.
+   *   - A non-matching parent that still has matching descendants is
+   *     kept as a "scaffold" so the hierarchy stays navigable. The
+   *     planner can tell scaffold from match visually (see
+   *     `queryMatchIds` + the muted styling further below).
+   *
+   * Match scope is unchanged on purpose so the per-column filters
+   * stay the only way to narrow on assignee / labels / etc. — this
+   * change is purely about how the top-level search assembles results.
+   */
   const filtered = useMemo(() => {
     const byInitiative = [...initiatives].sort((a, b) => a.title.localeCompare(b.title));
     if (!q) return byInitiative;
     return byInitiative
       .map((initiative) => {
-        const initiativeMatch =
-          initiative.title.toLowerCase().includes(q) ||
-          (initiative.assignee ?? "").toLowerCase().includes(q) ||
-          initiative.status.toLowerCase().includes(q);
         const epics = (initiative.epics ?? [])
           .map((epic) => {
-            const epicMatch =
-              epic.title.toLowerCase().includes(q) || (epic.assignee ?? "").toLowerCase().includes(q);
-            const stories = (epic.userStories ?? []).filter((story) => {
+            const matchingStories = (epic.userStories ?? []).filter((story) => {
               const ref = storyRefById[story.id] ?? "";
               const labelMatch = parseStoryLabels(story.labels).some((lab) => lab.toLowerCase().includes(q));
               return (
@@ -5818,15 +5879,59 @@ export function BacklogPlanningPanel({
                 labelMatch
               );
             });
-            if (epicMatch) return { ...epic, userStories: epic.userStories ?? [] };
-            return { ...epic, userStories: stories };
+            return { ...epic, userStories: matchingStories };
           })
-          .filter((epic) => epic.title.toLowerCase().includes(q) || (epic.userStories ?? []).length > 0);
-
-        if (initiativeMatch) return initiative;
+          .filter((epic) =>
+            epic.title.toLowerCase().includes(q) ||
+            (epic.assignee ?? "").toLowerCase().includes(q) ||
+            (epic.userStories ?? []).length > 0,
+          );
         return { ...initiative, epics };
       })
-      .filter((initiative) => initiative.title.toLowerCase().includes(q) || (initiative.epics ?? []).length > 0);
+      .filter((initiative) =>
+        initiative.title.toLowerCase().includes(q) ||
+        (initiative.assignee ?? "").toLowerCase().includes(q) ||
+        initiative.status.toLowerCase().includes(q) ||
+        (initiative.epics ?? []).length > 0,
+      );
+  }, [initiatives, q, storyRefById]);
+
+  /**
+   * Set of IDs (initiative + epic + story) whose row should render as
+   * a MATCH (highlight + full opacity). Anything in `filtered` that
+   * isn't in this set is a SCAFFOLD parent — kept only for hierarchy,
+   * rendered muted. When the query is empty, this is `null` so the
+   * row renderers short-circuit and don't apply any styling at all.
+   */
+  const queryMatchIds = useMemo(() => {
+    if (!q) return null;
+    const set = new Set<string>();
+    for (const initiative of initiatives) {
+      const initiativeHit =
+        initiative.title.toLowerCase().includes(q) ||
+        (initiative.assignee ?? "").toLowerCase().includes(q) ||
+        initiative.status.toLowerCase().includes(q);
+      if (initiativeHit) set.add(initiative.id);
+      for (const epic of initiative.epics ?? []) {
+        const epicHit =
+          epic.title.toLowerCase().includes(q) ||
+          (epic.assignee ?? "").toLowerCase().includes(q);
+        if (epicHit) set.add(epic.id);
+        for (const story of epic.userStories ?? []) {
+          const ref = storyRefById[story.id] ?? "";
+          const labelMatch = parseStoryLabels(story.labels).some((lab) => lab.toLowerCase().includes(q));
+          const storyHit =
+            story.title.toLowerCase().includes(q) ||
+            (story.assignee ?? "").toLowerCase().includes(q) ||
+            story.status.toLowerCase().includes(q) ||
+            sprintLabel(story.sprint).toLowerCase().includes(q) ||
+            ref.includes(q) ||
+            labelMatch;
+          if (storyHit) set.add(story.id);
+        }
+      }
+    }
+    return set;
   }, [initiatives, q, storyRefById]);
 
   const filteredWithControls = useMemo(() => {
@@ -7180,7 +7285,9 @@ export function BacklogPlanningPanel({
     renderBacklogCells: (cells, edits) => storyRowRefs.current.renderBacklogCells(cells, edits),
     renderRoadmapCell: (initiativeId) => storyRowRefs.current.renderRoadmapCell(initiativeId),
     formatStoryLabelsForEditInput,
-  }), [tableGridTemplate, workspaceDirectoryUsers, assigneeNameSuggestions, storyLabelSuggestions]);
+    searchQuery: q,
+    queryMatchIds,
+  }), [tableGridTemplate, workspaceDirectoryUsers, assigneeNameSuggestions, storyLabelSuggestions, q, queryMatchIds]);
 
   function renderStoryDataRows(rows: typeof groupedStoryRows, indentPx: number, keyPrefix: string) {
     return rows
@@ -7237,7 +7344,11 @@ export function BacklogPlanningPanel({
      *  zebra-stripe data attributes so DOM diagnostics keep working. */
     labelOverride?: React.ReactNode,
   ) {
-    const isOpen = openGroupFolders[folderId] ?? (defaultOpenOverride ?? defaultGroupExpanded);
+    // When the planner is searching, force every group / scaffold parent
+    // open so the matching descendants are visible without having to
+    // expand each folder manually. Their manual collapse state is
+    // preserved — we just override the read, not the underlying map.
+    const isOpen = q ? true : (openGroupFolders[folderId] ?? (defaultOpenOverride ?? defaultGroupExpanded));
     const renderedChildren = isOpen ? renderChildren() : null;
     return (
       <div key={folderId}>
@@ -7391,7 +7502,8 @@ export function BacklogPlanningPanel({
     renderChildrenOverride?: () => React.ReactNode,
   ) {
     const folderId = `${epicPath}/epic:${epicId}`;
-    const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
+    // Search-active override: see comment in `renderFolderRow` above.
+    const isOpen = q ? true : (openGroupFolders[folderId] ?? defaultGroupExpanded);
     const { estimated, left } = sumEstimatedAndLeft(epicRows);
     const originalEstimate = epicRows[0]?.epicOriginalEstimateDays ?? 0;
     const initModelForEpic = epicRows[0]?.initiativeId ? initiativeById.get(epicRows[0].initiativeId) : undefined;
@@ -7402,10 +7514,19 @@ export function BacklogPlanningPanel({
         ? ganttDateRangeForEpic(epicModelForRow, planYearForEpic)
         : { start: null as Date | null, end: null as Date | null };
 
+    // Search-scaffold check: when a query is active and this epic
+    // didn't match itself (it's only here because a child story matched),
+    // render the row in mid-mute (slate-500 / opacity-70) so the planner
+    // reads it as navigational context rather than a result.
+    const isEpicScaffold = queryMatchIds != null && !queryMatchIds.has(epicId);
     return (
       <div key={folderId}>
         <div
-          className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40", "[content-visibility:auto] [contain-intrinsic-size:0_38px]")}
+          className={cn(
+            "group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40",
+            "[content-visibility:auto] [contain-intrinsic-size:0_38px]",
+            isEpicScaffold && "text-slate-500 opacity-70",
+          )}
           style={{
             gridTemplateColumns: tableGridTemplate,
           }}
@@ -7440,7 +7561,7 @@ export function BacklogPlanningPanel({
                     renderParentTitleEditor("epic", epicId, epicTitle)
                   ) : (
                     <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
-                      <span className="truncate">{epicTitle}</span>
+                      <span className="truncate">{highlightQueryInText(epicTitle, q)}</span>
                       <span
                         className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100"
                         onMouseDown={(event) => event.stopPropagation()}
@@ -7735,14 +7856,23 @@ export function BacklogPlanningPanel({
     renderChildrenOverride?: () => React.ReactNode,
   ) {
     const folderId = `${initPath}/initiative:${initiativeId}`;
-    const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
+    // Search-active override: see comment in `renderFolderRow` above.
+    const isOpen = q ? true : (openGroupFolders[folderId] ?? defaultGroupExpanded);
     const { estimated, left } = sumEstimatedAndLeft(initiativeRows);
     const initModelForRow = initiativeById.get(initiativeId);
     const initGanttRange = initModelForRow ? ganttDateRangeForInitiative(initModelForRow) : { start: null as Date | null, end: null as Date | null };
+    // Same scaffold check as `renderEpicRow` — initiative that didn't
+    // match itself but has surviving matching descendants renders muted
+    // (slate-500 + opacity-70) so the planner reads it as context.
+    const isInitiativeScaffold = queryMatchIds != null && !queryMatchIds.has(initiativeId);
     return (
       <div key={folderId}>
         <div
-          className={cn("group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40", "[content-visibility:auto] [contain-intrinsic-size:0_38px]")}
+          className={cn(
+            "group/workitem grid min-w-full w-max items-center gap-2 border-b border-slate-200/80 py-1.5 hover:!bg-indigo-50/40",
+            "[content-visibility:auto] [contain-intrinsic-size:0_38px]",
+            isInitiativeScaffold && "text-slate-500 opacity-70",
+          )}
           style={{
             gridTemplateColumns: tableGridTemplate,
           }}
@@ -7777,7 +7907,7 @@ export function BacklogPlanningPanel({
                     renderParentTitleEditor("initiative", initiativeId, initiativeTitle)
                   ) : (
                     <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
-                      <span className="truncate">{initiativeTitle}</span>
+                      <span className="truncate">{highlightQueryInText(initiativeTitle, q)}</span>
                       <span
                         className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100"
                         onMouseDown={(event) => event.stopPropagation()}
@@ -8191,7 +8321,8 @@ export function BacklogPlanningPanel({
     const entries = Array.from(groups.entries()).sort((a, b) => a[1].sort.localeCompare(b[1].sort));
     for (const [key, group] of entries) {
       const folderId = `${path}${level}:${key}`;
-      const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
+      // Search-active override: see comment in `renderFolderRow` above.
+    const isOpen = q ? true : (openGroupFolders[folderId] ?? defaultGroupExpanded);
       const count = group.rows.length + group.standaloneRows.length;
       const indentPx = levelIndex * 14;
       // Compute per-level icons / actions / overrides — same logic as in
@@ -8400,7 +8531,8 @@ export function BacklogPlanningPanel({
     pathPrefix: string,
   ): void {
     const folderId = `${pathPrefix}/epic:${epicId}`;
-    const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
+    // Search-active override: see comment in `renderFolderRow` above.
+    const isOpen = q ? true : (openGroupFolders[folderId] ?? defaultGroupExpanded);
     out.push({
       key: `epic-${folderId}`,
       kind: "epic",
@@ -8430,7 +8562,8 @@ export function BacklogPlanningPanel({
     pathPrefix: string,
   ): void {
     const folderId = `${pathPrefix}/initiative:${initiativeId}`;
-    const isOpen = openGroupFolders[folderId] ?? defaultGroupExpanded;
+    // Search-active override: see comment in `renderFolderRow` above.
+    const isOpen = q ? true : (openGroupFolders[folderId] ?? defaultGroupExpanded);
     out.push({
       key: `init-${folderId}`,
       kind: "initiative",
