@@ -7465,6 +7465,11 @@ export function BacklogPlanningPanel({
                 {workflowStatusLabel(rollupWorkflowStatusFromGroupedRows(epicRows))}
               </span>
             ),
+            health: renderBacklogHealthCell(
+              epicModelForRow
+                ? computeEpicHealthVerdict(epicModelForRow, Number(initiativeYear), progressBasis)
+                : null,
+            ),
             sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
             assignee: (
               <span className="text-center text-[16px] text-slate-700">
@@ -7600,6 +7605,7 @@ export function BacklogPlanningPanel({
                 ),
             },
             status: { kind: "lock" },
+            health: { kind: "lock" },
             sprint: { kind: "lock" },
             labels: { kind: "edit", onEdit: () => beginEpicLabelsEdit({ id: epicId, labels: epicModelForRow?.labels ?? null }) },
             priority: { kind: "edit", onEdit: () => setEpicPriorityPopoverId(epicId) },
