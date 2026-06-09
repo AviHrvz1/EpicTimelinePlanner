@@ -54,7 +54,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
@@ -960,104 +959,100 @@ function CellOptionPopover<T extends string>({
   );
 }
 
-/**
- * Inline team-cell editor. Renders the current-team chip as the visible anchor
- * and a portaled CellOptionPopover positioned to that anchor (so it isn't
- * clipped by the cell's overflow box).
- */
-function ParentTeamEditor({
-  kind,
-  editingValue,
-  onSelect,
-  onCancel,
-}: {
-  kind: "epic" | "initiative";
-  editingValue: string;
-  onSelect: (v: string) => void;
-  onCancel: () => void;
-}) {
-  // kind currently doesn't change rendering -- preserved for future per-kind tweaks.
-  void kind;
-  const anchorRef = useRef<HTMLSpanElement | null>(null);
-  const value = editingValue;
-  const currentColor = value ? TEAM_DOT_COLOR[value] ?? "bg-slate-300" : "bg-slate-300";
-  const currentLabel = value
-    ? monthTeamLabelForId(value) ?? teamLabelForWorkspaceUser(value) ?? value
-    : "(none)";
-  const popoverOptions: Array<{ value: string; label: string; subtitle?: string; icon: ReactNode }> = [
-    {
-      value: "",
-      label: "(none)",
-      icon: <span className="inline-block size-2 rounded-full bg-slate-300" aria-hidden />,
-    },
-    ...MONTH_TEAM_COLUMNS.map((team) => ({
-      value: team.id,
-      label: team.label,
-      subtitle: team.subtitle,
-      icon: (
-        <span
-          className={cn("inline-block size-2 rounded-full", TEAM_DOT_COLOR[team.id] ?? "bg-slate-400")}
-          aria-hidden
-        />
-      ),
-    })),
-  ];
-  return (
-    <span
-      data-cell-editing
-      className="relative inline-flex items-center gap-1"
-      onMouseDown={(event) => event.stopPropagation()}
-    >
-      <span
-        ref={anchorRef}
-        className="inline-flex h-7 items-center gap-1.5 rounded-md bg-white px-2 text-[14px] text-slate-700 ring-1 ring-slate-200"
-      >
-        <span className={cn("inline-block size-2 rounded-full", currentColor)} aria-hidden />
-        <span className="truncate">{currentLabel}</span>
-      </span>
-      <button
-        type="button"
-        onClick={onCancel}
-        className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
-      >
-        <X className="size-3.5" />
-      </button>
-      <CellOptionPopover
-        value={value}
-        options={popoverOptions}
-        onSelect={onSelect}
-        onCancel={onCancel}
-        triggerRef={anchorRef}
-      />
-    </span>
-  );
-}
 
 /**
- * Inline team picker for backlog story rows. Visually + behaviorally
- * identical to the team field in the Child User Stories table in the
- * epic popup:
+ * Inline team picker used by EVERY team cell in the backlog (story,
+ * epic, and initiative rows). Visually + behaviorally identical to
+ * the team field in the Child User Stories table in the epic popup:
  *   - Trigger button: `<TeamAvatar />` + label + chevron
  *   - Listbox: every team's avatar + label (no subtitles, no search)
- *   - "Inherit from epic" sits at the top as the clear-override
+ *   - The first option clears the team — its label is contextual
+ *     (`"Inherit from epic"` for story rows, `"(none)"` for epic /
+ *     initiative rows, where there is no parent team to inherit
+ *     from). The caller supplies this via `noneLabel`.
  *
- * The popover opens automatically on mount (the cell entered edit
- * mode) so the planner doesn't have to click the trigger first.
+ * Pick → calls `onChange` with the new value, which the caller treats
+ * as a DRAFT update; the surrounding cell renders the overlay frame
+ * with ✓ / ✕ buttons that own commit + cancel.
  */
-function StoryTeamPickEditor({
+function BacklogTeamPickEditor({
   value,
   onChange,
+  noneLabel,
 }: {
   value: string;
   onChange: (next: string) => void;
+  noneLabel: string;
 }) {
-  const [open, setOpen] = useState(true);
+  // Starts CLOSED — matches the epic popup's team editor exactly.
+  // The planner sees the trigger button with the current selection +
+  // chevron; clicking either the button or the chevron toggles the
+  // listbox open.
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const listRef = useRef<HTMLUListElement | null>(null);
+  // Fixed-positioned popover coordinates, recomputed every time the
+  // listbox opens (or the page scrolls / resizes). We render the list
+  // into a PORTAL on `document.body` so it can't be clipped by:
+  //   - the cell's overflow-hidden box
+  //   - the virtualizer's transform / paint-containment row
+  //   - the scrolling work-item table itself
+  //   - a sibling row painting after this one in DOM order
+  // Every prior z-index trick failed against at least one of those —
+  // the portal sidesteps them entirely.
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number; minWidth: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPopoverPos(null);
+      return;
+    }
+    function reposition() {
+      const btn = triggerRef.current;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      setPopoverPos({
+        top: rect.bottom + 4,
+        left: rect.left,
+        minWidth: Math.max(rect.width, 192),
+      });
+    }
+    reposition();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (triggerRef.current?.contains(target)) return;
+      if (listRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   const selectedLabel = value
     ? monthTeamLabelForId(value) ?? teamLabelForWorkspaceUser(value) ?? value
-    : "Inherit from epic";
+    : noneLabel;
   return (
     <span data-cell-editing className="relative inline-flex items-center" onMouseDown={(event) => event.stopPropagation()}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
@@ -1070,47 +1065,59 @@ function StoryTeamPickEditor({
         </span>
         <ChevronDown className="size-3 shrink-0 text-slate-400" aria-hidden />
       </button>
-      {open ? (
-        <ul
-          role="listbox"
-          className="absolute left-0 top-full z-30 mt-1 max-h-72 min-w-[12rem] overflow-y-auto rounded-md border border-slate-200 bg-white py-0.5 shadow-md"
-        >
-          <li role="option" aria-selected={value === ""}>
-            <button
-              type="button"
-              onClick={() => {
-                onChange("");
-                setOpen(false);
+      {open && popoverPos
+        ? createPortal(
+            <ul
+              ref={listRef}
+              role="listbox"
+              style={{
+                position: "fixed",
+                top: popoverPos.top,
+                left: popoverPos.left,
+                minWidth: popoverPos.minWidth,
+                zIndex: 1000,
               }}
-              className={cn(
-                "flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100",
-                value === "" && "bg-slate-50 font-medium",
-              )}
+              className="max-h-72 overflow-y-auto rounded-md border border-slate-200 bg-white py-0.5 shadow-md"
+              onMouseDown={(event) => event.stopPropagation()}
             >
-              <TeamAvatar slug={null} sizePx={14} />
-              <span className="truncate">Inherit from epic</span>
-            </button>
-          </li>
-          {MONTH_TEAM_COLUMNS.map((t) => (
-            <li key={t.id} role="option" aria-selected={value === t.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  onChange(t.id);
-                  setOpen(false);
-                }}
-                className={cn(
-                  "flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100",
-                  value === t.id && "bg-slate-50 font-medium",
-                )}
-              >
-                <TeamAvatar slug={t.id} sizePx={14} />
-                <span className="truncate">{t.label}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+              <li role="option" aria-selected={value === ""}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange("");
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100",
+                    value === "" && "bg-slate-50 font-medium",
+                  )}
+                >
+                  <TeamAvatar slug={null} sizePx={14} />
+                  <span className="truncate">{noneLabel}</span>
+                </button>
+              </li>
+              {MONTH_TEAM_COLUMNS.map((t) => (
+                <li key={t.id} role="option" aria-selected={value === t.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange(t.id);
+                      setOpen(false);
+                    }}
+                    className={cn(
+                      "flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100",
+                      value === t.id && "bg-slate-50 font-medium",
+                    )}
+                  >
+                    <TeamAvatar slug={t.id} sizePx={14} />
+                    <span className="truncate">{t.label}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>,
+            document.body,
+          )
+        : null}
     </span>
   );
 }
@@ -3547,7 +3554,7 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
           // Picking an option in the popover updates the DRAFT value
           // shown in the anchor; planner commits via ✓ (no auto-save)
           // or backs out via ✕.
-          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
+          <span className="relative z-40 inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
             <StoryStatusEditor
               currentValue={editingCellValue as WorkflowStatus}
               onSelect={(v) => ctx.setEditingStoryCell((prev: any) => (prev ? { ...prev, value: v } : prev))}
@@ -3626,7 +3633,7 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
               // rounded white pill with a subtle ring + shadow + nowrap
               // so the combobox + ✓ + ✕ buttons always render side by
               // side, distinct from the row background behind them.
-              <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
+              <span className="relative z-40 inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
                 <AssigneeCombobox
                   value={editingCellValue}
                   onChange={(v) => ctx.setEditingStoryCell((prev: any) => (prev ? { ...prev, value: v } : prev))}
@@ -3698,7 +3705,7 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
         priority: isEditingCell && editingCellField === "priority" ? (
           // Overlay editor — same frame as status/team/assignee.
           // PriorityPopover updates the DRAFT only; commit via ✓.
-          <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
+          <span className="relative z-40 inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
             <span
               ref={priorityTriggerRef}
               data-cell-editing
@@ -4628,17 +4635,39 @@ export function BacklogPlanningPanel({
     );
   }
   function renderParentTeamEditor(args: { kind: "epic" | "initiative"; id: string }): ReactNode {
+    // Mirrors `renderStoryTeamEditor` exactly — same overlay frame,
+    // same trigger+listbox picker, same commit-on-✓ semantics. The
+    // only difference vs. the story-row version is that there is no
+    // parent team to inherit from at this level, so we surface
+    // `"(none)"` as the clear-team option instead of
+    // `"Inherit from epic"`.
+    const commit = args.kind === "epic" ? commitEpicTeamEdit : commitInitiativeTeamEdit;
     return (
-      <ParentTeamEditor
-        kind={args.kind}
-        editingValue={editingParentTeam?.value ?? ""}
-        onSelect={(v) => {
-          setEditingParentTeam((prev) => (prev ? { ...prev, value: v } : prev));
-          if (args.kind === "epic") void commitEpicTeamEdit(v);
-          else void commitInitiativeTeamEdit(v);
-        }}
-        onCancel={() => setEditingParentTeam(null)}
-      />
+      <span className="relative z-40 inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
+        <BacklogTeamPickEditor
+          value={editingParentTeam?.value ?? ""}
+          noneLabel="(none)"
+          onChange={(next) => setEditingParentTeam((prev) => (prev ? { ...prev, value: next } : prev))}
+        />
+        <button
+          type="button"
+          onClick={() => void commit()}
+          title="Save"
+          aria-label="Save team"
+          className="inline-flex h-6 w-6 items-center justify-center rounded text-emerald-700 hover:bg-emerald-50"
+        >
+          <Check className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setEditingParentTeam(null)}
+          title="Cancel"
+          aria-label="Cancel"
+          className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100"
+        >
+          <X className="size-3.5" />
+        </button>
+      </span>
     );
   }
   /** Story-level team editor. Uses the same trigger + listbox-with-
@@ -4651,9 +4680,10 @@ export function BacklogPlanningPanel({
     snapshot: StoryCellEditSnapshot;
   }): ReactNode {
     return (
-      <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
-        <StoryTeamPickEditor
+      <span className="relative z-40 inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
+        <BacklogTeamPickEditor
           value={args.currentSlug}
+          noneLabel="Inherit from epic"
           onChange={(next) => setEditingStoryCell((prev) => (prev ? { ...prev, value: next } : prev))}
         />
         <button
@@ -5499,7 +5529,19 @@ export function BacklogPlanningPanel({
 
       return (
         <div key={key} className={cn(stretchClass, "group/cell flex items-center")}>
-          <div className={cn("w-full min-w-0 flex items-center overflow-hidden", isCentered && "justify-center")}>
+          <div
+            className={cn(
+              "w-full min-w-0 flex items-center overflow-hidden",
+              // While an inline editor is open in this cell, drop the
+              // clip so the trigger pill + ✓ / ✕ can extend past the
+              // column's natural width (Team is 120-150 px; the team
+              // picker trigger alone is 160 px). Match the epic-popup
+              // pattern — the editor visually overlays narrower cells
+              // instead of getting its first letter clipped off.
+              "group-has-[[data-cell-editing]]/cell:overflow-visible",
+              isCentered && "justify-center",
+            )}
+          >
             {cells[key]}
           </div>
           {hint.kind === "edit" ? (
