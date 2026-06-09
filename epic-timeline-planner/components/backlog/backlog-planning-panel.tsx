@@ -67,7 +67,7 @@ import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
 import { PriorityPill, PriorityPopover, type Priority } from "@/components/ui/priority-picker";
 import { TableColumnDragGrip } from "@/components/ui/table-column-drag-grip";
-import { resolveAssigneeAvatar } from "@/components/ui/user-avatar";
+import { resolveAssigneeAvatar, UserAvatar } from "@/components/ui/user-avatar";
 import { TeamAvatar } from "@/components/ui/team-avatar";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import {
@@ -1165,6 +1165,242 @@ function BacklogTeamPickEditor({
                 <li className="px-2 py-1.5 text-xs text-slate-400">No teams match</li>
               ) : null}
             </ul>,
+            document.body,
+          )
+        : null}
+    </span>
+  );
+}
+
+/**
+ * Inline assignee picker shared by every assignee cell in the backlog
+ * (story, epic, and initiative rows). Mirrors `BacklogTeamPickEditor`
+ * point-for-point:
+ *   - Trigger button: avatar (or `UserRound` fallback) + name + chevron
+ *   - Listbox: portaled to `document.body` with a sticky search input
+ *     at the top, "Unassigned" as the clear-assignee option, then the
+ *     filtered name suggestions with their avatars
+ *   - Empty-text search still matches; type to filter; Enter on a
+ *     single match (or a never-seen name) picks / creates it
+ *   - Picks update the DRAFT via `onChange`; the surrounding cell
+ *     owns commit (✓) and cancel (✕). Same UX as the team picker.
+ *
+ * Unlike teams (a closed set), assignees are open — typing a brand
+ * new name surfaces a "Use 'xxx'" row that, when clicked or Entered,
+ * commits the typed name verbatim. This matches the legacy
+ * `AssigneeCombobox` capability the picker is replacing in this file.
+ */
+function BacklogAssigneePickEditor({
+  value,
+  onChange,
+  suggestions,
+  directoryUsers,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  suggestions: readonly string[];
+  directoryUsers?: readonly { name: string; image?: string | null }[] | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number; minWidth: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPopoverPos(null);
+      return;
+    }
+    function reposition() {
+      const btn = triggerRef.current;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      setPopoverPos({
+        top: rect.bottom + 4,
+        left: rect.left,
+        minWidth: Math.max(rect.width, 192),
+      });
+    }
+    reposition();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      setQuery("");
+      return;
+    }
+    const id = requestAnimationFrame(() => searchRef.current?.focus());
+    return () => cancelAnimationFrame(id);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (triggerRef.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const dedupedSuggestions = useMemo(() => [...new Set(suggestions)], [suggestions]);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return dedupedSuggestions.slice(0, 80);
+    return dedupedSuggestions.filter((s) => s.toLowerCase().includes(q)).slice(0, 80);
+  }, [dedupedSuggestions, query]);
+  const trimmedQuery = query.trim();
+  const showCreateRow =
+    trimmedQuery.length > 0 &&
+    !filtered.some((s) => s.toLowerCase() === trimmedQuery.toLowerCase());
+  const unassignedMatches =
+    trimmedQuery === "" || "unassigned".includes(trimmedQuery.toLowerCase());
+
+  const trimmedValue = value.trim();
+  const triggerResolved = resolveAssigneeAvatar(trimmedValue, directoryUsers);
+  const triggerLabel = trimmedValue || "Unassigned";
+
+  return (
+    <span data-cell-editing className="relative inline-flex items-center" onMouseDown={(event) => event.stopPropagation()}>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="inline-flex w-[10rem] items-center justify-between gap-1.5 rounded-md border bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+      >
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          {triggerResolved.image ? (
+            <UserAvatar name={triggerResolved.name} image={triggerResolved.image} size={14} />
+          ) : (
+            <UserRound className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+          )}
+          <span className="truncate">{triggerLabel}</span>
+        </span>
+        <ChevronDown className="size-3 shrink-0 text-slate-400" aria-hidden />
+      </button>
+      {open && popoverPos
+        ? createPortal(
+            <div
+              ref={popoverRef}
+              style={{
+                position: "fixed",
+                top: popoverPos.top,
+                left: popoverPos.left,
+                minWidth: popoverPos.minWidth,
+                zIndex: 1000,
+              }}
+              className="max-h-72 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-md"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <div className="sticky top-0 z-10 border-b border-slate-200 bg-white px-2 py-1.5">
+                <input
+                  ref={searchRef}
+                  type="text"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search or add assignee…"
+                  className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 placeholder:text-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      if (filtered.length === 1 && !showCreateRow) {
+                        onChange(filtered[0]);
+                        setOpen(false);
+                      } else if (showCreateRow && trimmedQuery) {
+                        onChange(trimmedQuery);
+                        setOpen(false);
+                      }
+                    }
+                  }}
+                />
+              </div>
+              <ul role="listbox" className="py-0.5">
+                {unassignedMatches ? (
+                  <li role="option" aria-selected={!trimmedValue}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onChange("");
+                        setOpen(false);
+                      }}
+                      className={cn(
+                        "flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100",
+                        !trimmedValue && "bg-slate-50 font-medium",
+                      )}
+                    >
+                      <UserRound className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+                      <span className="truncate">Unassigned</span>
+                    </button>
+                  </li>
+                ) : null}
+                {filtered.map((s) => {
+                  const isCurrent = s.toLowerCase() === trimmedValue.toLowerCase() && trimmedValue.length > 0;
+                  const r = resolveAssigneeAvatar(s, directoryUsers);
+                  return (
+                    <li key={s} role="option" aria-selected={isCurrent}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onChange(s);
+                          setOpen(false);
+                        }}
+                        className={cn(
+                          "flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100",
+                          isCurrent && "bg-slate-50 font-medium",
+                        )}
+                      >
+                        {r.image ? (
+                          <UserAvatar name={r.name} image={r.image} size={14} />
+                        ) : (
+                          <UserRound className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+                        )}
+                        <span className="truncate">{s}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+                {showCreateRow ? (
+                  <li role="option">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onChange(trimmedQuery);
+                        setOpen(false);
+                      }}
+                      className="flex w-full items-center gap-1.5 border-t border-slate-200 px-2 py-1 text-left text-xs text-slate-600 hover:bg-slate-100"
+                    >
+                      <UserRound className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+                      <span className="truncate">
+                        Use &ldquo;<span className="font-medium text-slate-800">{trimmedQuery}</span>&rdquo;
+                      </span>
+                    </button>
+                  </li>
+                ) : null}
+                {!unassignedMatches && filtered.length === 0 && !showCreateRow ? (
+                  <li className="px-2 py-1.5 text-xs text-slate-400">No matches</li>
+                ) : null}
+              </ul>
+            </div>,
             document.body,
           )
         : null}
@@ -3684,25 +3920,19 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
               // so the combobox + ✓ + ✕ buttons always render side by
               // side, distinct from the row background behind them.
               <span className="relative z-40 inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
-                <AssigneeCombobox
+                <BacklogAssigneePickEditor
                   value={editingCellValue}
                   onChange={(v) => ctx.setEditingStoryCell((prev: any) => (prev ? { ...prev, value: v } : prev))}
-                  onKeyDown={(event) =>
-                    ctx.handleStoryCellKeyDown(event, row.storyId, "assignee", storyEditSnapshotFromGroupedRow(row))
-                  }
                   suggestions={ctx.assigneeNameSuggestions}
                   directoryUsers={ctx.workspaceDirectoryUsers ?? undefined}
-                  showLeadingAvatar
-                  placeholder="Unassigned"
-                  className="h-7 w-full min-w-[104px] rounded-md bg-white pl-7 pr-2 text-[16px] ring-1 ring-slate-200 outline-none"
                 />
-                <button type="button" onClick={ctx.cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                <button type="button" onClick={ctx.cancelStoryCellEdit} className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button>
                 <button
                   type="button"
                   onClick={() =>
                     ctx.confirmStoryCellEdit(row.storyId, "assignee", storyEditSnapshotFromGroupedRow(row))
                   }
-                  className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded text-emerald-700 hover:bg-emerald-50"
                 ><Check className="size-3.5" /></button>
               </span>
             ) : (
@@ -6617,28 +6847,15 @@ export function BacklogPlanningPanel({
             assignee: (
               <span className="text-center text-[16px] text-slate-700">
                 {editingParentAssignee?.kind === "epic" && editingParentAssignee.id === epicId ? (
-                  <span className="inline-flex items-center gap-1">
-                    <AssigneeCombobox
+                  <span className="relative z-40 inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
+                    <BacklogAssigneePickEditor
                       value={editingParentAssignee.value}
                       onChange={(v) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: v } : prev))}
                       suggestions={assigneeNameSuggestions}
-                  directoryUsers={workspaceDirectoryUsers}
-                  showLeadingAvatar
-                      placeholder="Unassigned"
-                      className="h-7 w-full min-w-[104px] rounded-md bg-white pl-7 pr-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape") {
-                          e.preventDefault();
-                          setEditingParentAssignee(null);
-                        }
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          void confirmParentAssigneeEdit("epic", epicId, epicAssignee === "Unassigned" ? null : epicAssignee);
-                        }
-                      }}
+                      directoryUsers={workspaceDirectoryUsers}
                     />
-                    <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                    <button type="button" onClick={() => void confirmParentAssigneeEdit("epic", epicId, epicAssignee === "Unassigned" ? null : epicAssignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                    <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button>
+                    <button type="button" onClick={() => void confirmParentAssigneeEdit("epic", epicId, epicAssignee === "Unassigned" ? null : epicAssignee)} className="inline-flex h-6 w-6 items-center justify-center rounded text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button>
                   </span>
                 ) : (
                   <button
@@ -6936,32 +7153,15 @@ export function BacklogPlanningPanel({
             assignee: (
               <span className="text-center text-[16px] text-slate-700">
                 {editingParentAssignee?.kind === "initiative" && editingParentAssignee.id === initiativeId ? (
-                  <span className="inline-flex items-center gap-1">
-                    <AssigneeCombobox
+                  <span className="relative z-40 inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
+                    <BacklogAssigneePickEditor
                       value={editingParentAssignee.value}
                       onChange={(v) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: v } : prev))}
                       suggestions={assigneeNameSuggestions}
-                  directoryUsers={workspaceDirectoryUsers}
-                  showLeadingAvatar
-                      placeholder="Unassigned"
-                      className="h-7 w-full min-w-[104px] rounded-md bg-white pl-7 pr-2 text-[16px] ring-1 ring-slate-200 outline-none"
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape") {
-                          e.preventDefault();
-                          setEditingParentAssignee(null);
-                        }
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          void confirmParentAssigneeEdit(
-                            "initiative",
-                            initiativeId,
-                            initiativeAssignee === "Unassigned" ? null : initiativeAssignee,
-                          );
-                        }
-                      }}
+                      directoryUsers={workspaceDirectoryUsers}
                     />
-                    <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
-                    <button type="button" onClick={() => void confirmParentAssigneeEdit("initiative", initiativeId, initiativeAssignee === "Unassigned" ? null : initiativeAssignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                    <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100"><X className="size-3.5" /></button>
+                    <button type="button" onClick={() => void confirmParentAssigneeEdit("initiative", initiativeId, initiativeAssignee === "Unassigned" ? null : initiativeAssignee)} className="inline-flex h-6 w-6 items-center justify-center rounded text-emerald-700 hover:bg-emerald-50"><Check className="size-3.5" /></button>
                   </span>
                 ) : (
                   <button
