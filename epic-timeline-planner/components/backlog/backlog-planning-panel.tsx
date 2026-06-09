@@ -989,8 +989,30 @@ function BacklogTeamPickEditor({
   // chevron; clicking either the button or the chevron toggles the
   // listbox open.
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+
+  // Close → drop the search query so the next open starts fresh.
+  // Open → focus the search input on the next frame (after the portal
+  // mounts) so the planner can type immediately without clicking.
+  useEffect(() => {
+    if (!open) {
+      setQuery("");
+      return;
+    }
+    const id = requestAnimationFrame(() => searchRef.current?.focus());
+    return () => cancelAnimationFrame(id);
+  }, [open]);
+
+  const filteredTeams = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return MONTH_TEAM_COLUMNS;
+    return MONTH_TEAM_COLUMNS.filter((t) => t.label.toLowerCase().includes(q));
+  }, [query]);
+  const noneMatches = query.trim().toLowerCase() === ""
+    || noneLabel.toLowerCase().includes(query.trim().toLowerCase());
   // Fixed-positioned popover coordinates, recomputed every time the
   // listbox opens (or the page scrolls / resizes). We render the list
   // into a PORTAL on `document.body` so it can't be clipped by:
@@ -1077,26 +1099,51 @@ function BacklogTeamPickEditor({
                 minWidth: popoverPos.minWidth,
                 zIndex: 1000,
               }}
-              className="max-h-72 overflow-y-auto rounded-md border border-slate-200 bg-white py-0.5 shadow-md"
+              className="max-h-72 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-md"
               onMouseDown={(event) => event.stopPropagation()}
             >
-              <li role="option" aria-selected={value === ""}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onChange("");
-                    setOpen(false);
+              <li className="sticky top-0 z-10 border-b border-slate-200 bg-white px-2 py-1.5">
+                <input
+                  ref={searchRef}
+                  type="text"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search team…"
+                  className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 placeholder:text-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      // Enter on a single match → pick it.
+                      const candidates: string[] = [];
+                      if (noneMatches) candidates.push("");
+                      filteredTeams.forEach((t) => candidates.push(t.id));
+                      if (candidates.length === 1) {
+                        event.preventDefault();
+                        onChange(candidates[0]);
+                        setOpen(false);
+                      }
+                    }
                   }}
-                  className={cn(
-                    "flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100",
-                    value === "" && "bg-slate-50 font-medium",
-                  )}
-                >
-                  <TeamAvatar slug={null} sizePx={14} />
-                  <span className="truncate">{noneLabel}</span>
-                </button>
+                />
               </li>
-              {MONTH_TEAM_COLUMNS.map((t) => (
+              {noneMatches ? (
+                <li role="option" aria-selected={value === ""}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange("");
+                      setOpen(false);
+                    }}
+                    className={cn(
+                      "flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100",
+                      value === "" && "bg-slate-50 font-medium",
+                    )}
+                  >
+                    <TeamAvatar slug={null} sizePx={14} />
+                    <span className="truncate">{noneLabel}</span>
+                  </button>
+                </li>
+              ) : null}
+              {filteredTeams.map((t) => (
                 <li key={t.id} role="option" aria-selected={value === t.id}>
                   <button
                     type="button"
@@ -1114,6 +1161,9 @@ function BacklogTeamPickEditor({
                   </button>
                 </li>
               ))}
+              {!noneMatches && filteredTeams.length === 0 ? (
+                <li className="px-2 py-1.5 text-xs text-slate-400">No teams match</li>
+              ) : null}
             </ul>,
             document.body,
           )
