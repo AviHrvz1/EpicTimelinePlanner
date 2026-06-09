@@ -5870,7 +5870,9 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 ? "Roadmap Planning"
                 : topMode === "users"
                   ? "Users Directory"
-                  : "Roadmap Health"
+                  : topMode === "dashboard"
+                    ? "Dashboard"
+                    : "Roadmap Health"
           }
           titleIcon={
             topMode === "backlog"
@@ -5879,13 +5881,22 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 ? MapIcon
                 : topMode === "users"
                   ? Users
-                  : undefined
+                  : topMode === "dashboard"
+                    ? LayoutDashboard
+                    : undefined
           }
-          /* Users Directory has no relevant dashboard body — just use
-             the hero as a title bar and lock the accordion closed so
-             the planner can't open it. */
-          defaultExpanded={topMode !== "users"}
-          hideExpandToggle={topMode === "users"}
+          /* Users + Dashboard both treat the hero as a title-only bar:
+              - Users has no relevant dashboard body at all.
+              - Dashboard mode renders its full content in
+                `<DashboardPage>` below the hero, so the hero's donut
+                summary would just duplicate it.
+             Both lock the accordion closed and hide the chevron so the
+             internal state can't drift out of sync (the hero stays
+             mounted across modes; without `hideExpandToggle`, the
+             initial `useState` value would be sticky after the first
+             mode change). */
+          defaultExpanded={topMode !== "users" && topMode !== "dashboard"}
+          hideExpandToggle={topMode === "users" || topMode === "dashboard"}
           barMode={roadmapBarModeCtrl}
           onBarModeChange={setRoadmapBarModeCtrl}
           showTeamChips={showGanttTeamChipsCtrl}
