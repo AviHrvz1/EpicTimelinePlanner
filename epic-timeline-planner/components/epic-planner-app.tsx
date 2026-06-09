@@ -1398,6 +1398,15 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
    *  no hand-off pending. */
   const [backlogIncomingStatusFilter, setBacklogIncomingStatusFilter] =
     useState<readonly string[] | null>(null);
+  /** Same hand-off pipe as `backlogIncomingStatusFilter`, but for the
+   *  Health Distribution donut: the planner clicked an "At Risk" /
+   *  "Watch" / etc. slice WHILE on Backlog Workspace, and the click
+   *  should narrow the backlog table to epics with that verdict.
+   *  Roadmap Planning's existing behaviour (filter Gantt bars via
+   *  `healthFilter`) is unchanged — we just additionally mirror the
+   *  pick here so the backlog filter sees it. `null` = no hand-off. */
+  const [backlogIncomingHealthFilter, setBacklogIncomingHealthFilter] =
+    useState<readonly HealthStatus[] | null>(null);
   /** Same lift pattern as the status filter — emitted by the panel,
    *  passed to TimelineGrid so the Gantt only renders epics whose
    *  plan-start quarter is in the set. Empty Set = no filter. */
@@ -1548,6 +1557,15 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   const handleHealthFilterChange = useCallback(
     (next: Set<HealthStatus>) => {
       setHealthFilter(next);
+      // Mirror the pick into the Backlog Workspace's filter hand-off
+      // pipe ONLY when the planner is currently on Backlog. Other modes
+      // keep their existing behaviour (Gantt bar filtering via
+      // `healthFilter`). Allocating a fresh array on each call lets the
+      // backlog's sync useEffect fire even when the same verdict is
+      // re-clicked (same identity-based trick as the status hand-off).
+      if (topMode === "backlog") {
+        setBacklogIncomingHealthFilter(Array.from(next));
+      }
       if (next.size > 0) {
         setShowRoadmapProgress(true);
         setLastPickedLabelLane("health");
@@ -1558,7 +1576,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         setShowRoadmapProgress(false);
       }
     },
-    [],
+    [topMode],
   );
   const layoutRef = useRef<HTMLDivElement | null>(null);
   /** When true, we hid the initiative rail for insights/retro; restore on leaving those surfaces. */
@@ -6873,6 +6891,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 workspaceDirectoryUsers={workspaceDirectoryUsers}
                 progressBasis={progressBasis}
                 externalStatusFilter={backlogIncomingStatusFilter}
+                externalHealthFilter={backlogIncomingHealthFilter}
                 onOpenInitiative={backlogOpenInitiative}
                 onOpenEpic={backlogOpenEpic}
                 onOpenStory={backlogOpenStory}

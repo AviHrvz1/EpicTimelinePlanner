@@ -259,6 +259,14 @@ type BacklogPlanningPanelProps = {
    *  the parent creates a fresh array on each click so the same status
    *  can be applied repeatedly without going stale. */
   externalStatusFilter?: readonly string[] | null;
+  /** Same hand-off shape as `externalStatusFilter`, but for the Health
+   *  Distribution donut: when the planner clicks an "At Risk" / "Watch"
+   *  / "Done" / "Overdue" / "On Track" slice while on Backlog, drop
+   *  every epic whose computed health verdict is OUTSIDE this set.
+   *  Initiatives with no surviving epics fall out alongside. Empty
+   *  array clears the filter; `null` / `undefined` means no hand-off
+   *  pending (existing internal `healthFilter` stays put). */
+  externalHealthFilter?: readonly HealthStatus[] | null;
 };
 
 type OptionItem = { id: string; label: string };
@@ -4939,6 +4947,7 @@ export function BacklogPlanningPanel({
   workspaceDirectoryUsers,
   progressBasis = "epicEst",
   externalStatusFilter,
+  externalHealthFilter,
 }: BacklogPlanningPanelProps) {
   // Render-time diagnostic: count + time every commit to help spot whether
   // slowness is the mount itself, re-renders from a parent, or some heavy
@@ -4972,6 +4981,18 @@ export function BacklogPlanningPanel({
     setStatusFilter([...externalStatusFilter]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalStatusFilter]);
+  /** Health-verdict filter — drops epics whose computed verdict isn't
+   *  in this set (parent initiatives without surviving epics fall out
+   *  too). Story rows inside surviving epics all show; we don't
+   *  attempt to filter at story level because the donut counts epics,
+   *  not stories. Empty set = no filter. */
+  const [healthFilter, setHealthFilter] = useState<readonly HealthStatus[]>([]);
+  // Same identity-based sync pattern as `externalStatusFilter`.
+  useEffect(() => {
+    if (externalHealthFilter == null) return;
+    setHealthFilter([...externalHealthFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalHealthFilter]);
   const [sprintFilter, setSprintFilter] = useState<string[]>([]);
   const [yearFilter, setYearFilter] = useState<string[]>([]);
   const [quarterFilter, setQuarterFilter] = useState<string[]>([]);
@@ -6019,6 +6040,33 @@ export function BacklogPlanningPanel({
       .map(({ initiative, epics }) => ({ ...initiative, epics }));
   }, [filtered, statusFilter, sprintFilter, labelFilter, sortBy]);
 
+  /**
+   * Health-verdict pass — applied AFTER the status/sprint/label
+   * filters in `filteredWithControls`. Drops every epic whose computed
+   * health verdict isn't in `healthFilter`; initiatives with no
+   * surviving epics fall out alongside. Empty `healthFilter` is a
+   * no-op. The verdict math reuses the same `computeEpicHealthVerdict`
+   * the Gantt and dashboard donut already share, so the picks always
+   * line up across surfaces.
+   */
+  const filteredWithHealth = useMemo(() => {
+    if (healthFilter.length === 0) return filteredWithControls;
+    const wantedStatuses = new Set(healthFilter);
+    return filteredWithControls
+      .map((initiative) => {
+        const epics = (initiative.epics ?? []).filter((epic) => {
+          const verdict = computeEpicHealthVerdict(
+            epic,
+            initiative.year,
+            progressBasis,
+          );
+          return verdict != null && wantedStatuses.has(verdict.status);
+        });
+        return { ...initiative, epics };
+      })
+      .filter((initiative) => (initiative.epics ?? []).length > 0);
+  }, [filteredWithControls, healthFilter, progressBasis]);
+
   type SearchSuggestionKind = "initiative" | "epic" | "story" | "assignee";
   const suggestions = useMemo<Array<{ label: string; kind: SearchSuggestionKind }>>(() => {
     const seen = new Map<string, SearchSuggestionKind>();
@@ -6192,7 +6240,7 @@ export function BacklogPlanningPanel({
      *  certain epics restricts to those epics. The hierarchical picker enforces
      *  cascade-tick at write time, so here we only check membership. */
     const parentFilterSet = new Set(parentFilter);
-    return filteredWithControls
+    return filteredWithHealth
       .map((initiative) => {
         if (roadmapFilter.length > 0 && (!initiative.roadmapId || !roadmapFilter.includes(initiative.roadmapId))) return null;
         if (yearFilter.length > 0 && !yearFilter.includes(String(initiative.year))) return null;
@@ -6236,8 +6284,8 @@ export function BacklogPlanningPanel({
         if (epics.length === 0 && !initiativeQuarterMatch) return null;
         return { ...initiative, epics };
       })
-      .filter(Boolean) as typeof filteredWithControls;
-  }), [filteredWithControls, roadmapFilter, yearFilter, quarterFilter, teamFilter, assigneeFilter, parentFilter]);
+      .filter(Boolean) as typeof filteredWithHealth;
+  }), [filteredWithHealth, roadmapFilter, yearFilter, quarterFilter, teamFilter, assigneeFilter, parentFilter]);
 
   const fullyFiltered = useMemo(() => timePhase("fullyFiltered", () => {
     const base = applyWorkItemKindFilter(backlogFilteredBeforeWorkItem, workItemFilter);
