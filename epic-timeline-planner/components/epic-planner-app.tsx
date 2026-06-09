@@ -1390,6 +1390,14 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   const [ganttStatusFilter, setGanttStatusFilter] = useState<Set<"backlogEpic" | "todo" | "inProgress" | "review" | "done">>(
     () => new Set(),
   );
+  /** Hand-off filter for the Backlog Workspace, set when the planner
+   *  clicks a Work Progress donut slice on the hero from any non-backlog
+   *  mode. A fresh array is allocated on every click so re-clicking the
+   *  same status keeps the array identity changing — `BacklogPlanningPanel`'s
+   *  sync useEffect is identity-keyed for exactly this reason. `null` =
+   *  no hand-off pending. */
+  const [backlogIncomingStatusFilter, setBacklogIncomingStatusFilter] =
+    useState<readonly string[] | null>(null);
   /** Same lift pattern as the status filter — emitted by the panel,
    *  passed to TimelineGrid so the Gantt only renders epics whose
    *  plan-start quarter is in the set. Empty Set = no filter. */
@@ -1453,6 +1461,46 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       }
     },
     [],
+  );
+  /**
+   * Work Progress donut slice click — story status is a backlog-domain
+   * concern, so clicks "navigate to where the work lives" instead of
+   * trying to filter the Gantt by story status (which would hide
+   * perfectly-scheduled epics whose stories happen to be todo).
+   *
+   *   - On Backlog Workspace already → toggle the picked status in
+   *     `ganttStatusFilter` like before (this filter is also what the
+   *     backlog table reads, so the toggle filters the rows).
+   *   - On any other mode → REPLACE the filter with the picked status
+   *     and switch to Backlog Workspace, so the planner lands on the
+   *     filtered backlog already showing the stories they clicked. A
+   *     toast confirms the navigation so the mode switch isn't a
+   *     surprise on first interaction.
+   */
+  const handleWorkProgressSliceClick = useCallback(
+    (status: "backlogEpic" | "todo" | "inProgress" | "review" | "done", label: string) => {
+      if (topMode === "backlog") {
+        // In-mode: toggle the status in/out of the hand-off pipe.
+        // BacklogPlanningPanel's internal `statusFilter` syncs on every
+        // new identity, so the toggle reaches the row filter the same
+        // way the cross-mode hand-off does. The Gantt's parallel
+        // `ganttStatusFilter` (used by other surfaces) stays in lockstep.
+        const next = new Set(ganttStatusFilter);
+        if (next.has(status)) next.delete(status);
+        else next.add(status);
+        handlePanelStatusFilterDerivedChange(next);
+        setBacklogIncomingStatusFilter(Array.from(next));
+        return;
+      }
+      // Cross-mode: replace, navigate, toast. New array literal each
+      // call ensures the backlog's sync useEffect fires even when the
+      // same status is clicked repeatedly.
+      handlePanelStatusFilterDerivedChange(new Set([status]));
+      setBacklogIncomingStatusFilter([status]);
+      setTopMode("backlog");
+      toast.success(`Filtered Backlog to "${label}"`);
+    },
+    [topMode, ganttStatusFilter, handlePanelStatusFilterDerivedChange],
   );
   const handlePanelTeamFilterDerivedChange = useCallback((next: Set<string>) => {
     setGanttTeamFilter(next);
@@ -5907,6 +5955,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           onHealthFilterChange={handleHealthFilterChange}
           statusFilter={ganttStatusFilter}
           onStatusFilterChange={handlePanelStatusFilterDerivedChange}
+          onWorkProgressSliceClick={handleWorkProgressSliceClick}
           onOpenEpicEstimatePanel={handleOpenEstPanel}
           summaryBarRef={setSummaryBarEl}
           onYearChange={async (nextYear) => {
@@ -6823,6 +6872,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 storyRefById={storyRefMaps.byId}
                 workspaceDirectoryUsers={workspaceDirectoryUsers}
                 progressBasis={progressBasis}
+                externalStatusFilter={backlogIncomingStatusFilter}
                 onOpenInitiative={backlogOpenInitiative}
                 onOpenEpic={backlogOpenEpic}
                 onOpenStory={backlogOpenStory}

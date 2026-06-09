@@ -128,6 +128,7 @@ export function RoadmapHealthHero({
   onStatusFilterChange,
   onOpenEpicEstimatePanel,
   onSelectLaggards,
+  onWorkProgressSliceClick,
   title = "Roadmap Health",
   titleIcon: TitleIcon = ShieldCheck,
   defaultExpanded = true,
@@ -181,6 +182,15 @@ export function RoadmapHealthHero({
    *  planner picks a contributor row or "Highlight on Roadmap". Inert
    *  when omitted; the chart's popover still works as a read-only list. */
   onSelectLaggards?: (epicIds: string[], label: string) => void;
+  /** Overrides the default "toggle into statusFilter" behaviour on the
+   *  Work Progress donut slice click. When the app supplies this, the
+   *  donut hands the picked status off to the callback (instead of
+   *  toggling `statusFilter` locally) so the app can decide whether to
+   *  filter in place or navigate elsewhere — e.g. "you clicked from
+   *  Roadmap Planning → open Backlog Workspace with that filter
+   *  already applied". When omitted, the donut keeps its existing
+   *  in-place toggle on `statusFilter`. */
+  onWorkProgressSliceClick?: (status: StoryExecStatus, label: string) => void;
   /** Header title — overrides the default "Roadmap Health" so the same hero
    *  can act as the top bar for other modes (e.g. "Backlog Workspace" when
    *  the backlog panel is active). */
@@ -463,16 +473,30 @@ export function RoadmapHealthHero({
               { label: "Backlog epic", value: stats.workProgress.backlogEpic, color: "#94a3b8", icon: <Inbox className="size-3.5" strokeWidth={2} />, valueSuffix: "stories" },
             ]}
             onSliceClick={
-              onStatusFilterChange
+              // When the app provides `onWorkProgressSliceClick`, it owns
+              // the routing decision (in-place toggle when already on
+              // Backlog, or "open Backlog with this status filter
+              // pre-applied" from any other mode). We hand the picked
+              // status off verbatim — no local Set mutation.
+              //
+              // When the app doesn't override (legacy callers), keep the
+              // toggle-into-`statusFilter` behaviour that worked before.
+              onWorkProgressSliceClick
                 ? (label) => {
                     const status = STATUS_LABEL_TO_VALUE[label];
                     if (!status) return;
-                    const next = new Set(statusFilter ?? []);
-                    if (next.has(status)) next.delete(status);
-                    else next.add(status);
-                    onStatusFilterChange(next);
+                    onWorkProgressSliceClick(status, label);
                   }
-                : undefined
+                : onStatusFilterChange
+                  ? (label) => {
+                      const status = STATUS_LABEL_TO_VALUE[label];
+                      if (!status) return;
+                      const next = new Set(statusFilter ?? []);
+                      if (next.has(status)) next.delete(status);
+                      else next.add(status);
+                      onStatusFilterChange(next);
+                    }
+                  : undefined
             }
             activeLabels={
               statusFilter && statusFilter.size > 0

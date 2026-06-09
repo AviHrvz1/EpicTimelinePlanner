@@ -252,6 +252,13 @@ type BacklogPlanningPanelProps = {
    *  the Health column verdict so every surface stays in agreement (`epicEst`
    *  default mirrors `epic-planner-app.tsx`). */
   progressBasis?: ProgressBasis;
+  /** Hand-off filter from outside the backlog (e.g. clicking the Work
+   *  Progress donut on the hero while in Roadmap Planning navigates to
+   *  Backlog and applies this filter). Every distinct array identity
+   *  triggers a single sync into the panel's internal `statusFilter` —
+   *  the parent creates a fresh array on each click so the same status
+   *  can be applied repeatedly without going stale. */
+  externalStatusFilter?: readonly string[] | null;
 };
 
 type OptionItem = { id: string; label: string };
@@ -4931,6 +4938,7 @@ export function BacklogPlanningPanel({
   suppressInlineChips,
   workspaceDirectoryUsers,
   progressBasis = "epicEst",
+  externalStatusFilter,
 }: BacklogPlanningPanelProps) {
   // Render-time diagnostic: count + time every commit to help spot whether
   // slowness is the mount itself, re-renders from a parent, or some heavy
@@ -4954,6 +4962,16 @@ export function BacklogPlanningPanel({
   const [openInitiatives, setOpenInitiatives] = useState<Record<string, boolean>>({});
   const [openEpics, setOpenEpics] = useState<Record<string, boolean>>({});
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  // Sync external hand-off filter into the panel's internal state.
+  // `externalStatusFilter` is array-identity based: the parent creates a
+  // fresh array on each click so re-applying the SAME status still
+  // triggers the effect. `null` / `undefined` is treated as "no
+  // hand-off" and leaves the existing filter alone.
+  useEffect(() => {
+    if (externalStatusFilter == null) return;
+    setStatusFilter([...externalStatusFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalStatusFilter]);
   const [sprintFilter, setSprintFilter] = useState<string[]>([]);
   const [yearFilter, setYearFilter] = useState<string[]>([]);
   const [quarterFilter, setQuarterFilter] = useState<string[]>([]);
