@@ -35,7 +35,8 @@ import { HealthExplainerPopover } from "@/components/dashboard/health-explainer-
 import { RoadmapSelector } from "@/components/timeline/roadmap-selector";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { computeProgress, type HealthStatus } from "@/lib/progress";
-import { computeEpicHealthVerdict } from "@/lib/epic-health";
+import { computeEpicHealthVerdict, computeInitiativeHealthVerdict } from "@/lib/epic-health";
+import { computeStoryHealthVerdict } from "@/lib/story-health";
 import { now as clockNow } from "@/lib/clock";
 import { monthTeamLabelForId } from "@/lib/month-team-board";
 import { globalSprintFromMonthLane, sprintEndDate, sprintStartDate } from "@/lib/year-sprint";
@@ -129,6 +130,10 @@ export function RoadmapHealthHero({
   onOpenEpicEstimatePanel,
   onSelectLaggards,
   onWorkProgressSliceClick,
+  onHealthDistributionSliceClick,
+  onTeamProgressRowClick,
+  heroScope,
+  onHeroScopeChange,
   title = "Roadmap Health",
   titleIcon: TitleIcon = ShieldCheck,
   defaultExpanded = true,
@@ -191,6 +196,29 @@ export function RoadmapHealthHero({
    *  already applied". When omitted, the donut keeps its existing
    *  in-place toggle on `statusFilter`. */
   onWorkProgressSliceClick?: (status: StoryExecStatus, label: string) => void;
+  /** Same idea as `onWorkProgressSliceClick` but for the Health
+   *  Distribution donut. The app owns the scope routing decision
+   *  (in-mode in Backlog, cross-mode hand-off from Roadmap Planning
+   *  at Story scope, etc.). Omitting it preserves the legacy
+   *  toggle-into-`healthFilter` behaviour. */
+  onHealthDistributionSliceClick?: (verdict: HealthStatus, label: string) => void;
+  /** Same idea as the donut click callbacks but for Team Progress row
+   *  clicks. When supplied, the row click bypasses the per-team
+   *  drilldown popover and hands the picked team off to the app so it
+   *  can decide between filtering the current surface and navigating
+   *  to the Backlog with the team pre-filtered. */
+  onTeamProgressRowClick?: (teamId: string, label: string) => void;
+  /** Active unit on the KPI strip. Drives which Initiatives / Epics /
+   *  Stories tile is highlighted and (later phases) what every card on
+   *  the hero counts + how each slice click filters. When undefined,
+   *  the strip's interactive scope-picking is off (legacy callers); the
+   *  three tiles fall back to their pre-scope-selector behaviours
+   *  (Initiatives/Epics flip `barMode`, Stories is passive). */
+  heroScope?: "initiative" | "epic" | "story";
+  /** Setter for `heroScope`. Required for scope-picking to work — the
+   *  three tiles flip it on click. Optional so legacy callers can keep
+   *  the old behaviour without changes. */
+  onHeroScopeChange?: (next: "initiative" | "epic" | "story") => void;
   /** Header title — overrides the default "Roadmap Health" so the same hero
    *  can act as the top bar for other modes (e.g. "Backlog Workspace" when
    *  the backlog panel is active). */
@@ -351,59 +379,102 @@ export function RoadmapHealthHero({
               onDeleteRoadmap={onDeleteRoadmap}
               extraSuffix={`${stats.epicsCount} epics in scope`}
             />
-            <span className="inline-block h-4 w-px shrink-0 bg-slate-300/80" aria-hidden />
-            <div className="flex items-center gap-2.5">
-              <span className="inline-flex h-[18px] items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.05em] leading-[18px] text-slate-500">
-                <HeartPulse className="size-[18px] shrink-0 text-rose-500" strokeWidth={2.2} aria-hidden />
-                <span className="inline-block translate-y-[1px]">Health calculation</span>
-                <button
-                  type="button"
-                  aria-label="How is health calculated?"
-                  title="How is health calculated?"
-                  // Same target as the Info icons on Health Distribution,
-                  // Roadmap Health popover, and the Initiative Health
-                  // verdict menu — opens the full 7-page explainer. The
-                  // first slide is the basis explainer, which is the
-                  // contextually right starting page for this label.
-                  onClick={() => setHealthExplainerOpen(true)}
-                  className="inline-flex size-4 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-                >
-                  <Info className="size-3.5" aria-hidden />
-                </button>
-              </span>
-              <PillToggle
-                value={progressBasis}
-                onChange={(v) => onProgressBasisChange(v as "days" | "stories" | "epicEst")}
-                options={[
-                  { value: "epicEst", label: "Epic Est (d)" },
-                  { value: "days", label: "Σ | Child Est (d)" },
-                  { value: "stories", label: "Stories Completed (%)" },
-                ]}
-              />
-            </div>
+            {/* "Health calculation" basis chip — visible at Initiative
+                / Epic scope (where the basis drives the verdict math via
+                `computeEpicHealthVerdict` / `computeInitiativeHealthVerdict`).
+                Hidden at Story scope: story health is sprint-burndown
+                driven (`computeStoryHealthVerdict`), which doesn't take
+                a basis. Defaults to visible when `heroScope` is undefined
+                (legacy callers). */}
+            {heroScope !== "story" ? (
+              <>
+                <span className="inline-block h-4 w-px shrink-0 bg-slate-300/80" aria-hidden />
+                <div className="flex items-center gap-2.5">
+                  <span className="inline-flex h-[18px] items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.05em] leading-[18px] text-slate-500">
+                    <HeartPulse className="size-[18px] shrink-0 text-rose-500" strokeWidth={2.2} aria-hidden />
+                    <span className="inline-block translate-y-[1px]">Health calculation</span>
+                    <button
+                      type="button"
+                      aria-label="How is health calculated?"
+                      title="How is health calculated?"
+                      // Same target as the Info icons on Health Distribution,
+                      // Roadmap Health popover, and the Initiative Health
+                      // verdict menu — opens the full 7-page explainer. The
+                      // first slide is the basis explainer, which is the
+                      // contextually right starting page for this label.
+                      onClick={() => setHealthExplainerOpen(true)}
+                      className="inline-flex size-4 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                    >
+                      <Info className="size-3.5" aria-hidden />
+                    </button>
+                  </span>
+                  <PillToggle
+                    value={progressBasis}
+                    onChange={(v) => onProgressBasisChange(v as "days" | "stories" | "epicEst")}
+                    options={[
+                      { value: "epicEst", label: "Epic Est (d)" },
+                      { value: "days", label: "Σ | Child Est (d)" },
+                      { value: "stories", label: "Stories Completed (%)" },
+                    ]}
+                  />
+                </div>
+              </>
+            ) : null}
             {/* Inline stats: Initiatives · Epics · Stories · Teams · Sprints,
-                pushed right next to the roadmap selector + Health calc. */}
+                pushed right next to the roadmap selector + Health calc.
+                When the app supplies `onHeroScopeChange`, the first three
+                tiles become a scope selector — click sets the active
+                unit the rest of the hero counts and filters by. Legacy
+                callers (no `onHeroScopeChange`) keep the old behaviour:
+                Initiatives/Epics flip the Gantt's `barMode`, Stories is
+                passive. Teams / Sprints tiles stay as Gantt overlay
+                toggles regardless of scope-picking mode. */}
             <div className="ml-auto flex shrink-0 items-center gap-x-9">
               <StatBlock
                 icon={<Zap className="size-7 text-blue-600" strokeWidth={1.9} aria-hidden />}
                 value={stats.initiativesCount}
                 label="Initiatives"
-                onClick={onBarModeChange ? () => onBarModeChange("initiatives") : undefined}
-                active={barMode === "initiatives"}
-                title="Show initiative bars on the Gantt"
+                onClick={
+                  onHeroScopeChange
+                    ? () => {
+                        onHeroScopeChange("initiative");
+                        // Keep the Gantt's initiative-vs-epic bar mode
+                        // in sync — picking Initiatives on the scope
+                        // selector also wants the Gantt to show
+                        // initiative bars.
+                        onBarModeChange?.("initiatives");
+                      }
+                    : onBarModeChange
+                      ? () => onBarModeChange("initiatives")
+                      : undefined
+                }
+                active={onHeroScopeChange ? heroScope === "initiative" : barMode === "initiatives"}
+                title={onHeroScopeChange ? "Analyse the hero in Initiatives" : "Show initiative bars on the Gantt"}
               />
               <StatBlock
                 icon={<Folder className="size-7 text-violet-500" aria-hidden />}
                 value={stats.epicsCount}
                 label="Epics"
-                onClick={onBarModeChange ? () => onBarModeChange("epics") : undefined}
-                active={barMode === "epics"}
-                title="Show epic bars on the Gantt"
+                onClick={
+                  onHeroScopeChange
+                    ? () => {
+                        onHeroScopeChange("epic");
+                        onBarModeChange?.("epics");
+                      }
+                    : onBarModeChange
+                      ? () => onBarModeChange("epics")
+                      : undefined
+                }
+                active={onHeroScopeChange ? heroScope === "epic" : barMode === "epics"}
+                title={onHeroScopeChange ? "Analyse the hero in Epics" : "Show epic bars on the Gantt"}
               />
               <StatBlock
                 icon={<BookOpen className="size-7 text-sky-500" aria-hidden />}
                 value={stats.storiesCount}
                 label="Stories"
+                onClick={onHeroScopeChange ? () => onHeroScopeChange("story") : undefined}
+                active={onHeroScopeChange ? heroScope === "story" : false}
+                title={onHeroScopeChange ? "Analyse the hero in Stories" : undefined}
               />
               <StatBlock
                 icon={<Users className="size-7 text-emerald-500" aria-hidden />}
@@ -433,12 +504,37 @@ export function RoadmapHealthHero({
             * container, a horizontal scrollbar lets the user pan the
             * full row instead of cards getting clipped. */}
           <div className="mt-2 flex w-full min-w-0 flex-nowrap items-center justify-between gap-x-2 overflow-x-auto [scrollbar-width:thin] [scrollbar-color:theme(colors.indigo.100)_transparent] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gradient-to-r [&::-webkit-scrollbar-thumb]:from-sky-100 [&::-webkit-scrollbar-thumb]:via-indigo-100 [&::-webkit-scrollbar-thumb]:to-violet-100">
+          {(() => {
+            // Pick the scope-flavored team rollup. Unit suffix:
+            //   - story / initiative scopes count rows (no "d" suffix)
+            //   - epic scope keeps the existing day-or-blank behaviour
+            //     so the legacy display logic isn't regressed.
+            const tpScope = heroScope ?? "epic";
+            const tpRows =
+              tpScope === "story"
+                ? stats.teamProgress.story
+                : tpScope === "initiative"
+                  ? stats.teamProgress.initiative
+                  : stats.teamProgress.epic;
+            const tpUnitSuffix =
+              tpScope === "epic" && progressBasis !== "stories" ? "d" : "";
+            return (
           <TeamProgressCard
-            rows={stats.teamProgress}
-            unitSuffix={progressBasis === "stories" ? "" : "d"}
-            onRowClick={(teamId, label) => setDrilldownTeam({ teamId, label })}
+            rows={tpRows}
+            unitSuffix={tpUnitSuffix}
+            onRowClick={
+              // App-supplied handler bypasses the per-team drilldown
+              // popover and goes straight to scope-aware filtering /
+              // navigation. The popover stays available for legacy
+              // callers that don't pass `onTeamProgressRowClick`.
+              onTeamProgressRowClick
+                ? (teamId, label) => onTeamProgressRowClick(teamId, label)
+                : (teamId, label) => setDrilldownTeam({ teamId, label })
+            }
             panelClassName="bg-emerald-50/60 ring-emerald-100"
           />
+            );
+          })()}
           {/* Work Progress donut — story execution-state distribution
            *  (Backlog epic / To do / In progress / Review / Done). Took
            *  this slot back from the Portfolio Burndown card after the
@@ -451,27 +547,46 @@ export function RoadmapHealthHero({
            *  Risk / Overdue`), and deeper burnup/burndown views live on
            *  the dedicated Dashboard page. */}
           {(() => {
-            // Sum once so the title and the donut center stay in lockstep.
-            const workProgressTotal =
-              stats.workProgress.backlogEpic +
-              stats.workProgress.todo +
-              stats.workProgress.inProgress +
-              stats.workProgress.review +
-              stats.workProgress.done;
+            // Resolve the active scope (defaults to "story" when the
+            // app didn't supply one — legacy behaviour preserved). Build
+            // the slices array, title suffix, and total per scope. Slice
+            // order stays severity-ascending (Done at the top) for
+            // visual consistency with the Health Distribution donut.
+            const scope = heroScope ?? "story";
+            const scopeLabel = scope === "initiative" ? "Initiatives" : scope === "epic" ? "Epics" : "Stories";
+            const valueSuffix = scope === "initiative" ? "initiatives" : scope === "epic" ? "epics" : "stories";
+            const wpStory = stats.workProgress.story;
+            const wpEpic = stats.workProgress.epic;
+            const wpInit = stats.workProgress.initiative;
+            const total =
+              scope === "story"
+                ? wpStory.backlogEpic + wpStory.todo + wpStory.inProgress + wpStory.review + wpStory.done
+                : scope === "epic"
+                  ? wpEpic.unscheduled + wpEpic.todo + wpEpic.inProgress + wpEpic.review + wpEpic.done
+                  : wpInit.todo + wpInit.inProgress + wpInit.review + wpInit.done;
+            const baseSlices = [
+              { label: "Done", value: scope === "story" ? wpStory.done : scope === "epic" ? wpEpic.done : wpInit.done, color: "#10b981", icon: <CheckCheck className="size-3.5" strokeWidth={2} />, valueSuffix },
+              { label: "Review / testing", value: scope === "story" ? wpStory.review : scope === "epic" ? wpEpic.review : wpInit.review, color: "#6366f1", icon: <Eye className="size-3.5" strokeWidth={2} />, valueSuffix },
+              { label: "In progress", value: scope === "story" ? wpStory.inProgress : scope === "epic" ? wpEpic.inProgress : wpInit.inProgress, color: "#3b82f6", icon: <PlayCircle className="size-3.5" strokeWidth={2} />, valueSuffix },
+              { label: "To do", value: scope === "story" ? wpStory.todo : scope === "epic" ? wpEpic.todo : wpInit.todo, color: "#f59e0b", icon: <Circle className="size-3.5" strokeWidth={2} />, valueSuffix },
+            ];
+            // 5th slice varies by scope:
+            //   - story scope: "Backlog epic" (story under unscheduled epic)
+            //   - epic scope: "Unscheduled" (epic without plan dates)
+            //   - initiative scope: NO 5th slice (4 buckets total)
+            if (scope === "story") {
+              baseSlices.push({ label: "Backlog epic", value: wpStory.backlogEpic, color: "#94a3b8", icon: <Inbox className="size-3.5" strokeWidth={2} />, valueSuffix });
+            } else if (scope === "epic") {
+              baseSlices.push({ label: "Unscheduled", value: wpEpic.unscheduled, color: "#94a3b8", icon: <Inbox className="size-3.5" strokeWidth={2} />, valueSuffix });
+            }
             return (
           <DonutCard
             panelClassName="bg-sky-50/60 ring-sky-100"
-            title={`Work Progress · Stories · ${workProgressTotal}`}
+            title={`Work Progress · ${scopeLabel} · ${total}`}
             titleIcon={<PlayCircle className="size-3.5 text-sky-500" strokeWidth={2.1} aria-hidden />}
-            centerCount={workProgressTotal}
-            centerLabel="Stories"
-            slices={[
-              { label: "Done", value: stats.workProgress.done, color: "#10b981", icon: <CheckCheck className="size-3.5" strokeWidth={2} />, valueSuffix: "stories" },
-              { label: "Review / testing", value: stats.workProgress.review, color: "#6366f1", icon: <Eye className="size-3.5" strokeWidth={2} />, valueSuffix: "stories" },
-              { label: "In progress", value: stats.workProgress.inProgress, color: "#3b82f6", icon: <PlayCircle className="size-3.5" strokeWidth={2} />, valueSuffix: "stories" },
-              { label: "To do", value: stats.workProgress.todo, color: "#f59e0b", icon: <Circle className="size-3.5" strokeWidth={2} />, valueSuffix: "stories" },
-              { label: "Backlog epic", value: stats.workProgress.backlogEpic, color: "#94a3b8", icon: <Inbox className="size-3.5" strokeWidth={2} />, valueSuffix: "stories" },
-            ]}
+            centerCount={total}
+            centerLabel={scopeLabel}
+            slices={baseSlices}
             onSliceClick={
               // When the app provides `onWorkProgressSliceClick`, it owns
               // the routing decision (in-place toggle when already on
@@ -508,9 +623,30 @@ export function RoadmapHealthHero({
           />
             );
           })()}
+          {(() => {
+            // Same scope-resolution as Work Progress. Health Distribution
+            // at Story scope uses the sprint-burndown verdict and has no
+            // progress-basis (the basis chip is hidden by the wrap
+            // earlier in the file at the "Health calculation" pill).
+            const hdScope = heroScope ?? "epic";
+            const hdData =
+              hdScope === "story"
+                ? stats.healthDistribution.story
+                : hdScope === "initiative"
+                  ? stats.healthDistribution.initiative
+                  : stats.healthDistribution.epic;
+            const hdScopeLabel = hdScope === "initiative" ? "Initiatives" : hdScope === "epic" ? "Epics" : "Stories";
+            const hdValueSuffix = hdScope === "initiative" ? "initiatives" : hdScope === "epic" ? "epics" : "stories";
+            // Story scope reads sprint-burndown verdicts; the basis chip
+            // doesn't apply, so the title drops the basis suffix.
+            const hdTitle =
+              hdScope === "story"
+                ? `Health Distribution · ${hdScopeLabel}`
+                : `Health Distribution · ${hdScopeLabel} · ${basisLabel}`;
+            return (
           <DonutCard
             panelClassName="bg-orange-50/60 ring-orange-100"
-            title={`Health Distribution · Epics · ${basisLabel}`}
+            title={hdTitle}
             titleIcon={<HeartPulse className="size-3.5 text-rose-500" strokeWidth={2.1} aria-hidden />}
             titleAction={
               <button
@@ -523,30 +659,40 @@ export function RoadmapHealthHero({
                 <Info className="size-3.5" aria-hidden />
               </button>
             }
-            centerCount={stats.healthDistribution.total}
-            centerLabel="Epics"
+            centerCount={hdData.total}
+            centerLabel={hdScopeLabel}
             slices={[
               // Severity ascending: best outcome (Done) → green
               // (On Track) → amber (Watch) → orange (At Risk) → red
               // (Overdue). Matches the visual intuition of a health
               // gauge — green at the top, red at the bottom.
-              { label: "Done", value: stats.healthDistribution.done, color: "#3b82f6", icon: <CheckCheck className="size-3.5" strokeWidth={2} />, valueSuffix: "epics" },
-              { label: "On Track", value: stats.healthDistribution.onTrack, color: "#10b981", icon: <Check className="size-3.5" strokeWidth={2.4} />, valueSuffix: "epics" },
-              { label: "Watch", value: stats.healthDistribution.watch, color: "#f59e0b", icon: <AlertTriangle className="size-3.5" strokeWidth={2} />, valueSuffix: "epics" },
-              { label: "At Risk", value: stats.healthDistribution.atRisk, color: "#fb923c", icon: <AlertTriangle className="size-3.5" strokeWidth={2} />, valueSuffix: "epics" },
-              { label: "Overdue", value: stats.healthDistribution.overdue, color: "#ef4444", icon: <AlertOctagon className="size-3.5" strokeWidth={2} />, valueSuffix: "epics" },
+              { label: "Done", value: hdData.done, color: "#3b82f6", icon: <CheckCheck className="size-3.5" strokeWidth={2} />, valueSuffix: hdValueSuffix },
+              { label: "On Track", value: hdData.onTrack, color: "#10b981", icon: <Check className="size-3.5" strokeWidth={2.4} />, valueSuffix: hdValueSuffix },
+              { label: "Watch", value: hdData.watch, color: "#f59e0b", icon: <AlertTriangle className="size-3.5" strokeWidth={2} />, valueSuffix: hdValueSuffix },
+              { label: "At Risk", value: hdData.atRisk, color: "#fb923c", icon: <AlertTriangle className="size-3.5" strokeWidth={2} />, valueSuffix: hdValueSuffix },
+              { label: "Overdue", value: hdData.overdue, color: "#ef4444", icon: <AlertOctagon className="size-3.5" strokeWidth={2} />, valueSuffix: hdValueSuffix },
             ]}
             onSliceClick={
-              onHealthFilterChange
+              // App-supplied handler wins — it has the scope routing
+              // logic (in-mode vs cross-mode hand-off). Falls back to
+              // the legacy `healthFilter`-toggle behaviour when the app
+              // doesn't override.
+              onHealthDistributionSliceClick
                 ? (label) => {
                     const status = HEALTH_LABEL_TO_STATUS[label];
                     if (!status) return;
-                    const next = new Set(healthFilter ?? []);
-                    if (next.has(status)) next.delete(status);
-                    else next.add(status);
-                    onHealthFilterChange(next);
+                    onHealthDistributionSliceClick(status, label);
                   }
-                : undefined
+                : onHealthFilterChange
+                  ? (label) => {
+                      const status = HEALTH_LABEL_TO_STATUS[label];
+                      if (!status) return;
+                      const next = new Set(healthFilter ?? []);
+                      if (next.has(status)) next.delete(status);
+                      else next.add(status);
+                      onHealthFilterChange(next);
+                    }
+                  : undefined
             }
             activeLabels={
               healthFilter && healthFilter.size > 0
@@ -556,6 +702,8 @@ export function RoadmapHealthHero({
                 : undefined
             }
           />
+            );
+          })()}
           <DonutCard
             panelClassName="bg-violet-50/60 ring-violet-100"
             title={
@@ -1540,6 +1688,27 @@ function DonutSvg({
 
 /* -------- Stats computation -------- */
 
+/**
+ * Worst-of workflow rollup across a list of stories — used to bucket
+ * an epic / initiative by the most-progressed status of its work.
+ * Mirrors `rollupWorkflowStatus` in `backlog-planning-panel.tsx` so the
+ * hero's Work Progress donut at Epic / Initiative scope buckets the
+ * same way the backlog table does. Inlined rather than imported to
+ * avoid pulling the entire ~12k-line backlog panel into the hero's
+ * build graph.
+ */
+type WorkflowStatus = "todo" | "inProgress" | "review" | "done";
+function rollupWorkflowStatusLocal(
+  stories: ReadonlyArray<{ status: string | null | undefined }>,
+): WorkflowStatus {
+  if (stories.length === 0) return "todo";
+  const statuses = stories.map((s) => s.status ?? "todo");
+  if (statuses.every((s) => s === "done")) return "done";
+  if (statuses.every((s) => s === "review" || s === "done")) return "review";
+  if (statuses.some((s) => s === "inProgress" || s === "review" || s === "done")) return "inProgress";
+  return "todo";
+}
+
 function computeRoadmapStats(
   initiatives: readonly InitiativeItem[],
   selectedYear: number,
@@ -1549,8 +1718,40 @@ function computeRoadmapStats(
   let epicsCount = 0;
   let epicsScheduledCount = 0;
   let storiesCount = 0;
-  const workProgress = { backlogEpic: 0, todo: 0, inProgress: 0, review: 0, done: 0 };
-  const healthDistribution = { onTrack: 0, done: 0, watch: 0, atRisk: 0, overdue: 0, total: 0 };
+  /**
+   * Work Progress is computed at three scopes simultaneously so the
+   * Work Progress donut can read `workProgress[heroScope]` without a
+   * second pass through the initiative tree. The buckets vary slightly
+   * by scope:
+   *   - story: "backlogEpic" (story under unscheduled epic) + 4 statuses
+   *   - epic:  "unscheduled" (epic without plan dates) + 4 statuses
+   *   - initiative: just the 4 workflow statuses (initiative-level
+   *     "unscheduled" isn't a real concept; an initiative without any
+   *     scheduled epic still has a workflow rollup if it has any
+   *     stories anywhere). 4 slices instead of 5.
+   */
+  const workProgress = {
+    story: { backlogEpic: 0, todo: 0, inProgress: 0, review: 0, done: 0 },
+    epic: { unscheduled: 0, todo: 0, inProgress: 0, review: 0, done: 0 },
+    initiative: { todo: 0, inProgress: 0, review: 0, done: 0 },
+  };
+  /**
+   * Health Distribution at three scopes simultaneously — same bucket
+   * shape, different units:
+   *   - epic: 1 row per epic (via `computeEpicHealthVerdict`)
+   *   - initiative: 1 row per initiative (via `computeInitiativeHealthVerdict`,
+   *     worst-of-children)
+   *   - story: 1 row per story (via `computeStoryHealthVerdict`, sprint
+   *     burndown). Stories without a verdict (no sprint or no estimate)
+   *     are not counted — matches the Health column's `—` rule in the
+   *     backlog table so the donut numbers reconcile against the visible
+   *     rows.
+   */
+  const healthDistribution = {
+    epic: { onTrack: 0, done: 0, watch: 0, atRisk: 0, overdue: 0, total: 0 },
+    initiative: { onTrack: 0, done: 0, watch: 0, atRisk: 0, overdue: 0, total: 0 },
+    story: { onTrack: 0, done: 0, watch: 0, atRisk: 0, overdue: 0, total: 0 },
+  };
   /** Epic Estimates coverage — 3-tier split when basis is "epicEst":
    *    • estimated          = epic has originalEstimateDays AND every
    *                           child story has estimatedDays (or no children).
@@ -1578,7 +1779,26 @@ function computeRoadmapStats(
     daysLeft: number;
     status: HealthStatus;
   };
+  /**
+   * Three independent maps — one per scope. Each accumulates the same
+   * shape but counts a different unit:
+   *   - epic: estTotal = sum of child story estimatedDays under each
+   *     epic the team owns; daysLeft = sum of child story daysLeft;
+   *     status = worst epic verdict for the team. Current behaviour.
+   *   - initiative: estTotal = sum of all stories across all epics of
+   *     all initiatives the team's epics belong to; status = worst
+   *     initiative verdict the team participates in.
+   *   - story: estTotal = number of stories assigned to the team (or
+   *     owned via epic.team); daysLeft = open story count; status =
+   *     worst per-story sprint-burndown verdict.
+   */
   const teamAccs = new Map<string, TeamAcc>();
+  const teamAccsInitiative = new Map<string, TeamAcc>();
+  const teamAccsStory = new Map<string, TeamAcc>();
+  // Track which initiatives each team participates in (via its
+  // epics), so the initiative-scope rollup doesn't double-count an
+  // initiative that has multiple of the same team's epics.
+  const teamInitiativesSeen = new Map<string, Set<string>>();
   const STATUS_RANK_LOCAL: Record<HealthStatus, number> = {
     done: 0,
     onTrack: 0,
@@ -1630,8 +1850,8 @@ function computeRoadmapStats(
       let epicHealth: HealthStatus | null = null;
       const v = computeEpicHealthVerdict(epic, selectedYear, progressBasis);
       if (v != null) {
-        healthDistribution[v.status] = (healthDistribution[v.status] ?? 0) + 1;
-        healthDistribution.total += 1;
+        healthDistribution.epic[v.status] = (healthDistribution.epic[v.status] ?? 0) + 1;
+        healthDistribution.epic.total += 1;
         epicHealth = v.status;
       }
 
@@ -1644,12 +1864,48 @@ function computeRoadmapStats(
       if (epicHealth && STATUS_RANK_LOCAL[epicHealth] > STATUS_RANK_LOCAL[teamAcc.status]) {
         teamAcc.status = epicHealth;
       }
+      // Initiative-scope team accumulator: same team key, but the
+      // estTotal / daysLeft / status are kept on a separate map so
+      // each team's initiative-count is incremented at most once per
+      // initiative (via the `seen` set below), and the status uses
+      // the initiative-level verdict computed at the end of the outer
+      // loop. We touch the entry here so it exists for the
+      // outer-loop's status / estimate writes.
+      let teamAccInit = teamAccsInitiative.get(teamKey);
+      if (!teamAccInit) {
+        teamAccInit = { teamId: teamKey, estTotal: 0, daysLeft: 0, status: "onTrack" };
+        teamAccsInitiative.set(teamKey, teamAccInit);
+      }
+      let seenInits = teamInitiativesSeen.get(teamKey);
+      if (!seenInits) {
+        seenInits = new Set();
+        teamInitiativesSeen.set(teamKey, seenInits);
+      }
+      seenInits.add(initiative.id);
+      // Story-scope team accumulator — touch the entry up-front so
+      // the inner story loop can write into it.
+      let teamAccStory = teamAccsStory.get(teamKey);
+      if (!teamAccStory) {
+        teamAccStory = { teamId: teamKey, estTotal: 0, daysLeft: 0, status: "onTrack" };
+        teamAccsStory.set(teamKey, teamAccStory);
+      }
 
       for (const story of epic.userStories ?? []) {
         storiesCount += 1;
         if (!(story.description ?? "").trim()) storiesWithoutDescCount += 1;
         if (story.sprint != null) sprintIds.add(story.sprint);
         const estDaysStory = Math.max(0, Number(story.estimatedDays ?? 0));
+        // Story-scope Health Distribution: bucket each story by its
+        // sprint-burndown verdict. Stories without a verdict
+        // (unscheduled / no estimate / zero-day sprint) are not
+        // counted — the donut number matches the count of "—"-free
+        // rows in the backlog's Health column.
+        const storyVerdict = computeStoryHealthVerdict(story, epic, selectedYear);
+        if (storyVerdict != null) {
+          healthDistribution.story[storyVerdict.status] =
+            (healthDistribution.story[storyVerdict.status] ?? 0) + 1;
+          healthDistribution.story.total += 1;
+        }
         // Work Progress donut is a story-COUNT snapshot — always
         // increment by 1 regardless of `progressBasis`. The basis
         // toggle makes sense for "what % of work is done?" cards
@@ -1667,21 +1923,21 @@ function computeRoadmapStats(
         // "Backlog epic". Once the epic is scheduled, normal status
         // bucketing takes over.
         if (epic.planStartMonth == null) {
-          workProgress.backlogEpic += 1;
+          workProgress.story.backlogEpic += 1;
         } else {
           switch (story.status) {
             case "inProgress":
-              workProgress.inProgress += 1;
+              workProgress.story.inProgress += 1;
               break;
             case "done":
-              workProgress.done += 1;
+              workProgress.story.done += 1;
               break;
             case "review":
-              workProgress.review += 1;
+              workProgress.story.review += 1;
               break;
             case "todo":
             default:
-              workProgress.todo += 1;
+              workProgress.story.todo += 1;
           }
         }
         // Epic Estimates donut, when basis is days/stories, splits at the
@@ -1708,6 +1964,69 @@ function computeRoadmapStats(
           teamAcc.estTotal += estDaysStory;
           teamAcc.daysLeft += left;
         }
+        // Story-scope team rollup: estTotal = story count, daysLeft =
+        // open-story count, status = worst per-story sprint-burndown
+        // verdict.
+        teamAccStory.estTotal += 1;
+        teamAccStory.daysLeft += story.status === "done" ? 0 : 1;
+        if (storyVerdict && STATUS_RANK_LOCAL[storyVerdict.status] > STATUS_RANK_LOCAL[teamAccStory.status]) {
+          teamAccStory.status = storyVerdict.status;
+        }
+      }
+
+      // Epic-scope Work Progress bucket: "unscheduled" (no plan
+      // dates) trumps the workflow rollup, otherwise the worst-of
+      // child story statuses decides the bucket. Matches the row-pill
+      // logic in the backlog table for epic rows.
+      if (epic.planStartMonth == null) {
+        workProgress.epic.unscheduled += 1;
+      } else {
+        const epicWorkflow = rollupWorkflowStatusLocal(epic.userStories ?? []);
+        workProgress.epic[epicWorkflow] += 1;
+      }
+    }
+
+    // Initiative-scope Work Progress bucket: rollup workflow status
+    // across EVERY story under EVERY epic of this initiative. Empty
+    // initiatives (no stories anywhere) fall to "todo" via the
+    // helper's empty-list default, which matches the backlog's
+    // initiative-row pill behaviour.
+    const allInitiativeStories = (initiative.epics ?? []).flatMap(
+      (e) => e.userStories ?? [],
+    );
+    const initiativeWorkflow = rollupWorkflowStatusLocal(allInitiativeStories);
+    workProgress.initiative[initiativeWorkflow] += 1;
+
+    // Initiative-scope Health Distribution: shared verdict helper —
+    // same one the Gantt initiative bars + dashboard donut already
+    // call. Null verdicts (initiative without scheduled epics, etc.)
+    // aren't counted, matching the Health column rule.
+    const initVerdict = computeInitiativeHealthVerdict(
+      initiative,
+      selectedYear,
+      progressBasis,
+    );
+    if (initVerdict != null) {
+      healthDistribution.initiative[initVerdict.status] =
+        (healthDistribution.initiative[initVerdict.status] ?? 0) + 1;
+      healthDistribution.initiative.total += 1;
+    }
+    // Initiative-scope Team Progress: push the initiative's
+    // estimate/daysLeft AND its verdict into the acc of every team
+    // that participates in it (via epic ownership). estTotal counts
+    // initiatives the team participates in; status is the worst
+    // initiative verdict the team is associated with.
+    for (const [teamKey, seenInits] of teamInitiativesSeen.entries()) {
+      if (!seenInits.has(initiative.id)) continue;
+      const teamAccInit = teamAccsInitiative.get(teamKey);
+      if (!teamAccInit) continue;
+      teamAccInit.estTotal += 1;
+      // No clean "daysLeft" for an initiative outside of status, so use
+      // the same heuristic as the story acc: 0 when "done", 1 otherwise.
+      // The card will show this as a 0-or-1 progress count per initiative.
+      teamAccInit.daysLeft += initVerdict?.status === "done" ? 0 : 1;
+      if (initVerdict && STATUS_RANK_LOCAL[initVerdict.status] > STATUS_RANK_LOCAL[teamAccInit.status]) {
+        teamAccInit.status = initVerdict.status;
       }
     }
   }
@@ -1715,26 +2034,36 @@ function computeRoadmapStats(
   const coveragePercent =
     epicsCount === 0 ? 0 : Math.round((epicsScheduledCount / epicsCount) * 100);
 
-  const teamProgress = Array.from(teamAccs.values())
-    .filter((t) => t.estTotal > 0)
-    .map((t) => {
-      const doneDays = Math.max(0, t.estTotal - t.daysLeft);
-      const donePct = t.estTotal > 0 ? Math.round((doneDays / t.estTotal) * 100) : 0;
-      const label =
-        t.teamId === "__unassigned__"
-          ? "Unassigned"
-          : monthTeamLabelForId(t.teamId) ?? t.teamId;
-      return {
-        teamId: t.teamId,
-        label,
-        estTotal: t.estTotal,
-        daysLeft: t.daysLeft,
-        doneDays,
-        donePct,
-        status: t.status,
-      };
-    })
-    .sort((a, b) => b.estTotal - a.estTotal);
+  // Shared finalizer so the three scope flavors share the same
+  // "filter empty teams + sort by size desc" tail. `label` is also
+  // resolved here so the card never has to deal with raw team ids.
+  function finalizeTeamProgress(accs: Map<string, TeamAcc>) {
+    return Array.from(accs.values())
+      .filter((t) => t.estTotal > 0)
+      .map((t) => {
+        const doneDays = Math.max(0, t.estTotal - t.daysLeft);
+        const donePct = t.estTotal > 0 ? Math.round((doneDays / t.estTotal) * 100) : 0;
+        const label =
+          t.teamId === "__unassigned__"
+            ? "Unassigned"
+            : monthTeamLabelForId(t.teamId) ?? t.teamId;
+        return {
+          teamId: t.teamId,
+          label,
+          estTotal: t.estTotal,
+          daysLeft: t.daysLeft,
+          doneDays,
+          donePct,
+          status: t.status,
+        };
+      })
+      .sort((a, b) => b.estTotal - a.estTotal);
+  }
+  const teamProgress = {
+    epic: finalizeTeamProgress(teamAccs),
+    initiative: finalizeTeamProgress(teamAccsInitiative),
+    story: finalizeTeamProgress(teamAccsStory),
+  };
 
   return {
     initiativesCount,

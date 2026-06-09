@@ -89,6 +89,7 @@ import { teamLabelForWorkspaceUser } from "@/lib/workspace-users";
 import { monthLaneFromGlobalSprint, resolveStoryYearSprint, sprintEndDate, YEAR_SPRINT_MAX } from "@/lib/year-sprint";
 import { sprintCalendarDaysRemaining, sprintDayDates } from "@/lib/sprint-analytics";
 import { sprintStoryVerdict, type SprintLoadStoryProjection } from "@/components/timeline/sprint-analytics";
+import { computeStoryHealthVerdict } from "@/lib/story-health";
 import { HealthBadge } from "@/components/timeline/health-badge";
 import { computeEpicHealthVerdict, computeInitiativeHealthVerdict } from "@/lib/epic-health";
 import type { HealthStatus, ProgressBasis } from "@/lib/progress";
@@ -129,33 +130,11 @@ function aggregateInitiativeTeamId(initiative: InitiativeItem): string | null {
  *   - the sprint resolves to a zero-day window (shouldn't happen, but
  *     guards a div-by-zero in the burndown math)
  */
-function computeStoryHealthForBacklog(
-  story: UserStoryItem,
-  parentEpic: EpicItem,
-  planYear: number,
-): { status: HealthStatus } | null {
-  // `resolveStoryYearSprint` falls back to the epic's plan window
-  // when the story has no explicit sprint — pass the epic's start
-  // month as the context anchor.
-  const contextMonth = parentEpic.planStartMonth ?? 1;
-  const globalSprint = resolveStoryYearSprint(story, contextMonth);
-  if (globalSprint == null) return null;
-  const est = Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
-  if (est <= 0) return null;
-  const { month } = monthLaneFromGlobalSprint(globalSprint);
-  const total = sprintDayDates(planYear, month, globalSprint).length;
-  if (total <= 0) return null;
-  const left = sprintCalendarDaysRemaining(planYear, month, globalSprint);
-  const projection: SprintLoadStoryProjection = {
-    id: story.id,
-    title: story.title,
-    estimatedDays: story.estimatedDays,
-    daysLeft: story.daysLeft,
-    statusKey: story.status,
-  };
-  const { status } = sprintStoryVerdict(projection, left, total);
-  return { status };
-}
+// Backlog uses the shared `computeStoryHealthVerdict` from `lib/story-health.ts`
+// for its Health column. Same helper now also drives the hero's
+// Health Distribution donut at Story scope so the donut and the
+// table always bucket the same way.
+const computeStoryHealthForBacklog = computeStoryHealthVerdict;
 
 /**
  * Tiny shared renderer so every row variant — story / epic /
@@ -267,6 +246,16 @@ type BacklogPlanningPanelProps = {
    *  array clears the filter; `null` / `undefined` means no hand-off
    *  pending (existing internal `healthFilter` stays put). */
   externalHealthFilter?: readonly HealthStatus[] | null;
+  /** Hand-off into the panel's `workItemFilter` for the hero scope
+   *  selector: every donut click on Backlog (Work Progress / Health
+   *  Distribution / Team Progress) sets this to `[<heroScope>]` so the
+   *  table narrows to that work-item kind at the same time the axis
+   *  filter is applied. Identity-based sync like the others. */
+  externalWorkItemFilter?: readonly ("initiative" | "epic" | "story")[] | null;
+  /** Hand-off into the panel's internal `teamFilter` — used when the
+   *  planner clicks a Team Progress row on the hero while on Backlog.
+   *  Identity-based sync. */
+  externalTeamFilter?: readonly string[] | null;
 };
 
 type OptionItem = { id: string; label: string };
@@ -4948,6 +4937,8 @@ export function BacklogPlanningPanel({
   progressBasis = "epicEst",
   externalStatusFilter,
   externalHealthFilter,
+  externalWorkItemFilter,
+  externalTeamFilter,
 }: BacklogPlanningPanelProps) {
   // Render-time diagnostic: count + time every commit to help spot whether
   // slowness is the mount itself, re-renders from a parent, or some heavy
@@ -5006,6 +4997,20 @@ export function BacklogPlanningPanel({
    *  its epicId is in the set. Empty array = no filter. */
   const [parentFilter, setParentFilter] = useState<string[]>([]);
   const [workItemFilter, setWorkItemFilter] = useState<WorkItemKindFilter[]>([]);
+  // Identity-based sync for the hero scope selector's `workItemFilter`
+  // and `teamFilter` hand-offs. Placed AFTER the setters they call so
+  // they're in scope (declaration order matters — moving these above
+  // the `useState` lines throws ReferenceError at runtime).
+  useEffect(() => {
+    if (externalWorkItemFilter == null) return;
+    setWorkItemFilter([...externalWorkItemFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalWorkItemFilter]);
+  useEffect(() => {
+    if (externalTeamFilter == null) return;
+    setTeamFilter([...externalTeamFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalTeamFilter]);
   const [sortBy, setSortBy] = useState<BacklogSortBy>("titleAsc");
   // Per-column header sort: overrides initiative ordering when non-null. Third
   // click on the same header clears back to null so the saved-view sort wins.

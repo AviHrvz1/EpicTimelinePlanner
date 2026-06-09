@@ -1407,6 +1407,20 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
    *  pick here so the backlog filter sees it. `null` = no hand-off. */
   const [backlogIncomingHealthFilter, setBacklogIncomingHealthFilter] =
     useState<readonly HealthStatus[] | null>(null);
+  /** Hand-off for the backlog's `workItemFilter`. Every donut click on
+   *  Backlog while the scope selector is active sets this to the
+   *  scope's kind (`["initiative"]` / `["epic"]` / `["story"]`) so the
+   *  table narrows to that kind at the same time the axis filter is
+   *  applied. Cross-mode clicks (story scope from Roadmap Planning,
+   *  etc.) set this and switch modes simultaneously. Identity-based
+   *  sync inside the backlog panel — allocate a fresh array per click. */
+  const [backlogIncomingWorkItemFilter, setBacklogIncomingWorkItemFilter] =
+    useState<readonly ("initiative" | "epic" | "story")[] | null>(null);
+  /** Hand-off for the backlog's internal `teamFilter`. Set when the
+   *  planner clicks a Team Progress row on the hero. Identity-based
+   *  sync, same pattern as the other backlog hand-offs. */
+  const [backlogIncomingTeamFilter, setBacklogIncomingTeamFilter] =
+    useState<readonly string[] | null>(null);
   /** Same lift pattern as the status filter — emitted by the panel,
    *  passed to TimelineGrid so the Gantt only renders epics whose
    *  plan-start quarter is in the set. Empty Set = no filter. */
@@ -1425,6 +1439,33 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   /** Controlled mirror of the Gantt bar mode (initiatives vs epics) — lifted
    *  so the hero's "Initiatives" / "Epics" stat blocks can flip it. */
   const [roadmapBarModeCtrl, setRoadmapBarModeCtrl] = useState<"epics" | "initiatives">("epics");
+  /**
+   * "Hero scope" — the active unit the planner is analysing across the
+   * hero's KPI strip + donut cards. The Initiatives / Epics / Stories
+   * tiles flip this; the donut math, slice click semantics, and any
+   * cross-mode hand-off all key off it. Per-mode defaults via the
+   * effect below: Backlog → story, Roadmap Planning → epic, Dashboard →
+   * initiative; the planner's manual override persists until they
+   * switch modes (no localStorage in v1 — keep state ephemeral).
+   */
+  const [heroScope, setHeroScope] = useState<"initiative" | "epic" | "story">("epic");
+  // Per-mode default for heroScope. Snaps back to the mode's natural
+  // unit each time the planner switches modes — Backlog wants stories
+  // (table rows), Roadmap Planning wants epics (Gantt bars), Dashboard
+  // wants initiatives (top-level scope). The planner can still override
+  // within a mode by clicking a different KPI tile; the override lasts
+  // until they leave that mode. We don't persist the override across
+  // mode switches because the new mode usually has a different natural
+  // unit anyway.
+  useEffect(() => {
+    if (topMode === "backlog") setHeroScope("story");
+    else if (topMode === "dashboard") setHeroScope("initiative");
+    else if (topMode === "roadmap") setHeroScope("epic");
+    // Other modes (users / demoBuilder / timeDebugger) don't render
+    // the hero in the same shape — leave the scope alone so re-entering
+    // backlog/roadmap/dashboard later doesn't trigger an unnecessary
+    // re-sync.
+  }, [topMode]);
   /** Same mirror for the calendar header's sprint-chip row. */
   const [showYearSprintChipsCtrl, setShowYearSprintChipsCtrl] = useState(false);
   /** Command bus: when the hero's Epic Estimates donut legend is clicked
@@ -1488,29 +1529,55 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
    */
   const handleWorkProgressSliceClick = useCallback(
     (status: "backlogEpic" | "todo" | "inProgress" | "review" | "done", label: string) => {
+      // Backlog mode: every click sets BOTH `workItemFilter=[heroScope]`
+      // and toggles the picked status. Replace+toggle as confirmed in
+      // plan — the donut click expresses a specific intent so we
+      // overwrite any prior `workItemFilter` rather than merging.
       if (topMode === "backlog") {
-        // In-mode: toggle the status in/out of the hand-off pipe.
-        // BacklogPlanningPanel's internal `statusFilter` syncs on every
-        // new identity, so the toggle reaches the row filter the same
-        // way the cross-mode hand-off does. The Gantt's parallel
-        // `ganttStatusFilter` (used by other surfaces) stays in lockstep.
+        const next = new Set(ganttStatusFilter);
+        const isToggleOff = next.has(status);
+        if (isToggleOff) next.delete(status);
+        else next.add(status);
+        handlePanelStatusFilterDerivedChange(next);
+        setBacklogIncomingStatusFilter(Array.from(next));
+        // When the planner toggles the slice OFF (second click), clear
+        // the work-item filter alongside — they were set as a unit, so
+        // they unset as a unit. When toggling ON or adding another
+        // slice, replace `workItemFilter` with the current scope.
+        setBacklogIncomingWorkItemFilter(
+          isToggleOff && next.size === 0 ? [] : [heroScope],
+        );
+        return;
+      }
+      // Roadmap Planning + scope=initiative/epic: stay in-mode, filter
+      // the Gantt's matching bars via `handlePanelStatusFilterDerivedChange`
+      // (which writes `ganttStatusFilter` — the same filter the bar
+      // renderer at `initiativeMatchesGanttStatusFilter` / the epic
+      // equivalent already read).
+      if (topMode === "roadmap" && heroScope !== "story") {
         const next = new Set(ganttStatusFilter);
         if (next.has(status)) next.delete(status);
         else next.add(status);
         handlePanelStatusFilterDerivedChange(next);
-        setBacklogIncomingStatusFilter(Array.from(next));
         return;
       }
-      // Cross-mode: replace, navigate, toast. New array literal each
-      // call ensures the backlog's sync useEffect fires even when the
-      // same status is clicked repeatedly.
+      // Cross-mode (story scope from any non-backlog mode, dashboard,
+      // etc.): hand off to Backlog with status + workItemFilter
+      // pre-applied. Fresh array literal each call so the backlog's
+      // sync useEffect fires reliably.
       handlePanelStatusFilterDerivedChange(new Set([status]));
       setBacklogIncomingStatusFilter([status]);
+      setBacklogIncomingWorkItemFilter([heroScope]);
       setTopMode("backlog");
-      toast.success(`Filtered Backlog to "${label}"`);
+      const scopePlural = heroScope === "initiative" ? "initiatives" : heroScope === "epic" ? "epics" : "stories";
+      toast.success(`Filtered Backlog to "${label}" ${scopePlural}`);
     },
-    [topMode, ganttStatusFilter, handlePanelStatusFilterDerivedChange],
+    [topMode, heroScope, ganttStatusFilter, handlePanelStatusFilterDerivedChange],
   );
+  // (`handleHealthDistributionSliceClick` and `handleTeamProgressRowClick`
+  // are declared further below — they depend on `handleHealthFilterChange`
+  // and `handlePanelTeamFilterDerivedChange` which haven't been declared
+  // yet at this point in the file.)
   const handlePanelTeamFilterDerivedChange = useCallback((next: Set<string>) => {
     setGanttTeamFilter(next);
     if (next.size > 0) setLastPickedLabelLane("team");
@@ -1577,6 +1644,85 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       }
     },
     [topMode],
+  );
+  /**
+   * Health Distribution slice click — scope-aware. Same in-mode-vs-
+   * cross-mode split as the Work Progress handler:
+   *   - Backlog: replace `workItemFilter` + toggle in `healthFilter`,
+   *     both clear together on second click of the same slice.
+   *   - Roadmap Planning + initiative/epic scope: in-mode toggle of
+   *     `healthFilter` (drives Gantt bar filtering — already wired).
+   *   - Cross-mode (story scope from Roadmap Planning, etc.): hand off
+   *     to Backlog with verdict + work-item filter + toast.
+   */
+  const handleHealthDistributionSliceClick = useCallback(
+    (verdict: HealthStatus, label: string) => {
+      if (topMode === "backlog") {
+        const next = new Set(healthFilter);
+        const isToggleOff = next.has(verdict);
+        if (isToggleOff) next.delete(verdict);
+        else next.add(verdict);
+        handleHealthFilterChange(next);
+        setBacklogIncomingHealthFilter(Array.from(next));
+        setBacklogIncomingWorkItemFilter(
+          isToggleOff && next.size === 0 ? [] : [heroScope],
+        );
+        return;
+      }
+      if (topMode === "roadmap" && heroScope !== "story") {
+        const next = new Set(healthFilter);
+        if (next.has(verdict)) next.delete(verdict);
+        else next.add(verdict);
+        handleHealthFilterChange(next);
+        return;
+      }
+      // Cross-mode hand-off.
+      handleHealthFilterChange(new Set([verdict]));
+      setBacklogIncomingHealthFilter([verdict]);
+      setBacklogIncomingWorkItemFilter([heroScope]);
+      setTopMode("backlog");
+      const scopePlural = heroScope === "initiative" ? "initiatives" : heroScope === "epic" ? "epics" : "stories";
+      toast.success(`Filtered Backlog to "${label}" ${scopePlural}`);
+    },
+    [topMode, heroScope, healthFilter, handleHealthFilterChange],
+  );
+  /**
+   * Team Progress row click — same mode × scope routing as the donut
+   * handlers above, with `teamFilter` as the axis. The legacy
+   * drilldown popover (opened by setting `drilldownTeam` inside the
+   * hero) is bypassed entirely when the app provides this callback —
+   * the click goes straight to navigation / filtering. If the planner
+   * still wants the per-team story breakdown, the filtered Backlog
+   * Workspace surfaces the same data in the table.
+   */
+  const handleTeamProgressRowClick = useCallback(
+    (teamId: string, label: string) => {
+      if (topMode === "backlog") {
+        // Toggle: clicking the SAME team twice clears the filter (and
+        // the work-item filter alongside).
+        const isToggleOff = ganttTeamFilter.has(teamId);
+        const next = new Set(isToggleOff ? [] : [teamId]);
+        handlePanelTeamFilterDerivedChange(next);
+        setBacklogIncomingTeamFilter(Array.from(next));
+        setBacklogIncomingWorkItemFilter(isToggleOff ? [] : [heroScope]);
+        return;
+      }
+      if (topMode === "roadmap" && heroScope !== "story") {
+        const next = new Set(ganttTeamFilter);
+        if (next.has(teamId)) next.delete(teamId);
+        else next.add(teamId);
+        handlePanelTeamFilterDerivedChange(next);
+        return;
+      }
+      // Cross-mode hand-off.
+      handlePanelTeamFilterDerivedChange(new Set([teamId]));
+      setBacklogIncomingTeamFilter([teamId]);
+      setBacklogIncomingWorkItemFilter([heroScope]);
+      setTopMode("backlog");
+      const scopePlural = heroScope === "initiative" ? "initiatives" : heroScope === "epic" ? "epics" : "stories";
+      toast.success(`Filtered Backlog to ${label} ${scopePlural}`);
+    },
+    [topMode, heroScope, ganttTeamFilter, handlePanelTeamFilterDerivedChange],
   );
   const layoutRef = useRef<HTMLDivElement | null>(null);
   /** When true, we hid the initiative rail for insights/retro; restore on leaving those surfaces. */
@@ -5974,6 +6120,10 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           statusFilter={ganttStatusFilter}
           onStatusFilterChange={handlePanelStatusFilterDerivedChange}
           onWorkProgressSliceClick={handleWorkProgressSliceClick}
+          onHealthDistributionSliceClick={handleHealthDistributionSliceClick}
+          onTeamProgressRowClick={handleTeamProgressRowClick}
+          heroScope={heroScope}
+          onHeroScopeChange={setHeroScope}
           onOpenEpicEstimatePanel={handleOpenEstPanel}
           summaryBarRef={setSummaryBarEl}
           onYearChange={async (nextYear) => {
@@ -6892,6 +7042,8 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 progressBasis={progressBasis}
                 externalStatusFilter={backlogIncomingStatusFilter}
                 externalHealthFilter={backlogIncomingHealthFilter}
+                externalWorkItemFilter={backlogIncomingWorkItemFilter}
+                externalTeamFilter={backlogIncomingTeamFilter}
                 onOpenInitiative={backlogOpenInitiative}
                 onOpenEpic={backlogOpenEpic}
                 onOpenStory={backlogOpenStory}
