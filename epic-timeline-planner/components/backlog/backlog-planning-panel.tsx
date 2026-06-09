@@ -1793,6 +1793,250 @@ function BacklogParentPickEditor({
 // users don't have to read meaning into the color of a chip.
 const LABEL_CHIP_CLASS = "border-indigo-200/70 bg-indigo-50 text-indigo-700";
 
+/**
+ * Inline labels picker for backlog rows. Mirrors
+ * `BacklogTeamPickEditor` (trigger + portaled listbox + sticky
+ * search) but multi-select: each row toggles in / out of the draft
+ * instead of replacing it, so a story can wear several tags at once.
+ *
+ * - `value` is the comma-separated draft kept in `editingStoryCell` /
+ *   `editingParentLabels`, matching the existing storage contract.
+ * - Trigger shows the first 2 active labels as chips + a `+N` pill
+ *   when more exist; clicking opens the listbox.
+ * - Listbox: sticky search at the top, every distinct workspace
+ *   label below with a check on the currently-active ones, plus a
+ *   trailing "Add 'xxx'" row when the typed text is brand new.
+ * - Picking a row TOGGLES (doesn't close) so the planner can multi-
+ *   select in one open. Outside click / Escape closes; the cell
+ *   owns commit (✓) and cancel (✕).
+ */
+function BacklogLabelsPickEditor({
+  value,
+  onChange,
+  suggestions,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  suggestions: readonly string[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number; minWidth: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPopoverPos(null);
+      return;
+    }
+    function reposition() {
+      const btn = triggerRef.current;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      setPopoverPos({
+        top: rect.bottom + 4,
+        left: rect.left,
+        minWidth: Math.max(rect.width, 240),
+      });
+    }
+    reposition();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      setQuery("");
+      return;
+    }
+    const id = requestAnimationFrame(() => searchRef.current?.focus());
+    return () => cancelAnimationFrame(id);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (triggerRef.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const activeLabels = useMemo(() => parseStoryLabels(value), [value]);
+  const activeSet = useMemo(() => new Set(activeLabels.map((l) => l.toLowerCase())), [activeLabels]);
+
+  function toggleLabel(label: string) {
+    const trimmed = label.trim();
+    if (!trimmed) return;
+    const next = activeSet.has(trimmed.toLowerCase())
+      ? activeLabels.filter((l) => l.toLowerCase() !== trimmed.toLowerCase())
+      : [...activeLabels, trimmed];
+    onChange(next.join(", "));
+  }
+
+  const trimmedQuery = query.trim();
+  const dedupedSuggestions = useMemo(() => [...new Set(suggestions)], [suggestions]);
+  const filteredSuggestions = useMemo(() => {
+    const q = trimmedQuery.toLowerCase();
+    if (!q) return dedupedSuggestions;
+    return dedupedSuggestions.filter((s) => s.toLowerCase().includes(q));
+  }, [dedupedSuggestions, trimmedQuery]);
+  const showAddRow =
+    trimmedQuery.length > 0 &&
+    !dedupedSuggestions.some((s) => s.toLowerCase() === trimmedQuery.toLowerCase());
+
+  return (
+    <span data-cell-editing className="relative inline-flex max-w-full items-center" onMouseDown={(event) => event.stopPropagation()}>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="inline-flex min-w-0 max-w-full items-center justify-between gap-1.5 rounded-md border bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+      >
+        <span className="inline-flex min-w-0 items-center gap-1">
+          {activeLabels.length === 0 ? (
+            <span className="truncate text-slate-400">Pick labels…</span>
+          ) : (
+            <>
+              {activeLabels.slice(0, 2).map((l) => (
+                <span
+                  key={l}
+                  className={cn(
+                    "inline-flex max-w-[6rem] items-center truncate rounded border px-1.5 py-0.5 text-[11px] leading-none",
+                    LABEL_CHIP_CLASS,
+                  )}
+                >
+                  {l}
+                </span>
+              ))}
+              {activeLabels.length > 2 ? (
+                <span className="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[11px] leading-none text-slate-600">
+                  +{activeLabels.length - 2}
+                </span>
+              ) : null}
+            </>
+          )}
+        </span>
+        <ChevronDown className="size-3 shrink-0 text-slate-400" aria-hidden />
+      </button>
+      {open && popoverPos
+        ? createPortal(
+            <div
+              ref={popoverRef}
+              style={{
+                position: "fixed",
+                top: popoverPos.top,
+                left: popoverPos.left,
+                minWidth: popoverPos.minWidth,
+                zIndex: 1000,
+              }}
+              className="max-h-72 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-md"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <div className="sticky top-0 z-10 border-b border-slate-200 bg-white px-2 py-1.5">
+                <input
+                  ref={searchRef}
+                  type="text"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search or add label…"
+                  className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 placeholder:text-slate-400 focus:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      if (showAddRow && trimmedQuery) {
+                        toggleLabel(trimmedQuery);
+                        setQuery("");
+                      } else if (filteredSuggestions.length === 1) {
+                        toggleLabel(filteredSuggestions[0]);
+                        setQuery("");
+                      }
+                    }
+                  }}
+                />
+              </div>
+              <ul role="listbox" className="py-0.5">
+                {filteredSuggestions.map((s) => {
+                  const isActive = activeSet.has(s.toLowerCase());
+                  return (
+                    <li key={s} role="option" aria-selected={isActive}>
+                      <button
+                        type="button"
+                        onClick={() => toggleLabel(s)}
+                        className={cn(
+                          "flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-100",
+                          isActive && "bg-slate-50 font-medium",
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "inline-flex size-3.5 shrink-0 items-center justify-center rounded border",
+                            isActive
+                              ? "border-indigo-300 bg-indigo-50 text-indigo-700"
+                              : "border-slate-300 text-transparent",
+                          )}
+                          aria-hidden
+                        >
+                          <Check className="size-2.5" />
+                        </span>
+                        <span className={cn(
+                          "inline-flex max-w-full truncate rounded border px-1.5 py-0.5 text-[11px] leading-none",
+                          LABEL_CHIP_CLASS,
+                        )}>
+                          {s}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+                {showAddRow ? (
+                  <li role="option">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        toggleLabel(trimmedQuery);
+                        setQuery("");
+                      }}
+                      className="flex w-full items-center gap-1.5 border-t border-slate-200 px-2 py-1 text-left text-xs text-slate-600 hover:bg-slate-100"
+                    >
+                      <span className="inline-flex size-3.5 shrink-0 items-center justify-center rounded border border-dashed border-slate-300 text-slate-400" aria-hidden>+</span>
+                      <span className="truncate">
+                        Add &ldquo;<span className="font-medium text-slate-800">{trimmedQuery}</span>&rdquo;
+                      </span>
+                    </button>
+                  </li>
+                ) : null}
+                {filteredSuggestions.length === 0 && !showAddRow ? (
+                  <li className="px-2 py-1.5 text-xs text-slate-400">No labels match</li>
+                ) : null}
+              </ul>
+            </div>,
+            document.body,
+          )
+        : null}
+    </span>
+  );
+}
+
 function labelChipClasses(_label: string): string {
   return LABEL_CHIP_CLASS;
 }
@@ -3895,6 +4139,11 @@ type BacklogStoryRowCtx = {
   workspaceDirectoryUsers: readonly { name: string; image?: string | null }[] | null;
   /** Names suggested by the assignee combobox while editing. */
   assigneeNameSuggestions: readonly string[];
+  /** Every distinct label currently used across stories in the workspace.
+   *  Drives the suggestion list inside `BacklogLabelsPickEditor` — the
+   *  planner sees existing tags first, then can still add brand-new
+   *  ones via the "Add 'xxx'" row. */
+  storyLabelSuggestions: readonly string[];
   /** Sprint options for the year of the story currently being edited.
    *  Kept as a function so the row only resolves them when actually
    *  rendering the editor for itself. */
@@ -4208,18 +4457,25 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
         labels: (
           <div className="w-full min-w-0 overflow-hidden">
             {isEditingCell && editingCellField === "labels" ? (
-              <div className="mx-auto flex w-full min-w-0 max-w-full flex-col gap-1.5 rounded-lg border border-indigo-200/55 bg-gradient-to-b from-white to-slate-50/95 p-2 shadow-sm ring-1 ring-slate-200/45">
-                <IsolatedStoryCellTextEditor
-                  initial={editingCellValue}
-                  multiline
-                  placeholder="Comma-separated labels"
-                  className="min-h-[2.5rem] w-full min-w-0 rounded-md border border-slate-200/80 bg-white px-2 py-1.5 text-left text-[14px] leading-snug text-slate-800 outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200/70"
-                  onCancel={ctx.cancelStoryCellEdit}
-                  onSave={(value) =>
-                    ctx.confirmStoryCellEdit(row.storyId, "labels", storyEditSnapshotFromGroupedRow(row), value)
-                  }
+              <span className="relative z-40 inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
+                <BacklogLabelsPickEditor
+                  value={editingCellValue}
+                  onChange={(v) => ctx.setEditingStoryCell((prev: any) => (prev ? { ...prev, value: v } : prev))}
+                  suggestions={ctx.storyLabelSuggestions}
                 />
-              </div>
+                <button
+                  type="button"
+                  onClick={ctx.cancelStoryCellEdit}
+                  title="Cancel"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100"
+                ><X className="size-3.5" /></button>
+                <button
+                  type="button"
+                  onClick={() => void ctx.confirmStoryCellEdit(row.storyId, "labels", storyEditSnapshotFromGroupedRow(row))}
+                  title="Save"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded text-emerald-700 hover:bg-emerald-50"
+                ><Check className="size-3.5" /></button>
+              </span>
             ) : (
               <BacklogLabelsChipPanel
                 labelsSerialized={row.storyLabels}
@@ -5335,27 +5591,39 @@ export function BacklogPlanningPanel({
     );
   }
   function renderParentLabelsEditor(args: { kind: "epic" | "initiative"; id: string }): ReactNode {
-    const initial = editingParentLabels?.value ?? "";
     const patchFn = args.kind === "epic" ? onPatchEpicQuick : onPatchInitiativeQuick;
     const toastLabel = args.kind === "epic" ? "Epic labels" : "Initiative labels";
+    async function commit() {
+      const value = editingParentLabels?.value ?? "";
+      const next = value.trim() === "" ? null : value.trim();
+      try {
+        await patchFn(args.id, { labels: next });
+        toast.success(`${toastLabel} updated`);
+        setEditingParentLabels(null);
+      } catch {
+        toast.error(`Failed to update ${toastLabel.toLowerCase()}`);
+      }
+    }
     return (
-      <IsolatedTextInput
-        initial={initial}
-        placeholder="Comma-separated labels"
-        minLength={0}
-        saveOnBlur
-        onCancel={() => setEditingParentLabels(null)}
-        onSave={async (value) => {
-          const next = value.trim() === "" ? null : value.trim();
-          try {
-            await patchFn(args.id, { labels: next });
-            toast.success(`${toastLabel} updated`);
-            setEditingParentLabels(null);
-          } catch {
-            toast.error(`Failed to update ${toastLabel.toLowerCase()}`);
-          }
-        }}
-      />
+      <span className="relative z-40 inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
+        <BacklogLabelsPickEditor
+          value={editingParentLabels?.value ?? ""}
+          onChange={(v) => setEditingParentLabels((prev) => (prev ? { ...prev, value: v } : prev))}
+          suggestions={storyLabelSuggestions}
+        />
+        <button
+          type="button"
+          onClick={() => setEditingParentLabels(null)}
+          title="Cancel"
+          className="inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100"
+        ><X className="size-3.5" /></button>
+        <button
+          type="button"
+          onClick={() => void commit()}
+          title="Save"
+          className="inline-flex h-6 w-6 items-center justify-center rounded text-emerald-700 hover:bg-emerald-50"
+        ><Check className="size-3.5" /></button>
+      </span>
     );
   }
 
@@ -6718,6 +6986,7 @@ export function BacklogPlanningPanel({
     tableGridTemplate,
     workspaceDirectoryUsers: workspaceDirectoryUsers ?? null,
     assigneeNameSuggestions,
+    storyLabelSuggestions,
     assignableSprintsForYear: (year) => storyRowRefs.current.assignableSprintsForYear(year),
     onOpenStory: (id) => storyRowRefs.current.onOpenStory(id),
     patchStoryInline: (id, patch) => storyRowRefs.current.patchStoryInline(id, patch as any),
@@ -6738,7 +7007,7 @@ export function BacklogPlanningPanel({
     renderBacklogCells: (cells, edits) => storyRowRefs.current.renderBacklogCells(cells, edits),
     renderRoadmapCell: (initiativeId) => storyRowRefs.current.renderRoadmapCell(initiativeId),
     formatStoryLabelsForEditInput,
-  }), [tableGridTemplate, workspaceDirectoryUsers, assigneeNameSuggestions]);
+  }), [tableGridTemplate, workspaceDirectoryUsers, assigneeNameSuggestions, storyLabelSuggestions]);
 
   function renderStoryDataRows(rows: typeof groupedStoryRows, indentPx: number, keyPrefix: string) {
     return rows
