@@ -6525,6 +6525,9 @@ export function BacklogPlanningPanel({
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
+                  if (typeof window !== "undefined") {
+                    console.log("[BacklogPencilClick]", { column: key, kind: hint.kind });
+                  }
                   hint.onEdit();
                 }}
                 onMouseDown={(event) => event.stopPropagation()}
