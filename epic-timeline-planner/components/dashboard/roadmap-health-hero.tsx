@@ -26,7 +26,6 @@ import {
   Ruler,
   ShieldCheck,
   Sigma,
-  StickyNote,
   Users,
   Zap,
 } from "lucide-react";
@@ -34,6 +33,7 @@ import {
 import { UserChip } from "@/components/auth/user-chip";
 import { HealthExplainerPopover } from "@/components/dashboard/health-explainer-popover";
 import { RoadmapSelector } from "@/components/timeline/roadmap-selector";
+import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { computeProgress, type HealthStatus } from "@/lib/progress";
 import { computeEpicHealthVerdict } from "@/lib/epic-health";
 import { now as clockNow } from "@/lib/clock";
@@ -592,7 +592,7 @@ export function RoadmapHealthHero({
                         ? Math.round((stats.storiesWithoutDescCount / stats.storiesCount) * 100)
                         : 0,
                       color: "#f59e0b",
-                      icon: <StickyNote className="size-3.5" strokeWidth={2} />,
+                      icon: <UserStoryIcon className="size-3.5 text-current" />,
                       onClick: () => onOpenEpicEstimatePanel("storiesNoDesc"),
                       title: "Open the Estimate Coverage panel · Stories without description tab",
                       valueSuffix: "stories",

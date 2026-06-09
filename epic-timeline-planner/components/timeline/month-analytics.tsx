@@ -25,10 +25,10 @@ import {
   Clock,
   Eraser,
   ExternalLink,
+  BookOpen,
   Flag,
   Folder,
   Layers,
-  StickyNote,
   TrendingUp,
   User,
   UserRound,
@@ -4999,12 +4999,12 @@ export function MonthAnalytics({
                   selectedEpicOption != null
                     ? [
                         { value: "epicEst", label: "Epic Est (d)", icon: Folder },
-                        { value: "days", label: "Σ | Child Est (d)", icon: StickyNote },
+                        { value: "days", label: "Σ | Child Est (d)", icon: BookOpen },
                         { value: "stories", label: "Stories Completed (%)", icon: CheckCircle2 },
                       ]
                     : [
                         { value: "epicEst", label: "Σ | Epic Est (d)", icon: Folder },
-                        { value: "days", label: "Σ | Child Est (d)", icon: StickyNote },
+                        { value: "days", label: "Σ | Child Est (d)", icon: BookOpen },
                         { value: "stories", label: "Stories Completed (%)", icon: CheckCircle2 },
                       ]
                 }
@@ -6502,12 +6502,12 @@ export function MonthAnalytics({
                       selectedEpicOption != null
                         ? [
                             { value: "epicEst", label: "Epic Est (d)", icon: Folder },
-                            { value: "days", label: "Σ | Child Est (d)", icon: StickyNote },
+                            { value: "days", label: "Σ | Child Est (d)", icon: BookOpen },
                             { value: "stories", label: "Stories Completed (%)", icon: CheckCircle2 },
                           ]
                         : [
                             { value: "epicEst", label: "Σ | Epic Est (d)", icon: Folder },
-                            { value: "days", label: "Σ | Child Est (d)", icon: StickyNote },
+                            { value: "days", label: "Σ | Child Est (d)", icon: BookOpen },
                             { value: "stories", label: "Stories Completed (%)", icon: CheckCircle2 },
                           ]
                     }

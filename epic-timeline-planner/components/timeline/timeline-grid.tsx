@@ -32,7 +32,6 @@ import {
   PieChart,
   Plus,
   Search,
-  StickyNote,
   Thermometer,
   Trash2,
   User,
@@ -8546,7 +8545,7 @@ export function TimelineGrid({
                                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] hover:bg-slate-50"
                                 >
                                   {s.kind === "story" ? (
-                                    <StickyNote className="size-3.5 shrink-0 text-sky-500" aria-hidden />
+                                    <UserStoryIcon className="size-3.5 shrink-0 text-sky-500" />
                                   ) : s.kind === "epic" ? (
                                     <Folder className="size-3.5 shrink-0 text-slate-500" aria-hidden />
                                   ) : (
