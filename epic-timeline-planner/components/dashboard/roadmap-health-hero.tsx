@@ -445,51 +445,19 @@ export function RoadmapHealthHero({
               onRemoveYearFromRoadmap={onRemoveYearFromRoadmap}
               onGetRoadmapCounts={onGetRoadmapCounts}
               onDeleteRoadmap={onDeleteRoadmap}
-              extraSuffix={`${stats.epicsCount} epics in scope`}
             />
-            {/* "Health calculation" basis chip — visible at Initiative
-                / Epic scope (where the basis drives the verdict math via
-                `computeEpicHealthVerdict` / `computeInitiativeHealthVerdict`).
-                Hidden at Story scope: story health is sprint-burndown
-                driven (`computeStoryHealthVerdict`), which doesn't take
-                a basis. Defaults to visible when `heroScope` is undefined
-                (legacy callers). */}
-            {heroScope !== "story" ? (
-              <>
-                <span className="inline-block h-4 w-px shrink-0 bg-slate-300/80" aria-hidden />
-                <div className="flex items-center gap-2.5">
-                  <span className="inline-flex h-[18px] items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.05em] leading-[18px] text-slate-500">
-                    <HeartPulse className="size-[18px] shrink-0 text-rose-500" strokeWidth={2.2} aria-hidden />
-                    <span className="inline-block translate-y-[1px]">Health calculation</span>
-                    <button
-                      type="button"
-                      aria-label="How is health calculated?"
-                      title="How is health calculated?"
-                      // Same target as the Info icons on Health Distribution,
-                      // Roadmap Health popover, and the Initiative Health
-                      // verdict menu — opens the full 7-page explainer. The
-                      // first slide is the basis explainer, which is the
-                      // contextually right starting page for this label.
-                      onClick={() => setHealthExplainerOpen(true)}
-                      className="inline-flex size-4 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-                    >
-                      <Info className="size-3.5" aria-hidden />
-                    </button>
-                  </span>
-                  <PillToggle
-                    value={progressBasis}
-                    onChange={(v) => onProgressBasisChange(v as "days" | "stories" | "epicEst")}
-                    options={[
-                      { value: "epicEst", label: "Epic Est (d)" },
-                      { value: "days", label: "Σ | Child Est (d)" },
-                      { value: "stories", label: "Stories Completed (%)" },
-                    ]}
-                  />
-                </div>
-              </>
-            ) : null}
+            {/* Vertical divider between the roadmap selector and the
+             *  KPI tile group — same visual as the one before the
+             *  Health calculation cluster on the right. Replaces the
+             *  prior "· N epics in scope" suffix text the selector
+             *  was rendering. */}
+            <span className="inline-block h-4 w-px shrink-0 bg-slate-300/80" aria-hidden />
             {/* Inline stats: Initiatives · Epics · Stories · Teams · Sprints,
-                pushed right next to the roadmap selector + Health calc.
+                grouped immediately after the roadmap selector on the LEFT.
+                Was previously `ml-auto` pinned to the right; the Health
+                calculation chip now occupies that slot instead so the
+                two groups swap places (planner's preferred reading order:
+                "what am I scoping by" before "what verdict basis").
                 When the app supplies `onHeroScopeChange`, the first three
                 tiles become a scope selector — click sets the active
                 unit the rest of the hero counts and filters by. Legacy
@@ -497,7 +465,7 @@ export function RoadmapHealthHero({
                 Initiatives/Epics flip the Gantt's `barMode`, Stories is
                 passive. Teams / Sprints tiles stay as Gantt overlay
                 toggles regardless of scope-picking mode. */}
-            <div className="ml-auto flex shrink-0 items-center gap-x-9">
+            <div className="flex shrink-0 items-center gap-x-9">
               <StatBlock
                 icon={<Zap className="size-7 text-blue-600" strokeWidth={1.9} aria-hidden />}
                 value={stats.initiativesCount}
@@ -561,6 +529,49 @@ export function RoadmapHealthHero({
                 title="Toggle the sprint-chip row in the calendar header"
               />
             </div>
+            {/* "Health calculation" basis chip — now right-anchored via
+                `ml-auto` (was left-anchored next to the roadmap selector
+                before the swap). Visible at Initiative / Epic scope
+                (where the basis drives the verdict math via
+                `computeEpicHealthVerdict` / `computeInitiativeHealthVerdict`).
+                Hidden at Story scope: story health is sprint-burndown
+                driven (`computeStoryHealthVerdict`), which doesn't take
+                a basis. Defaults to visible when `heroScope` is undefined
+                (legacy callers). */}
+            {heroScope !== "story" ? (
+              <>
+                <span className="ml-auto inline-block h-4 w-px shrink-0 bg-slate-300/80" aria-hidden />
+                <div className="flex items-center gap-2.5">
+                  <span className="inline-flex h-[18px] items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.05em] leading-[18px] text-slate-500">
+                    <HeartPulse className="size-[18px] shrink-0 text-rose-500" strokeWidth={2.2} aria-hidden />
+                    <span className="inline-block translate-y-[1px]">Health calculation</span>
+                    <button
+                      type="button"
+                      aria-label="How is health calculated?"
+                      title="How is health calculated?"
+                      // Same target as the Info icons on Health Distribution,
+                      // Roadmap Health popover, and the Initiative Health
+                      // verdict menu — opens the full 7-page explainer. The
+                      // first slide is the basis explainer, which is the
+                      // contextually right starting page for this label.
+                      onClick={() => setHealthExplainerOpen(true)}
+                      className="inline-flex size-4 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                    >
+                      <Info className="size-3.5" aria-hidden />
+                    </button>
+                  </span>
+                  <PillToggle
+                    value={progressBasis}
+                    onChange={(v) => onProgressBasisChange(v as "days" | "stories" | "epicEst")}
+                    options={[
+                      { value: "epicEst", label: "Epic Est (d)" },
+                      { value: "days", label: "Σ | Child Est (d)" },
+                      { value: "stories", label: "Stories Completed (%)" },
+                    ]}
+                  />
+                </div>
+              </>
+            ) : null}
           </div>
           <div className="mt-2 h-px w-full bg-slate-200/70" aria-hidden />
           {/* Charts row — the original row 2 content, now without the
