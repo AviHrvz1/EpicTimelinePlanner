@@ -1594,6 +1594,15 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       // this, clicking a Team Progress row filtered the bars but
       // never painted the team chips.
       setShowGanttTeamChipsCtrl(true);
+    } else {
+      // Clearing the team filter (via the chip X, "All Teams" option,
+      // or unselecting the last team) flips the Teams KPI tile back
+      // to its idle state — same coupling as the on-side above, in
+      // reverse. Without this, the tile stayed highlighted after a
+      // clear and the bars kept painting team chips with no filter
+      // active, which the planner read as "still filtered" when it
+      // wasn't.
+      setShowGanttTeamChipsCtrl(false);
     }
   }, []);
   /**
@@ -1711,30 +1720,42 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
    */
   const handleTeamProgressRowClick = useCallback(
     (teamId: string, label: string) => {
+      // Unified add/remove toggle — clicking a new team ADDS it to
+      // the active set, clicking an already-selected team REMOVES
+      // it. Works the same in every mode so the planner can build
+      // up "Mobile + Experience" by clicking both rows on the Team
+      // Progress card, regardless of whether they're on Roadmap
+      // Planning or Backlog Workspace.
+      const next = new Set(ganttTeamFilter);
+      const wasSelected = next.has(teamId);
+      if (wasSelected) next.delete(teamId);
+      else next.add(teamId);
       if (topMode === "backlog") {
-        // Toggle: clicking the SAME team twice clears the filter (and
-        // the work-item filter alongside).
-        const isToggleOff = ganttTeamFilter.has(teamId);
-        const next = new Set(isToggleOff ? [] : [teamId]);
         handlePanelTeamFilterDerivedChange(next);
         setBacklogIncomingTeamFilter(Array.from(next));
-        setBacklogIncomingWorkItemFilter(isToggleOff ? [] : [heroScope]);
+        // Work-item filter clears alongside only when ALL teams are
+        // unselected (i.e. the planner is fully clearing the
+        // filter); otherwise the active heroScope stays bound to
+        // the surviving team picks.
+        setBacklogIncomingWorkItemFilter(next.size === 0 ? [] : [heroScope]);
         return;
       }
       if (topMode === "roadmap" && heroScope !== "story") {
-        const next = new Set(ganttTeamFilter);
-        if (next.has(teamId)) next.delete(teamId);
-        else next.add(teamId);
         handlePanelTeamFilterDerivedChange(next);
         return;
       }
-      // Cross-mode hand-off.
-      handlePanelTeamFilterDerivedChange(new Set([teamId]));
-      setBacklogIncomingTeamFilter([teamId]);
-      setBacklogIncomingWorkItemFilter([heroScope]);
+      // Cross-mode hand-off (Roadmap Planning + Story scope, or any
+      // other non-backlog mode). First click switches to Backlog
+      // with the picked team; subsequent clicks on Team Progress
+      // (now from Backlog) flow through the branch above.
+      handlePanelTeamFilterDerivedChange(next);
+      setBacklogIncomingTeamFilter(Array.from(next));
+      setBacklogIncomingWorkItemFilter(next.size === 0 ? [] : [heroScope]);
       setTopMode("backlog");
-      const scopePlural = heroScope === "initiative" ? "initiatives" : heroScope === "epic" ? "epics" : "stories";
-      toast.success(`Filtered Backlog to ${label} ${scopePlural}`);
+      if (!wasSelected) {
+        const scopePlural = heroScope === "initiative" ? "initiatives" : heroScope === "epic" ? "epics" : "stories";
+        toast.success(`Filtered Backlog to ${label} ${scopePlural}`);
+      }
     },
     [topMode, heroScope, ganttTeamFilter, handlePanelTeamFilterDerivedChange],
   );
@@ -6138,6 +6159,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           onHealthDistributionSliceClick={handleHealthDistributionSliceClick}
           onTeamProgressRowClick={handleTeamProgressRowClick}
           selectedTeamIds={ganttTeamFilter}
+          onClearTeamFilter={() => handlePanelTeamFilterDerivedChange(new Set())}
           heroScope={heroScope}
           onHeroScopeChange={setHeroScope}
           onOpenEpicEstimatePanel={handleOpenEstPanel}

@@ -27,6 +27,7 @@ import {
   ShieldCheck,
   Sigma,
   Users,
+  X,
   Zap,
 } from "lucide-react";
 
@@ -133,6 +134,7 @@ export function RoadmapHealthHero({
   onHealthDistributionSliceClick,
   onTeamProgressRowClick,
   selectedTeamIds,
+  onClearTeamFilter,
   heroScope,
   onHeroScopeChange,
   title = "Roadmap Health",
@@ -214,8 +216,15 @@ export function RoadmapHealthHero({
    *  `ganttTeamFilter` set). Drives the highlight on Team Progress
    *  rows so the card visually reflects whatever team is selected
    *  via the Gantt breadcrumb / Initiatives panel team dropdown.
-   *  Empty / undefined → no row highlighted ("All Teams"). */
+   *  Empty / undefined → no row highlighted ("All Teams"). Also
+   *  narrows the Work Progress / Health Distribution / Epic
+   *  Estimates donuts to the picked team's portion. */
   selectedTeamIds?: ReadonlySet<string> | null;
+  /** Fires when the planner clicks the X on a card's team-scope
+   *  chip. Parent should clear `ganttTeamFilter` everywhere — the
+   *  three-way sync (panel / breadcrumb / Team Progress highlight)
+   *  follows automatically. */
+  onClearTeamFilter?: () => void;
   /** Active unit on the KPI strip. Drives which Initiatives / Epics /
    *  Stories tile is highlighted and (later phases) what every card on
    *  the hero counts + how each slice click filters. When undefined,
@@ -251,11 +260,49 @@ export function RoadmapHealthHero({
    *  while the donut row is visible). */
   onExpandedChange?: (expanded: boolean) => void;
 }) {
-  const stats = useMemo(() => computeRoadmapStats(initiatives, selectedYear, progressBasis), [
-    initiatives,
-    selectedYear,
-    progressBasis,
-  ]);
+  const stats = useMemo(
+    () => computeRoadmapStats(initiatives, selectedYear, progressBasis, selectedTeamIds),
+    [initiatives, selectedYear, progressBasis, selectedTeamIds],
+  );
+  // Floating "team scope" chip rendered in the top-right of each
+  // data-narrowing card (Work Progress, Health Distribution, Epic
+  // Estimates). Built once here so the three card mounts can just
+  // pass `cornerChip={teamScopeChip}` — keeps the chip identical
+  // across cards and avoids duplicating the avatar / X-on-hover
+  // logic three times. Null when no team is picked so the cards
+  // render flush as before.
+  const teamScopeChipIds = selectedTeamIds ? Array.from(selectedTeamIds) : [];
+  const teamScopeChip = teamScopeChipIds.length > 0 ? (
+    <button
+      type="button"
+      onClick={onClearTeamFilter}
+      disabled={!onClearTeamFilter}
+      title={onClearTeamFilter ? "Clear team filter" : undefined}
+      className={cn(
+        "group/teamchip inline-flex items-center gap-[5px] rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-semibold text-slate-700 ring-1 ring-slate-200/70 backdrop-blur transition",
+        onClearTeamFilter
+          ? "hover:bg-rose-50 hover:text-rose-700 hover:ring-rose-200"
+          : "cursor-default",
+      )}
+    >
+      {teamScopeChipIds.length === 1 ? (
+        <>
+          <TeamAvatar slug={teamScopeChipIds[0]} sizePx={12} className="shrink-0" />
+          <span className="max-w-[100px] truncate">
+            {monthTeamLabelForId(teamScopeChipIds[0]) ?? teamScopeChipIds[0]}
+          </span>
+        </>
+      ) : (
+        <span>{teamScopeChipIds.length} teams</span>
+      )}
+      {onClearTeamFilter ? (
+        <X
+          className="size-3 shrink-0 opacity-0 transition group-hover/teamchip:opacity-100"
+          aria-hidden
+        />
+      ) : null}
+    </button>
+  ) : null;
   // When the chevron is hidden (e.g. Users Directory), the planner has
   // no way to toggle the panel, so we just mirror `defaultExpanded`
   // verbatim — navigating into the mode collapses the body, navigating
@@ -602,6 +649,7 @@ export function RoadmapHealthHero({
             return (
           <DonutCard
             panelClassName="bg-sky-50/60 ring-sky-100"
+            cornerChip={teamScopeChip}
             title={`Work Progress · ${scopeLabel} · ${total}`}
             titleIcon={<PlayCircle className="size-3.5 text-sky-500" strokeWidth={2.1} aria-hidden />}
             centerCount={total}
@@ -666,6 +714,7 @@ export function RoadmapHealthHero({
             return (
           <DonutCard
             panelClassName="bg-orange-50/60 ring-orange-100"
+            cornerChip={teamScopeChip}
             title={hdTitle}
             titleIcon={<HeartPulse className="size-3.5 text-rose-500" strokeWidth={2.1} aria-hidden />}
             titleAction={
@@ -726,6 +775,7 @@ export function RoadmapHealthHero({
           })()}
           <DonutCard
             panelClassName="bg-violet-50/60 ring-violet-100"
+            cornerChip={teamScopeChip}
             title={
               progressBasis === "epicEst"
                 ? `Epic Estimates · Epics · ${basisLabel}`
@@ -780,8 +830,8 @@ export function RoadmapHealthHero({
                     {
                       label: "Stories w/o description",
                       value: stats.storiesWithoutDescCount,
-                      pct: stats.storiesCount > 0
-                        ? Math.round((stats.storiesWithoutDescCount / stats.storiesCount) * 100)
+                      pct: stats.storiesCountInScope > 0
+                        ? Math.round((stats.storiesWithoutDescCount / stats.storiesCountInScope) * 100)
                         : 0,
                       color: "#f59e0b",
                       icon: <UserStoryIcon className="size-3.5 text-current" />,
@@ -792,8 +842,8 @@ export function RoadmapHealthHero({
                     {
                       label: "Epics w/o description",
                       value: stats.epicsWithoutDescCount,
-                      pct: stats.epicsCount > 0
-                        ? Math.round((stats.epicsWithoutDescCount / stats.epicsCount) * 100)
+                      pct: stats.epicsCountInScope > 0
+                        ? Math.round((stats.epicsWithoutDescCount / stats.epicsCountInScope) * 100)
                         : 0,
                       color: "#ec4899",
                       icon: <FileWarning className="size-3.5" strokeWidth={2} />,
@@ -1383,6 +1433,7 @@ function DonutCard({
   activeLabels,
   extraLegendRows,
   panelClassName,
+  cornerChip,
 }: {
   title: string;
   /** Optional icon rendered next to the card title — same family of
@@ -1425,6 +1476,10 @@ function DonutCard({
     title?: string;
     valueSuffix?: string;
   }>;
+  /** Tiny pill floated to the top-right of the card — used by the
+   *  team-scope chip ("[avatar] Mobile" / "3 teams") so the planner
+   *  has a per-card lock-on showing the data is team-narrowed. */
+  cornerChip?: React.ReactNode;
 }) {
   const total = slices.reduce((sum, s) => sum + s.value, 0);
   // Slice the mouse is currently hovering — used to mirror the legend
@@ -1433,10 +1488,13 @@ function DonutCard({
   return (
     <div
       className={cn(
-        "flex w-[520px] min-w-[520px] max-w-[520px] shrink-0 flex-col gap-2 rounded-2xl px-7 py-3 ring-1 ring-inset transition-shadow",
+        "relative flex w-[520px] min-w-[520px] max-w-[520px] shrink-0 flex-col gap-2 rounded-2xl px-7 py-3 ring-1 ring-inset transition-shadow",
         panelClassName ?? "bg-white ring-slate-200/70",
       )}
     >
+      {cornerChip ? (
+        <div className="absolute right-2 top-2 z-10">{cornerChip}</div>
+      ) : null}
       <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500">
         {titleIcon ? <span className="inline-flex shrink-0 text-slate-500" aria-hidden>{titleIcon}</span> : null}
         {title}
@@ -1754,11 +1812,34 @@ function computeRoadmapStats(
   initiatives: readonly InitiativeItem[],
   selectedYear: number,
   progressBasis: "days" | "stories" | "epicEst",
+  teamFilter?: ReadonlySet<string> | null,
 ) {
+  // Workspace-wide pre-pass — these counters drive the KPI strip
+  // (Initiatives / Epics / Stories tiles) which intentionally STAYS
+  // workspace-wide regardless of team filter; the strip is the source
+  // of scope identity for the hero, narrowing it would make
+  // "click the tile" semantics ambiguous.
   const initiativesCount = initiatives.length;
   let epicsCount = 0;
   let epicsScheduledCount = 0;
   let storiesCount = 0;
+  for (const init of initiatives) {
+    for (const epic of init.epics ?? []) {
+      epicsCount += 1;
+      if (epic.planStartMonth != null && epic.planEndMonth != null) {
+        epicsScheduledCount += 1;
+      }
+      storiesCount += (epic.userStories ?? []).length;
+    }
+  }
+  // Scope-narrowed counters (post team filter) — drive the
+  // "stories without description" / "epics without description"
+  // legend percentages on the Epic Estimates card, so those rows
+  // read as "X% of the team's epics" rather than "X% of workspace
+  // epics" when a team is picked.
+  let epicsCountInScope = 0;
+  let storiesCountInScope = 0;
+  const hasTeamFilter = teamFilter != null && teamFilter.size > 0;
   /**
    * Work Progress is computed at three scopes simultaneously so the
    * Work Progress donut can read `workProgress[heroScope]` without a
@@ -1851,38 +1932,53 @@ function computeRoadmapStats(
     overdue: 3,
   };
 
-  for (const initiative of initiatives) {
+  for (const initiativeRaw of initiatives) {
+    // Per-epic team filter — gates the data-narrowing donut /
+    // Health Distribution / Epic Estimates writes below, but DOES
+    // NOT gate the Team Progress accumulator: the planner expects
+    // every team row to keep appearing on the card so they can
+    // compare their pick against the others (selection is shown by
+    // the row highlight, not by hiding the rest). Initiative-scope
+    // rollups also stay aware of the filter — see the
+    // `epicsForInitRollup` view used after the inner loop.
+    const initiative = initiativeRaw;
+    const epicsForInitRollup = hasTeamFilter
+      ? (initiativeRaw.epics ?? []).filter((e) => e.team != null && teamFilter!.has(e.team))
+      : (initiativeRaw.epics ?? []);
     for (const epic of initiative.epics ?? []) {
-      epicsCount += 1;
-      if (epic.planStartMonth != null && epic.planEndMonth != null) {
-        epicsScheduledCount += 1;
-      }
+      const epicPasses =
+        !hasTeamFilter || (epic.team != null && teamFilter!.has(epic.team));
+      if (epicPasses) epicsCountInScope += 1;
       const estDays = Number(epic.originalEstimateDays ?? 0);
       // Epic Estimates donut reflects the current basis:
       //  - epicEst: count epics with vs without originalEstimateDays (current)
       //  - days / stories: count STORIES with vs without estimatedDays > 0
       //    (handled in the per-story loop below for stories basis)
-      if (progressBasis === "epicEst") {
-        if (estDays > 0) {
-          // Distinguish fully-estimated (all child stories sized) from
-          // partially-estimated (some child stories missing). Epics with
-          // no child stories at all count as fully estimated.
-          const stories = epic.userStories ?? [];
-          const fullyEstimated =
-            stories.length === 0 || stories.every((s) => Number(s.estimatedDays ?? 0) > 0);
-          if (fullyEstimated) epicEstimates.estimated += 1;
-          else epicEstimates.partiallyEstimated += 1;
-          epicEstimates.daysSum += estDays;
+      if (epicPasses) {
+        if (progressBasis === "epicEst") {
+          if (estDays > 0) {
+            // Distinguish fully-estimated (all child stories sized) from
+            // partially-estimated (some child stories missing). Epics with
+            // no child stories at all count as fully estimated.
+            const stories = epic.userStories ?? [];
+            const fullyEstimated =
+              stories.length === 0 || stories.every((s) => Number(s.estimatedDays ?? 0) > 0);
+            if (fullyEstimated) epicEstimates.estimated += 1;
+            else epicEstimates.partiallyEstimated += 1;
+            epicEstimates.daysSum += estDays;
+          } else {
+            epicEstimates.unestimated += 1;
+          }
         } else {
-          epicEstimates.unestimated += 1;
+          // days basis still uses epic-level estimates as the "Total Days"
+          // sum, but the slice split happens at the story level below.
+          if (estDays > 0) epicEstimates.daysSum += estDays;
         }
-      } else {
-        // days basis still uses epic-level estimates as the "Total Days"
-        // sum, but the slice split happens at the story level below.
-        if (estDays > 0) epicEstimates.daysSum += estDays;
+        if (!(epic.description ?? "").trim()) epicsWithoutDescCount += 1;
       }
-      if (!(epic.description ?? "").trim()) epicsWithoutDescCount += 1;
       const team = (epic.team ?? "").trim();
+      // `teamIds` feeds the KPI strip "Teams" count and the Team
+      // Progress accumulator — both intentionally workspace-wide.
       if (team) teamIds.add(team);
 
       // SINGLE SOURCE OF TRUTH for the verdict — same function the
@@ -1894,8 +1990,10 @@ function computeRoadmapStats(
       let epicHealth: HealthStatus | null = null;
       const v = computeEpicHealthVerdict(epic, selectedYear, progressBasis);
       if (v != null) {
-        healthDistribution.epic[v.status] = (healthDistribution.epic[v.status] ?? 0) + 1;
-        healthDistribution.epic.total += 1;
+        if (epicPasses) {
+          healthDistribution.epic[v.status] = (healthDistribution.epic[v.status] ?? 0) + 1;
+          healthDistribution.epic.total += 1;
+        }
         epicHealth = v.status;
       }
 
@@ -1930,8 +2028,11 @@ function computeRoadmapStats(
       }
 
       for (const story of epic.userStories ?? []) {
-        storiesCount += 1;
-        if (!(story.description ?? "").trim()) storiesWithoutDescCount += 1;
+        if (epicPasses) {
+          storiesCountInScope += 1;
+          if (!(story.description ?? "").trim()) storiesWithoutDescCount += 1;
+        }
+        // `sprintIds` feeds the KPI strip "Sprints" count — workspace-wide.
         if (story.sprint != null) sprintIds.add(story.sprint);
         const estDaysStory = Math.max(0, Number(story.estimatedDays ?? 0));
         // Story-scope Health Distribution: bucket each story by its
@@ -1940,7 +2041,7 @@ function computeRoadmapStats(
         // counted — the donut number matches the count of "—"-free
         // rows in the backlog's Health column.
         const storyVerdict = computeStoryHealthVerdict(story, epic, selectedYear);
-        if (storyVerdict != null) {
+        if (storyVerdict != null && epicPasses) {
           healthDistribution.story[storyVerdict.status] =
             (healthDistribution.story[storyVerdict.status] ?? 0) + 1;
           healthDistribution.story.total += 1;
@@ -1961,29 +2062,31 @@ function computeRoadmapStats(
         // whole epic is still in the backlog) rolls up under
         // "Backlog epic". Once the epic is scheduled, normal status
         // bucketing takes over.
-        if (epic.planStartMonth == null) {
-          workProgress.story.backlogEpic += 1;
-        } else {
-          switch (story.status) {
-            case "inProgress":
-              workProgress.story.inProgress += 1;
-              break;
-            case "done":
-              workProgress.story.done += 1;
-              break;
-            case "review":
-              workProgress.story.review += 1;
-              break;
-            case "todo":
-            default:
-              workProgress.story.todo += 1;
+        if (epicPasses) {
+          if (epic.planStartMonth == null) {
+            workProgress.story.backlogEpic += 1;
+          } else {
+            switch (story.status) {
+              case "inProgress":
+                workProgress.story.inProgress += 1;
+                break;
+              case "done":
+                workProgress.story.done += 1;
+                break;
+              case "review":
+                workProgress.story.review += 1;
+                break;
+              case "todo":
+              default:
+                workProgress.story.todo += 1;
+            }
           }
-        }
-        // Epic Estimates donut, when basis is days/stories, splits at the
-        // story level — count of stories estimated vs unestimated.
-        if (progressBasis !== "epicEst") {
-          if (estDaysStory > 0) epicEstimates.estimated += 1;
-          else epicEstimates.unestimated += 1;
+          // Epic Estimates donut, when basis is days/stories, splits at the
+          // story level — count of stories estimated vs unestimated.
+          if (progressBasis !== "epicEst") {
+            if (estDaysStory > 0) epicEstimates.estimated += 1;
+            else epicEstimates.unestimated += 1;
+          }
         }
         // Team Progress per-team rollup. Three basis-keyed paths:
         //  - stories: estTotal = story count, daysLeft = open story count.
@@ -2010,38 +2113,47 @@ function computeRoadmapStats(
       // dates) trumps the workflow rollup, otherwise the worst-of
       // child story statuses decides the bucket. Matches the row-pill
       // logic in the backlog table for epic rows.
-      if (epic.planStartMonth == null) {
-        workProgress.epic.unscheduled += 1;
-      } else {
-        const epicWorkflow = rollupWorkflowStatusLocal(epic.userStories ?? []);
-        workProgress.epic[epicWorkflow] += 1;
+      if (epicPasses) {
+        if (epic.planStartMonth == null) {
+          workProgress.epic.unscheduled += 1;
+        } else {
+          const epicWorkflow = rollupWorkflowStatusLocal(epic.userStories ?? []);
+          workProgress.epic[epicWorkflow] += 1;
+        }
       }
     }
 
-    // Initiative-scope Work Progress bucket: rollup workflow status
-    // across EVERY story under EVERY epic of this initiative. Empty
-    // initiatives (no stories anywhere) fall to "todo" via the
-    // helper's empty-list default, which matches the backlog's
-    // initiative-row pill behaviour.
-    const allInitiativeStories = (initiative.epics ?? []).flatMap(
-      (e) => e.userStories ?? [],
-    );
-    const initiativeWorkflow = rollupWorkflowStatusLocal(allInitiativeStories);
-    workProgress.initiative[initiativeWorkflow] += 1;
+    // Initiative-scope rollups (Work Progress · Initiatives,
+    // Health Distribution · Initiatives) — use the team-filtered
+    // epic view so each initiative's verdict reflects only the
+    // picked team's work within it. Initiatives whose epics all
+    // belong to other teams are skipped entirely (no rollup, no
+    // donut contribution). When no team filter is active, this
+    // mirrors today's behaviour.
+    if (!hasTeamFilter || epicsForInitRollup.length > 0) {
+      const initiativeForRollup = hasTeamFilter
+        ? ({ ...initiative, epics: epicsForInitRollup } as InitiativeItem)
+        : initiative;
+      const allInitiativeStories = (initiativeForRollup.epics ?? []).flatMap(
+        (e) => e.userStories ?? [],
+      );
+      const initiativeWorkflow = rollupWorkflowStatusLocal(allInitiativeStories);
+      workProgress.initiative[initiativeWorkflow] += 1;
 
-    // Initiative-scope Health Distribution: shared verdict helper —
-    // same one the Gantt initiative bars + dashboard donut already
-    // call. Null verdicts (initiative without scheduled epics, etc.)
-    // aren't counted, matching the Health column rule.
-    const initVerdict = computeInitiativeHealthVerdict(
-      initiative,
-      selectedYear,
-      progressBasis,
-    );
-    if (initVerdict != null) {
-      healthDistribution.initiative[initVerdict.status] =
-        (healthDistribution.initiative[initVerdict.status] ?? 0) + 1;
-      healthDistribution.initiative.total += 1;
+      // Initiative-scope Health Distribution: shared verdict helper —
+      // same one the Gantt initiative bars + dashboard donut already
+      // call. Null verdicts (initiative without scheduled epics, etc.)
+      // aren't counted, matching the Health column rule.
+      const initVerdict = computeInitiativeHealthVerdict(
+        initiativeForRollup,
+        selectedYear,
+        progressBasis,
+      );
+      if (initVerdict != null) {
+        healthDistribution.initiative[initVerdict.status] =
+          (healthDistribution.initiative[initVerdict.status] ?? 0) + 1;
+        healthDistribution.initiative.total += 1;
+      }
     }
   }
 
@@ -2087,6 +2199,8 @@ function computeRoadmapStats(
     epicsCount,
     epicsScheduledCount,
     storiesCount,
+    epicsCountInScope,
+    storiesCountInScope,
     teamsCount: teamIds.size,
     sprintsCount: sprintIds.size,
     coveragePercent,
