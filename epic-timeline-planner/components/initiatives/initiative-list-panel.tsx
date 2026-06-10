@@ -1318,6 +1318,13 @@ type InitiativeListPanelProps = {
    *  Gantt bars, so the two surfaces stay in lockstep. Default `false`
    *  (chips off) to match the tile's initial inactive state. */
   showTeamChips?: boolean;
+  /** Switch the planner to the Insights tab pre-scoped to a specific
+   *  initiative or epic — same callback the epic / initiative dialogs
+   *  fire when their "Insights" header button is clicked. The panel
+   *  uses it to render a hover-revealed insights icon at the top-right
+   *  of each initiative / epic card. When omitted, the icon is not
+   *  rendered (callers without an Insights surface stay unchanged). */
+  onOpenInsights?: (kind: "epic" | "initiative", id: string) => void;
   /** Parent-owned execution-status filter — currently the Gantt status
    *  filter the Hero's Work Progress donut writes to. When `heroScope`
    *  is `"initiative"` and this set is non-empty, the panel filters its
@@ -1460,6 +1467,7 @@ function InitiativeTreeEpicRow({
   showTeamChips = false,
   showHealthChips = false,
   showStatusChips = false,
+  onOpenInsights,
 }: {
   epic: EpicItem;
   initiative: InitiativeItem;
@@ -1484,6 +1492,10 @@ function InitiativeTreeEpicRow({
   /** Gated by the Hero KPI strip "Teams" tile — when `false`, the epic's
    *  delivery-team chip is suppressed from the chip cluster. */
   showTeamChips?: boolean;
+  /** When wired, the epic row renders a hover-revealed Insights icon at
+   *  the card's top-right. Clicking it fires `("epic", epic.id)` so the
+   *  parent can switch to the Insights tab pre-scoped to this epic. */
+  onOpenInsights?: (kind: "epic" | "initiative", id: string) => void;
   /** Gated by the Hero "Health Distribution" donut — true when the planner
    *  has picked at least one slice (so `healthFilter` is non-empty). When
    *  false, the per-epic health verdict chip is hidden. */
@@ -1549,7 +1561,32 @@ function InitiativeTreeEpicRow({
         position: isDragging ? "relative" : undefined,
       }}
     >
-      <div className="rounded-md transition-colors hover:bg-sky-50/70">
+      <div className="group/epic-row relative rounded-md transition-colors hover:bg-sky-50/70">
+      {/* Hover-revealed Insights launcher on inner-initiative epic rows.
+       *  Sits absolute top-right inside the row, fades in on row hover via
+       *  the `group/epic-row` scope above so it does NOT trigger on the
+       *  parent initiative card's own hover. */}
+      {onOpenInsights ? (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenInsights("epic", epic.id);
+          }}
+          aria-label={`Open insights for ${epic.title}`}
+          title="Open insights scoped to this epic"
+          className="absolute right-1 top-1 z-10 inline-flex h-6 w-6 items-center justify-center rounded-md border border-indigo-200 bg-white opacity-0 shadow-sm transition-opacity hover:bg-indigo-50 group-hover/epic-row:opacity-100"
+        >
+          <img
+            src="/dialog-insights-icon.png"
+            alt=""
+            aria-hidden
+            className="size-3 select-none object-contain"
+            draggable={false}
+          />
+        </button>
+      ) : null}
       <div className="flex min-w-0 items-center gap-0.5">
         <button
           type="button"
@@ -1568,7 +1605,7 @@ function InitiativeTreeEpicRow({
         {(isCapacityMode ? !epicTeamId : (!isEpicScheduledOnGantt && epicPlanDragEnabled)) ? (
           <button
             type="button"
-            className="relative inline-flex h-7 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+            className="relative inline-flex h-6 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
             aria-label="Drag epic"
             {...listeners}
             {...attributes}
@@ -1579,8 +1616,14 @@ function InitiativeTreeEpicRow({
             ) : null}
           </button>
         ) : null}
-        <span className="inline-flex h-7 shrink-0 items-center" aria-hidden>
-          <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-3.5 [&_svg]:text-sky-500" />
+        {/* Epic-row icon — `size-5` makes it visually proportionate to the
+         *  16px epic title to its right (the previous `size-3.5` looked
+         *  small/floating after the title size reduction). Container height
+         *  matches the title's `leading-6` line box so the icon sits
+         *  centered on the epic-name row, not floating between the title
+         *  and the secondary initiative line below. */}
+        <span className="mr-1.5 inline-flex h-6 shrink-0 items-center" aria-hidden>
+          <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-5 [&_svg]:text-sky-500" />
         </span>
         <button
           type="button"
@@ -1836,6 +1879,7 @@ function InitiativeTreeCard({
   showTeamChips = false,
   showHealthChips = false,
   showStatusChips = false,
+  onOpenInsights,
 }: {
   initiative: InitiativeItem;
   isOpen: boolean;
@@ -1878,6 +1922,9 @@ function InitiativeTreeCard({
    *  row AND the inner epic rows. Driven by the Hero's Work Progress donut
    *  (non-empty `externalStatusFilter`). */
   showStatusChips?: boolean;
+  /** Forwarded — renders a hover-revealed Insights icon at the top-right
+   *  of the initiative card AND each inner epic row. */
+  onOpenInsights?: (kind: "epic" | "initiative", id: string) => void;
 }) {
   const inMonthView = planContextMonth != null;
   const { setNodeRef: setDropRef, isOver: isBacklogDropOver } = useDroppable({
@@ -2008,7 +2055,7 @@ function InitiativeTreeCard({
     <div
       ref={setDropRef}
       className={cn(
-        "rounded-md border border-slate-200/90 p-3 font-sans antialiased",
+        "group/init-card relative rounded-md border border-slate-200/90 p-3 font-sans antialiased",
         isBacklogDropOver && "ring-2 ring-slate-300",
       )}
       style={{
@@ -2017,6 +2064,31 @@ function InitiativeTreeCard({
         background: `#ffffff`,
       }}
     >
+      {/* Hover-revealed Insights launcher for the initiative card —
+       *  scope `group/init-card` so it triggers on the OUTER card hover
+       *  only (not on the inner per-epic row hovers, which carry their
+       *  own button). */}
+      {onOpenInsights ? (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenInsights("initiative", initiative.id);
+          }}
+          aria-label={`Open insights for ${initiative.title}`}
+          title="Open insights scoped to this initiative"
+          className="absolute right-2 top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md border border-indigo-200 bg-white opacity-0 shadow-sm transition-opacity hover:bg-indigo-50 group-hover/init-card:opacity-100"
+        >
+          <img
+            src="/dialog-insights-icon.png"
+            alt=""
+            aria-hidden
+            className="size-3.5 select-none object-contain"
+            draggable={false}
+          />
+        </button>
+      ) : null}
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="group/init">
@@ -2197,6 +2269,7 @@ function InitiativeTreeCard({
                             showTeamChips={showTeamChips}
                             showHealthChips={showHealthChips}
                             showStatusChips={showStatusChips}
+                            onOpenInsights={onOpenInsights}
                             showDragHint={hintEpicId === epic.id}
                             onToggleEpic={() =>
                               setOpenEpicIds((prev) => {
@@ -2300,6 +2373,7 @@ function SprintEpicCard({
   workspaceDirectoryUsers = [],
   showTeamChips = false,
   showStatusChips = false,
+  onOpenInsights,
 }: {
   epic: EpicItem;
   initiative: InitiativeItem;
@@ -2327,6 +2401,9 @@ function SprintEpicCard({
   /** Gated by the Hero "Work Progress" donut — when `false`, the epic's
    *  execution-status chip (In progress / Done / etc.) is hidden. */
   showStatusChips?: boolean;
+  /** Hover-revealed Insights icon at the card's top-right; click fires
+   *  `("epic", epic.id)` so the parent can pre-scope the Insights tab. */
+  onOpenInsights?: (kind: "epic" | "initiative", id: string) => void;
 }) {
   const { active } = useDndContext();
   /** Gantt bars use `timeline-epic:`; those drops should use thin `EpicBacklogDropSlot` targets or unplan strip, not the large card hit area (avoids accidental unplan). */
@@ -2429,14 +2506,43 @@ function SprintEpicCard({
         position: isDragging ? "relative" : undefined,
       }}
     >
+      {/* Hover-revealed Insights launcher — same icon + behavior as the
+       *  epic dialog's "Insights" header button. Click switches the
+       *  planner to the Insights tab pre-scoped to this epic via the
+       *  parent's `onOpenInsights`. The card root has `group relative`,
+       *  so `group-hover:opacity-100` fades the button in on row hover
+       *  and `z-10` keeps it above the title text it floats over. */}
+      {onOpenInsights ? (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenInsights("epic", epic.id);
+          }}
+          aria-label={`Open insights for ${epic.title}`}
+          title="Open insights scoped to this epic"
+          className="absolute right-2 top-2 z-10 inline-flex h-7 w-7 items-center justify-center rounded-md border border-indigo-200 bg-white opacity-0 shadow-sm transition-opacity hover:bg-indigo-50 group-hover:opacity-100"
+        >
+          <img
+            src="/dialog-insights-icon.png"
+            alt=""
+            aria-hidden
+            className="size-3.5 select-none object-contain"
+            draggable={false}
+          />
+        </button>
+      ) : null}
       <div className="flex min-w-0 items-start gap-0.5">
         <button
           type="button"
           onClick={handleToggle}
-          // `h-7` matches the epic title's `leading-7` so the chevron,
+          // `h-6` matches the epic title's `leading-6` so the chevron,
           // drag handle, and epic icon all sit on the same baseline as
-          // the title's first line under `items-start`.
-          className="inline-flex h-7 shrink-0 items-center rounded-sm text-slate-500 transition-colors hover:text-slate-700"
+          // the title's first line under `items-start`. (Title text was
+          // resized down from 18px/leading-7 to 16px/leading-6 in the
+          // earlier hierarchy pass; these chrome heights followed.)
+          className="inline-flex h-6 shrink-0 items-center rounded-sm text-slate-500 transition-colors hover:text-slate-700"
           aria-label={isOpen ? "Collapse epic" : "Expand epic"}
           aria-expanded={isOpen}
         >
@@ -2450,7 +2556,7 @@ function SprintEpicCard({
         {(isCapacityMode ? !epicTeamId : (!isEpicScheduledOnGantt && epicPlanDragEnabled)) ? (
           <button
             type="button"
-            className="relative inline-flex h-7 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+            className="relative inline-flex h-6 shrink-0 cursor-grab items-center rounded-md p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
             aria-label="Drag epic"
             {...listeners}
             {...attributes}
@@ -2461,8 +2567,14 @@ function SprintEpicCard({
             ) : null}
           </button>
         ) : null}
-        <span className="inline-flex h-7 shrink-0 items-center" aria-hidden>
-          <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-3.5 [&_svg]:text-sky-500" />
+        {/* Epic-row icon — `size-5` makes it visually proportionate to the
+         *  16px epic title to its right (the previous `size-3.5` looked
+         *  small/floating after the title size reduction). Container height
+         *  matches the title's `leading-6` line box so the icon sits
+         *  centered on the epic-name row, not floating between the title
+         *  and the secondary initiative line below. */}
+        <span className="mr-1.5 inline-flex h-6 shrink-0 items-center" aria-hidden>
+          <EpicPlanBarIcon icon={epic.icon} className="mr-0 [&_svg]:size-5 [&_svg]:text-sky-500" />
         </span>
         <div className="min-w-0 flex-1 text-left">
           <button
@@ -2736,6 +2848,7 @@ export function InitiativeListPanel({
   onHealthFilterChange,
   heroScope,
   showTeamChips = false,
+  onOpenInsights,
   externalStatusFilter,
   externalTeamFilter,
   onUserPickedFilter,
@@ -2869,6 +2982,16 @@ export function InitiativeListPanel({
   const [inlineNewEpicTitle, setInlineNewEpicTitle] = useState("");
   const [inlineNewEpicInitiativeId, setInlineNewEpicInitiativeId] = useState("");
   const [inlineNewEpicSubmitting, setInlineNewEpicSubmitting] = useState(false);
+  // Mini "+ New initiative" composer that sits INSIDE the New Epic
+  // composer. Lets the planner create an initiative without leaving the
+  // epic-create flow: clicking the "+ New" button next to the Initiative
+  // field reveals a name input below; submitting creates the initiative
+  // (via the same `onCreateInitiativeQuick` the picker uses) and
+  // auto-selects it as the epic's parent in `inlineNewEpicInitiativeId`.
+  const [epicComposerNewInitOpen, setEpicComposerNewInitOpen] = useState(false);
+  const [epicComposerNewInitTitle, setEpicComposerNewInitTitle] = useState("");
+  const [epicComposerNewInitSubmitting, setEpicComposerNewInitSubmitting] = useState(false);
+  const epicComposerNewInitInputRef = useRef<HTMLInputElement>(null);
   const inlineInitiativeInputRef = useRef<HTMLInputElement>(null);
   const inlineEpicInputRef = useRef<HTMLInputElement>(null);
   const [panelQuarterFilters, setPanelQuarterFilters] = useState<Array<"all" | "Q1" | "Q2" | "Q3" | "Q4">>(["all"]);
@@ -2895,6 +3018,8 @@ export function InitiativeListPanel({
     setInlineNewInitiativeTitle("");
     setInlineNewEpicTitle("");
     setInlineNewEpicInitiativeId("");
+    setEpicComposerNewInitOpen(false);
+    setEpicComposerNewInitTitle("");
   }, [epicPlanPanelMode]);
 
   useEffect(() => {
@@ -2903,6 +3028,22 @@ export function InitiativeListPanel({
 
   useEffect(() => {
     if (inlineNewEpicOpen) inlineEpicInputRef.current?.focus();
+  }, [inlineNewEpicOpen]);
+
+  // Auto-focus the mini new-initiative input the moment its disclosure
+  // expands so the planner can start typing immediately.
+  useEffect(() => {
+    if (epicComposerNewInitOpen) epicComposerNewInitInputRef.current?.focus();
+  }, [epicComposerNewInitOpen]);
+
+  // When the outer New Epic composer closes (Cancel / Add / Escape),
+  // also collapse the mini new-initiative composer so it doesn't ghost
+  // back open the next time the planner opens the epic flow.
+  useEffect(() => {
+    if (!inlineNewEpicOpen) {
+      setEpicComposerNewInitOpen(false);
+      setEpicComposerNewInitTitle("");
+    }
   }, [inlineNewEpicOpen]);
 
   const quarterFilterOptions: IconFilterOption<"all" | "Q1" | "Q2" | "Q3" | "Q4">[] = [
@@ -3617,6 +3758,34 @@ export function InitiativeListPanel({
     }
   }, [inlineNewEpicInitiativeId, inlineNewEpicTitle, onCreateEpicQuick]);
 
+  /** Submit the mini "+ New initiative" composer that lives inside the
+   *  New Epic flow. Creates the initiative via `onCreateInitiativeQuick`,
+   *  auto-selects it as the epic's parent (so the planner doesn't have
+   *  to hunt for it in the picker), and collapses the mini composer.
+   *  The outer New Epic composer stays open and the epic-title input
+   *  re-receives focus so the planner can finish in one go. */
+  const submitEpicComposerNewInit = useCallback(async () => {
+    if (!onCreateInitiativeQuick) return;
+    const title = epicComposerNewInitTitle.trim();
+    if (title.length < 2) return;
+    setEpicComposerNewInitSubmitting(true);
+    try {
+      const created = await onCreateInitiativeQuick(title);
+      if (typeof created === "string" && created) {
+        setInlineNewEpicInitiativeId(created);
+      }
+      setEpicComposerNewInitTitle("");
+      setEpicComposerNewInitOpen(false);
+      // Hop focus back to the epic-title input so the next keystroke
+      // names the epic — keeps the create flow uninterrupted.
+      queueMicrotask(() => inlineEpicInputRef.current?.focus());
+    } catch {
+      // Parent surfaces the toast on the createInitiativeQuick handler.
+    } finally {
+      setEpicComposerNewInitSubmitting(false);
+    }
+  }, [epicComposerNewInitTitle, onCreateInitiativeQuick]);
+
   return (
     <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-indigo-200 bg-white pt-10 pb-4 pl-0 pr-2 shadow-xl ring-1 ring-black/8">
       <div className="z-10 -mr-2 mb-4 flex shrink-0 items-center justify-between border-b border-slate-200 bg-white pr-2 pb-2">
@@ -3816,9 +3985,27 @@ export function InitiativeListPanel({
                   </div>
                   <div className="space-y-2">
                     <div>
-                      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                        Initiative
-                      </p>
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                          Initiative
+                        </p>
+                        {onCreateInitiativeQuick ? (
+                          // Visible-by-default "+ New initiative" affordance —
+                          // gives the planner a one-click path to create an
+                          // initiative without first clicking into the picker
+                          // field. Toggles the mini composer below the field.
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-0.5 rounded px-1 text-[11px] font-semibold text-sky-700 hover:text-sky-900 hover:bg-sky-50/80 disabled:opacity-50"
+                            disabled={inlineNewEpicSubmitting}
+                            onClick={() => setEpicComposerNewInitOpen((v) => !v)}
+                            aria-expanded={epicComposerNewInitOpen}
+                          >
+                            <Plus className="size-3" aria-hidden />
+                            New initiative
+                          </button>
+                        ) : null}
+                      </div>
                       <InitiativeCombobox
                         valueId={inlineNewEpicInitiativeId}
                         onValueChange={setInlineNewEpicInitiativeId}
@@ -3837,6 +4024,60 @@ export function InitiativeListPanel({
                         aria-label="Initiative for new epic"
                         className="h-8 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] text-slate-900 shadow-inner shadow-slate-900/5 outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-2 focus:ring-violet-200/70"
                       />
+                      {epicComposerNewInitOpen && onCreateInitiativeQuick ? (
+                        // Disclosure-triggered mini composer. Submitting
+                        // creates the initiative via the same handler the
+                        // combobox uses, auto-selects it as the new epic's
+                        // parent, and collapses this row.
+                        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-sky-200/80 bg-sky-50/40 px-2 py-1.5">
+                          <input
+                            ref={epicComposerNewInitInputRef}
+                            type="text"
+                            value={epicComposerNewInitTitle}
+                            onChange={(e) => setEpicComposerNewInitTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                void submitEpicComposerNewInit();
+                              }
+                              if (e.key === "Escape") {
+                                setEpicComposerNewInitOpen(false);
+                                setEpicComposerNewInitTitle("");
+                              }
+                            }}
+                            placeholder="New initiative name…"
+                            autoComplete="off"
+                            disabled={epicComposerNewInitSubmitting}
+                            className="h-7 min-w-0 flex-1 rounded-md border border-sky-200 bg-white px-2 text-[13px] text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:ring-2 focus:ring-sky-200/70"
+                            aria-label="New initiative name"
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-7 shrink-0 gap-1 bg-sky-600 px-2 text-[12px] font-semibold text-white shadow-sm hover:bg-sky-700 disabled:opacity-50"
+                            disabled={
+                              epicComposerNewInitSubmitting ||
+                              epicComposerNewInitTitle.trim().length < 2
+                            }
+                            onClick={() => void submitEpicComposerNewInit()}
+                          >
+                            <Plus className="size-3.5" aria-hidden />
+                            Create
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 shrink-0 px-2 text-[12px] text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                            onClick={() => {
+                              setEpicComposerNewInitOpen(false);
+                              setEpicComposerNewInitTitle("");
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <input
@@ -3927,7 +4168,13 @@ export function InitiativeListPanel({
           <div
             ref={setEpicUnplanDropRef}
             className={cn(
-              "bg-transparent p-0 transition",
+              // `space-y-2` adds a consistent 8px gap between epic cards in
+              // the Epics panel. Without it, cards sat flush — the colored
+              // left stripes touched and the list read as one continuous
+              // bar. The `EpicBacklogDropSlot` between cards is rendered
+              // inside each card's wrapper `<div>`, so it doesn't pick up
+              // a duplicate margin from `space-y-2`.
+              "space-y-2 bg-transparent p-0 transition",
               isEpicUnplanDropOver && "bg-transparent",
             )}
           >
@@ -3961,6 +4208,7 @@ export function InitiativeListPanel({
                     activeYearSprint={activeYearSprint}
                     showTeamChips={showTeamChips}
                     showStatusChips={showStatusChips}
+                    onOpenInsights={onOpenInsights}
                     onEpicAccordionChange={onEpicAccordionChange}
                     onOpenEpic={onOpenEpic}
                     onOpenStory={onOpenStory}
@@ -4248,6 +4496,7 @@ export function InitiativeListPanel({
                     showTeamChips={showTeamChips}
                     showHealthChips={showHealthChips}
                     showStatusChips={showStatusChips}
+                    onOpenInsights={onOpenInsights}
                     onToggle={() => {
                       const next = !(openInitiativeIds[initiative.id] ?? false);
                       setOpenInitiativeIds((prev) => ({ ...prev, [initiative.id]: next }));

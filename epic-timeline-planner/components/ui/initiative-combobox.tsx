@@ -120,10 +120,23 @@ export function InitiativeCombobox({
   }, [draft, options]);
 
   const trimmedDraft = draft.trim();
+  /** Clickable "+ Create" — input has a valid, non-duplicate name. */
   const canOfferCreate =
     Boolean(onCreateNew) &&
     trimmedDraft.length >= 2 &&
     !options.some((o) => normalizeTitle(o.title) === normalizeTitle(trimmedDraft));
+  /** Whether to render the create row AT ALL (even disabled). True whenever
+   *  the consumer wired a create callback — discoverability matters more
+   *  than tidy menus. When `canOfferCreate` is false, the row renders as
+   *  a muted hint instead of an action ("type a name to create one"). */
+  const showCreateAffordance = Boolean(onCreateNew);
+  const createRowHint = (() => {
+    if (canOfferCreate) return null;
+    if (!onCreateNew) return null;
+    if (trimmedDraft.length === 0) return "Type a name to create a new initiative";
+    if (trimmedDraft.length < 2) return "Type at least 2 characters to create";
+    return `“${trimmedDraft}” already exists`;
+  })();
 
   const recalcMenu = useCallback(() => {
     const el = inputRef.current;
@@ -249,7 +262,7 @@ export function InitiativeCombobox({
   };
 
   const showMenu =
-    open && !disabled && (filtered.length > 0 || canOfferCreate);
+    open && !disabled && (filtered.length > 0 || showCreateAffordance);
   const dropdown =
     showMenu && typeof document !== "undefined"
       ? createPortal(
@@ -285,21 +298,40 @@ export function InitiativeCombobox({
                   </button>
                 </li>
               ))}
-              {canOfferCreate ? (
+              {showCreateAffordance ? (
                 <li role="presentation">
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={false}
-                    disabled={isCreating}
-                    className="w-full border-t border-slate-100 px-2.5 py-1.5 text-left text-[13px] font-semibold text-sky-700 hover:bg-sky-50 disabled:opacity-60"
-                    onMouseDown={(ev) => {
-                      ev.preventDefault();
-                      void handleCreate();
-                    }}
-                  >
-                    {isCreating ? "Creating…" : `+ Create ${createLabel} “${trimmedDraft}”`}
-                  </button>
+                  {canOfferCreate ? (
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={false}
+                      disabled={isCreating}
+                      className="w-full border-t border-slate-100 px-2.5 py-1.5 text-left text-[13px] font-semibold text-sky-700 hover:bg-sky-50 disabled:opacity-60"
+                      onMouseDown={(ev) => {
+                        ev.preventDefault();
+                        void handleCreate();
+                      }}
+                    >
+                      {isCreating ? "Creating…" : `+ Create ${createLabel} “${trimmedDraft}”`}
+                    </button>
+                  ) : (
+                    // Hint row — keeps the "+ Create" affordance discoverable
+                    // even before the user has typed a valid name. Clicking it
+                    // focuses the input so the next keystroke goes to the
+                    // create flow without forcing a separate field-click.
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      className="flex w-full items-center gap-2 border-t border-slate-100 px-2.5 py-1.5 text-left text-[13px] font-medium text-slate-500 hover:bg-slate-50"
+                      onMouseDown={(ev) => {
+                        ev.preventDefault();
+                        inputRef.current?.focus();
+                      }}
+                    >
+                      <span aria-hidden className="text-slate-400">+</span>
+                      <span className="min-w-0 truncate">{createRowHint}</span>
+                    </button>
+                  )}
                 </li>
               ) : null}
             </ul>

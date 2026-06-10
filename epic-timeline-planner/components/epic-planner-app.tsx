@@ -6329,6 +6329,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                       onHealthFilterChange={handleHealthFilterChange}
                       heroScope={heroScope}
                       showTeamChips={showGanttTeamChipsCtrl}
+                      onOpenInsights={handleOpenInsightsInApp}
                       externalStatusFilter={ganttStatusFilter}
                       externalTeamFilter={ganttTeamFilter}
                       onUserPickedFilter={() => setShowRoadmapProgress(true)}
@@ -6337,7 +6338,20 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                       onPanelTeamFilterActiveChange={handlePanelTeamFilterActiveChange}
                       onPanelTeamFilterDerivedChange={handlePanelTeamFilterDerivedChange}
                       storyProgressDetailsVisible={showRoadmapProgress}
-                      useEpicPlanLeftPanel={initiativeListActiveMonth != null}
+                      // Panel mode follows the Hero KPI tile pick:
+                      //   `heroScope === "epic"` → Epics panel (flat
+                      //     epic list, the same surface a month drill-in
+                      //     opens). Toggled by clicking the Hero "Epics"
+                      //     tile.
+                      //   `heroScope === "initiative"` (or `"story"`) →
+                      //     Initiative tree panel (today's default).
+                      //     Toggled by clicking the Hero "Initiatives"
+                      //     tile, which is the implicit return path.
+                      // A drilled-in month still forces the Epics panel
+                      // regardless of scope — that surface is inherently
+                      // epic-centric (you're looking at one month's
+                      // bundle), so respect it over the tile pick.
+                      useEpicPlanLeftPanel={initiativeListActiveMonth != null || heroScope === "epic"}
                       activeYearSprint={activeYearSprint}
                       storyDragEnabled={
                         isSprintModeActive &&
