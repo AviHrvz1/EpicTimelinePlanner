@@ -683,8 +683,21 @@ export function SprintAnalytics({
   // input filters by substring (title); the dropdowns filter by exact match
   // on the visible label of the column. Cleared when the underlying drilldown
   // changes so re-opening starts fresh.
-  type SprintDrilldownColFilter = { title: string; team: string | null; sprint: string | null; assignee: string | null; status: string | null };
-  const EMPTY_SPRINT_DRILLDOWN_FILTER: SprintDrilldownColFilter = { title: "", team: null, sprint: null, assignee: null, status: null };
+  type SprintDrilldownColFilter = { title: string; team: string | null; sprint: string | null; assignee: string | null; status: string | null; health: string | null };
+  const EMPTY_SPRINT_DRILLDOWN_FILTER: SprintDrilldownColFilter = { title: "", team: null, sprint: null, assignee: null, status: null, health: null };
+  // Health column filter — values are the raw HealthStatus enum strings
+  // (mirrors the MonthAnalytics drill-down convention so dropdown options
+  // are stable across surfaces). Each option (and the dropdown's selected
+  // value display) is rendered as the SAME `HealthBadge` chip that
+  // appears in the body row's Health cell — so the dropdown reads as
+  // "pick one of THESE chips" instead of plain text labels. `size="xs"`
+  // keeps the chip compact for a tight dropdown row.
+  const SPRINT_HEALTH_FILTER_OPTIONS: string[] = ["done", "onTrack", "watch", "atRisk", "overdue"];
+  const renderSprintHealthFilterOption = (value: string): React.ReactNode => (
+    <span className="inline-flex items-center">
+      <HealthBadge status={value as HealthStatus} size="xs" />
+    </span>
+  );
   const [statusDrilldownColFilter, setStatusDrilldownColFilter] = useState<SprintDrilldownColFilter>(EMPTY_SPRINT_DRILLDOWN_FILTER);
   const [workloadDrilldownColFilter, setWorkloadDrilldownColFilter] = useState<SprintDrilldownColFilter>(EMPTY_SPRINT_DRILLDOWN_FILTER);
   const [sprintLoadDrilldownColFilter, setSprintLoadDrilldownColFilter] = useState<SprintDrilldownColFilter>(EMPTY_SPRINT_DRILLDOWN_FILTER);
@@ -905,6 +918,24 @@ export function SprintAnalytics({
     [workloadDrilldownAssignee, sprintStories],
   );
 
+  // Health verdict per story uses the sprint's calendar-days-left
+  // (`workloadSprintCalendarDaysLeft`) as the reference horizon — same
+  // signal Sprint Load reads in the per-row badges. Computed once at the
+  // useMemo layer below and threaded through `applyDrilldownColFilter`.
+  const sprintDaysLeftForHealth = analytics.workloadSprintCalendarDaysLeft;
+  const storyHealthVerdict = (story: typeof sprintStories[number]) =>
+    sprintStoryVerdict(
+      {
+        id: story.id,
+        title: story.title,
+        estimatedDays: story.estimatedDays,
+        daysLeft: story.daysLeft,
+        statusKey: story.statusKey ?? null,
+      },
+      sprintDaysLeftForHealth,
+      0,
+    ).status;
+
   function applyDrilldownColFilter(
     rows: typeof sprintStories,
     f: SprintDrilldownColFilter,
@@ -925,6 +956,7 @@ export function SprintAnalytics({
         if (label !== f.assignee) return false;
       }
       if (f.status != null && s.status !== f.status) return false;
+      if (f.health != null && storyHealthVerdict(s) !== f.health) return false;
       return true;
     });
   }
@@ -1011,11 +1043,14 @@ export function SprintAnalytics({
 
   return (
     <section
-      // `pt-1 pl-1` (was `p-4` all-around) matches the MonthAnalytics
-      // dot-grid section — tightens the inset between the context rail
-      // and the first chart card on its right. Bottom + right padding
-      // unchanged so the dot-grid backplate still frames the charts.
-      className="mb-2 flex flex-col gap-4 rounded-xl pb-4 pt-0 pl-1 pr-4"
+      // `pt-0 pl-1 pr-1` (was `p-4` all-around) matches the MonthAnalytics
+      // dot-grid section — tightens horizontal insets so the chart cards
+      // can claim more width. Bottom padding kept so the dot-grid
+      // backplate still frames the charts; right inset dropped from
+      // `pr-4` to `pr-1` per planner request to reduce the dead band
+      // between the right edge of the Burndown/CFD/Burnup column and
+      // the scrollbar / page chrome.
+      className="mb-2 flex flex-col gap-4 rounded-xl pb-4 pt-0 pl-1 pr-1"
       style={{
         backgroundImage: "radial-gradient(circle, #cbd5e1 1px, transparent 1px)",
         backgroundSize: "24px 24px",
@@ -1053,6 +1088,7 @@ export function SprintAnalytics({
                       <th className="px-2 py-1.5 text-[14px] font-bold">Sprint</th>
                       <th className="px-2 py-1.5 text-[14px] font-bold">Assignee</th>
                       <th className="px-2 py-1.5 text-[14px] font-bold">Status</th>
+                      <th className="px-2 py-1.5 text-[14px] font-bold">Health</th>
                       <th className="px-2 py-1.5 text-right text-[14px] font-bold">Est days</th>
                       <th className="px-2 py-1.5 text-right text-[14px] font-bold">Est days left</th>
                     </tr>
@@ -1093,6 +1129,15 @@ export function SprintAnalytics({
                           ariaLabel="Filter status drilldown by status"
                         />
                       </th>
+                      <th className="px-1 py-0.5">
+                        <DrilldownFilterDropdown
+                          value={statusDrilldownColFilter.health}
+                          options={SPRINT_HEALTH_FILTER_OPTIONS}
+                          renderOption={renderSprintHealthFilterOption}
+                          onChange={(v) => setStatusDrilldownColFilter((p) => ({ ...p, health: v }))}
+                          ariaLabel="Filter status drilldown by health"
+                        />
+                      </th>
                       {/* Σ totals over the currently visible (filtered) rows
                        *  so the user always sees how much est-days work the
                        *  drilldown represents, even after filtering by name /
@@ -1129,13 +1174,16 @@ export function SprintAnalytics({
                         <td className="px-2 py-1.5">
                           <StoryStatusPill status={story.status} />
                         </td>
+                        <td className="px-2 py-1.5">
+                          <HealthBadge status={storyHealthVerdict(story)} />
+                        </td>
                         <td className="px-2 py-1.5 text-right tabular-nums">{story.estimatedDays ?? "—"}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums">{story.daysLeft ?? "—"}</td>
                       </tr>
                     ))}
                     {statusDrilldownStories.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="px-3 py-8 text-center text-[13px] text-slate-500">
+                        <td colSpan={9} className="px-3 py-8 text-center text-[13px] text-slate-500">
                           No stories in this status.
                         </td>
                       </tr>
@@ -1457,6 +1505,7 @@ export function SprintAnalytics({
                       <th className="px-2 py-1 text-[14px] font-semibold">Sprint</th>
                       <th className="px-2 py-1 text-[14px] font-semibold">Assignee</th>
                       <th className="px-2 py-1 text-[14px] font-semibold">Status</th>
+                      <th className="px-2 py-1 text-[14px] font-semibold">Health</th>
                       <th className="px-2 py-1 text-right text-[14px] font-semibold">Est days</th>
                       <th className="px-2 py-1 text-right text-[14px] font-semibold">Est days left</th>
                     </tr>
@@ -1506,6 +1555,15 @@ export function SprintAnalytics({
                           ariaLabel="Filter workload by status"
                         />
                       </th>
+                      <th className="px-1 py-0.5">
+                        <DrilldownFilterDropdown
+                          value={workloadDrilldownColFilter.health}
+                          options={SPRINT_HEALTH_FILTER_OPTIONS}
+                          renderOption={renderSprintHealthFilterOption}
+                          onChange={(v) => setWorkloadDrilldownColFilter((p) => ({ ...p, health: v }))}
+                          ariaLabel="Filter workload by health"
+                        />
+                      </th>
                       {/* Σ totals over the currently visible (filtered) rows. */}
                       <th className="px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
                         Σ <span className="text-slate-300">|</span> {workloadDrilldownStories.reduce((sum, s) => sum + (s.estimatedDays ?? 0), 0)}
@@ -1539,6 +1597,9 @@ export function SprintAnalytics({
                         </td>
                         <td className="px-2 py-1">
                           <StoryStatusPill status={story.status} />
+                        </td>
+                        <td className="px-2 py-1">
+                          <HealthBadge status={storyHealthVerdict(story)} />
                         </td>
                         <td className="px-2 py-1 text-right tabular-nums">{story.estimatedDays ?? "—"}</td>
                         <td className="px-2 py-1 text-right tabular-nums">{story.daysLeft ?? "—"}</td>
@@ -1995,6 +2056,7 @@ export function SprintAnalytics({
                               <th className="px-2 py-1 text-[14px] font-semibold">Sprint</th>
                               <th className="px-2 py-1 text-[14px] font-semibold">Assignee</th>
                               <th className="px-2 py-1 text-[14px] font-semibold">Status</th>
+                              <th className="px-2 py-1 text-[14px] font-semibold">Health</th>
                               <th className="px-2 py-1 text-right text-[14px] font-semibold">Est days</th>
                               <th className="px-2 py-1 text-right text-[14px] font-semibold">Est days left</th>
                             </tr>
@@ -2044,6 +2106,15 @@ export function SprintAnalytics({
                                   ariaLabel="Filter sprint load by status"
                                 />
                               </th>
+                              <th className="px-1 py-0.5">
+                                <DrilldownFilterDropdown
+                                  value={sprintLoadDrilldownColFilter.health}
+                                  options={SPRINT_HEALTH_FILTER_OPTIONS}
+                                  renderOption={renderSprintHealthFilterOption}
+                                  onChange={(v) => setSprintLoadDrilldownColFilter((p) => ({ ...p, health: v }))}
+                                  ariaLabel="Filter sprint load by health"
+                                />
+                              </th>
                               {/* Σ totals over the currently visible (filtered) rows. */}
                               <th className="px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
                                 Σ <span className="text-slate-300">|</span> {sprintLoadDrilldownStories.reduce((sum, s) => sum + (s.estimatedDays ?? 0), 0)}
@@ -2073,6 +2144,9 @@ export function SprintAnalytics({
                                 </td>
                                 <td className="px-2 py-1">
                                   <StoryStatusPill status={story.status} />
+                                </td>
+                                <td className="px-2 py-1">
+                                  <HealthBadge status={storyHealthVerdict(story)} />
                                 </td>
                                 <td className="px-2 py-1 text-right tabular-nums">{story.estimatedDays ?? "—"}</td>
                                 <td className="px-2 py-1 text-right tabular-nums">{story.daysLeft ?? "—"}</td>

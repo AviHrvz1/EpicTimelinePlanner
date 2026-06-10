@@ -9724,7 +9724,7 @@ export function TimelineGrid({
                 </div>
               </DeferredMount>
             ) : (
-              <div className="pt-0 pb-3 pl-1 pr-3 sm:pb-5 sm:pr-5">
+              <div className="pt-0 pb-3 pl-1 pr-1 sm:pb-5 sm:pr-1">
                 <SprintAnalytics
                   initiatives={initiatives}
                   month={sprintBoardContextMonth ?? activeMonth ?? 1}
