@@ -4278,12 +4278,16 @@ export function MonthAnalytics({
   });
   return (
     <section
-      // `pl-1` (was `p-4` all-around) tightens the inset between the
-      // context rail's right edge and the "Epic / Initiative Scope"
-      // banner — at 16px left padding the gap read as wasted space
-      // once the rail was shrunk to 36px. Top/bottom/right padding
-      // unchanged so the dot-grid backplate still frames the charts.
-      className="mb-2 flex flex-col gap-3.5 rounded-xl py-4 pl-1 pr-4"
+      // `pl-1 pt-1` (was `p-4` all-around) tightens TWO insets:
+      // - Left: gap between the context rail's right edge and the
+      //   "Epic / Initiative Scope" banner (was 16px; rail is 36px now,
+      //   gap read as wasted space).
+      // - Top: gap between the Map/Activity rail icons and the scope
+      //   banner top (was 16px; planner wanted them aligned, since the
+      //   rail is positioned `absolute top-0` of its sibling wrapper).
+      // Bottom + right padding unchanged so the dot-grid backplate
+      // still frames the charts beneath.
+      className="mb-2 flex flex-col gap-3.5 rounded-xl pb-4 pt-1 pl-1 pr-4"
       style={{
         backgroundImage: "radial-gradient(circle, #cbd5e1 1px, transparent 1px)",
         backgroundSize: "24px 24px",
@@ -4569,7 +4573,7 @@ export function MonthAnalytics({
           ) : null}
         </div>
       </div>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
       <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1 lg:h-full">
         <div className={cn("mb-2 flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
           <h3
@@ -5090,7 +5094,7 @@ export function MonthAnalytics({
           </div>
       </article>
 
-      <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:h-full">
+      <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1 lg:h-full">
         <div className={cn("mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
           <h3
             className={cn(
@@ -5541,7 +5545,7 @@ export function MonthAnalytics({
       </article>
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
+      <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
       <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1">
         <div className={cn("flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW, isMultiPeriodInsights ? "mb-3" : "mb-2")}>
           <h3
@@ -5949,7 +5953,7 @@ export function MonthAnalytics({
         </p>
       </article>
 
-      <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:h-full">
+      <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1 lg:h-full">
         <div className={cn("mb-2 flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
           <h3
             className={cn(
@@ -6175,7 +6179,7 @@ export function MonthAnalytics({
        *  pinned — pinned scope must always show both charts even if the epic
        *  has no scheduled stories to chart. */}
       {(burnUpData.length > 0 || selectedEpicOption != null || selectedInitiativeId !== "all") && (
-        <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
+        <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
           {/* Month Load — left column, below Workload Balance */}
           {(() => {
             const teamMode = !forceUserMode && (!filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1) && analytics.workloadByTeam.length > 0;
@@ -6661,7 +6665,7 @@ export function MonthAnalytics({
           })()}
 
           {/* Burn Up chart + right-side epic legend */}
-          <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:h-full">
+          <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1 lg:h-full">
             <div className={cn("mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
               <h3
                 className={cn(
@@ -7075,36 +7079,36 @@ export function MonthAnalyticsSkeleton() {
         <div className={cn("h-6 w-40 rounded-md", shimmer)} />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
         <div className={cn(card, "lg:col-span-1 lg:h-full")}>
           <div className={cn("mb-2 h-5 w-32 rounded", shimmer)} />
           <div className={cn(pieBand, "flex items-center justify-center")}>
             <div className={cn("size-36 rounded-full", shimmer)} />
           </div>
         </div>
-        <div className={cn(card, "lg:col-span-2 lg:h-full")}>
+        <div className={cn(card, "lg:col-span-1 lg:h-full")}>
           <div className={cn("mb-2 h-5 w-44 rounded", shimmer)} />
           <div className={cn(band, "rounded-md", shimmer)} />
         </div>
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
+      <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
         <div className={cn(card, "lg:col-span-1")}>
           <div className={cn("mb-2 h-5 w-36 rounded", shimmer)} />
           <div className={cn(band, "rounded-md", shimmer)} />
         </div>
-        <div className={cn(card, "lg:col-span-2")}>
+        <div className={cn(card, "lg:col-span-1")}>
           <div className={cn("mb-2 h-5 w-40 rounded", shimmer)} />
           <div className={cn(band, "rounded-md", shimmer)} />
         </div>
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
+      <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
         <div className={cn(card, "lg:col-span-1")}>
           <div className={cn("mb-2 h-5 w-32 rounded", shimmer)} />
           <div className={cn(band, "rounded-md", shimmer)} />
         </div>
-        <div className={cn(card, "lg:col-span-2")}>
+        <div className={cn(card, "lg:col-span-1")}>
           <div className={cn("mb-2 h-5 w-36 rounded", shimmer)} />
           <div className={cn(band, "rounded-md", shimmer)} />
         </div>
