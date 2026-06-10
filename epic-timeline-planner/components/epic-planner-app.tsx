@@ -6251,6 +6251,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                       highlightedEpicIds={roadmapHighlight?.epicIds ?? null}
                       healthFilter={healthFilter}
                       onHealthFilterChange={handleHealthFilterChange}
+                      heroScope={heroScope}
                       onUserPickedFilter={() => setShowRoadmapProgress(true)}
                       onPanelStatusFilterDerivedChange={handlePanelStatusFilterDerivedChange}
                       onPanelQuarterFilterDerivedChange={setGanttQuarterFilter}

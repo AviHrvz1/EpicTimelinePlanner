@@ -6521,46 +6521,21 @@ export function TimelineGrid({
       for (const group of activeInitiativeRows) {
         for (const row of group.items) {
           totalBars += 1;
-          const initiativeStart = sprintStartDate(currentYear, row.startS);
-          const initiativeEnd = sprintEndDate(currentYear, row.endS);
-          const childStatuses: HealthStatus[] = [];
-          for (const epic of row.initiative.epics ?? []) {
-            const epicEnd = epic.planEndSprint != null
-              ? sprintEndDate(currentYear, epic.planEndSprint)
-              : initiativeEnd;
-            const h = computeProgress({
-              stories: epic.userStories ?? [],
-              start: initiativeStart,
-              end: epicEnd,
-              basis: progressBasis,
-              epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
-            });
-            childStatuses.push(h.status);
+          // Route through the shared helper so the Gantt's initiative
+          // verdict matches the Hero's Health Distribution donut at
+          // initiative scope. The previous inline math used
+          // `epic.planEndSprint` (a 1|2 lane within a month) as if it
+          // were a global sprint number, collapsing every child end
+          // date into early January and stamping every initiative as
+          // overdue — which then made a "On Track" health filter
+          // match zero bars.
+          const v = computeInitiativeHealthVerdict(row.initiative, currentYear, progressBasis);
+          if (v != null) {
+            counts[v.status] += 1;
+            statusByBarId.set(row.initiative.id, v.status);
+            items.push({ id: row.initiative.id, title: row.initiative.title, kind: "initiative", status: v.status });
+            unestimatedStoryCount += v.result.unestimatedCount;
           }
-          const stories = (row.initiative.epics ?? []).flatMap((e) => e.userStories ?? []);
-          const initiativeOriginalEstSum = (row.initiative.epics ?? []).reduce(
-            (sum, e) => sum + (e.originalEstimateDays ?? 0),
-            0,
-          );
-          const h = computeInitiativeProgress({
-            stories,
-            childStatuses,
-            start: initiativeStart,
-            end: initiativeEnd,
-            basis: progressBasis,
-            epicOriginalEstimateDays: initiativeOriginalEstSum > 0 ? initiativeOriginalEstSum : null,
-          });
-          // Status counts only include bars where we could compute health
-          // (i.e. there's estimated work in days/epicEst mode or any story in
-          // stories mode). totalBars above always increments so the popover's
-          // total matches what's on the Gantt.
-          const hasData = progressBasis === "stories" ? stories.length > 0 : h.totalEffort > 0;
-          if (hasData) {
-            counts[h.status] += 1;
-            statusByBarId.set(row.initiative.id, h.status);
-            items.push({ id: row.initiative.id, title: row.initiative.title, kind: "initiative", status: h.status });
-          }
-          unestimatedStoryCount += h.unestimatedCount;
         }
       }
     } else {

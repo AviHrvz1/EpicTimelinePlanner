@@ -66,7 +66,7 @@ import { InitiativeStatus } from "@/lib/generated/prisma";
 import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { resolveStoryYearSprint, sprintStartDate, sprintEndDate, globalSprintFromMonthLane } from "@/lib/year-sprint";
 import { computeProgress, type HealthStatus } from "@/lib/progress";
-import { computeEpicHealthVerdict } from "@/lib/epic-health";
+import { computeEpicHealthVerdict, computeInitiativeHealthVerdict } from "@/lib/epic-health";
 import { resolveAssigneeAvatar, UserAvatar } from "@/components/ui/user-avatar";
 import { TeamAvatar } from "@/components/ui/team-avatar";
 import { formatAssigneeShortLabel } from "@/lib/assignee-display";
@@ -1258,6 +1258,12 @@ type InitiativeListPanelProps = {
    *  filter in lockstep. */
   healthFilter?: Set<HealthStatus>;
   onHealthFilterChange?: (next: Set<HealthStatus>) => void;
+  /** Hero KPI scope. When `"initiative"`, the panel filters its visible
+   *  initiatives by the worst-of-children initiative verdict — same as
+   *  the Hero's Health Distribution donut at initiative scope. At other
+   *  scopes the legacy any-child-epic-matches semantics is preserved so
+   *  the Roadmap Health popover keeps behaving as before. */
+  heroScope?: "initiative" | "epic" | "story";
   /** Fires whenever the planner picks a non-"all" option in the unified
    *  Statuses dropdown — either a regular status OR a health verdict. Used
    *  by the parent to force-enable the roadmap Progress toggle so the
@@ -2559,6 +2565,7 @@ export function InitiativeListPanel({
   planYear,
   healthFilter,
   onHealthFilterChange,
+  heroScope,
   onUserPickedFilter,
   onPanelStatusFilterDerivedChange,
   onPanelQuarterFilterDerivedChange,
@@ -3227,18 +3234,27 @@ export function InitiativeListPanel({
         }
       }
       if (healthFilter && healthFilter.size > 0) {
-        // Show an initiative only when at least one of its epics has a
-        // verdict in the active set — mirrors the popover's "epic-level"
-        // selection semantics.
-        const epicMatches = (initiative.epics ?? []).some((epic) => {
-          const verdict = healthByEpicId.get(epic.id);
-          return verdict != null && healthFilter.has(verdict);
-        });
-        if (!epicMatches) return false;
+        if (heroScope === "initiative") {
+          // At initiative scope, match the Hero's Health Distribution
+          // donut: each initiative gets a single worst-of-children
+          // verdict and the panel keeps only initiatives whose verdict
+          // is in the active set.
+          const v = computeInitiativeHealthVerdict(initiative, planYear ?? new Date().getFullYear(), progressBasis);
+          if (v == null || !healthFilter.has(v.status)) return false;
+        } else {
+          // Show an initiative only when at least one of its epics has a
+          // verdict in the active set — mirrors the popover's "epic-level"
+          // selection semantics.
+          const epicMatches = (initiative.epics ?? []).some((epic) => {
+            const verdict = healthByEpicId.get(epic.id);
+            return verdict != null && healthFilter.has(verdict);
+          });
+          if (!epicMatches) return false;
+        }
       }
       return true;
     });
-  }, [initiativeList, initiativeSearch, panelQuarterFilters, panelStatusFilters, panelTeamFilterIds, healthFilter, healthByEpicId]);
+  }, [initiativeList, initiativeSearch, panelQuarterFilters, panelStatusFilters, panelTeamFilterIds, healthFilter, healthByEpicId, heroScope, planYear, progressBasis]);
   const initiativeSearchSuggestions = useMemo(() => {
     const set = new Set<string>();
     for (const initiative of initiativeList) {
