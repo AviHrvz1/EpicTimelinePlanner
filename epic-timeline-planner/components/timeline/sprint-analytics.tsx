@@ -197,8 +197,21 @@ export type SprintLoadStoryProjection = {
 
 /** Per-story version of `sprintBurndownVerdict` — buckets a single story's
  *  remaining work against an ideal sprint burndown so we can list flagged
- *  stories in the Sprint Load badge popover. Stories that are review or have
- *  no estimate are reported as `onTrack` so the popover skips them. */
+ *  stories in the Sprint Load badge popover.
+ *
+ *  Closed-sprint policy (sprint window has passed, `sprintDaysLeft <= 0`):
+ *  any story whose status isn't `done` rolls up to `overdue`. The previous
+ *  "review = done" and "no estimate = onTrack" carve-outs let unfinished
+ *  work hide from the donut counts even though the sprint had ended — see
+ *  the planner-facing discussion for context.
+ *
+ *  Open-sprint policy: status is the ultimate signal first (`done` → done;
+ *  `review` → done because the engineering is finished, sign-off pending;
+ *  `daysLeft <= 0` → done because work has been burned down even if the
+ *  status flag wasn't updated). Otherwise we compare remaining work against
+ *  an ideal burndown line and bucket via the gap. Stories without estimates
+ *  in an open sprint stay `onTrack` because there's no target to compare
+ *  against. */
 export function sprintStoryVerdict(
   story: SprintLoadStoryProjection,
   sprintDaysLeft: number,
@@ -206,11 +219,30 @@ export function sprintStoryVerdict(
 ): { status: HealthStatus; gap: number } {
   const est = Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
   const left = Math.max(0, story.daysLeft ?? est);
-  if (left <= 0 || story.statusKey === "review" || story.statusKey === "done") {
+  // Done is done, regardless of sprint state.
+  if (story.statusKey === "done") {
     return { status: "done", gap: 0 };
   }
+  // Closed sprint + not done → overdue. No exceptions for review /
+  // no-estimate / already-burned-down because the calendar window has
+  // passed and the work isn't formally complete.
+  if (sprintDaysLeft <= 0) {
+    return { status: "overdue", gap: left };
+  }
+  // Open sprint from here on.
+  // Review = engineering complete, sign-off pending. Treat as done for
+  // the burndown's purposes so an open sprint doesn't keep flagging
+  // these as in-flight work.
+  if (story.statusKey === "review") {
+    return { status: "done", gap: 0 };
+  }
+  // Burned down to zero remaining work — count as done even if the
+  // status flag wasn't updated yet.
+  if (left <= 0) {
+    return { status: "done", gap: 0 };
+  }
+  // No estimate or zero-day sprint → can't measure burndown.
   if (est <= 0 || sprintDaysTotal <= 0) return { status: "onTrack", gap: 0 };
-  if (sprintDaysLeft <= 0) return { status: "overdue", gap: left };
   const elapsed = Math.min(1, Math.max(0, (sprintDaysTotal - sprintDaysLeft) / sprintDaysTotal));
   const ideal = est * (1 - elapsed);
   const gap = left - ideal;

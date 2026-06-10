@@ -174,11 +174,26 @@ export function StoryDetailsDialog({
     [initiatives],
   );
   const assignableSprints = useMemo(
-    () =>
-      Array.from({ length: YEAR_SPRINT_MAX }, (_, i) => i + 1).filter(
+    () => {
+      // Future sprints (whose end date hasn't passed yet) are always
+      // assignable. Past sprints are filtered out so a fresh pick can
+      // only land in a still-open window.
+      const future = Array.from({ length: YEAR_SPRINT_MAX }, (_, i) => i + 1).filter(
         (n) => sprintEndDate(sprintPlanningYear, n).getTime() > Date.now(),
-      ),
-    [sprintPlanningYear],
+      );
+      // BUT — the story may already be assigned to a past sprint, in
+      // which case the planner needs to SEE that assignment (otherwise
+      // the `<select>` value has no matching `<option>` and browsers
+      // fall back to the first one — "Not set" — which looks like the
+      // sprint was cleared. Include the current sprint at the front
+      // when it isn't already in the future list.
+      const current = story?.sprint ?? null;
+      if (current != null && !future.includes(current)) {
+        return [current, ...future];
+      }
+      return future;
+    },
+    [sprintPlanningYear, story?.sprint],
   );
   const [priority, setPriority] = useState("");
   const [priorityOpen, setPriorityOpen] = useState(false);

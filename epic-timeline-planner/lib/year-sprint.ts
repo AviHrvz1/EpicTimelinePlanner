@@ -92,11 +92,29 @@ export function isYearSprintValue(n: unknown): n is number {
 /**
  * Story.sprint: either a year sprint 1–24, or legacy 1–2 meaning lane within `contextMonth`.
  */
-export function resolveStoryYearSprint(story: UserStoryItem, contextMonth: number): number | null {
-  if (story.sprint == null) return null;
-  if (story.sprint >= 3) return story.sprint;
-  if (story.sprint !== 1 && story.sprint !== 2) return story.sprint;
-  return globalSprintFromMonthLane(contextMonth, story.sprint as 1 | 2);
+export function resolveStoryYearSprint(story: UserStoryItem, _contextMonth: number): number | null {
+  // `story.sprint` is always stored as a year-wide GLOBAL sprint number
+  // (1..24). Both write paths produce globals: the demo-builder seeds
+  // stories with values pulled from `sprintRange` (already globals via
+  // `globalSprintFromMonthLane`), and the Move-leftovers / manual PATCH
+  // path writes `fromSprint + 1` (a global). So this resolver is now a
+  // straight pass-through.
+  //
+  // The previous "if sprint == 1|2, treat as a lane-within-contextMonth"
+  // branch was wrong for stories: when the caller (kanban / verdict
+  // math) asked from a non-January month, a literal global Sprint 1
+  // story would get reinterpreted as "lane 1 of <that month>" and
+  // appear under the WRONG sprint — e.g. a January story with
+  // `sprint = 2` showed up on every lane-2 sprint kanban (Sprint 2, 4,
+  // 6, 8, …). That bug also produced the "Sprint 6 kanban shows 10
+  // stories but backlog Sprint 6 filter shows 5" discrepancy.
+  //
+  // `contextMonth` is kept in the signature for caller compatibility
+  // (and to make a future revival of legacy data explicit) but is
+  // unused now — see `resolveEpicPlanYearSprint` below which DOES
+  // still legitimately legacy-decode against the epic's own
+  // `planStartMonth`.
+  return story.sprint ?? null;
 }
 
 /**
