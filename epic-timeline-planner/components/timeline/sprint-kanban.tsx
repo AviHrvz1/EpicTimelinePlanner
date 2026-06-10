@@ -36,6 +36,10 @@ import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { DragHandleIcon } from "@/components/ui/drag-handle";
 import { UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
+import { HealthBadge } from "@/components/timeline/health-badge";
+import { computeStoryHealthVerdict, formatStoryHealthTooltip } from "@/lib/story-health";
+import { computeEpicHealthVerdict } from "@/lib/epic-health";
+import { formatHealthTooltip } from "@/components/timeline/health-badge";
 
 function storyAssigneeLabel(story: UserStoryItem): string {
   const t = story.assignee?.trim();
@@ -138,6 +142,8 @@ function KanbanColumn({
 
 function KanbanStoryCard({
   row,
+  planYear,
+  showHealthBadge = false,
   boardStoryAssigneeNames,
   workspaceDirectoryUsers,
   dragDisabled = false,
@@ -151,6 +157,8 @@ function KanbanStoryCard({
   showProgress = false,
 }: {
   row: BoardStoryRow;
+  planYear: number;
+  showHealthBadge?: boolean;
   boardStoryAssigneeNames: ReadonlySet<string>;
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
   dragDisabled?: boolean;
@@ -365,12 +373,21 @@ function KanbanStoryCard({
           </div>
         ) : null}
         <div className="flex w-full flex-wrap items-center justify-end gap-2 pr-0">
-          {epic.team ? (
-            <span className="inline-flex items-center gap-1 rounded-md bg-violet-50 px-2 py-1 text-[12px] font-medium text-violet-700">
-              <Users className="size-3 shrink-0 opacity-70" aria-hidden />
-              {monthTeamLabelForId(epic.team) ?? epic.team}
-            </span>
-          ) : null}
+          {/* Sprint-burndown health verdict — same helper the hero's
+           *  Health Distribution donut + backlog Health column use,
+           *  toggled by the chip-toolbar "Health" button. Null
+           *  verdicts (no sprint, no resolvable burndown) skip the
+           *  chip even when the toggle is on. Team chip removed from
+           *  story cards — the team's identity already shows on the
+           *  per-column team filter chips at the top of the kanban,
+           *  duplicating it inside every card was redundant and
+           *  pushed the assignee + days chips off the row. */}
+          {showHealthBadge ? (() => {
+            const v = computeStoryHealthVerdict(row.story, epic, planYear);
+            if (!v) return null;
+            const tip = formatStoryHealthTooltip(row.story, epic, planYear, v.status);
+            return <HealthBadge status={v.status} size="xs" tooltip={tip ?? undefined} />;
+          })() : null}
           {editing === "assignee" && editable ? (
             <div ref={assigneeInputWrapRef} className="min-w-[7.5rem] max-w-[14rem] flex-1">
               <AssigneeCombobox
@@ -515,6 +532,9 @@ function SprintEpicCard({
   row,
   month,
   yearSprint,
+  planYear,
+  progressBasis,
+  showHealthBadge = false,
   onOpenEpic,
   workspaceDirectoryUsers,
   showProgress = false,
@@ -522,6 +542,9 @@ function SprintEpicCard({
   row: BoardEpicRow;
   month: number;
   yearSprint: number;
+  planYear: number;
+  progressBasis: "days" | "stories" | "epicEst";
+  showHealthBadge?: boolean;
   onOpenEpic?: (epicId: string) => void;
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
   showProgress?: boolean;
@@ -587,6 +610,15 @@ function SprintEpicCard({
           </div>
         ) : null}
         <div className="mt-6 flex flex-wrap items-center justify-end gap-1.5">
+          {/* Epic-level health verdict — same helper the hero's Health
+           *  Distribution donut uses at Epic scope, gated by the
+           *  chip-toolbar Health toggle. */}
+          {showHealthBadge ? (() => {
+            const v = computeEpicHealthVerdict(epic, planYear, progressBasis);
+            if (!v) return null;
+            const tip = formatHealthTooltip(v.result);
+            return <HealthBadge status={v.status} size="xs" tooltip={tip} />;
+          })() : null}
           {epic.assignee?.trim() ? (() => {
             const fullName = epic.assignee.trim();
             const resolved = resolveAssigneeAvatar(epic.assignee, workspaceDirectoryUsers);
@@ -630,6 +662,9 @@ function SprintEpicKanbanView({
   epicRows,
   month,
   yearSprint,
+  planYear,
+  progressBasis,
+  showHealthBadges = false,
   onOpenEpic,
   workspaceDirectoryUsers,
   showProgress = false,
@@ -637,6 +672,9 @@ function SprintEpicKanbanView({
   epicRows: BoardEpicRow[];
   month: number;
   yearSprint: number;
+  planYear: number;
+  progressBasis: "days" | "stories" | "epicEst";
+  showHealthBadges?: boolean;
   onOpenEpic?: (epicId: string) => void;
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
   showProgress?: boolean;
@@ -676,6 +714,9 @@ function SprintEpicKanbanView({
                   row={row}
                   month={month}
                   yearSprint={yearSprint}
+                  planYear={planYear}
+                  progressBasis={progressBasis}
+                  showHealthBadge={showHealthBadges}
                   onOpenEpic={onOpenEpic}
                   workspaceDirectoryUsers={workspaceDirectoryUsers}
                   showProgress={showProgress}
@@ -725,6 +766,15 @@ type SprintKanbanProps = {
   onOpenEpic?: (epicId: string) => void;
   onPatchStory?: (storyId: string, patch: SprintKanbanStoryPatch) => void;
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
+  /** Progress basis driving epic-level health verdict math on epic
+   *  cards. Defaults to `days` when omitted — matches the Hero's
+   *  default basis. */
+  progressBasis?: "days" | "stories" | "epicEst";
+  /** When true, each story / epic card renders a sprint-burndown
+   *  health chip. Toggled via the "Health" button on the sprint
+   *  kanban chip toolbar. Off by default — cards stay compact when
+   *  health isn't the focus. */
+  showHealthBadges?: boolean;
 };
 
 export function SprintKanbanBoard({
@@ -732,6 +782,8 @@ export function SprintKanbanBoard({
   planYear,
   month,
   yearSprint,
+  progressBasis = "days",
+  showHealthBadges = false,
   filterEpicTeamIds = null,
   epicAccordionEmphasis = null,
   scheduledStoriesEmphasis = null,
@@ -1043,6 +1095,9 @@ export function SprintKanbanBoard({
           epicRows={filteredEpicRows}
           month={month}
           yearSprint={yearSprint}
+          planYear={planYear}
+          progressBasis={progressBasis}
+          showHealthBadges={showHealthBadges}
           onOpenEpic={onOpenEpic}
           workspaceDirectoryUsers={workspaceDirectoryUsers}
           showProgress={showProgress}
@@ -1088,6 +1143,8 @@ export function SprintKanbanBoard({
                 <KanbanStoryCard
                   key={row.story.id}
                   row={row}
+                  planYear={planYear}
+                  showHealthBadge={showHealthBadges}
                   boardStoryAssigneeNames={boardStoryAssigneeNames}
                   workspaceDirectoryUsers={workspaceDirectoryUsers}
                   dragDisabled={sprintClosed}

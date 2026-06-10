@@ -70,6 +70,7 @@ import { clampYearSprint, globalSprintFromMonthLane, monthLaneFromGlobalSprint, 
 import { computeProgress, computeInitiativeProgress, type HealthStatus, type ProgressBasis, type ProgressResult } from "@/lib/progress";
 import { computeEpicObservedStart, effectiveEpicStart } from "@/lib/epic-observed-start";
 import { computeEpicHealthVerdict } from "@/lib/epic-health";
+import { computeStoryHealthVerdict, formatStoryHealthTooltip, formatBundleHealthTooltip } from "@/lib/story-health";
 import { nowMs as clockNowMs } from "@/lib/clock";
 import { projectInitiativesToCloseDate } from "@/lib/story-snapshot-projection";
 import { SnapshotHeaderStrip, type SnapshotHeaderStripScope } from "@/components/timeline/snapshot-header-strip";
@@ -120,18 +121,18 @@ function CircleProgress({
   percent: number;
   color: string;
 }) {
-  // Slightly elliptical so 3-digit "100%" fits without clipping.
-  // See sprint-analytics CircleProgress for the math derivation —
-  // the vertical-then-rotated trick is what makes the fill start
-  // at the visible top.
-  const rx = 11;
+  // Circular (rx === ry) so the percent ring reads as a true round
+  // donut. The math + rotate(-90) trick still works the same way
+  // either circle or ellipse — the ellipse-perimeter formula
+  // collapses to `2 * π * r` when rx === ry.
+  const rx = 14;
   const ry = 14;
   const h = ((rx - ry) ** 2) / ((rx + ry) ** 2);
   const circumference = Math.PI * (rx + ry) * (1 + (3 * h) / (10 + Math.sqrt(4 - 3 * h)));
   const clamped = Math.max(0, Math.min(100, percent));
   const dashOffset = circumference * (1 - clamped / 100);
   return (
-    <svg width={34} height={28} viewBox="0 0 34 28" aria-hidden>
+    <svg width={34} height={32} viewBox="0 -2 34 32" aria-hidden>
       <ellipse cx={17} cy={14} rx={rx} ry={ry} fill="none" stroke="#e2e8f0" strokeWidth={2.4} transform="rotate(-90 17 14)" />
       <ellipse
         cx={17}
@@ -258,12 +259,17 @@ interface EpicDrilldownFilter {
   initiative: string | null;
   assignee: string | null;
   status: string | null;
+  /** Sprint-burndown / epic health verdict — picks the matching
+   *  `HealthStatus` value or `null` for "show all". Same one the
+   *  Hero Health Distribution donut + backlog Health column use. */
+  health: HealthStatus | null;
 }
 const EMPTY_EPIC_DRILLDOWN_FILTER: EpicDrilldownFilter = {
   title: "",
   initiative: null,
   assignee: null,
   status: null,
+  health: null,
 };
 const EPIC_STATUS_RANK: Record<string, number> = {
   Unscheduled: 0,
@@ -317,6 +323,9 @@ interface DrilldownFilter {
   team: string | null;
   assignee: string | null;
   status: string | null;
+  /** Sprint-burndown health verdict per story. Same `HealthStatus`
+   *  values the rest of the app uses; `null` means "show all". */
+  health: HealthStatus | null;
 }
 
 const EMPTY_DRILLDOWN_FILTER: DrilldownFilter = {
@@ -325,7 +334,34 @@ const EMPTY_DRILLDOWN_FILTER: DrilldownFilter = {
   team: null,
   assignee: null,
   status: null,
+  health: null,
 };
+
+/** Shared options + renderer for the Health column filter dropdown
+ *  across the drill-down tables. Each option is a (id, label) pair
+ *  the existing `DrilldownFilterDropdown` API expects. The "Any"
+ *  case is handled by the dropdown itself when value is null. */
+const HEALTH_FILTER_OPTIONS: string[] = [
+  "done",
+  "onTrack",
+  "watch",
+  "atRisk",
+  "overdue",
+];
+const HEALTH_FILTER_LABELS: Record<string, string> = {
+  done: "Done",
+  onTrack: "On Track",
+  watch: "Watch",
+  atRisk: "At Risk",
+  overdue: "Overdue",
+};
+function renderHealthFilterOption(value: string): React.ReactNode {
+  return (
+    <span className="inline-flex items-center gap-1.5 truncate">
+      {HEALTH_FILTER_LABELS[value] ?? value}
+    </span>
+  );
+}
 
 /** Order used when sorting by status — todo first, done last — so the
  *  ascending direction reads as "earliest in the workflow first". */
@@ -4150,6 +4186,11 @@ export function MonthAnalytics({
   const drilldownTableEmptyRowZebra =
     "border-t border-[#7cd3f7]/60 text-slate-400 odd:bg-[#f4f7fc]/55 even:bg-white";
   const drilldownTableClass = "w-full table-fixed border-collapse text-left text-[13px]";
+  // Each `<col>` here matches one `<th>` in the corresponding table
+  // header. When adding a column, ADD a matching col here AND the
+  // header AND the body cell AND (when filterable) the filter-row cell.
+  // The trailing two columns (Est days / Est days left) are the
+  // narrow right-edge slots; the Health column sits just before them.
   const drilldownColgroup = (
     <colgroup>
       <col className="w-[4%]" />
@@ -4160,6 +4201,22 @@ export function MonthAnalytics({
       <col className="w-[12%]" />
       <col className="w-[8.5%]" />
       <col className="w-[8.5%]" />
+    </colgroup>
+  );
+  /** Same as `drilldownColgroup` plus a Health column slot. Used by
+   *  the Status drill-down's story variant; will be reused once the
+   *  other modals (Workload, Month Load) grow their Health column too. */
+  const drilldownColgroupWithHealth = (
+    <colgroup>
+      <col className="w-[4%]" />
+      <col className="w-[10%]" />
+      <col className="w-[22%]" />
+      <col className="w-[12%]" />
+      <col className="w-[14%]" />
+      <col className="w-[10%]" />
+      <col className="w-[12%]" />
+      <col className="w-[8%]" />
+      <col className="w-[8%]" />
     </colgroup>
   );
   const drilldownColgroupWithTeam = (
@@ -4175,15 +4232,30 @@ export function MonthAnalytics({
       <col className="w-[8.5%]" />
     </colgroup>
   );
+  const drilldownColgroupWithTeamAndHealth = (
+    <colgroup>
+      <col className="w-[4%]" />
+      <col className="w-[9%]" />
+      <col className="w-[17%]" />
+      <col className="w-[10%]" />
+      <col className="w-[10%]" />
+      <col className="w-[9%]" />
+      <col className="w-[14%]" />
+      <col className="w-[11%]" />
+      <col className="w-[8%]" />
+      <col className="w-[8%]" />
+    </colgroup>
+  );
   const drilldownColgroupEpic = (
     <colgroup>
       <col className="w-[4%]" />
       <col className="w-[11%]" />
-      <col className="w-[36%]" />
+      <col className="w-[30%]" />
+      <col className="w-[13%]" />
       <col className="w-[14%]" />
-      <col className="w-[16%]" />
-      <col className="w-[9.5%]" />
-      <col className="w-[9.5%]" />
+      <col className="w-[11%]" />
+      <col className="w-[8.5%]" />
+      <col className="w-[8.5%]" />
     </colgroup>
   );
   const sharedDrilldownArrowClass =
@@ -4540,7 +4612,7 @@ export function MonthAnalytics({
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
               >
               <table className={drilldownTableClass}>
-                {statusChartShowsEpics ? drilldownColgroupEpic : drilldownColgroup}
+                {statusChartShowsEpics ? drilldownColgroupEpic : drilldownColgroupWithHealth}
                 <thead className="sticky top-0 z-10 overflow-hidden rounded-t-md border-b border-[#19abeb]/70 bg-[#0897d5] text-white shadow-[0_1px_0_rgba(15,23,42,0.04)]">
                   {statusChartShowsEpics ? (
                     <>
@@ -4558,6 +4630,7 @@ export function MonthAnalytics({
                       <th className="min-w-0 px-2 py-1 text-[14px] text-left">
                         <DrilldownSortHeader label="Status" column={"status" as DrilldownSortKey} sort={statusDrilldownEpicSort as { key: DrilldownSortKey; dir: "asc" | "desc" } | null} onSortChange={(next) => setStatusDrilldownEpicSort(next as { key: EpicDrilldownSortKey; dir: "asc" | "desc" } | null)} />
                       </th>
+                      <th className="min-w-0 px-2 py-1 text-[14px] text-left">Health</th>
                       <th className="min-w-0 px-2 py-1 text-right text-[14px]">Est days</th>
                       <th className="min-w-0 px-2 py-1 text-right text-[14px]">Est days left</th>
                     </tr>
@@ -4595,6 +4668,15 @@ export function MonthAnalytics({
                           ariaLabel="Filter epic progress by status"
                         />
                       </th>
+                      <th className="min-w-0 px-1 py-0.5">
+                        <DrilldownFilterDropdown
+                          value={statusDrilldownEpicFilter.health}
+                          options={HEALTH_FILTER_OPTIONS}
+                          renderOption={renderHealthFilterOption}
+                          onChange={(v) => setStatusDrilldownEpicFilter((p) => ({ ...p, health: v as HealthStatus | null }))}
+                          ariaLabel="Filter epic progress by health"
+                        />
+                      </th>
                       {/* Σ totals: sum the est days + remaining across each
                        *  epic's child stories so the planner sees the
                        *  drilldown's collective effort. */}
@@ -4625,6 +4707,7 @@ export function MonthAnalytics({
                       <th className="min-w-0 px-2 py-1 text-[14px] text-left">
                         <DrilldownSortHeader label="Status" column="status" sort={statusDrilldownSort} onSortChange={setStatusDrilldownSort} />
                       </th>
+                      <th className="min-w-0 px-2 py-1 text-[14px] text-left">Health</th>
                       <th className="min-w-0 px-2 py-1 text-right text-[14px]">Est days</th>
                       <th className="min-w-0 px-2 py-1 text-right text-[14px]">Est days left</th>
                     </tr>
@@ -4656,6 +4739,15 @@ export function MonthAnalytics({
                       </th>
                       <th className="min-w-0 px-1 py-0.5">
                         <DrilldownFilterDropdown value={statusDrilldownColFilter.status} options={uniqueStatuses} renderOption={renderStatusOption} onChange={(v) => setStatusDrilldownColFilter((p) => ({ ...p, status: v }))} ariaLabel="Filter status drilldown by status" />
+                      </th>
+                      <th className="min-w-0 px-1 py-0.5">
+                        <DrilldownFilterDropdown
+                          value={statusDrilldownColFilter.health}
+                          options={HEALTH_FILTER_OPTIONS}
+                          renderOption={renderHealthFilterOption}
+                          onChange={(v) => setStatusDrilldownColFilter((p) => ({ ...p, health: v as HealthStatus | null }))}
+                          ariaLabel="Filter status drilldown by health"
+                        />
                       </th>
                       {/* Σ totals over the currently visible (filtered) rows. */}
                       <th className="min-w-0 px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
@@ -4715,6 +4807,14 @@ export function MonthAnalytics({
                               </span>
                             )}
                           </td>
+                          <td className="min-w-0 px-2 py-0.5">
+                            {(() => {
+                              const v = computeEpicHealthVerdict(epic, planYear, progressBasis);
+                              if (!v) return <span className="text-slate-300">—</span>;
+                              const tip = formatHealthTooltip(v.result);
+                              return <HealthBadge size="xs" status={v.status} tooltip={tip} />;
+                            })()}
+                          </td>
                           <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">
                             {(epic.userStories ?? []).reduce((a, s) => a + (s.estimatedDays ?? 0), 0) || "—"}
                           </td>
@@ -4764,6 +4864,16 @@ export function MonthAnalytics({
                           <td className="min-w-0 px-2 py-0.5">
                             <StoryStatusPill status={story.status} />
                           </td>
+                          <td className="min-w-0 px-2 py-0.5">
+                            {(() => {
+                              const parentEpic = monthEpics.find(({ epic }) => (epic.userStories ?? []).some((s) => s.id === story.id))?.epic;
+                              if (!parentEpic) return <span className="text-slate-300">\u2014</span>;
+                              const v = computeStoryHealthVerdict(story, parentEpic, planYear);
+                              if (!v) return <span className="text-slate-300">\u2014</span>;
+                              const tip = formatStoryHealthTooltip(story, parentEpic, planYear, v.status);
+                              return <HealthBadge size="xs" status={v.status} tooltip={tip ?? undefined} />;
+                            })()}
+                          </td>
                           <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.estimatedDays ?? "\u2014"}</td>
                           <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.daysLeft ?? "\u2014"}</td>
                         </tr>
@@ -4771,7 +4881,7 @@ export function MonthAnalytics({
                   {statusDrilldownEmptyRows > 0
                     ? Array.from({ length: statusDrilldownEmptyRows }).map((_, index) => (
                         <tr key={`status-empty-${index}`} className={drilldownTableEmptyRowZebra}>
-                          <td colSpan={statusChartShowsEpics ? 7 : 8} className="px-3 py-0.5 text-[13px]">
+                          <td colSpan={statusChartShowsEpics ? 8 : 9} className="px-3 py-0.5 text-[13px]">
                             {"\u00A0"}
                           </td>
                         </tr>
@@ -6121,7 +6231,7 @@ export function MonthAnalytics({
                         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
                       >
                         <table className={drilldownTableClass}>
-                          {drilldownColgroupWithTeam}
+                          {drilldownColgroupWithTeamAndHealth}
                           <thead className="sticky top-0 z-10 overflow-hidden rounded-t-md border-b border-[#19abeb]/70 bg-[#0897d5] text-white shadow-[0_1px_0_rgba(15,23,42,0.04)]">
                             <tr>
                               <th className="min-w-0 px-2 py-1 text-right text-[14px]">#</th>
@@ -6141,6 +6251,7 @@ export function MonthAnalytics({
                               <th className="min-w-0 px-2 py-1 text-[14px] text-left">
                                 <DrilldownSortHeader label="Status" column="status" sort={monthLoadDrilldownSort} onSortChange={setMonthLoadDrilldownSort} />
                               </th>
+                              <th className="min-w-0 px-2 py-1 text-[14px] text-left">Health</th>
                               <th className="min-w-0 px-2 py-1 text-right text-[14px]">Est days</th>
                               <th className="min-w-0 px-2 py-1 text-right text-[14px]">Est days left</th>
                             </tr>
@@ -6185,6 +6296,15 @@ export function MonthAnalytics({
                               <th className="min-w-0 px-1 py-0.5">
                                 <DrilldownFilterDropdown value={monthLoadDrilldownFilter.status} options={uniqueStatuses} renderOption={renderStatusOption} onChange={(v) => setMonthLoadDrilldownFilter((p) => ({ ...p, status: v }))} ariaLabel="Filter month load by status" />
                               </th>
+                              <th className="min-w-0 px-1 py-0.5">
+                                <DrilldownFilterDropdown
+                                  value={monthLoadDrilldownFilter.health}
+                                  options={HEALTH_FILTER_OPTIONS}
+                                  renderOption={renderHealthFilterOption}
+                                  onChange={(v) => setMonthLoadDrilldownFilter((p) => ({ ...p, health: v as HealthStatus | null }))}
+                                  ariaLabel="Filter month load by health"
+                                />
+                              </th>
                               {/* Σ totals over the currently visible (filtered) rows. */}
                               <th className="min-w-0 px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
                                 Σ <span className="text-slate-300">|</span> {monthLoadDrilldownStories.reduce((sum, s) => sum + (s.estimatedDays ?? 0), 0)}
@@ -6227,6 +6347,16 @@ export function MonthAnalytics({
                                 <td className="min-w-0 px-2 py-0.5">
                                   <StoryStatusPill status={story.status} />
                                 </td>
+                                <td className="min-w-0 px-2 py-0.5">
+                                  {(() => {
+                                    const parentEpic = monthEpics.find(({ epic }) => (epic.userStories ?? []).some((s) => s.id === story.id))?.epic;
+                                    if (!parentEpic) return <span className="text-slate-300">—</span>;
+                                    const v = computeStoryHealthVerdict(story, parentEpic, planYear);
+                                    if (!v) return <span className="text-slate-300">—</span>;
+                                    const tip = formatStoryHealthTooltip(story, parentEpic, planYear, v.status);
+                                    return <HealthBadge size="xs" status={v.status} tooltip={tip ?? undefined} />;
+                                  })()}
+                                </td>
                                 <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.estimatedDays ?? "—"}</td>
                                 <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.daysLeft ?? "—"}</td>
                               </tr>
@@ -6234,7 +6364,7 @@ export function MonthAnalytics({
                             })}
                             {monthLoadDrilldownEmptyRows > 0 && Array.from({ length: monthLoadDrilldownEmptyRows }).map((_, i) => (
                               <tr key={`ml-empty-${i}`} className={drilldownTableEmptyRowZebra}>
-                                <td colSpan={9} className="px-3 py-0.5 text-[13px]">{" "}</td>
+                                <td colSpan={10} className="px-3 py-0.5 text-[13px]">{" "}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -6260,14 +6390,49 @@ export function MonthAnalytics({
                     const allDone = row.daysLeft === 0 && row.estTotal > 0;
                     // Team-level health from the per-epic rollup. Only set
                     // for teams (rows generated from analytics.workloadByTeam).
-                    // User-mode rows don't get a health pill since the
-                    // computation is per-EPIC, not per-assignee.
                     const teamHealth = row.teamSlug ? teamHealthByTeamKey.get(row.teamSlug) : undefined;
-                    // Visual hint for the avatar ring and bar color falls
-                    // back to the old "all review" / default tone when no
-                    // team health is available (user rows).
-                    const atRisk = teamHealth ? (teamHealth.status === "atRisk" || teamHealth.status === "overdue") : false;
-                    const watch = teamHealth?.status === "watch";
+                    // Row-level verdict — applies the same days-vs-days
+                    // rule the sprint-story verdict uses, treating the
+                    // row's total daysLeft as the "story" and the
+                    // month's remaining calendar days as the sprint
+                    // window. Used by every row (user OR team) to
+                    // drive the badge next to the name and the
+                    // circle's stroke color. Null when the row has no
+                    // estimated work (donut + badge skip).
+                    const rowVerdict: HealthStatus | null = row.estTotal <= 0
+                      ? null
+                      : allDone
+                        ? "done"
+                        : monthDaysLeft <= 0
+                          ? "overdue"
+                          : row.daysLeft > monthDaysLeft
+                            ? "atRisk"
+                            : row.daysLeft === monthDaysLeft
+                              ? "watch"
+                              : "onTrack";
+                    // Hex strokes match the HealthBadge palette so the
+                    // chip next to the name and the donut to the right
+                    // read as the same signal. `null` falls back to a
+                    // neutral slate so the donut still has a stroke.
+                    const verdictStroke: string = rowVerdict === "done"
+                      ? "#10b981"
+                      : rowVerdict === "onTrack"
+                        ? "#0ea5e9"
+                        : rowVerdict === "watch"
+                          ? "#f59e0b"
+                          : rowVerdict === "atRisk"
+                            ? "#f43f5e"
+                            : rowVerdict === "overdue"
+                              ? "#be123c"
+                              : "#94a3b8";
+                    // Avatar ring / bar tint still uses the team-level
+                    // health when present, so team rows keep their
+                    // amber-on-risk / emerald-on-done ring. User rows
+                    // use the new rowVerdict.
+                    const atRisk = teamHealth
+                      ? (teamHealth.status === "atRisk" || teamHealth.status === "overdue")
+                      : (rowVerdict === "atRisk" || rowVerdict === "overdue");
+                    const watch = teamHealth?.status === "watch" || rowVerdict === "watch";
                     return (
                       <button
                         key={row.key}
@@ -6333,35 +6498,65 @@ export function MonthAnalytics({
                             </span>
                           )}
                           {(() => {
-                            // Per-team palette: clock-chip color +
-                            // circle stroke cycle through a 6-color
-                            // list keyed by row index so the rows read
-                            // as visually distinct. Matches the hero
-                            // Team Progress card.
-                            //
-                            // The bar fill + percentage text still
-                            // follow the health-aware tone (amber when
-                            // at-risk, emerald when done) so the
-                            // verdict signal isn't lost — only the
-                            // secondary chrome cycles per team.
-                            const TEAM_PALETTE = [
-                              { chip: "bg-amber-50 text-amber-700 ring-amber-200/70", stroke: "#f59e0b" },
-                              { chip: "bg-emerald-50 text-emerald-700 ring-emerald-200/70", stroke: "#10b981" },
-                              { chip: "bg-violet-50 text-violet-700 ring-violet-200/70", stroke: "#8b5cf6" },
-                              { chip: "bg-rose-50 text-rose-700 ring-rose-200/70", stroke: "#f43f5e" },
-                              { chip: "bg-sky-50 text-sky-700 ring-sky-200/70", stroke: "#0ea5e9" },
-                              { chip: "bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-200/70", stroke: "#d946ef" },
-                            ];
-                            const teamColor = TEAM_PALETTE[rowIdx % TEAM_PALETTE.length]!;
+                            // Per-row chip palette for the clock chip
+                            // still cycles (cosmetic only). The donut
+                            // stroke now mirrors the verdict tone via
+                            // `verdictStroke` instead, so the round
+                            // ring on the right reads as the same
+                            // signal as the HealthBadge next to the
+                            // name on the left.
+                            // Clock-chip palette: same verdict tones as
+                            // the HealthBadge + donut so the trio reads
+                            // as one signal. Null verdicts (unestimated
+                            // rows) get a neutral slate chip.
+                            const verdictChipClass: string = rowVerdict === "done"
+                              ? "bg-emerald-50 text-emerald-800 ring-emerald-200/70"
+                              : rowVerdict === "onTrack"
+                                ? "bg-sky-50 text-sky-800 ring-sky-200/70"
+                                : rowVerdict === "watch"
+                                  ? "bg-amber-50 text-amber-800 ring-amber-200/70"
+                                  : rowVerdict === "atRisk"
+                                    ? "bg-rose-50 text-rose-800 ring-rose-200/70"
+                                    : rowVerdict === "overdue"
+                                      ? "bg-rose-100 text-rose-900 ring-rose-300/80"
+                                      : "bg-slate-50 text-slate-700 ring-slate-200/70";
                             const bar = atRisk ? "bg-amber-400" : allDone ? "bg-emerald-400" : watch ? "bg-amber-300" : "bg-indigo-400";
                             const pct = atRisk || watch ? "text-amber-700" : allDone ? "text-emerald-700" : "text-indigo-600";
-                            const tone = { bar, pct, ...teamColor };
+                            const tone = { bar, pct, chip: verdictChipClass, stroke: verdictStroke };
                             return (
                               <>
                                 <div className="min-w-0 flex-1">
-                                  <div className="flex items-baseline gap-1.5">
+                                  {/* Name + (HealthBadge + days chip)
+                                   *  on the same horizontal line. Chips
+                                   *  push right via `ml-auto` on the
+                                   *  cluster so they sit close to the
+                                   *  edge of the flex-1 (just inside
+                                   *  the donut). Progress bar is the
+                                   *  next row below, full width. */}
+                                  <div className="flex items-center gap-2">
                                     <span className="truncate text-[12.5px] font-semibold text-slate-800">{row.label}</span>
-                                    <span className={cn("shrink-0 text-[10.5px] font-semibold tabular-nums", tone.pct)}>{donePct}%</span>
+                                    <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                                      {rowVerdict ? (() => {
+                                        const tip = formatBundleHealthTooltip({
+                                          verdict: rowVerdict,
+                                          bundleLabel: row.label,
+                                          bundleDaysLeft: row.daysLeft,
+                                          windowLabel: scopeLabel ?? "Window",
+                                          windowDaysLeft: monthDaysLeft,
+                                          windowDaysTotal: row.estTotal,
+                                        });
+                                        return <HealthBadge size="xs" status={rowVerdict} tooltip={tip} />;
+                                      })() : null}
+                                      <span
+                                        className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1", tone.chip)}
+                                        title={`${row.estTotal}d estimated total · ${doneDays}d in review · ${row.daysLeft}d left`}
+                                      >
+                                        <Clock className="size-2.5" strokeWidth={2.2} aria-hidden />
+                                        <span>{row.daysLeft}d</span>
+                                        <span className="opacity-50">/</span>
+                                        <span>{row.estTotal}d left</span>
+                                      </span>
+                                    </div>
                                   </div>
                                   <div className="mt-1 relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/50">
                                     <div
@@ -6370,11 +6565,6 @@ export function MonthAnalytics({
                                     />
                                   </div>
                                 </div>
-                                {/* Health badge — sits to the right of the
-                                 *  progress bar (before the chip cluster)
-                                 *  so the verdict pill reads as the
-                                 *  bar's natural "outcome", not crammed
-                                 *  inline with the name. */}
                                 {teamHealth ? (
                                   <span className="inline-flex shrink-0 items-center">
                                     <TeamHealthBadgeWithList
@@ -6387,23 +6577,6 @@ export function MonthAnalytics({
                                     />
                                   </span>
                                 ) : null}
-                                {/* Single combined chip: days-left /
-                                 *  total in one pill, mirroring the
-                                 *  hero card. Each segment is a
-                                 *  separate span so the flex `gap-1`
-                                 *  puts breathing room around the
-                                 *  slash. Title attribute keeps the
-                                 *  "X review" detail accessible via
-                                 *  hover. */}
-                                <span
-                                  className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1 text-slate-700", tone.chip)}
-                                  title={`${row.estTotal}d estimated total · ${doneDays}d in review · ${row.daysLeft}d left`}
-                                >
-                                  <Clock className="size-2.5" strokeWidth={2.2} aria-hidden />
-                                  <span className="text-slate-700">{row.daysLeft}d</span>
-                                  <span className="text-slate-400">/</span>
-                                  <span className="text-slate-700">{row.estTotal}d left</span>
-                                </span>
                                 <CircleProgress percent={donePct} color={tone.stroke} />
                               </>
                             );

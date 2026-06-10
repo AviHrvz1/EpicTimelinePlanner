@@ -20,6 +20,7 @@ import {
   Flag,
   Funnel,
   Folder,
+  HeartPulse,
   Inbox,
   Info,
   KanbanSquare,
@@ -2988,6 +2989,11 @@ export function TimelineGrid({
    *  default so cards stay compact — user opts in via the "Progress" chip
    *  in the sprint-board toolbar. */
   const [sprintKanbanShowProgress, setSprintKanbanShowProgress] = useState(false);
+  /** Sprint Kanban only — toggles the health verdict chip on each
+   *  story / epic card. Same `HealthBadge` the hero's Health
+   *  Distribution donut + backlog Health column use. Defaults to off
+   *  so cards stay compact when health isn't the focus. */
+  const [sprintKanbanShowHealth, setSprintKanbanShowHealth] = useState(false);
   const [sprintKanbanSearch, setSprintKanbanSearch] = useState("");
   const [sprintKanbanSearchOpen, setSprintKanbanSearchOpen] = useState(false);
   const sprintKanbanSearchRef = useRef<HTMLDivElement>(null);
@@ -7852,6 +7858,21 @@ export function TimelineGrid({
         <Activity className="size-3 shrink-0" strokeWidth={2.2} aria-hidden />
         Progress
       </button>
+      <button
+        type="button"
+        onClick={() => setSprintKanbanShowHealth((v) => !v)}
+        aria-pressed={sprintKanbanShowHealth}
+        title={sprintKanbanShowHealth ? "Hide health chips on cards" : "Show health chips on cards"}
+        className={cn(
+          summaryChipBaseClass,
+          sprintKanbanShowHealth
+            ? "bg-gradient-to-br from-rose-100 via-rose-200 to-rose-200 text-rose-950 ring-1 ring-rose-300/75 shadow-sm"
+            : "bg-gradient-to-br from-rose-50 via-rose-100 to-rose-100 text-rose-950 ring-1 ring-rose-200/75 hover:from-rose-100 hover:via-rose-200 hover:to-rose-200",
+        )}
+      >
+        <HeartPulse className="size-3 shrink-0" strokeWidth={2.2} aria-hidden />
+        Health
+      </button>
       {/* Carried-over toolbar chip — only renders when the current sprint
        *  actually has stories that rolled over from a prior sprint. Clicking
        *  opens the audit modal listing exactly which stories carried over. */}
@@ -8092,8 +8113,16 @@ export function TimelineGrid({
   /** Slim chips-only row rendered ABOVE the breadcrumb header so the
    *  Health / Initiatives↔Epics / Teams / Sprints / Epic Est. controls
    *  sit on their own line instead of cramped beside the breadcrumb
-   *  trail. */
-  const chipsToolbarRow = (suppressInlineChips || summaryBarPortalElement)
+   *  trail.
+   *
+   *  Sprint Kanban view always shows its toolbar regardless of the
+   *  hero's open/closed state — the kanban depends on these controls
+   *  (Health, viewMode toggles, Progress) for everyday navigation, so
+   *  the "hide chips while the hero is open" rule that applies to the
+   *  Gantt isn't a good fit here. The portal exception stays — if
+   *  another surface is hosting the chip row, this one stays empty. */
+  const isOnSprintKanbanSurface = sprintKanbanSummaryStats != null;
+  const chipsToolbarRow = ((suppressInlineChips && !isOnSprintKanbanSurface) || summaryBarPortalElement)
     ? null
     : (
         <div className="-mt-2 mb-1 flex w-full min-w-0 shrink-0 flex-wrap items-center justify-end gap-5 bg-white px-5 py-1.5">
@@ -9446,6 +9475,8 @@ export function TimelineGrid({
                   planYear={currentYear}
                   month={sprintBoardContextMonth ?? activeMonth ?? 1}
                   yearSprint={resolvedActiveYearSprint ?? 1}
+                  progressBasis={progressBasis}
+                  showHealthBadges={sprintKanbanShowHealth}
                   filterEpicTeamIds={sprintFilterTeamIds.length ? sprintFilterTeamIds : null}
                   workspaceDirectoryUsers={workspaceDirectoryUsers}
                   epicAccordionEmphasis={sprintEpicAccordionEmphasis}
@@ -10518,19 +10549,25 @@ export function TimelineGrid({
                           {QUARTERS.flatMap((quarter) => {
                             return quarter.months.map((month, mIdxInQ, allMonthsInQ) => {
                               const isLastMonthOverall = quarter.label === "Q4" && mIdxInQ === allMonthsInQ.length - 1;
-                              // Month drill-down parked — render as a plain,
-                              // non-clickable header. Restore the original
-                              // <button> + onClick to bring it back.
+                              // Month header → click to focus the parent
+                              // quarter. From the full-year Gantt, clicking
+                              // any month (e.g. Jun) jumps to its quarter's
+                              // single-quarter view (e.g. Q2). Each month
+                              // knows its parent via the outer `quarter` from
+                              // the QUARTERS map above.
                               return (
-                                <div
+                                <button
+                                  type="button"
                                   key={`month-${month}`}
+                                  onClick={() => onFocusedQuarterChange(quarter.label)}
+                                  title={`Focus ${quarter.label}`}
                                   className={cn(
-                                    "relative flex w-full min-w-0 cursor-default items-center justify-center px-1.5 py-3.5 text-center text-[12.5px] font-semibold tracking-tight text-slate-700",
+                                    "relative flex w-full min-w-0 cursor-pointer items-center justify-center px-1.5 py-3.5 text-center text-[12.5px] font-semibold tracking-tight text-slate-700 transition hover:bg-slate-50 hover:text-indigo-700 focus:outline-none focus-visible:bg-slate-50 focus-visible:text-indigo-700",
                                     !isLastMonthOverall && "border-r border-slate-200/60",
                                   )}
                                 >
                                   {MONTHS[month - 1]}
-                                </div>
+                                </button>
                               );
                             });
                           })}

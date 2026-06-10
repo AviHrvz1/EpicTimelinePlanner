@@ -1089,22 +1089,20 @@ function CircleProgress({
   percent: number;
   color: string;
 }) {
-  // Slightly elliptical so 3-digit "100%" fits without clipping.
-  // The ellipse is DEFINED vertically (rx 11, ry 14) and rotated
-  // -90° so the displayed shape ends up wide (visible 14 × 11) and
-  // the stroke's natural start point lands at the visible TOP. If
-  // we defined it horizontally and rotated, the rotation would
-  // swap axes back to vertical and the fill would look misplaced.
-  // Arc length uses the Ramanujan ellipse-circumference
-  // approximation since closed-form doesn't exist.
-  const rx = 11;
+  // Circular (rx === ry) so the percent ring reads as a true round
+  // donut. The Ramanujan ellipse-circumference formula collapses to
+  // `2 * π * r` when rx === ry — kept as-is to mirror the User
+  // Progress drawer at Insights. The viewBox is extended 2px above
+  // and below the original 0..28 area so the 2.4-wide stroke has
+  // room to render without clipping.
+  const rx = 14;
   const ry = 14;
   const h = ((rx - ry) ** 2) / ((rx + ry) ** 2);
   const circumference = Math.PI * (rx + ry) * (1 + (3 * h) / (10 + Math.sqrt(4 - 3 * h)));
   const clamped = Math.max(0, Math.min(100, percent));
   const dashOffset = circumference * (1 - clamped / 100);
   return (
-    <svg width={34} height={28} viewBox="0 0 34 28" aria-hidden>
+    <svg width={34} height={32} viewBox="0 -2 34 32" aria-hidden>
       <ellipse
         cx={17}
         cy={14}
@@ -1333,25 +1331,58 @@ function TeamProgressCard({
                  *  stroke so a quick glance reads the team's status.
                  */}
                 {(() => {
-                  // Per-team palette: each row picks a colour from a
-                  // cycling list so the four rows on the hero read as
-                  // visually distinct (amber / emerald / violet / rose
-                  // / sky / fuchsia). Drives the clock chip + circle
-                  // stroke + clock icon. The progress bar still uses
-                  // the health-aware tone (amber when at-risk,
-                  // emerald when done) so the verdict signal isn't
-                  // lost.
-                  const TEAM_PALETTE = [
-                    { chipBg: "bg-amber-50/80", icon: "text-amber-500", accent: "text-amber-600", stroke: "#f59e0b" },
-                    { chipBg: "bg-emerald-50/80", icon: "text-emerald-500", accent: "text-emerald-600", stroke: "#10b981" },
-                    { chipBg: "bg-violet-50/80", icon: "text-violet-500", accent: "text-violet-600", stroke: "#8b5cf6" },
-                    { chipBg: "bg-rose-50/80", icon: "text-rose-500", accent: "text-rose-600", stroke: "#f43f5e" },
-                    { chipBg: "bg-sky-50/80", icon: "text-sky-500", accent: "text-sky-600", stroke: "#0ea5e9" },
-                    { chipBg: "bg-fuchsia-50/80", icon: "text-fuchsia-500", accent: "text-fuchsia-600", stroke: "#d946ef" },
-                  ];
-                  const teamColor = TEAM_PALETTE[rowIdx % TEAM_PALETTE.length]!;
+                  // Health-tone palette: the clock chip background,
+                  // icon color, and circle stroke all key off the
+                  // row's verdict so the row reads as one signal
+                  // (matches the User Progress drawer at Insights).
+                  // The previous cycling 6-color palette is retired
+                  // — adjacent rows distinguish by name + verdict tint
+                  // instead of by hue.
+                  void rowIdx;
+                  const verdictStroke = row.status === "done"
+                    ? "#10b981"
+                    : row.status === "onTrack"
+                      ? "#0ea5e9"
+                      : row.status === "watch"
+                        ? "#f59e0b"
+                        : row.status === "atRisk"
+                          ? "#f43f5e"
+                          : "#be123c";
+                  const verdictChipBg = row.status === "done"
+                    ? "bg-emerald-50/80"
+                    : row.status === "onTrack"
+                      ? "bg-sky-50/80"
+                      : row.status === "watch"
+                        ? "bg-amber-50/80"
+                        : row.status === "atRisk"
+                          ? "bg-rose-50/80"
+                          : "bg-rose-100/80";
+                  const verdictIcon = row.status === "done"
+                    ? "text-emerald-500"
+                    : row.status === "onTrack"
+                      ? "text-sky-500"
+                      : row.status === "watch"
+                        ? "text-amber-500"
+                        : row.status === "atRisk"
+                          ? "text-rose-500"
+                          : "text-rose-700";
+                  const verdictAccent = row.status === "done"
+                    ? "text-emerald-600"
+                    : row.status === "onTrack"
+                      ? "text-sky-600"
+                      : row.status === "watch"
+                        ? "text-amber-600"
+                        : row.status === "atRisk"
+                          ? "text-rose-600"
+                          : "text-rose-700";
                   const bar = atRisk ? "bg-amber-400" : allDone ? "bg-emerald-400" : watch ? "bg-amber-300" : "bg-indigo-400";
-                  const tone = { bar, ...teamColor };
+                  const tone = {
+                    bar,
+                    chipBg: verdictChipBg,
+                    icon: verdictIcon,
+                    accent: verdictAccent,
+                    stroke: verdictStroke,
+                  };
                   return (
                     <div className="flex items-center gap-2">
                       <TeamAvatar
@@ -1383,9 +1414,6 @@ function TeamProgressCard({
                       <div className="min-w-0 flex-1">
                         <div className="flex items-baseline gap-1">
                           <span className="truncate text-[12px] font-semibold text-slate-800">{row.label}</span>
-                          <span className={cn("shrink-0 text-[10.5px] font-semibold tabular-nums", atRisk || watch ? "text-amber-700" : allDone ? "text-emerald-700" : "text-indigo-600")}>
-                            {row.donePct}%
-                          </span>
                         </div>
                         <div className="mt-0.5 relative h-1.5 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/50">
                           <div

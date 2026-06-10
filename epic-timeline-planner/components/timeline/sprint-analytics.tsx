@@ -95,14 +95,14 @@ function CircleProgress({
   //
   // Arc length uses the Ramanujan ellipse-circumference
   // approximation since closed-form doesn't exist.
-  const rx = 11;
+  const rx = 14;
   const ry = 14;
   const h = ((rx - ry) ** 2) / ((rx + ry) ** 2);
   const circumference = Math.PI * (rx + ry) * (1 + (3 * h) / (10 + Math.sqrt(4 - 3 * h)));
   const clamped = Math.max(0, Math.min(100, percent));
   const dashOffset = circumference * (1 - clamped / 100);
   return (
-    <svg width={34} height={28} viewBox="0 0 34 28" aria-hidden>
+    <svg width={34} height={32} viewBox="0 -2 34 32" aria-hidden>
       <ellipse cx={17} cy={14} rx={rx} ry={ry} fill="none" stroke="#e2e8f0" strokeWidth={2.4} transform="rotate(-90 17 14)" />
       <ellipse
         cx={17}
@@ -195,60 +195,61 @@ export type SprintLoadStoryProjection = {
   statusKey: UserStoryItem["status"] | null;
 };
 
-/** Per-story version of `sprintBurndownVerdict` — buckets a single story's
- *  remaining work against an ideal sprint burndown so we can list flagged
- *  stories in the Sprint Load badge popover.
+/** Per-story version of `sprintBurndownVerdict` — buckets a single story
+ *  by comparing the story's days-left against the sprint's days-left.
+ *  Status is the ultimate signal first; days-left math is the
+ *  tie-breaker between watch / atRisk / onTrack.
  *
- *  Closed-sprint policy (sprint window has passed, `sprintDaysLeft <= 0`):
- *  any story whose status isn't `done` rolls up to `overdue`. The previous
- *  "review = done" and "no estimate = onTrack" carve-outs let unfinished
- *  work hide from the donut counts even though the sprint had ended — see
- *  the planner-facing discussion for context.
+ *  Rule order (first match wins):
  *
- *  Open-sprint policy: status is the ultimate signal first (`done` → done;
- *  `review` → done because the engineering is finished, sign-off pending;
- *  `daysLeft <= 0` → done because work has been burned down even if the
- *  status flag wasn't updated). Otherwise we compare remaining work against
- *  an ideal burndown line and bucket via the gap. Stories without estimates
- *  in an open sprint stay `onTrack` because there's no target to compare
- *  against. */
+ *    1. `statusKey === "done"`              → done
+ *    2. `sprintDaysLeft <= 0` (sprint over)  → overdue
+ *    3. `storyDaysLeft >  sprintDaysLeft`    → atRisk   (need more days than sprint has)
+ *    4. `storyDaysLeft === sprintDaysLeft`   → watch    (tight, no slack)
+ *    5. `storyDaysLeft <  sprintDaysLeft`    → onTrack  (has slack)
+ *
+ *  Where
+ *    `storyDaysLeft = max(0, story.daysLeft ?? story.estimatedDays ?? 0)`
+ *
+ *  Notes:
+ *    - Review status is intentionally NOT folded into Done here. A story
+ *      in Review during an open sprint reads as On Track / Watch / At
+ *      Risk based on its days-left vs the sprint's days-left — the
+ *      engineering may be finished but the sprint hasn't shipped it yet.
+ *    - Stories whose status is `done` skip the days-left math entirely;
+ *      done = done regardless of any stale `daysLeft` value.
+ *    - Stories with no estimate AND no `daysLeft` get `storyDaysLeft = 0`
+ *      and fall to On Track in open sprints. The OUTER
+ *      `computeStoryHealthVerdict` in `lib/story-health.ts` short-
+ *      circuits to `null` for those in open sprints before this function
+ *      is ever called — so this helper only sees them in closed sprints
+ *      (where rule 2 catches them as Overdue).
+ *    - The `sprintDaysTotal` parameter is kept for caller compatibility
+ *      with `sprintBurndownVerdict` but isn't used — the day-comparison
+ *      rules don't need a sprint-elapsed fraction. */
 export function sprintStoryVerdict(
   story: SprintLoadStoryProjection,
   sprintDaysLeft: number,
-  sprintDaysTotal: number,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _sprintDaysTotal: number,
 ): { status: HealthStatus; gap: number } {
-  const est = Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
-  const left = Math.max(0, story.daysLeft ?? est);
-  // Done is done, regardless of sprint state.
+  // Rule 1: Status takes precedence.
   if (story.statusKey === "done") {
     return { status: "done", gap: 0 };
   }
-  // Closed sprint + not done → overdue. No exceptions for review /
-  // no-estimate / already-burned-down because the calendar window has
-  // passed and the work isn't formally complete.
+  const storyDaysLeft = Math.max(0, story.daysLeft ?? story.estimatedDays ?? 0);
+  // Rule 2: Sprint over + not done → overdue.
   if (sprintDaysLeft <= 0) {
-    return { status: "overdue", gap: left };
+    return { status: "overdue", gap: storyDaysLeft };
   }
-  // Open sprint from here on.
-  // Review = engineering complete, sign-off pending. Treat as done for
-  // the burndown's purposes so an open sprint doesn't keep flagging
-  // these as in-flight work.
-  if (story.statusKey === "review") {
-    return { status: "done", gap: 0 };
+  // Open sprint — day-comparison rules.
+  if (storyDaysLeft > sprintDaysLeft) {
+    return { status: "atRisk", gap: storyDaysLeft - sprintDaysLeft };
   }
-  // Burned down to zero remaining work — count as done even if the
-  // status flag wasn't updated yet.
-  if (left <= 0) {
-    return { status: "done", gap: 0 };
+  if (storyDaysLeft === sprintDaysLeft) {
+    return { status: "watch", gap: 0 };
   }
-  // No estimate or zero-day sprint → can't measure burndown.
-  if (est <= 0 || sprintDaysTotal <= 0) return { status: "onTrack", gap: 0 };
-  const elapsed = Math.min(1, Math.max(0, (sprintDaysTotal - sprintDaysLeft) / sprintDaysTotal));
-  const ideal = est * (1 - elapsed);
-  const gap = left - ideal;
-  if (gap >= 4) return { status: "atRisk", gap };
-  if (gap >= 1) return { status: "watch", gap };
-  return { status: "onTrack", gap };
+  return { status: "onTrack", gap: storyDaysLeft - sprintDaysLeft };
 }
 
 type FlaggedStoryEntry = {
@@ -2169,24 +2170,42 @@ export function SprintAnalytics({
                                 </span>
                               )}
                               {(() => {
-                                // Per-row palette: chip + circle stroke
-                                // cycle through 6 colors keyed by row
-                                // index so the rows read as visually
-                                // distinct. Bar fill + % text keep the
-                                // health-aware tone (amber/emerald/
-                                // indigo) so the verdict signal stays.
-                                // Mirrors the same treatment on the
-                                // RoadmapHealthHero + month-analytics
-                                // Team Progress rows.
-                                const TEAM_PALETTE = [
-                                  { chip: "bg-amber-50 ring-amber-200/70", icon: "text-amber-500", stroke: "#f59e0b" },
-                                  { chip: "bg-emerald-50 ring-emerald-200/70", icon: "text-emerald-500", stroke: "#10b981" },
-                                  { chip: "bg-violet-50 ring-violet-200/70", icon: "text-violet-500", stroke: "#8b5cf6" },
-                                  { chip: "bg-rose-50 ring-rose-200/70", icon: "text-rose-500", stroke: "#f43f5e" },
-                                  { chip: "bg-sky-50 ring-sky-200/70", icon: "text-sky-500", stroke: "#0ea5e9" },
-                                  { chip: "bg-fuchsia-50 ring-fuchsia-200/70", icon: "text-fuchsia-500", stroke: "#d946ef" },
-                                ];
-                                const teamColor = TEAM_PALETTE[rowIdx % TEAM_PALETTE.length]!;
+                                // Health-tone palette: chip + circle stroke +
+                                // clock icon all key off the row's verdict
+                                // so the chip / badge / donut read as one
+                                // signal. Mirrors the new treatment on the
+                                // RoadmapHealthHero + Insights User Progress
+                                // rows — cycling 6-color palette retired.
+                                void rowIdx;
+                                const verdictStatus = verdict.status;
+                                const verdictStroke = verdictStatus === "done"
+                                  ? "#10b981"
+                                  : verdictStatus === "onTrack"
+                                    ? "#0ea5e9"
+                                    : verdictStatus === "watch"
+                                      ? "#f59e0b"
+                                      : verdictStatus === "atRisk"
+                                        ? "#f43f5e"
+                                        : "#be123c";
+                                const verdictChipClass = verdictStatus === "done"
+                                  ? "bg-emerald-50 ring-emerald-200/70"
+                                  : verdictStatus === "onTrack"
+                                    ? "bg-sky-50 ring-sky-200/70"
+                                    : verdictStatus === "watch"
+                                      ? "bg-amber-50 ring-amber-200/70"
+                                      : verdictStatus === "atRisk"
+                                        ? "bg-rose-50 ring-rose-200/70"
+                                        : "bg-rose-100 ring-rose-300/80";
+                                const verdictIconClass = verdictStatus === "done"
+                                  ? "text-emerald-500"
+                                  : verdictStatus === "onTrack"
+                                    ? "text-sky-500"
+                                    : verdictStatus === "watch"
+                                      ? "text-amber-500"
+                                      : verdictStatus === "atRisk"
+                                        ? "text-rose-500"
+                                        : "text-rose-700";
+                                const teamColor = { chip: verdictChipClass, icon: verdictIconClass, stroke: verdictStroke };
                                 const bar = atRisk ? "bg-amber-400" : allDone ? "bg-emerald-400" : watch ? "bg-amber-300" : "bg-indigo-400";
                                 const pctClass = atRisk || watch ? "text-amber-700" : allDone ? "text-emerald-700" : "text-indigo-600";
                                 return (
