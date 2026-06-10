@@ -1436,6 +1436,12 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
    * chips visible, they probably want them to stay.
    */
   const [showGanttTeamChipsCtrl, setShowGanttTeamChipsCtrl] = useState(false);
+  /** Mirror of the Roadmap Health hero's open/closed state. Drives
+   *  whether the Gantt's summary chip toolbar renders inline — when the
+   *  hero is open, those chips would visually duplicate the donut row
+   *  right above them, so we suppress them. When the hero is collapsed
+   *  the chips come back so the planner still has the toolbar surface. */
+  const [heroExpanded, setHeroExpanded] = useState(true);
   /** Controlled mirror of the Gantt bar mode (initiatives vs epics) — lifted
    *  so the hero's "Initiatives" / "Epics" stat blocks can flip it. */
   const [roadmapBarModeCtrl, setRoadmapBarModeCtrl] = useState<"epics" | "initiatives">("epics");
@@ -1580,7 +1586,15 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   // yet at this point in the file.)
   const handlePanelTeamFilterDerivedChange = useCallback((next: Set<string>) => {
     setGanttTeamFilter(next);
-    if (next.size > 0) setLastPickedLabelLane("team");
+    if (next.size > 0) {
+      setLastPickedLabelLane("team");
+      // Picking a team implies the planner wants to SEE the team
+      // chips on the bars (mirrors `handlePanelStatusFilterDerivedChange`
+      // forcing `showRoadmapProgress` for the status pill). Without
+      // this, clicking a Team Progress row filtered the bars but
+      // never painted the team chips.
+      setShowGanttTeamChipsCtrl(true);
+    }
   }, []);
   /**
    * Sync the right-panel timeline to the panel's quarter chip:
@@ -6109,6 +6123,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
              mode change). */
           defaultExpanded={topMode !== "users" && topMode !== "dashboard"}
           hideExpandToggle={topMode === "users" || topMode === "dashboard"}
+          onExpandedChange={setHeroExpanded}
           barMode={roadmapBarModeCtrl}
           onBarModeChange={setRoadmapBarModeCtrl}
           showTeamChips={showGanttTeamChipsCtrl}
@@ -6122,6 +6137,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           onWorkProgressSliceClick={handleWorkProgressSliceClick}
           onHealthDistributionSliceClick={handleHealthDistributionSliceClick}
           onTeamProgressRowClick={handleTeamProgressRowClick}
+          selectedTeamIds={ganttTeamFilter}
           heroScope={heroScope}
           onHeroScopeChange={setHeroScope}
           onOpenEpicEstimatePanel={handleOpenEstPanel}
@@ -6253,6 +6269,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                       onHealthFilterChange={handleHealthFilterChange}
                       heroScope={heroScope}
                       externalStatusFilter={ganttStatusFilter}
+                      externalTeamFilter={ganttTeamFilter}
                       onUserPickedFilter={() => setShowRoadmapProgress(true)}
                       onPanelStatusFilterDerivedChange={handlePanelStatusFilterDerivedChange}
                       onPanelQuarterFilterDerivedChange={setGanttQuarterFilter}
@@ -6475,6 +6492,13 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 initiatives={initiatives}
                 zoom={1}
                 currentYear={selectedYear}
+                /* Hide the inline chip toolbar (Health / Initiatives /
+                 *  Epics / Stories / Teams / Epic Est. / Sprints) while
+                 *  the hero is open — those chips visually duplicate the
+                 *  donut row immediately above. Closing the hero brings
+                 *  the toolbar back so the planner still has a control
+                 *  surface. */
+                suppressInlineChips={heroExpanded}
                 showRoadmapProgress={showRoadmapProgress}
                 onShowRoadmapProgressChange={(next) => {
                   setShowRoadmapProgress(next);
@@ -6492,6 +6516,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 ganttStatusFilterExternal={ganttStatusFilter}
                 ganttQuarterFilterExternal={ganttQuarterFilter}
                 ganttTeamFilterExternal={ganttTeamFilter}
+                onGanttTeamFilterChange={handlePanelTeamFilterDerivedChange}
                 showGanttTeamChipsExternal={showGanttTeamChipsCtrl}
                 onShowGanttTeamChipsChange={handleShowGanttTeamChipsChange}
                 showYearSprintChipsExternal={showYearSprintChipsCtrl}

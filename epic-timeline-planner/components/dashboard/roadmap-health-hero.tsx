@@ -132,12 +132,14 @@ export function RoadmapHealthHero({
   onWorkProgressSliceClick,
   onHealthDistributionSliceClick,
   onTeamProgressRowClick,
+  selectedTeamIds,
   heroScope,
   onHeroScopeChange,
   title = "Roadmap Health",
   titleIcon: TitleIcon = ShieldCheck,
   defaultExpanded = true,
   hideExpandToggle = false,
+  onExpandedChange,
 }: {
   initiatives: readonly InitiativeItem[];
   roadmaps: RoadmapItem[];
@@ -208,6 +210,12 @@ export function RoadmapHealthHero({
    *  can decide between filtering the current surface and navigating
    *  to the Backlog with the team pre-filtered. */
   onTeamProgressRowClick?: (teamId: string, label: string) => void;
+  /** Currently-active team filter (the parent's shared
+   *  `ganttTeamFilter` set). Drives the highlight on Team Progress
+   *  rows so the card visually reflects whatever team is selected
+   *  via the Gantt breadcrumb / Initiatives panel team dropdown.
+   *  Empty / undefined → no row highlighted ("All Teams"). */
+  selectedTeamIds?: ReadonlySet<string> | null;
   /** Active unit on the KPI strip. Drives which Initiatives / Epics /
    *  Stories tile is highlighted and (later phases) what every card on
    *  the hero counts + how each slice click filters. When undefined,
@@ -237,6 +245,11 @@ export function RoadmapHealthHero({
    *  modes where the body is irrelevant and the hero is just a title
    *  bar (e.g. Users Directory). */
   hideExpandToggle?: boolean;
+  /** Fires whenever the planner toggles the hero body open/closed.
+   *  Lets the parent hide / show surfaces that overlap the hero
+   *  visually (e.g. the Gantt's summary chip toolbar — redundant
+   *  while the donut row is visible). */
+  onExpandedChange?: (expanded: boolean) => void;
 }) {
   const stats = useMemo(() => computeRoadmapStats(initiatives, selectedYear, progressBasis), [
     initiatives,
@@ -252,6 +265,14 @@ export function RoadmapHealthHero({
   // isn't reset every time the panel re-renders.
   const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
   const isPanelExpanded = hideExpandToggle ? defaultExpanded : internalExpanded;
+  // Mirror the effective expanded state to the parent so the surrounding
+  // chrome (Gantt chip toolbar) can react. Skipped when the chevron is
+  // hidden — in that case the parent already controls the state via
+  // `defaultExpanded` and doesn't need a callback echo.
+  useEffect(() => {
+    if (hideExpandToggle) return;
+    onExpandedChange?.(internalExpanded);
+  }, [internalExpanded, hideExpandToggle, onExpandedChange]);
   const setIsPanelExpanded: typeof setInternalExpanded = (value) => {
     if (hideExpandToggle) return;
     setInternalExpanded(value);
@@ -520,6 +541,7 @@ export function RoadmapHealthHero({
             rows={stats.teamProgress[tpScope]}
             title={tpTitle}
             unitLabel={tpUnitLabel}
+            selectedTeamIds={selectedTeamIds}
             onRowClick={
               // App-supplied handler bypasses the per-team drilldown
               // popover and goes straight to scope-aware filtering /
@@ -1075,6 +1097,7 @@ function TeamProgressCard({
   title = "Team Progress (all epics)",
   unitLabel = "days",
   onRowClick,
+  selectedTeamIds,
   panelClassName,
 }: {
   /** Card heading text. The hero composes a scope-aware label
@@ -1088,6 +1111,11 @@ function TeamProgressCard({
    *  reads "10 / 10 left (days)" instead of "10d / 10d left". */
   unitLabel?: "days" | "stories";
   onRowClick?: (teamId: string, label: string) => void;
+  /** Highlight rows whose `teamId` is in this set — drives the
+   *  three-way sync with the Gantt breadcrumb and the Initiatives
+   *  panel team dropdown. Empty / undefined → no row highlighted
+   *  ("All Teams" state). */
+  selectedTeamIds?: ReadonlySet<string> | null;
   rows: Array<{
     teamId: string;
     label: string;
@@ -1228,6 +1256,8 @@ function TeamProgressCard({
             const atRisk = row.status === "atRisk" || row.status === "overdue";
             const watch = row.status === "watch";
             const allDone = row.daysLeft === 0 && row.estTotal > 0;
+            const isSelected =
+              selectedTeamIds != null && selectedTeamIds.has(row.teamId);
             return (
               <button
                 key={row.teamId}
@@ -1239,6 +1269,8 @@ function TeamProgressCard({
                   onRowClick
                     ? "cursor-pointer hover:bg-gradient-to-r hover:from-sky-50 hover:via-indigo-50 hover:to-violet-50 hover:ring-1 hover:ring-indigo-200/70 focus-visible:ring-2 focus-visible:ring-indigo-300"
                     : "cursor-default",
+                  isSelected &&
+                    "bg-gradient-to-r from-sky-50 via-indigo-50 to-violet-50 ring-1 ring-indigo-200/70",
                 )}
               >
                 {/* New row layout (matches the mockup):

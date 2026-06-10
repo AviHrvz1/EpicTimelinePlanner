@@ -1272,6 +1272,14 @@ type InitiativeListPanelProps = {
    *  as the Work Progress donut). At other scopes the existing
    *  `panelStatusFilters` dropdown semantics is preserved. */
   externalStatusFilter?: ReadonlySet<"todo" | "inProgress" | "review" | "done" | "backlogEpic"> | null;
+  /** Parent-owned team filter — currently driven by the Hero's Team
+   *  Progress row clicks. When non-empty, the panel keeps initiatives
+   *  whose epics include at least one belonging to the picked team(s).
+   *  Applied at every scope (team filtering is meaningful at all three
+   *  scopes — an initiative panel showing "Mobile's portfolio" is the
+   *  natural read regardless of whether the planner is thinking in
+   *  initiatives, epics, or stories). */
+  externalTeamFilter?: ReadonlySet<string> | null;
   /** Fires whenever the planner picks a non-"all" option in the unified
    *  Statuses dropdown — either a regular status OR a health verdict. Used
    *  by the parent to force-enable the roadmap Progress toggle so the
@@ -2575,6 +2583,7 @@ export function InitiativeListPanel({
   onHealthFilterChange,
   heroScope,
   externalStatusFilter,
+  externalTeamFilter,
   onUserPickedFilter,
   onPanelStatusFilterDerivedChange,
   onPanelQuarterFilterDerivedChange,
@@ -2943,6 +2952,28 @@ export function InitiativeListPanel({
     }
     onPanelTeamFilterDerivedChange(set);
   }, [panelTeamFilterIds, onPanelTeamFilterDerivedChange]);
+  /** Reverse-direction sync: when the Hero's Team Progress row click
+   *  or the Gantt breadcrumb writes to the parent's shared team Set,
+   *  mirror it back into the panel's own dropdown state so the panel
+   *  UI reflects the active selection. Content-equality guard avoids
+   *  a write-back loop with the emit useEffect above (which fires on
+   *  every `panelTeamFilterIds` change). Falling back to the "all"
+   *  sentinel when external is empty keeps the dropdown's checkbox UI
+   *  visually consistent with its own "show everything" idiom. */
+  useEffect(() => {
+    if (!externalTeamFilter) return;
+    const incoming = Array.from(externalTeamFilter);
+    setPanelTeamFilterIds((prev) => {
+      const prevReal = prev.filter((id) => id !== "all");
+      if (
+        incoming.length === prevReal.length &&
+        incoming.every((id) => prevReal.includes(id))
+      ) {
+        return prev;
+      }
+      return incoming.length === 0 ? ["all"] : incoming;
+    });
+  }, [externalTeamFilter]);
   const toggleMultiFilter = <T extends string>(prev: T[], value: T, allToken: T): T[] => {
     if (value === allToken) return [allToken];
     const withoutAll = prev.filter((x) => x !== allToken);
@@ -3207,6 +3238,16 @@ export function InitiativeListPanel({
           return false;
         }
       }
+      // External team filter (Hero's Team Progress row click writes
+      // here via the parent's `ganttTeamFilter`). When non-empty, keep
+      // only initiatives whose epics include at least one belonging
+      // to a picked team. Applied at every scope.
+      if (externalTeamFilter && externalTeamFilter.size > 0) {
+        const matches = (initiative.epics ?? []).some(
+          (epic) => epic.team != null && externalTeamFilter.has(epic.team),
+        );
+        if (!matches) return false;
+      }
       if (!panelTeamFilterIds.includes("all")) {
         const hasTeam = (initiative.epics ?? []).some((epic) =>
           panelTeamFilterIds.includes(normalizedEpicTeamId(epic)),
@@ -3282,7 +3323,7 @@ export function InitiativeListPanel({
       }
       return true;
     });
-  }, [initiativeList, initiativeSearch, panelQuarterFilters, panelStatusFilters, panelTeamFilterIds, healthFilter, healthByEpicId, heroScope, planYear, progressBasis, externalStatusFilter]);
+  }, [initiativeList, initiativeSearch, panelQuarterFilters, panelStatusFilters, panelTeamFilterIds, healthFilter, healthByEpicId, heroScope, planYear, progressBasis, externalStatusFilter, externalTeamFilter]);
   const initiativeSearchSuggestions = useMemo(() => {
     const set = new Set<string>();
     for (const initiative of initiativeList) {

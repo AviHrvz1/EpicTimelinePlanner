@@ -1954,6 +1954,13 @@ type TimelineGridProps = {
    * causes only Mobile-owned epics to render on the Gantt.
    */
   ganttTeamFilterExternal?: Set<string>;
+  /** Mirror of `ganttTeamFilterExternal` going the other way — fires
+   *  whenever the planner changes the breadcrumb team picker so the
+   *  parent can keep its shared `ganttTeamFilter` Set in lockstep. The
+   *  Hero's Team Progress card highlight + Initiatives panel team
+   *  filter all read off the same parent Set, so without this they'd
+   *  go stale the moment the planner picked a team via the breadcrumb. */
+  onGanttTeamFilterChange?: (next: Set<string>) => void;
   /**
    * Cross-mode "highlight these epic IDs" filter — set by the Portfolio
    * Burndown's contributor popover when the planner picks laggards (or
@@ -2809,6 +2816,7 @@ export function TimelineGrid({
   ganttStatusFilterExternal,
   ganttQuarterFilterExternal,
   ganttTeamFilterExternal,
+  onGanttTeamFilterChange,
   showGanttTeamChipsExternal,
   onShowGanttTeamChipsChange,
   showYearSprintChipsExternal,
@@ -7116,6 +7124,23 @@ export function TimelineGrid({
       return [...sprintFilterTeamIds];
     });
   }, [sprintFilterTeamIds]);
+  // External-filter sync. When the parent writes `ganttTeamFilterExternal`
+  // (e.g. the planner clicks a row on the hero's Team Progress card),
+  // mirror it into the Gantt's local `ganttTeamIds` so the breadcrumb
+  // "Team All Teams" dropdown reflects the selection and the
+  // bar-row-level filtering paths that read `ganttTeamIds` (year/month/
+  // quarter epic rows; see `ganttTeamIds.includes` sites above) stay
+  // consistent with the external Set the cross-mode filter uses.
+  useEffect(() => {
+    if (!ganttTeamFilterExternal) return;
+    const incoming = Array.from(ganttTeamFilterExternal);
+    setGanttTeamIds((prev) => {
+      if (prev.length === incoming.length && prev.every((id, i) => id === incoming[i])) {
+        return prev;
+      }
+      return incoming;
+    });
+  }, [ganttTeamFilterExternal, setGanttTeamIds]);
   useEffect(() => {
     if (isSprintTeamMenuOpen) {
       setSprintTeamSearch("");
@@ -8239,7 +8264,20 @@ export function TimelineGrid({
                       aria-label="Filter Gantt by team"
                       aria-expanded={isGanttTeamMenuOpen}
                     >
-                      <span className="truncate">{ganttTeamLabel}</span>
+                      {/* Avatar + label live in their own inner flex so
+                       *  the button's `justify-between` only pushes the
+                       *  chevron to the right edge — without this, the
+                       *  avatar got pinned to the far left and a fat
+                       *  visual gap opened between the avatar and the
+                       *  team name. Multi-select falls back to plain
+                       *  text; stacking three avatars at 28px height
+                       *  would be unreadable. */}
+                      <span className="inline-flex min-w-0 items-center gap-[5px]">
+                        {ganttTeamIds.length === 1 ? (
+                          <TeamAvatar slug={ganttTeamIds[0]} sizePx={16} className="shrink-0" />
+                        ) : null}
+                        <span className="truncate">{ganttTeamLabel}</span>
+                      </span>
                       <ChevronDown className="size-3.5 shrink-0 text-slate-500" aria-hidden />
                     </button>
                     {ganttTeamIds.length > 0 ? (
@@ -8248,7 +8286,7 @@ export function TimelineGrid({
                         aria-label="Clear team filter"
                         title="Clear team filter"
                         onPointerDown={(e) => e.stopPropagation()}
-                        onClick={(e) => { e.stopPropagation(); setGanttTeamIds([]); }}
+                        onClick={(e) => { e.stopPropagation(); setGanttTeamIds([]); onGanttTeamFilterChange?.(new Set()); }}
                         className="pointer-events-none absolute inset-y-0 right-0 hidden items-center justify-center rounded-r-md px-1.5 text-slate-400 group-hover/trigger:pointer-events-auto group-hover/trigger:flex hover:text-rose-500"
                       >
                         <X className="size-3.5" />
@@ -8287,10 +8325,15 @@ export function TimelineGrid({
                                 });
                                 if (isAll) {
                                   setGanttTeamIds([]);
+                                  onGanttTeamFilterChange?.(new Set());
                                 } else {
-                                  setGanttTeamIds((prev) =>
-                                    prev.includes(option.value) ? prev.filter((id) => id !== option.value) : [...prev, option.value]
-                                  );
+                                  setGanttTeamIds((prev) => {
+                                    const next = prev.includes(option.value)
+                                      ? prev.filter((id) => id !== option.value)
+                                      : [...prev, option.value];
+                                    onGanttTeamFilterChange?.(new Set(next));
+                                    return next;
+                                  });
                                 }
                               }}
                               className={cn(
