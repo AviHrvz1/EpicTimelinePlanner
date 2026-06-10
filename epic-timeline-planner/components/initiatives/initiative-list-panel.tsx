@@ -67,6 +67,7 @@ import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { resolveStoryYearSprint, sprintStartDate, sprintEndDate, globalSprintFromMonthLane } from "@/lib/year-sprint";
 import { computeProgress, type HealthStatus } from "@/lib/progress";
 import { computeEpicHealthVerdict, computeInitiativeHealthVerdict } from "@/lib/epic-health";
+import { HealthBadge, formatHealthTooltip } from "@/components/timeline/health-badge";
 import { rollupWorkflowStatus } from "@/lib/workflow-rollup";
 import { resolveAssigneeAvatar, UserAvatar } from "@/components/ui/user-avatar";
 import { TeamAvatar } from "@/components/ui/team-avatar";
@@ -983,12 +984,58 @@ function storyStatusMeta(story: UserStoryItem, contextMonth: number | null): {
 const statusBadgeBase =
   "inline-flex items-center rounded-sm px-2.5 py-1 text-[13px] font-semibold leading-none tracking-[0.01em]";
 
-/** Slightly shorter variant used on EPIC-row chips so the visual weight
- *  reads as subordinate to the parent initiative's chip row. Smaller
- *  vertical padding + 1pt smaller font; same color treatment is layered
- *  on top by the caller via `cn(epicBadgeBase, chipColorClasses)`. */
+/** Epic row chips read as a slightly de-emphasised echo of the parent
+ *  initiative's chip cluster — slightly smaller text (12px vs 13px on
+ *  initiative) and ~4px less total vertical height (py-0.5 vs py-1).
+ *  That preserves "cohesive group" while restoring a parent-vs-child
+ *  hierarchy in an opened initiative. Colors are layered on by callers
+ *  via `cn(epicBadgeBase, chipColorClasses)`. */
 const epicBadgeBase =
-  "inline-flex items-center rounded-sm px-1.5 py-px text-[10.5px] font-semibold leading-tight tracking-[0.01em]";
+  "inline-flex items-center rounded-sm px-2.5 py-0.5 text-[12px] font-semibold leading-none tracking-[0.01em]";
+
+/** Forces the HealthBadge to match the INITIATIVE row's chip height
+ *  (`px-2.5 py-1 text-[13px]`). Tailwind-merge keeps the override last
+ *  against the badge's own `px-2 py-0.5 text-[12px]` defaults. */
+const healthBadgeInitiativeRowOverride =
+  "px-2.5 py-1 text-[13px] leading-none rounded-sm";
+
+/** Forces the HealthBadge to match the EPIC row's chip — `text-[12px]`
+ *  and `py-0.5` so it lines up with the slightly-smaller epic chips
+ *  alongside it. */
+const healthBadgeEpicRowOverride =
+  "px-2.5 py-0.5 text-[12px] leading-none rounded-sm";
+
+/** Collapse a sorted-or-unsorted list of quarter labels (`"Q1"`,
+ *  `"Q2"`, …) into a single human-readable range or comma list.
+ *    ["Q1"]            → "Q1"
+ *    ["Q1", "Q2"]      → "Q1-Q2"
+ *    ["Q1", "Q2", "Q3"] → "Q1-Q3"
+ *    ["Q1", "Q3"]      → "Q1, Q3"     (non-consecutive)
+ *    ["Q1", "Q2", "Q4"] → "Q1-Q2, Q4" (one range + tail)
+ *  Empty input returns the empty string. */
+function collapseQuarterRange(quarters: readonly string[]): string {
+  if (quarters.length === 0) return "";
+  const nums = quarters
+    .map((q) => parseInt(q.replace(/^Q/, ""), 10))
+    .filter((n) => Number.isFinite(n))
+    .sort((a, b) => a - b);
+  if (nums.length === 0) return "";
+  const parts: string[] = [];
+  let runStart = nums[0]!;
+  let runEnd = nums[0]!;
+  for (let i = 1; i <= nums.length; i++) {
+    if (i < nums.length && nums[i] === runEnd + 1) {
+      runEnd = nums[i]!;
+    } else {
+      parts.push(runStart === runEnd ? `Q${runStart}` : `Q${runStart}-Q${runEnd}`);
+      if (i < nums.length) {
+        runStart = nums[i]!;
+        runEnd = nums[i]!;
+      }
+    }
+  }
+  return parts.join(", ");
+}
 
 /** Left-panel initiative/epic cards: track grows to fill the row; summary stays on the same line (nowrap). */
 const leftPanelProgressTrackClass =
@@ -1265,6 +1312,12 @@ type InitiativeListPanelProps = {
    *  scopes the legacy any-child-epic-matches semantics is preserved so
    *  the Roadmap Health popover keeps behaving as before. */
   heroScope?: "initiative" | "epic" | "story";
+  /** Mirrors the Hero KPI strip's "Teams" tile (`showGanttTeamChipsCtrl`
+   *  in the parent). When `false`, epic rows in this panel hide their
+   *  delivery-team chip — same toggle that hides team chips on the
+   *  Gantt bars, so the two surfaces stay in lockstep. Default `false`
+   *  (chips off) to match the tile's initial inactive state. */
+  showTeamChips?: boolean;
   /** Parent-owned execution-status filter — currently the Gantt status
    *  filter the Hero's Work Progress donut writes to. When `heroScope`
    *  is `"initiative"` and this set is non-empty, the panel filters its
@@ -1404,6 +1457,9 @@ function InitiativeTreeEpicRow({
   isCapacityMode = false,
   searchQuery,
   workspaceDirectoryUsers = [],
+  showTeamChips = false,
+  showHealthChips = false,
+  showStatusChips = false,
 }: {
   epic: EpicItem;
   initiative: InitiativeItem;
@@ -1425,6 +1481,19 @@ function InitiativeTreeEpicRow({
   searchQuery?: string;
   /** Used to swap the User icon for a real photo on story-row assignee chips. */
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
+  /** Gated by the Hero KPI strip "Teams" tile — when `false`, the epic's
+   *  delivery-team chip is suppressed from the chip cluster. */
+  showTeamChips?: boolean;
+  /** Gated by the Hero "Health Distribution" donut — true when the planner
+   *  has picked at least one slice (so `healthFilter` is non-empty). When
+   *  false, the per-epic health verdict chip is hidden. */
+  showHealthChips?: boolean;
+  /** Gated by the Hero "Work Progress" donut — true when the planner has
+   *  picked at least one slice (so `externalStatusFilter` is non-empty).
+   *  When false, the per-epic execution-status chip is hidden. Plan-only
+   *  chips (Unscheduled / Q1-Q2 / Scheduled) are NOT gated — they reflect
+   *  schedule, not workflow status, and are independent of the donut. */
+  showStatusChips?: boolean;
 }) {
   const epicTeamId = normalizedEpicTeamId(epic);
   const epicTeamChip = epicTeamId ? epicDeliveryTeamAssignmentChip(epicTeamId) : null;
@@ -1522,7 +1591,7 @@ function InitiativeTreeEpicRow({
           <div className="flex min-w-0 items-center gap-1 pl-0">
             <p
               className={cn(
-                "min-w-0 truncate rounded px-1 text-[15px] font-normal leading-5 tracking-tight text-slate-900",
+                "min-w-0 truncate rounded px-1 text-[16px] font-normal leading-6 tracking-tight text-slate-900",
                 searchQuery && epic.title.toLowerCase().includes(searchQuery) && "bg-yellow-100",
               )}
             >
@@ -1540,12 +1609,34 @@ function InitiativeTreeEpicRow({
         </button>
       </div>
       <div className="mt-2 space-y-2 px-0.5">
-            <div className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+            <div className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted-foreground">
               <span className="min-w-0 shrink-0 text-left">
                 {completion.total === 0 ? "No stories yet" : `${completion.total} user stor${completion.total === 1 ? "y" : "ies"}`}
               </span>
               <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
-                {epicTeamChip ? (
+                {showHealthChips ? (() => {
+                  // Per-epic health verdict — same helper the Gantt
+                  // bars + Hero Health Distribution donut use, so the
+                  // chip on the row reads identically wherever the
+                  // planner sees this epic. Null verdicts (epics
+                  // without scheduled work / no estimate) skip the
+                  // chip entirely.
+                  //
+                  // Gated by `showHealthChips` so a Health Distribution
+                  // donut pick is what reveals the chip (clearing all
+                  // picks hides it again).
+                  const v = computeEpicHealthVerdict(epic, initiative.year ?? new Date().getFullYear(), progressBasis);
+                  if (!v) return null;
+                  return (
+                    <HealthBadge
+                      size="sm"
+                      status={v.status}
+                      tooltip={formatHealthTooltip(v.result)}
+                      className={healthBadgeEpicRowOverride}
+                    />
+                  );
+                })() : null}
+                {showTeamChips && epicTeamChip ? (
                   // Apply `epicBadgeBase` AFTER the team chip's own className
                   // so tailwind-merge overrides its smaller padding / font
                   // with the shared epic-badge size (matches the Quarter and
@@ -1553,6 +1644,10 @@ function InitiativeTreeEpicRow({
                   // `max-w` so longer team names like "Data & analytics"
                   // aren't truncated — the chip auto-shrinks if the row is
                   // tight, but no longer caps at 7rem.
+                  //
+                  // Gated by `showTeamChips` so the Hero KPI strip's
+                  // "Teams" tile (which already hides team chips on the
+                  // Gantt bars) hides this row's team chip in lockstep.
                   <span className={cn(epicTeamChip.className, epicBadgeBase, "max-w-[10rem] gap-1")}>
                     <TeamAvatar slug={epicTeamChip.slug} sizePx={10} fallback={<Users className="size-2.5 shrink-0" aria-hidden />} />
                     {epicTeamChip.label}
@@ -1562,16 +1657,20 @@ function InitiativeTreeEpicRow({
                   <span className={cn(epicBadgeBase, epicPlanStatus.className)}>
                     {epicPlanStatus.label}
                   </span>
-                ) : (
-                  quartersFromMonthRange(epic.planStartMonth, epic.planEndMonth).map((q) => (
-                    <span key={q} className={cn(epicBadgeBase, epicPlanStatus.className)}>
-                      {q}
+                ) : (() => {
+                  const qs = quartersFromMonthRange(epic.planStartMonth, epic.planEndMonth);
+                  if (qs.length === 0) return null;
+                  return (
+                    <span className={cn(epicBadgeBase, epicPlanStatus.className)}>
+                      {collapseQuarterRange(qs)}
                     </span>
-                  ))
-                )}
-                <span className={cn(epicBadgeBase, epicExecutionStatus.className)}>
-                  {epicExecutionStatus.label}
-                </span>
+                  );
+                })()}
+                {showStatusChips ? (
+                  <span className={cn(epicBadgeBase, epicExecutionStatus.className)}>
+                    {epicExecutionStatus.label}
+                  </span>
+                ) : null}
               </div>
             </div>
             {storyProgressDetailsVisible ? (
@@ -1734,6 +1833,9 @@ function InitiativeTreeCard({
   searchQuery,
   workspaceDirectoryUsers = [],
   isEpicDimmed,
+  showTeamChips = false,
+  showHealthChips = false,
+  showStatusChips = false,
 }: {
   initiative: InitiativeItem;
   isOpen: boolean;
@@ -1765,6 +1867,17 @@ function InitiativeTreeCard({
    *  true fade. Threaded from the panel-level `highlightedEpicIds` filter
    *  so the same fade rule applies across panel + Gantt. */
   isEpicDimmed?: (epicId: string) => boolean;
+  /** Gated by the Hero KPI strip "Teams" tile — forwarded to the inner
+   *  epic rows so they hide their team chip in lockstep with the Gantt. */
+  showTeamChips?: boolean;
+  /** Forwarded — gates the per-row health verdict chip on the initiative
+   *  row AND the inner epic rows. Driven by the Hero's Health Distribution
+   *  donut (non-empty `healthFilter`). */
+  showHealthChips?: boolean;
+  /** Forwarded — gates the per-row execution-status chip on the initiative
+   *  row AND the inner epic rows. Driven by the Hero's Work Progress donut
+   *  (non-empty `externalStatusFilter`). */
+  showStatusChips?: boolean;
 }) {
   const inMonthView = planContextMonth != null;
   const { setNodeRef: setDropRef, isOver: isBacklogDropOver } = useDroppable({
@@ -1980,21 +2093,46 @@ function InitiativeTreeCard({
                         : `${epics.length} epic${epics.length !== 1 ? "s" : ""}`}
                     </span>
                     <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
+                      {showHealthChips ? (() => {
+                        // Per-initiative health verdict — worst-of-
+                        // children rollup, same helper the Hero's
+                        // Health Distribution donut at Initiative
+                        // scope uses. Null verdicts (initiative without
+                        // scheduled epics, etc.) skip the chip.
+                        //
+                        // Gated by `showHealthChips` (donut-pick driven).
+                        const v = computeInitiativeHealthVerdict(initiative, initiative.year ?? new Date().getFullYear(), progressBasis);
+                        if (!v) return null;
+                        return (
+                          <HealthBadge
+                            size="sm"
+                            status={v.status}
+                            tooltip={formatHealthTooltip(v.result)}
+                            className={healthBadgeInitiativeRowOverride}
+                          />
+                        );
+                      })() : null}
                       {initiative.status === "scheduled"
-                        ? quartersForInitiative(initiative).map((q) => (
-                            <span key={q} className={cn(statusBadgeBase, "bg-violet-100 text-violet-700")}>
-                              {q}
-                            </span>
-                          ))
+                        ? (() => {
+                            const qs = quartersForInitiative(initiative);
+                            if (qs.length === 0) return null;
+                            return (
+                              <span className={cn(statusBadgeBase, "bg-violet-100 text-violet-700")}>
+                                {collapseQuarterRange(qs)}
+                              </span>
+                            );
+                          })()
                         : null}
                       {initiative.status === "scheduled" ? (
                         <span className={cn(statusBadgeBase, "border border-emerald-200/90 bg-emerald-50 text-emerald-800")}>
                           Scheduled
                         </span>
                       ) : null}
-                      <span className={cn(statusBadgeBase, initiativeExecutionStatus.className)}>
-                        {initiativeExecutionStatus.label}
-                      </span>
+                      {showStatusChips ? (
+                        <span className={cn(statusBadgeBase, initiativeExecutionStatus.className)}>
+                          {initiativeExecutionStatus.label}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                   {storyProgressDetailsVisible ? (
@@ -2056,6 +2194,9 @@ function InitiativeTreeCard({
                             initiative={initiative}
                             isEpicOpen={isEpicOpen}
                             searchQuery={searchQuery}
+                            showTeamChips={showTeamChips}
+                            showHealthChips={showHealthChips}
+                            showStatusChips={showStatusChips}
                             showDragHint={hintEpicId === epic.id}
                             onToggleEpic={() =>
                               setOpenEpicIds((prev) => {
@@ -2157,6 +2298,8 @@ function SprintEpicCard({
   showDragHint = false,
   isCapacityMode = false,
   workspaceDirectoryUsers = [],
+  showTeamChips = false,
+  showStatusChips = false,
 }: {
   epic: EpicItem;
   initiative: InitiativeItem;
@@ -2178,6 +2321,12 @@ function SprintEpicCard({
   showDragHint?: boolean;
   isCapacityMode?: boolean;
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
+  /** Gated by the Hero KPI strip "Teams" tile — when `false`, the epic's
+   *  delivery-team chip is suppressed from the chip cluster. */
+  showTeamChips?: boolean;
+  /** Gated by the Hero "Work Progress" donut — when `false`, the epic's
+   *  execution-status chip (In progress / Done / etc.) is hidden. */
+  showStatusChips?: boolean;
 }) {
   const { active } = useDndContext();
   /** Gantt bars use `timeline-epic:`; those drops should use thin `EpicBacklogDropSlot` targets or unplan strip, not the large card hit area (avoids accidental unplan). */
@@ -2324,7 +2473,7 @@ function SprintEpicCard({
           >
             <div className="flex w-full min-w-0 items-center gap-0">
               <div className="flex min-w-0 flex-1 items-center gap-0 pl-0">
-                <p className="min-w-0 truncate text-[18px] font-normal leading-7 tracking-tight text-slate-900">
+                <p className="min-w-0 truncate text-[16px] font-normal leading-6 tracking-tight text-slate-900">
                   {epic.title}
                 </p>
               </div>
@@ -2332,7 +2481,7 @@ function SprintEpicCard({
             <p className="truncate text-[13px] leading-5 text-slate-600">{initiative.title}</p>
           </button>
               <div className="mt-2 space-y-2 px-0.5">
-                <div className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted-foreground">
+                <div className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted-foreground">
                   <span className="min-w-0 shrink-0 text-left">
                     {completion.total === 0
                       ? "No stories yet"
@@ -2343,7 +2492,7 @@ function SprintEpicCard({
                    *  are the top-level rows in the middle panel they need
                    *  to match the primary visual weight. */}
                   <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
-                    {epicTeamChip ? (
+                    {showTeamChips && epicTeamChip ? (
                       <span className={cn(epicTeamChip.className, epicBadgeBase, "text-[12.5px] max-w-[10rem] gap-1")}>
                         <TeamAvatar slug={epicTeamChip.slug} sizePx={10} fallback={<Users className="size-2.5 shrink-0" aria-hidden />} />
                         {epicTeamChip.label}
@@ -2353,16 +2502,20 @@ function SprintEpicCard({
                       <span className={cn(epicBadgeBase, "text-[12.5px]", epicPlanStatus.className)}>
                         {epicPlanStatus.label}
                       </span>
-                    ) : (
-                      quartersFromMonthRange(epic.planStartMonth, epic.planEndMonth).map((q) => (
-                        <span key={q} className={cn(epicBadgeBase, "text-[12.5px]", epicPlanStatus.className)}>
-                          {q}
+                    ) : (() => {
+                      const qs = quartersFromMonthRange(epic.planStartMonth, epic.planEndMonth);
+                      if (qs.length === 0) return null;
+                      return (
+                        <span className={cn(epicBadgeBase, "text-[12.5px]", epicPlanStatus.className)}>
+                          {collapseQuarterRange(qs)}
                         </span>
-                      ))
-                    )}
-                    <span className={cn(epicBadgeBase, "text-[12.5px]", epicExecutionStatus.className)}>
-                      {epicExecutionStatus.label}
-                    </span>
+                      );
+                    })()}
+                    {showStatusChips ? (
+                      <span className={cn(epicBadgeBase, "text-[12.5px]", epicExecutionStatus.className)}>
+                        {epicExecutionStatus.label}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
                 {storyProgressDetailsVisible ? (
@@ -2582,6 +2735,7 @@ export function InitiativeListPanel({
   healthFilter,
   onHealthFilterChange,
   heroScope,
+  showTeamChips = false,
   externalStatusFilter,
   externalTeamFilter,
   onUserPickedFilter,
@@ -2614,6 +2768,29 @@ export function InitiativeListPanel({
   // initiative card chrome itself (header, progress bar). Phase 2(d) ships
   // only the epic-row fade since that's where the planner's eye lands.
   void isInitiativeDimmed;
+  // Health + execution-status chip visibility on initiative / epic rows
+  // is gated by the matching Hero donut state, mirroring the existing
+  // Teams-tile pattern.
+  //
+  // Health chips reveal on EITHER trigger:
+  //   (a) The Gantt chip toolbar's "Health" button — opens the
+  //       Roadmap Health popover and flips `showRoadmapProgress` (mirrored
+  //       here as `storyProgressDetailsVisible`). Treat that toggle as
+  //       "the planner is thinking about health right now" and surface
+  //       the chips on every initiative + epic row.
+  //   (b) A Health Distribution donut slice pick — non-empty
+  //       `healthFilter` set means the planner already chose a specific
+  //       verdict to focus on; the chips give per-row context.
+  // Execution-status chips ONLY reveal on a Work Progress donut pick
+  // (non-empty `externalStatusFilter`) — there is no equivalent "Status"
+  // button on the toolbar, so a slice pick is the single trigger.
+  //
+  // Plan chips (Scheduled / Unscheduled / Q1-Q2) are NOT gated — they
+  // describe schedule, not workflow status, and are independent of the
+  // hero state.
+  const showHealthChips =
+    (healthFilter?.size ?? 0) > 0 || storyProgressDetailsVisible;
+  const showStatusChips = (externalStatusFilter?.size ?? 0) > 0;
   const { active } = useDndContext();
   const isTimelineEpicDragActive = active != null && String(active.id).startsWith("timeline-epic:");
   /** Gantt epic bars must stay on the timeline; do not accept drops on the unplan / month backlog strip. */
@@ -3782,6 +3959,8 @@ export function InitiativeListPanel({
                     epicPlanDragEnabled={epicPlanDragEnabled}
                     storyDragEnabled={isSprintModeActive && storyDragEnabled}
                     activeYearSprint={activeYearSprint}
+                    showTeamChips={showTeamChips}
+                    showStatusChips={showStatusChips}
                     onEpicAccordionChange={onEpicAccordionChange}
                     onOpenEpic={onOpenEpic}
                     onOpenStory={onOpenStory}
@@ -4066,6 +4245,9 @@ export function InitiativeListPanel({
                             progressBasis={progressBasis}
                     workspaceDirectoryUsers={workspaceDirectoryUsers}
                     isEpicDimmed={isHighlightActive ? isEpicDimmed : undefined}
+                    showTeamChips={showTeamChips}
+                    showHealthChips={showHealthChips}
+                    showStatusChips={showStatusChips}
                     onToggle={() => {
                       const next = !(openInitiativeIds[initiative.id] ?? false);
                       setOpenInitiativeIds((prev) => ({ ...prev, [initiative.id]: next }));

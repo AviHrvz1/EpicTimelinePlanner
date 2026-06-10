@@ -167,11 +167,20 @@ export function RoadmapHealthPopover({
     }
     const snapToAnchor = () => {
       if (userMovedRef.current) return;
-      // Anchor to the top-left of the viewport rather than under the
-      // trigger button — gives the popover a predictable home that
-      // doesn't slide around when the toolbar layout shifts. The
-      // planner can still drag it wherever they want after open.
-      setPos({ left: 16, top: 16 });
+      // Anchor to the top-RIGHT of the viewport — the popover sits 16px
+      // in from the right edge so it doesn't cover the planner's left-
+      // hand initiative / epic list (where the per-row health chips it
+      // controls actually render). The card is 640px wide (matches the
+      // Tailwind `w-[640px]` below) and capped at `calc(100vw - 2rem)`
+      // on narrow viewports; clamping `left` to a 16px floor keeps the
+      // card on-screen at any width. The planner can still drag it
+      // wherever they want after open.
+      const POPOVER_WIDTH = 640;
+      const EDGE_MARGIN = 16;
+      const viewportWidth =
+        typeof window !== "undefined" ? window.innerWidth : POPOVER_WIDTH + EDGE_MARGIN * 2;
+      const left = Math.max(EDGE_MARGIN, viewportWidth - POPOVER_WIDTH - EDGE_MARGIN);
+      setPos({ left, top: 16 });
     };
     snapToAnchor();
     window.addEventListener("scroll", snapToAnchor, true);
