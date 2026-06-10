@@ -345,7 +345,7 @@ const YEAR_ROADMAP_H_SCROLL_HYSTERESIS_PX = 48;
  * the right panel stays fluid; below, outer horizontal scroll appears and portfolio Gantt stops shrinking lanes.
  */
 const RIGHT_PANEL_MIN_CONTENT_PX = 1000;
-/** Matches `pl-[4rem]` / `ml-[4rem]` when the context rail is shown so scroll width fits the sprint grid. */
+/** Matches `pl-[2.75rem]` / `ml-[2.75rem]` when the context rail is shown so scroll width fits the sprint grid. */
 const ROADMAP_PORTFOLIO_CONTEXT_RAIL_INSET_PX = 64;
 
 function getRoadmapHScrollMinSprintPx(columnCount: number): number {
@@ -8687,9 +8687,12 @@ export function TimelineGrid({
           // scroll` (which hid the bar).
           // `overscroll-y-auto` lets the wheel scroll chain up to the
           // page once this inner area hits its top/bottom boundary.
-          // `pl-5 pr-4` is on this surface (moved off the panel root
-          // so the breadcrumb row can span full panel width).
-          "flex min-h-0 flex-1 flex-col max-h-[calc(100dvh-18rem)] overflow-y-auto overscroll-y-auto pl-5 pr-4",
+          // `pl-2 pr-4` is on this surface (moved off the panel root
+          // so the breadcrumb row can span full panel width). Left
+          // padding dropped from `pl-5` → `pl-2` so the now-narrower
+          // 36px rail sits closer to the panel edge — the old 20px
+          // pre-rail gap read as wasted space.
+          "flex min-h-0 flex-1 flex-col max-h-[calc(100dvh-18rem)] overflow-y-auto overscroll-y-auto pl-2 pr-4",
           // Pastel scrollbar matching the initiative panel's rail.
           "[scrollbar-gutter:stable] [scrollbar-width:thin] [scrollbar-color:theme(colors.indigo.100)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gradient-to-b [&::-webkit-scrollbar-thumb]:from-sky-100 [&::-webkit-scrollbar-thumb]:via-indigo-100 [&::-webkit-scrollbar-thumb]:to-violet-100 hover:[&::-webkit-scrollbar-thumb]:from-sky-200 hover:[&::-webkit-scrollbar-thumb]:via-indigo-200 hover:[&::-webkit-scrollbar-thumb]:to-violet-200",
           showCapacityPlanningScrollbar && "min-w-0",
@@ -8702,8 +8705,8 @@ export function TimelineGrid({
               so size the wrapper accordingly. */}
           <div
             className={cn(
-              "absolute left-0 top-0 inline-flex flex-col justify-between gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width,height] duration-200",
-              isRailExpanded ? "w-56" : "w-[3.25rem]",
+              "absolute left-0 top-0 inline-flex flex-col justify-between gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-0.5 ring-1 ring-black/5 transition-[width,height] duration-200",
+              isRailExpanded ? "w-56" : "w-[2.25rem]",
               activeSprint != null && (monthPlanTab === "sprint-kanban" || monthPlanTab === "sprint-status" || monthPlanTab === "sprint-capacity" || monthPlanTab === "sprint-retrospective")
                 ? "h-[180px]"
                 // Default month rail: 2 buttons now (Epic Plan + Insights).
@@ -8931,8 +8934,8 @@ export function TimelineGrid({
             className={cn(
               // Single-quarter rail height matches the Q + 3 months + 6
               // sprints panel above. Nudged a touch up.
-              "absolute left-0 top-0 inline-flex h-[132px] flex-col justify-between gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width] duration-200",
-              isRailExpanded ? "w-56" : "w-[3.25rem]",
+              "absolute left-0 top-0 inline-flex h-[132px] flex-col justify-between gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-0.5 ring-1 ring-black/5 transition-[width] duration-200",
+              isRailExpanded ? "w-56" : "w-[2.25rem]",
             )}
             onMouseLeave={() => {
               console.log("[rail-nav] quarter rail mouseleave", {
@@ -9025,10 +9028,10 @@ export function TimelineGrid({
           <div
             className={cn(
               // Rail height tracks the Quarter + Months banner above (no
-              // fixed pixel lock). 2 × h-10 buttons + p-1 + gap-1 lands
+              // fixed pixel lock). 2 × h-10 buttons + p-0.5 + gap-1 lands
               // around the same height as Q+months without sprints.
-              "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-1 ring-1 ring-black/5 transition-[width] duration-200",
-              isRailExpanded ? "w-56" : "w-[3.25rem]",
+              "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-0.5 ring-1 ring-black/5 transition-[width] duration-200",
+              isRailExpanded ? "w-56" : "w-[2.25rem]",
             )}
             onMouseLeave={() => setIsRailExpanded(false)}
           >
@@ -9097,8 +9100,8 @@ export function TimelineGrid({
               monthPlanTab !== "month-status" &&
               monthPlanTab !== "sprint-status" &&
               "rounded-2xl p-1.5 shadow-lg ring-1",
-            monthPlanTab === "sprint-kanban" && "flex w-full min-w-0 flex-col min-h-min pl-[4rem]",
-            hasContextSideMenu && monthPlanTab !== "sprint-kanban" && "w-[calc(100%-4rem)] ml-[4rem]",
+            monthPlanTab === "sprint-kanban" && "flex w-full min-w-0 flex-col min-h-min pl-[2.75rem]",
+            hasContextSideMenu && monthPlanTab !== "sprint-kanban" && "w-[calc(100%-2.75rem)] ml-[2.75rem]",
     monthPlanTab !== "sprint-kanban" &&
     monthPlanTab !== "sprint-retrospective" &&
     monthPlanTab !== "month-capacity" &&
@@ -9742,7 +9745,7 @@ export function TimelineGrid({
             <div
               className={cn(
                 "mb-4 flex min-h-0 min-w-0 flex-1 w-full flex-col",
-                hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]",
+                hasContextSideMenu && "w-[calc(100%-2.75rem)] ml-[2.75rem]",
               )}
             >
               <div
@@ -10348,7 +10351,7 @@ export function TimelineGrid({
             // Unified-scroll: clip horizontally without forcing an inner
             // vertical scrollbar.
             "flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip",
-          hasContextSideMenu && "w-[calc(100%-4rem)] ml-[4rem]",
+          hasContextSideMenu && "w-[calc(100%-2.75rem)] ml-[2.75rem]",
         )}
       >
         {activeMonth ? null : !focusedQuarter && quarterViewTab === "insights" ? (

@@ -4278,7 +4278,12 @@ export function MonthAnalytics({
   });
   return (
     <section
-      className="mb-2 flex flex-col gap-3.5 rounded-xl p-4"
+      // `pl-1` (was `p-4` all-around) tightens the inset between the
+      // context rail's right edge and the "Epic / Initiative Scope"
+      // banner — at 16px left padding the gap read as wasted space
+      // once the rail was shrunk to 36px. Top/bottom/right padding
+      // unchanged so the dot-grid backplate still frames the charts.
+      className="mb-2 flex flex-col gap-3.5 rounded-xl py-4 pl-1 pr-4"
       style={{
         backgroundImage: "radial-gradient(circle, #cbd5e1 1px, transparent 1px)",
         backgroundSize: "24px 24px",
@@ -4300,7 +4305,7 @@ export function MonthAnalytics({
             <ChartNoAxesCombined className="size-4 text-slate-500" aria-hidden />
             Epic / Initiative Scope
           </label>
-          <div className="relative min-w-[28rem] flex-1 max-w-[44rem]">
+          <div className="relative min-w-[28rem] max-w-[44rem]">
             {/* Selected-scope glyph — Zap for initiative, Folder for epic.
              *  Hidden when scope is "All"; sits inside the input so the
              *  selected value reads "[icon] Epic Name". */}
@@ -4503,6 +4508,37 @@ export function MonthAnalytics({
               Epic Details
             </button>
           ) : null}
+          {/* Shared "Health calculation" basis picker — was a per-chart
+           *  ToggleGroup on each of Epic Burndown + Epic Scope Burnup,
+           *  collapsed into one source of truth that writes BOTH states
+           *  so the two charts always carry the same basis. Pushed to the
+           *  far right via `ml-auto`; the selected-scope chips below
+           *  (when present) sit further right of it without a duplicate
+           *  ml-auto since `ml-auto` only absorbs free space once. */}
+          <div className="ml-auto min-w-[18rem] shrink-0">
+            <ToggleGroup
+              label=""
+              options={
+                selectedEpicOption != null
+                  ? [
+                      { value: "epicEst", label: "Epic Est (d)", icon: Folder },
+                      { value: "days", label: "Σ | Child Est (d)", icon: BookOpen },
+                      { value: "stories", label: "Stories Completed (%)", icon: CheckCircle2 },
+                    ]
+                  : [
+                      { value: "epicEst", label: "Σ | Epic Est (d)", icon: Folder },
+                      { value: "days", label: "Σ | Child Est (d)", icon: BookOpen },
+                      { value: "stories", label: "Stories Completed (%)", icon: CheckCircle2 },
+                    ]
+              }
+              value={burndownBasis}
+              onChange={(v) => {
+                const next = v as "days" | "stories" | "epicEst";
+                setBurndownBasis(next);
+                setBurnupBasis(next);
+              }}
+            />
+          </div>
           {/* Selected-scope chips — pinned right. Epic shows team + assignee.
               Health verdict moved onto each chart's own header so the badge
               matches that chart's basis selection (the two charts can carry
@@ -5096,40 +5132,19 @@ export function MonthAnalytics({
               );
             })() : null}
           </h3>
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Per-chart basis toggle. Initialized from the popover's
-             *  global basis at mount; flipping it doesn't affect other
-             *  charts or the popover. Labels adapt to the currently-
-             *  pinned scope so the wording matches the popover (Epic
-             *  Days Est. with no Σ when an epic is pinned). */}
-            <div className="min-w-[18rem]">
-              <ToggleGroup
-                label=""
-                options={
-                  selectedEpicOption != null
-                    ? [
-                        { value: "epicEst", label: "Epic Est (d)", icon: Folder },
-                        { value: "days", label: "Σ | Child Est (d)", icon: BookOpen },
-                        { value: "stories", label: "Stories Completed (%)", icon: CheckCircle2 },
-                      ]
-                    : [
-                        { value: "epicEst", label: "Σ | Epic Est (d)", icon: Folder },
-                        { value: "days", label: "Σ | Child Est (d)", icon: BookOpen },
-                        { value: "stories", label: "Stories Completed (%)", icon: CheckCircle2 },
-                      ]
-                }
-                value={burndownBasis}
-                onChange={(v) => setBurndownBasis(v as "days" | "stories" | "epicEst")}
-              />
-            </div>
-          </div>
+          {/* Per-chart basis toggle relocated — a single shared picker
+           *  lives in the "Epic / Initiative Scope" header row above the
+           *  Insights charts and writes to both burndown + burnup basis
+           *  state, so the two charts now move together (matches the
+           *  planner's mental model of "one health calc, one scope"). */}
         </div>
         <div
           className={cn(
-            // Burndown chart + legend split. Legend column sized so epic
-            // titles read most of the way through before truncating
-            // (hover gives the full title via tooltip).
-            "grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_24rem] md:items-stretch",
+            // Burndown chart (full-width). Legend column removed per
+            // planner request — the Insights "Epic / Initiative Scope"
+            // picker above already drives which epics are visible, so a
+            // redundant on-chart legend just consumed real estate.
+            "grid min-h-0 flex-1 md:grid-cols-1 md:items-stretch",
             INSIGHTS_CHART_GRID_GAP,
             INSIGHTS_CONTENT_HEIGHT,
           )}
@@ -5409,6 +5424,9 @@ export function MonthAnalytics({
               </div>
             )}
           </div>
+          {/* Right-side burndown legend (initiative + epic list) removed —
+           *  scope picker above is the canonical filter surface now. */}
+          {false ? (
           <div className={`relative ${INSIGHTS_CONTENT_HEIGHT}`}>
             <div
               ref={burndownLegendScrollRef}
@@ -5518,6 +5536,7 @@ export function MonthAnalytics({
               <ChevronDown className="size-3.5" />
             </button>
           </div>
+          ) : null}
         </div>
       </article>
       </div>
@@ -6023,11 +6042,11 @@ export function MonthAnalytics({
         </div>
         <div
           className={cn(
-            // Match the Burndown + Burnup legend column width (24rem)
-            // so all three Q-insights charts share the same plot
-            // rectangle width. Without this CFD's plot area is ~14rem
-            // wider than the other two and the X-axes don't line up.
-            "grid md:grid-cols-[minmax(0,1fr)_24rem] md:items-stretch",
+            // CFD is full-width now — Burndown + Burnup dropped their
+            // right-side legends, so there's no longer a matching
+            // 24rem column to align to. The CFD legend was relocated
+            // to a horizontal row beneath the chart (see below).
+            "grid md:grid-cols-1 md:items-stretch",
             INSIGHTS_CHART_GRID_GAP,
             INSIGHTS_CHART_BAND,
           )}
@@ -6103,45 +6122,50 @@ export function MonthAnalytics({
               <div className="flex h-full items-center justify-center text-[12px] text-slate-500">No month days to chart.</div>
             )}
           </div>
-          <div className={INSIGHTS_SCROLL_SIDE}>
-            <button
-              type="button"
-              onClick={showAllCfdKeys}
-              className={cn(
-                "mb-1 w-full rounded-md px-1 py-1 text-left font-medium transition",
-                isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
-                allCfdKeysSelected
-                  ? "text-slate-900 hover:bg-slate-200/70"
-                  : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
-              )}
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <Layers className="size-3.5" aria-hidden />
-                All
-              </span>
-            </button>
-            {[...CFD_FLOW_SEGMENTS].reverse().map(({ key, label, color }) => {
-              const on = cfdVisibleKeys.includes(key);
-              return (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => toggleCfdKey(key)}
-                  className={cn(
-                    "mb-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left transition",
-                    isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
-                    on ? "text-slate-900 hover:bg-slate-200/70" : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
-                  )}
-                >
-                  <span
-                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-[2px] ring-1 ring-black/10"
-                    style={{ backgroundColor: color, opacity: on ? 1 : 0.35 }}
-                  />
-                  {label}
-                </button>
-              );
-            })}
-          </div>
+        </div>
+        {/* CFD legend — horizontal row beneath the chart. Was a 24rem
+         *  right column; relocated per planner request so the chart can
+         *  use the full width and the legend reads as a familiar
+         *  Recharts-style chip row. Wraps on narrow viewports. */}
+        <div
+          className={cn(
+            "mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-1",
+            isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
+          )}
+        >
+          <button
+            type="button"
+            onClick={showAllCfdKeys}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 font-medium transition",
+              allCfdKeysSelected
+                ? "text-slate-900 hover:bg-slate-200/70"
+                : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
+            )}
+          >
+            <Layers className="size-3.5" aria-hidden />
+            All
+          </button>
+          {[...CFD_FLOW_SEGMENTS].reverse().map(({ key, label, color }) => {
+            const on = cfdVisibleKeys.includes(key);
+            return (
+              <button
+                key={label}
+                type="button"
+                onClick={() => toggleCfdKey(key)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 transition",
+                  on ? "text-slate-900 hover:bg-slate-200/70" : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
+                )}
+              >
+                <span
+                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-[2px] ring-1 ring-black/10"
+                  style={{ backgroundColor: color, opacity: on ? 1 : 0.35 }}
+                />
+                {label}
+              </button>
+            );
+          })}
         </div>
       </article>
       </div>
@@ -6684,39 +6708,17 @@ export function MonthAnalytics({
                   );
                 })() : null}
               </h3>
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Per-chart basis toggle — same shape as the burndown
-                 *  card. Initialized from the popover's global basis at
-                 *  mount; independent thereafter. */}
-                <div className="min-w-[18rem]">
-                  <ToggleGroup
-                    label=""
-                    options={
-                      selectedEpicOption != null
-                        ? [
-                            { value: "epicEst", label: "Epic Est (d)", icon: Folder },
-                            { value: "days", label: "Σ | Child Est (d)", icon: BookOpen },
-                            { value: "stories", label: "Stories Completed (%)", icon: CheckCircle2 },
-                          ]
-                        : [
-                            { value: "epicEst", label: "Σ | Epic Est (d)", icon: Folder },
-                            { value: "days", label: "Σ | Child Est (d)", icon: BookOpen },
-                            { value: "stories", label: "Stories Completed (%)", icon: CheckCircle2 },
-                          ]
-                    }
-                    value={burnupBasis}
-                    onChange={(v) => setBurnupBasis(v as "days" | "stories" | "epicEst")}
-                  />
-                </div>
-              </div>
+              {/* Per-chart basis toggle removed — see the shared picker in
+               *  the "Epic / Initiative Scope" header (it writes to both
+               *  burndownBasis and burnupBasis so the two charts stay
+               *  aligned to one health calc). */}
             </div>
             <div
               className={cn(
-                // Burnup chart + legend split — matches the burndown column
-                // so the two charts stay symmetric. 13rem is tight enough to
-                // pull the legend close to the chart; truncated titles get
-                // their full text via the hover tooltip.
-                "grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_24rem] md:items-stretch",
+                // Burnup chart (full-width). Legend column removed per
+                // planner request — the Insights "Epic / Initiative
+                // Scope" picker above is the canonical filter surface.
+                "grid min-h-0 flex-1 md:grid-cols-1 md:items-stretch",
                 INSIGHTS_CHART_GRID_GAP,
                 INSIGHTS_CONTENT_HEIGHT,
               )}
@@ -6943,7 +6945,9 @@ export function MonthAnalytics({
                 )}
               </div>
 
-              {/* Right-side legend — identical structure to burndown legend */}
+              {/* Right-side burnup legend (initiative + epic list) removed —
+               *  scope picker above is the canonical filter surface now. */}
+              {false ? (
               <div className={`relative ${INSIGHTS_CONTENT_HEIGHT}`}>
                 <div
                   ref={burnUpLegendScrollRef}
@@ -7045,6 +7049,7 @@ export function MonthAnalytics({
                   <ChevronDown className="size-3.5" />
                 </button>
               </div>
+              ) : null}
             </div>
           </article>
 

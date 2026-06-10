@@ -2480,17 +2480,27 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     }
   }, []);
 
-  /** Portfolio Insights (year/quarter), month/sprint Insights, or Sprint Retro: left rail stays collapsed; no expand control. */
+  /** Month/sprint Insights and Sprint Retro: left rail stays collapsed; no
+   *  expand control.
+   *
+   *  Year/quarter Insights used to also lock the rail closed, but the
+   *  planner now wants the Initiative / Epic panel to stay open at the
+   *  same width it had on the Gantt surface — opening Insights via the
+   *  hover icon on a row should pre-scope the right panel without
+   *  yanking the left context (chip cluster, expanded children, search,
+   *  filters) out from under them. Returning to the Gantt surface used
+   *  to require re-expanding initiatives because the rail was hidden;
+   *  keeping it visible preserves `openInitiativeIds` / `openEpicIds`
+   *  visibly, not just in state. */
   const leftRailLockedClosed = useMemo(() => {
     if (topMode !== "roadmap") return false;
     return (
-      (activeTimelineMonth == null && activeQuarterViewTab === "insights") ||
-      (activeTimelineMonth != null &&
-        (activeMonthPlanTab === "month-status" ||
-          activeMonthPlanTab === "sprint-status" ||
-          activeMonthPlanTab === "sprint-retrospective"))
+      activeTimelineMonth != null &&
+      (activeMonthPlanTab === "month-status" ||
+        activeMonthPlanTab === "sprint-status" ||
+        activeMonthPlanTab === "sprint-retrospective")
     );
-  }, [topMode, activeTimelineMonth, activeQuarterViewTab, activeMonthPlanTab]);
+  }, [topMode, activeTimelineMonth, activeMonthPlanTab]);
   /** All-quarters Gantt is the only view where 4 quarter panels reflow during
    *  a width-driven slide, so the 320ms slide stutters even with debounced
    *  ResizeObserver state writes. On every other view (single quarter, month,
