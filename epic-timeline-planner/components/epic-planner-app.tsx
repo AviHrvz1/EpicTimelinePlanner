@@ -1421,6 +1421,16 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
    *  sync, same pattern as the other backlog hand-offs. */
   const [backlogIncomingTeamFilter, setBacklogIncomingTeamFilter] =
     useState<readonly string[] | null>(null);
+  /** Hand-off for the backlog's internal `roadmapFilter`. Set on
+   *  every cross-mode hand-off (donut / health / team slice click
+   *  that switches from Roadmap Planning to Backlog Workspace) so
+   *  the backlog opens scoped to the same roadmap the hero was on.
+   *  Direct backlog navigation leaves this `null` so the planner's
+   *  cross-roadmap search workflow keeps working — the table only
+   *  auto-scopes when arriving from a chart click. Identity-based
+   *  sync, same pattern as the other backlog hand-offs. */
+  const [backlogIncomingRoadmapFilter, setBacklogIncomingRoadmapFilter] =
+    useState<readonly string[] | null>(null);
   /** Same lift pattern as the status filter — emitted by the panel,
    *  passed to TimelineGrid so the Gantt only renders epics whose
    *  plan-start quarter is in the set. Empty Set = no filter. */
@@ -1574,11 +1584,16 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       handlePanelStatusFilterDerivedChange(new Set([status]));
       setBacklogIncomingStatusFilter([status]);
       setBacklogIncomingWorkItemFilter([heroScope]);
+      // Carry the current roadmap into the backlog hand-off so the
+      // table opens scoped to the same roadmap the hero was reading.
+      // Null `selectedRoadmap` means "no roadmap picked globally" —
+      // pass null through so the backlog stays workspace-wide.
+      setBacklogIncomingRoadmapFilter(selectedRoadmap ? [selectedRoadmap.id] : null);
       setTopMode("backlog");
       const scopePlural = heroScope === "initiative" ? "initiatives" : heroScope === "epic" ? "epics" : "stories";
       toast.success(`Filtered Backlog to "${label}" ${scopePlural}`);
     },
-    [topMode, heroScope, ganttStatusFilter, handlePanelStatusFilterDerivedChange],
+    [topMode, heroScope, ganttStatusFilter, handlePanelStatusFilterDerivedChange, selectedRoadmap],
   );
   // (`handleHealthDistributionSliceClick` and `handleTeamProgressRowClick`
   // are declared further below — they depend on `handleHealthFilterChange`
@@ -1703,11 +1718,15 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       handleHealthFilterChange(new Set([verdict]));
       setBacklogIncomingHealthFilter([verdict]);
       setBacklogIncomingWorkItemFilter([heroScope]);
+      // Same roadmap carry-over as the Work Progress cross-mode
+      // hand-off above — keep the backlog scoped to the currently
+      // selected roadmap on chart-click navigation.
+      setBacklogIncomingRoadmapFilter(selectedRoadmap ? [selectedRoadmap.id] : null);
       setTopMode("backlog");
       const scopePlural = heroScope === "initiative" ? "initiatives" : heroScope === "epic" ? "epics" : "stories";
       toast.success(`Filtered Backlog to "${label}" ${scopePlural}`);
     },
-    [topMode, heroScope, healthFilter, handleHealthFilterChange],
+    [topMode, heroScope, healthFilter, handleHealthFilterChange, selectedRoadmap],
   );
   /**
    * Team Progress row click — same mode × scope routing as the donut
@@ -1751,13 +1770,16 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       handlePanelTeamFilterDerivedChange(next);
       setBacklogIncomingTeamFilter(Array.from(next));
       setBacklogIncomingWorkItemFilter(next.size === 0 ? [] : [heroScope]);
+      // Carry the roadmap on chart-click hand-off (same as the
+      // Work Progress / Health Distribution branches).
+      setBacklogIncomingRoadmapFilter(selectedRoadmap ? [selectedRoadmap.id] : null);
       setTopMode("backlog");
       if (!wasSelected) {
         const scopePlural = heroScope === "initiative" ? "initiatives" : heroScope === "epic" ? "epics" : "stories";
         toast.success(`Filtered Backlog to ${label} ${scopePlural}`);
       }
     },
-    [topMode, heroScope, ganttTeamFilter, handlePanelTeamFilterDerivedChange],
+    [topMode, heroScope, ganttTeamFilter, handlePanelTeamFilterDerivedChange, selectedRoadmap],
   );
   const layoutRef = useRef<HTMLDivElement | null>(null);
   /** When true, we hid the initiative rail for insights/retro; restore on leaving those surfaces. */
@@ -2431,6 +2453,22 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       }
     },
     [],
+  );
+  /** Cross-mode jump to a specific sprint's kanban view — wired into
+   *  the backlog's Sprint column cell. Resolves the year-sprint
+   *  number to a calendar month (via `monthLaneFromGlobalSprint`),
+   *  flips to Roadmap Planning, opens the month plan, and seeds the
+   *  sprint kanban tab + active year-sprint so the board lands on
+   *  the exact sprint the planner clicked. */
+  const navigateToSprint = useCallback(
+    (globalSprint: number) => {
+      const { month } = monthLaneFromGlobalSprint(globalSprint);
+      setTopMode("roadmap");
+      handleSprintModeChange(true, month, globalSprint);
+      setActiveMonthPlanTab("sprint-kanban");
+      setActiveSprintTab("kanban");
+    },
+    [handleSprintModeChange],
   );
 
   const handleMonthPlanTabChange = useCallback((tab: MonthPlanSurfaceTab) => {
@@ -7093,6 +7131,8 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 externalHealthFilter={backlogIncomingHealthFilter}
                 externalWorkItemFilter={backlogIncomingWorkItemFilter}
                 externalTeamFilter={backlogIncomingTeamFilter}
+                externalRoadmapFilter={backlogIncomingRoadmapFilter}
+                onOpenSprint={navigateToSprint}
                 onOpenInitiative={backlogOpenInitiative}
                 onOpenEpic={backlogOpenEpic}
                 onOpenStory={backlogOpenStory}

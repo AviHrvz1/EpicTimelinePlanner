@@ -163,6 +163,11 @@ type BacklogPlanningPanelProps = {
   onOpenInitiative: (initiativeId: string) => void;
   onOpenEpic: (epicId: string) => void;
   onOpenStory: (storyId: string) => void;
+  /** Optional: switch the app to the sprint kanban for the given
+   *  global year-sprint number. Wired into the Sprint column cell
+   *  so clicking the chip jumps to that sprint's board. Omitting
+   *  this prop preserves the legacy click-to-edit behaviour. */
+  onOpenSprint?: (globalSprint: number) => void;
   onCreateInitiativeQuick: (title: string, roadmapId?: string | null) => Promise<string | void>;
   /** Optional roadmap operations exposed by the parent. When undefined, the
    *  backlog hides its create-roadmap/edit-roadmap-name affordances. Years
@@ -260,6 +265,15 @@ type BacklogPlanningPanelProps = {
    *  planner clicks a Team Progress row on the hero while on Backlog.
    *  Identity-based sync. */
   externalTeamFilter?: readonly string[] | null;
+  /** Hand-off into the panel's internal `roadmapFilter`. Set on every
+   *  cross-mode hand-off (a hero chart-click that switches mode from
+   *  Roadmap Planning to Backlog) so the table opens scoped to the
+   *  same roadmap the hero was reading. Direct backlog navigation
+   *  passes `null` so the planner's cross-roadmap search workflow
+   *  keeps working — the column filter still wins when the planner
+   *  picks a different scope manually. Identity-based sync, same
+   *  pattern as the other external filters. */
+  externalRoadmapFilter?: readonly string[] | null;
 };
 
 type OptionItem = { id: string; label: string };
@@ -4397,6 +4411,11 @@ type BacklogStoryRowCtx = {
 
   // ---- always-latest callbacks (wrappers around refs in the parent) ----
   onOpenStory: (storyId: string) => void;
+  /** Optional: navigate to the sprint kanban for a global sprint
+   *  number. Used by the Sprint column cell so clicking the chip
+   *  jumps to that sprint's board. When omitted, the cell's click
+   *  falls back to the edit popover (legacy behaviour). */
+  onOpenSprint?: (globalSprint: number) => void;
   patchStoryInline: (storyId: string, patch: Record<string, unknown>) => Promise<unknown>;
   setEditingStoryTitle: (next: { id: string; value: string } | null) => void;
   setEditingStoryCell: (updater: any) => void;
@@ -4639,21 +4658,47 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
                 ><Check className="size-3.5" /></button>
               </span>
             ) : (
-              <button
-                type="button"
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  ctx.beginStoryCellEdit(
-                    row.storyId,
-                    "sprint",
-                    row.storySprintNum == null ? "unscheduled" : String(row.storySprintNum),
-                  );
-                }}
-                className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
-              >
-                <Flag className="size-3.5 shrink-0 text-rose-500" aria-hidden />
-                {row.storySprintLabel}
-              </button>
+              (() => {
+                // Sprint chip doubles as a link when the story is
+                // scheduled AND the parent wired `onOpenSprint`. Use
+                // the link visual treatment (indigo + underline) for
+                // that case so the planner can tell at a glance
+                // which sprint chips are navigable vs which open the
+                // pick-a-sprint popover. Unscheduled / fallback rows
+                // stay neutral so they don't look like dead links.
+                const navigates = row.storySprintNum != null && Boolean(ctx.onOpenSprint);
+                return (
+                  <button
+                    type="button"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      if (navigates) {
+                        ctx.onOpenSprint!(row.storySprintNum!);
+                      } else {
+                        ctx.beginStoryCellEdit(
+                          row.storyId,
+                          "sprint",
+                          row.storySprintNum == null ? "unscheduled" : String(row.storySprintNum),
+                        );
+                      }
+                    }}
+                    title={
+                      navigates
+                        ? `Open sprint kanban for ${row.storySprintLabel}`
+                        : "Click to set the sprint"
+                    }
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded px-1 py-0.5 transition",
+                      navigates
+                        ? "text-indigo-600 underline decoration-indigo-300 decoration-1 underline-offset-2 hover:bg-indigo-50 hover:text-indigo-700 hover:decoration-indigo-500"
+                        : "hover:bg-slate-100",
+                    )}
+                  >
+                    <Flag className={cn("size-3.5 shrink-0", navigates ? "text-indigo-500" : "text-rose-500")} aria-hidden />
+                    {row.storySprintLabel}
+                  </button>
+                );
+              })()
             )}
           </span>
         ),
@@ -5012,6 +5057,7 @@ export function BacklogPlanningPanel({
   onOpenInitiative,
   onOpenEpic,
   onOpenStory,
+  onOpenSprint,
   onCreateInitiativeQuick,
   onCreateRoadmapQuick,
   onRenameRoadmap,
@@ -5029,6 +5075,7 @@ export function BacklogPlanningPanel({
   externalHealthFilter,
   externalWorkItemFilter,
   externalTeamFilter,
+  externalRoadmapFilter,
 }: BacklogPlanningPanelProps) {
   // Render-time diagnostic: count + time every commit to help spot whether
   // slowness is the mount itself, re-renders from a parent, or some heavy
@@ -5118,6 +5165,16 @@ export function BacklogPlanningPanel({
     setTeamFilter([...externalTeamFilter]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalTeamFilter]);
+  // Identity-based sync for the cross-mode roadmap hand-off (hero
+  // chart-click → switch to Backlog with the current roadmap
+  // pre-applied). Null prop means "no incoming hand-off" — leave
+  // the column filter alone so the planner's manual cross-roadmap
+  // pick stays put.
+  useEffect(() => {
+    if (externalRoadmapFilter == null) return;
+    setRoadmapFilter([...externalRoadmapFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalRoadmapFilter]);
   const [sortBy, setSortBy] = useState<BacklogSortBy>("titleAsc");
   // Per-column header sort: overrides initiative ordering when non-null. Third
   // click on the same header clears back to null so the saved-view sort wins.
@@ -6166,16 +6223,74 @@ export function BacklogPlanningPanel({
 
   /**
    * Health-verdict pass — applied AFTER the status/sprint/label
-   * filters in `filteredWithControls`. Drops every epic whose computed
-   * health verdict isn't in `healthFilter`; initiatives with no
-   * surviving epics fall out alongside. Empty `healthFilter` is a
-   * no-op. The verdict math reuses the same `computeEpicHealthVerdict`
-   * the Gantt and dashboard donut already share, so the picks always
-   * line up across surfaces.
+   * filters in `filteredWithControls`. Verdict math reuses the
+   * same helpers the hero's Health Distribution donut uses
+   * (`computeEpicHealthVerdict` / `computeInitiativeHealthVerdict`
+   * / `computeStoryHealthForBacklog`) so the picks line up across
+   * surfaces.
+   *
+   * Filter level is scope-aware via `workItemFilter` — the hero
+   * chart-click hand-off seeds it so the same Watch / At Risk
+   * pick narrows the right thing:
+   *   - workItemFilter contains "story" → drop stories whose own
+   *     sprint-burndown verdict isn't in the picked set; keep an
+   *     epic if any of its stories survives; keep an initiative if
+   *     any of its epics survives.
+   *   - workItemFilter contains "initiative" → keep an initiative
+   *     only when its initiative-level verdict matches.
+   *   - otherwise (default + "epic" scope) → drop epics whose
+   *     epic-level verdict doesn't match (the original behaviour).
+   *
+   * Without this split, "Health Distribution · Stories · Watch
+   * (12)" handed to the backlog filtered by EPIC verdict and often
+   * matched zero rows because the 12 watch-stories sat under
+   * on-track epics.
    */
   const filteredWithHealth = useMemo(() => {
     if (healthFilter.length === 0) return filteredWithControls;
     const wantedStatuses = new Set(healthFilter);
+    // Story-level by default: when the planner picks via the Health
+    // column dropdown without an explicit scope hand-off from the
+    // hero, they're filtering rows in a story-centric table — so
+    // match individual stories first and cascade up. The hero's
+    // cross-mode hand-off still sets `workItemFilter` to its scope,
+    // so picking "At Risk" on the Health Distribution donut at Epic
+    // scope still filters epic verdicts directly.
+    const scope: "story" | "initiative" | "epic" = workItemFilter.includes("initiative")
+      ? "initiative"
+      : workItemFilter.includes("epic")
+        ? "epic"
+        : "story";
+    if (scope === "story") {
+      return filteredWithControls
+        .map((initiative) => {
+          const epics = (initiative.epics ?? [])
+            .map((epic) => {
+              const stories = (epic.userStories ?? []).filter((story) => {
+                const v = computeStoryHealthForBacklog(
+                  story,
+                  epic,
+                  Number(initiative.year),
+                );
+                return v != null && wantedStatuses.has(v.status);
+              });
+              return { ...epic, userStories: stories };
+            })
+            .filter((epic) => (epic.userStories ?? []).length > 0);
+          return { ...initiative, epics };
+        })
+        .filter((initiative) => (initiative.epics ?? []).length > 0);
+    }
+    if (scope === "initiative") {
+      return filteredWithControls.filter((initiative) => {
+        const v = computeInitiativeHealthVerdict(
+          initiative,
+          Number(initiative.year),
+          progressBasis,
+        );
+        return v != null && wantedStatuses.has(v.status);
+      });
+    }
     return filteredWithControls
       .map((initiative) => {
         const epics = (initiative.epics ?? []).filter((epic) => {
@@ -6189,7 +6304,7 @@ export function BacklogPlanningPanel({
         return { ...initiative, epics };
       })
       .filter((initiative) => (initiative.epics ?? []).length > 0);
-  }, [filteredWithControls, healthFilter, progressBasis]);
+  }, [filteredWithControls, healthFilter, progressBasis, workItemFilter]);
 
   type SearchSuggestionKind = "initiative" | "epic" | "story" | "assignee";
   const suggestions = useMemo<Array<{ label: string; kind: SearchSuggestionKind }>>(() => {
@@ -7474,6 +7589,7 @@ export function BacklogPlanningPanel({
   // stay stable for memoization while always calling the latest impl.
   const storyRowRefs = useRef({
     onOpenStory,
+    onOpenSprint,
     patchStoryInline,
     setEditingStoryTitle,
     setEditingStoryCell,
@@ -7494,6 +7610,7 @@ export function BacklogPlanningPanel({
   });
   storyRowRefs.current = {
     onOpenStory,
+    onOpenSprint,
     patchStoryInline,
     setEditingStoryTitle,
     setEditingStoryCell,
@@ -7519,6 +7636,7 @@ export function BacklogPlanningPanel({
     storyLabelSuggestions,
     assignableSprintsForYear: (year) => storyRowRefs.current.assignableSprintsForYear(year),
     onOpenStory: (id) => storyRowRefs.current.onOpenStory(id),
+    onOpenSprint: (globalSprint) => storyRowRefs.current.onOpenSprint?.(globalSprint),
     patchStoryInline: (id, patch) => storyRowRefs.current.patchStoryInline(id, patch as any),
     setEditingStoryTitle: (next) => storyRowRefs.current.setEditingStoryTitle(next),
     setEditingStoryCell: (updater) => storyRowRefs.current.setEditingStoryCell(updater),
