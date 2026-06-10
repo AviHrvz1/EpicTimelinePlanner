@@ -7,6 +7,8 @@ import {
   ArrowUpDown,
   Bookmark,
   CalendarDays,
+  AlertOctagon,
+  AlertTriangle,
   CalendarOff,
   CalendarRange,
   Check,
@@ -17,8 +19,10 @@ import {
   ChevronsDown,
   ChevronsUp,
   ChevronUp,
+  Circle,
   Eraser,
   ExternalLink,
+  Eye,
   Filter,
   Flag,
   Folder,
@@ -65,7 +69,7 @@ import { ROW_ESTIMATED_HEIGHTS, type RowDescriptor } from "@/components/backlog/
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AssigneeCombobox } from "@/components/ui/assignee-combobox";
 import { EditRowIconButton } from "@/components/ui/edit-row-icon-button";
-import { PriorityPill, PriorityPopover, type Priority } from "@/components/ui/priority-picker";
+import { getPriorityIcon, PRIORITY_VALUES, PriorityPill, PriorityPopover, priorityTone, type Priority } from "@/components/ui/priority-picker";
 import { TableColumnDragGrip } from "@/components/ui/table-column-drag-grip";
 import { resolveAssigneeAvatar, UserAvatar } from "@/components/ui/user-avatar";
 import { TeamAvatar } from "@/components/ui/team-avatar";
@@ -3258,12 +3262,59 @@ function ColumnFilterDropdown({
  * quarter, work-item kind, etc.). Reuses the same per-row layout regardless
  * of the column so all popovers read as the same control.
  */
+function BacklogDateRangeFilter({
+  value,
+  onChange,
+}: {
+  value: { from: string | null; to: string | null };
+  onChange: (next: { from: string | null; to: string | null }) => void;
+}) {
+  // Two `<input type="date">` pickers + a "Clear range" affordance.
+  // Stored as `yyyy-MM-dd` strings (the native input's own format)
+  // so React's value prop stays controlled without any Date /
+  // timezone gymnastics. Conversion to real Date instants happens
+  // once at filter-time inside `groupedStoryRows`.
+  return (
+    <div className="space-y-2 p-1">
+      <label className="block text-[12px] font-medium text-slate-700">
+        From
+        <input
+          type="date"
+          value={value.from ?? ""}
+          onChange={(e) => onChange({ ...value, from: e.target.value || null })}
+          className="mt-0.5 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-[13px] text-slate-900 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-300"
+        />
+      </label>
+      <label className="block text-[12px] font-medium text-slate-700">
+        To
+        <input
+          type="date"
+          value={value.to ?? ""}
+          onChange={(e) => onChange({ ...value, to: e.target.value || null })}
+          className="mt-0.5 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-[13px] text-slate-900 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-300"
+        />
+      </label>
+      {value.from || value.to ? (
+        <button
+          type="button"
+          onClick={() => onChange({ from: null, to: null })}
+          className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[12px] font-medium text-slate-600 transition hover:bg-slate-100"
+        >
+          Clear range
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function ColumnFilterCheckList({
   options,
   selected,
   onChange,
   emptyHint = "All",
   getIcon,
+  searchable = false,
+  searchPlaceholder = "Search…",
 }: {
   options: OptionItem[];
   selected: string[];
@@ -3274,15 +3325,49 @@ function ColumnFilterCheckList({
    *  Work Item kind filter). When provided, icons render between the
    *  checkbox and the label. */
   getIcon?: (id: string) => ReactNode;
+  /** When true, an autocomplete-style search input appears at the top
+   *  of the dropdown. Options are filtered by case-insensitive
+   *  substring match against `label` AND `id` — typing "moe" matches
+   *  "Mobile Eng" by name as well as a hypothetical "moe-team" id.
+   *  Already-selected options always stay visible regardless of the
+   *  query so the planner can see + uncheck them without having to
+   *  re-type the matching prefix. */
+  searchable?: boolean;
+  /** Placeholder for the search input. Defaults to "Search…". */
+  searchPlaceholder?: string;
 }) {
+  const [query, setQuery] = useState("");
   const allSelected = selected.length === 0;
   function toggle(id: string) {
     onChange(
       selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id],
     );
   }
+  const visibleOptions = (() => {
+    if (!searchable) return options;
+    const needle = query.trim().toLowerCase();
+    if (!needle) return options;
+    const selectedSet = new Set(selected);
+    return options.filter((option) => {
+      if (selectedSet.has(option.id)) return true;
+      const label = option.label.toLowerCase();
+      const id = option.id.toLowerCase();
+      return label.includes(needle) || id.includes(needle);
+    });
+  })();
   return (
     <div className="space-y-0.5">
+      {searchable ? (
+        <div className="px-1 pb-1">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={searchPlaceholder}
+            className="w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[12.5px] text-slate-900 outline-none placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:ring-1 focus:ring-indigo-300"
+          />
+        </div>
+      ) : null}
       <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition hover:bg-slate-50">
         <input
           type="checkbox"
@@ -3293,7 +3378,12 @@ function ColumnFilterCheckList({
         <span className="font-medium text-slate-700">{emptyHint}</span>
       </label>
       <div className="h-px bg-slate-100" />
-      {options.map((option) => {
+      {visibleOptions.length === 0 ? (
+        <div className="px-2 py-2 text-center text-[12px] italic text-slate-400">
+          No matches
+        </div>
+      ) : null}
+      {visibleOptions.map((option) => {
         const checked = selected.includes(option.id);
         const icon = getIcon?.(option.id) ?? null;
         return (
@@ -4996,6 +5086,23 @@ export function BacklogPlanningPanel({
    *  ticked in the Parent picker. A row matches if either its initiativeId or
    *  its epicId is in the set. Empty array = no filter. */
   const [parentFilter, setParentFilter] = useState<string[]>([]);
+  /** Story priority filter — holds the picked priority codes (P0..P3).
+   *  Empty array = no filter. Stories with `null` priority are
+   *  excluded the moment any priority is picked. */
+  const [priorityFilter, setPriorityFilter] = useState<string[]>([]);
+  /** Date range filters for the Start / End columns. Each is a pair of
+   *  ISO date strings (`yyyy-MM-dd`) or null. The filter accepts a row
+   *  when its `workPlanStart` / `workPlanEnd` is on-or-after `from`
+   *  AND on-or-before `to`. Either bound can be null to make the range
+   *  one-sided. Both null = no filter active. */
+  const [startDateRangeFilter, setStartDateRangeFilter] = useState<{
+    from: string | null;
+    to: string | null;
+  }>({ from: null, to: null });
+  const [endDateRangeFilter, setEndDateRangeFilter] = useState<{
+    from: string | null;
+    to: string | null;
+  }>({ from: null, to: null });
   const [workItemFilter, setWorkItemFilter] = useState<WorkItemKindFilter[]>([]);
   // Identity-based sync for the hero scope selector's `workItemFilter`
   // and `teamFilter` hand-offs. Placed AFTER the setters they call so
@@ -5980,7 +6087,11 @@ export function BacklogPlanningPanel({
 
   const filteredWithControls = useMemo(() => {
     const statusRank: Record<string, number> = { todo: 0, inProgress: 1, review: 2, done: 3 };
-    const storyFilterActive = statusFilter.length > 0 || sprintFilter.length > 0 || labelFilter.length > 0;
+    const storyFilterActive =
+      statusFilter.length > 0 ||
+      sprintFilter.length > 0 ||
+      labelFilter.length > 0 ||
+      priorityFilter.length > 0;
     return filtered
       .map((initiative) => {
         const originalHadEpics = (initiative.epics ?? []).length > 0;
@@ -6007,6 +6118,14 @@ export function BacklogPlanningPanel({
                 if (labelFilter.length > 0) {
                   const labs = parseStoryLabels(story.labels);
                   if (!labelFilter.some((lf) => labs.includes(lf))) return false;
+                }
+                if (priorityFilter.length > 0) {
+                  // Priority is a string like "P0".."P3" or null. The
+                  // moment any priority is picked, rows with no value
+                  // get dropped — same semantics as the other
+                  // category filters above.
+                  const p = (story.priority ?? "").trim().toUpperCase();
+                  if (!p || !priorityFilter.includes(p)) return false;
                 }
                 return true;
               })
@@ -6043,7 +6162,7 @@ export function BacklogPlanningPanel({
         return epics.length > 0;
       })
       .map(({ initiative, epics }) => ({ ...initiative, epics }));
-  }, [filtered, statusFilter, sprintFilter, labelFilter, sortBy]);
+  }, [filtered, statusFilter, sprintFilter, labelFilter, priorityFilter, sortBy]);
 
   /**
    * Health-verdict pass — applied AFTER the status/sprint/label
@@ -6208,6 +6327,18 @@ export function BacklogPlanningPanel({
     // rows that still need to be placed.
     { id: "scheduled", label: "Scheduled" },
     { id: "unscheduled", label: "Unscheduled" },
+  ];
+  // Sprint-burndown verdicts the Health column paints. Same five
+  // labels the hero's Health Distribution donut and the Roadmap
+  // Health popover use, so a planner who picks "At Risk" on the
+  // donut and opens the backlog sees the same chip text on the
+  // column dropdown.
+  const healthOptions: OptionItem[] = [
+    { id: "done", label: "Done" },
+    { id: "onTrack", label: "On Track" },
+    { id: "watch", label: "Watch" },
+    { id: "atRisk", label: "At Risk" },
+    { id: "overdue", label: "Overdue" },
   ];
   const sprintOptions: OptionItem[] = [
     { id: "unscheduled", label: "Unscheduled" },
@@ -6805,8 +6936,39 @@ export function BacklogPlanningPanel({
           };
         }),
       ),
-    );
-  }), [fullyFiltered]);
+    ).filter((row) => {
+      // Date range filters applied last so the row's already-derived
+      // workPlanStart / workPlanEnd can be matched without re-walking
+      // the story tree. Either bound can be null to make the range
+      // one-sided; null on the row's own date means "no plan window
+      // yet" — those rows fall out whenever a range is active.
+      if (startDateRangeFilter.from || startDateRangeFilter.to) {
+        const t = row.workPlanStart?.getTime();
+        if (t == null) return false;
+        if (startDateRangeFilter.from) {
+          const fromT = new Date(`${startDateRangeFilter.from}T00:00:00`).getTime();
+          if (Number.isFinite(fromT) && t < fromT) return false;
+        }
+        if (startDateRangeFilter.to) {
+          const toT = new Date(`${startDateRangeFilter.to}T23:59:59`).getTime();
+          if (Number.isFinite(toT) && t > toT) return false;
+        }
+      }
+      if (endDateRangeFilter.from || endDateRangeFilter.to) {
+        const t = row.workPlanEnd?.getTime();
+        if (t == null) return false;
+        if (endDateRangeFilter.from) {
+          const fromT = new Date(`${endDateRangeFilter.from}T00:00:00`).getTime();
+          if (Number.isFinite(fromT) && t < fromT) return false;
+        }
+        if (endDateRangeFilter.to) {
+          const toT = new Date(`${endDateRangeFilter.to}T23:59:59`).getTime();
+          if (Number.isFinite(toT) && t > toT) return false;
+        }
+      }
+      return true;
+    });
+  }), [fullyFiltered, startDateRangeFilter, endDateRangeFilter]);
 
   // Sort the story-row list by the user's column choice. The bucket renderer preserves iteration order
   // when filling groups, so sorting here causes rows to appear in the chosen order both flat AND inside
@@ -6823,6 +6985,25 @@ export function BacklogPlanningPanel({
           return dir * a.storyTitle.localeCompare(b.storyTitle);
         case "status":
           return dir * ((STATUS_RANK[a.storyStatus] ?? 99) - (STATUS_RANK[b.storyStatus] ?? 99));
+        case "health": {
+          // Best → worst ascending: done, onTrack tied at the top
+          // (both are "healthy"), then watch, atRisk, overdue.
+          // Null verdicts (story has no sprint / no estimate / no
+          // verdict computable) sort last in both directions so
+          // empty rows don't claim the leading slots.
+          const HEALTH_RANK: Record<string, number> = {
+            done: 0,
+            onTrack: 0,
+            watch: 1,
+            atRisk: 2,
+            overdue: 3,
+          };
+          const av = a.storyHealth?.status;
+          const bv = b.storyHealth?.status;
+          const ar = av != null ? HEALTH_RANK[av] ?? 99 : 99;
+          const br = bv != null ? HEALTH_RANK[bv] ?? 99 : 99;
+          return dir * (ar - br);
+        }
         case "team":
           return dir * (a.teamId ?? "").localeCompare(b.teamId ?? "");
         case "assignee":
@@ -10571,6 +10752,54 @@ export function BacklogPlanningPanel({
                             options={statusOptions}
                             selected={statusFilter}
                             onChange={setStatusFilter}
+                            getIcon={(id) => {
+                              switch (id) {
+                                case "todo":
+                                  return <Circle className="size-3.5 text-slate-400" strokeWidth={2.2} />;
+                                case "inProgress":
+                                  return <PlayCircle className="size-3.5 text-sky-500" strokeWidth={2.2} />;
+                                case "review":
+                                  return <Eye className="size-3.5 text-amber-500" strokeWidth={2.2} />;
+                                case "done":
+                                  return <CheckCircle2 className="size-3.5 text-emerald-500" strokeWidth={2.2} />;
+                                case "scheduled":
+                                  return <CalendarRange className="size-3.5 text-indigo-500" strokeWidth={2.2} />;
+                                case "unscheduled":
+                                  return <CalendarOff className="size-3.5 text-slate-400" strokeWidth={2.2} />;
+                                default:
+                                  return null;
+                              }
+                            }}
+                          />
+                        </ColumnFilterDropdown>
+                      );
+                    } else if (key === "health") {
+                      filterSlot = (
+                        <ColumnFilterDropdown
+                          title="Filter Health"
+                          isActive={healthFilter.length > 0}
+                          onClear={() => setHealthFilter([])}
+                        >
+                          <ColumnFilterCheckList
+                            options={healthOptions}
+                            selected={[...healthFilter]}
+                            onChange={(next) => setHealthFilter(next as HealthStatus[])}
+                            getIcon={(id) => {
+                              switch (id) {
+                                case "done":
+                                  return <CheckCheck className="size-3.5 text-emerald-600" strokeWidth={2.4} />;
+                                case "onTrack":
+                                  return <Check className="size-3.5 text-emerald-600" strokeWidth={2.4} />;
+                                case "watch":
+                                  return <AlertTriangle className="size-3.5 text-amber-600" strokeWidth={2.2} />;
+                                case "atRisk":
+                                  return <AlertTriangle className="size-3.5 text-rose-600" strokeWidth={2.2} />;
+                                case "overdue":
+                                  return <AlertOctagon className="size-3.5 text-rose-700" strokeWidth={2.2} />;
+                                default:
+                                  return null;
+                              }
+                            }}
                           />
                         </ColumnFilterDropdown>
                       );
@@ -10585,6 +10814,13 @@ export function BacklogPlanningPanel({
                             options={sprintOptions}
                             selected={sprintFilter}
                             onChange={setSprintFilter}
+                            getIcon={(id) =>
+                              id === "unscheduled" ? (
+                                <CalendarOff className="size-3.5 text-slate-400" strokeWidth={2.2} />
+                              ) : (
+                                <Flag className="size-3.5 text-amber-500" strokeWidth={2.2} />
+                              )
+                            }
                           />
                         </ColumnFilterDropdown>
                       );
@@ -10601,6 +10837,9 @@ export function BacklogPlanningPanel({
                             selected={teamFilter}
                             onChange={setTeamFilter}
                             emptyHint="All teams"
+                            getIcon={(id) => <TeamAvatar slug={id} sizePx={14} />}
+                            searchable
+                            searchPlaceholder="Search teams…"
                           />
                         </ColumnFilterDropdown>
                       );
@@ -10617,10 +10856,23 @@ export function BacklogPlanningPanel({
                             selected={assigneeFilter}
                             onChange={setAssigneeFilter}
                             emptyHint="All assignees"
+                            getIcon={(name) => {
+                              const resolved = resolveAssigneeAvatar(name, workspaceDirectoryUsers ?? null);
+                              return <UserAvatar name={resolved.name} image={resolved.image} size={14} />;
+                            }}
+                            searchable
+                            searchPlaceholder="Search people…"
                           />
                         </ColumnFilterDropdown>
                       );
                     } else if (key === "parent") {
+                      // Initiative ids vs epic ids share the same option
+                      // list — split visually via the parent icon so the
+                      // planner can distinguish them at a glance without
+                      // having to read the label prefix.
+                      const parentInitiativeIds = new Set(
+                        parentFilterTree.map((t) => t.initiativeId),
+                      );
                       filterSlot = (
                         <ColumnFilterDropdown
                           title="Filter Parent"
@@ -10640,6 +10892,15 @@ export function BacklogPlanningPanel({
                             selected={parentFilter}
                             onChange={setParentFilter}
                             emptyHint="All parents"
+                            getIcon={(id) =>
+                              parentInitiativeIds.has(id) ? (
+                                <Zap className="size-3.5 text-violet-500" strokeWidth={2.2} />
+                              ) : (
+                                <Folder className="size-3.5 text-indigo-500" strokeWidth={2.2} />
+                              )
+                            }
+                            searchable
+                            searchPlaceholder="Search initiatives / epics…"
                           />
                         </ColumnFilterDropdown>
                       );
@@ -10672,6 +10933,9 @@ export function BacklogPlanningPanel({
                             selected={roadmapFilter}
                             onChange={setRoadmapFilter}
                             emptyHint="All roadmaps"
+                            getIcon={() => <MapIcon className="size-3.5 text-indigo-500" strokeWidth={2.2} />}
+                            searchable
+                            searchPlaceholder="Search roadmaps…"
                           />
                         </ColumnFilterDropdown>
                       );
@@ -10700,6 +10964,62 @@ export function BacklogPlanningPanel({
                             options={quarterOptions}
                             selected={quarterFilter}
                             onChange={setQuarterFilter}
+                          />
+                        </ColumnFilterDropdown>
+                      );
+                    } else if (key === "priority") {
+                      filterSlot = (
+                        <ColumnFilterDropdown
+                          title="Filter Priority"
+                          isActive={priorityFilter.length > 0}
+                          onClear={() => setPriorityFilter([])}
+                        >
+                          <ColumnFilterCheckList
+                            options={PRIORITY_VALUES.map((p) => ({ id: p, label: p }))}
+                            selected={priorityFilter}
+                            onChange={setPriorityFilter}
+                            getIcon={(id) => (
+                              <span
+                                className={cn(
+                                  "inline-flex size-4 items-center justify-center rounded-full",
+                                  priorityTone[id] ?? "",
+                                )}
+                              >
+                                {getPriorityIcon(id, "size-2.5")}
+                              </span>
+                            )}
+                          />
+                        </ColumnFilterDropdown>
+                      );
+                    } else if (key === "startDate") {
+                      const active =
+                        startDateRangeFilter.from !== null || startDateRangeFilter.to !== null;
+                      filterSlot = (
+                        <ColumnFilterDropdown
+                          title="Filter Start"
+                          isActive={active}
+                          onClear={() => setStartDateRangeFilter({ from: null, to: null })}
+                          width={220}
+                        >
+                          <BacklogDateRangeFilter
+                            value={startDateRangeFilter}
+                            onChange={setStartDateRangeFilter}
+                          />
+                        </ColumnFilterDropdown>
+                      );
+                    } else if (key === "endDate") {
+                      const active =
+                        endDateRangeFilter.from !== null || endDateRangeFilter.to !== null;
+                      filterSlot = (
+                        <ColumnFilterDropdown
+                          title="Filter End"
+                          isActive={active}
+                          onClear={() => setEndDateRangeFilter({ from: null, to: null })}
+                          width={220}
+                        >
+                          <BacklogDateRangeFilter
+                            value={endDateRangeFilter}
+                            onChange={setEndDateRangeFilter}
                           />
                         </ColumnFilterDropdown>
                       );
