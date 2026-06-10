@@ -1011,13 +1011,17 @@ export function SprintAnalytics({
 
   return (
     <section
-      className="mb-2 flex flex-col gap-4 rounded-xl p-4"
+      // `pt-1 pl-1` (was `p-4` all-around) matches the MonthAnalytics
+      // dot-grid section — tightens the inset between the context rail
+      // and the first chart card on its right. Bottom + right padding
+      // unchanged so the dot-grid backplate still frames the charts.
+      className="mb-2 flex flex-col gap-4 rounded-xl pb-4 pt-0 pl-1 pr-4"
       style={{
         backgroundImage: "radial-gradient(circle, #cbd5e1 1px, transparent 1px)",
         backgroundSize: "24px 24px",
       }}
     >
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
       <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1 lg:h-full">
         <div className="mb-1.5 flex shrink-0 items-center justify-between gap-2">
           <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
@@ -1269,7 +1273,7 @@ export function SprintAnalytics({
         </div>
       </article>
 
-      <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:h-full lg:pl-4">
+      <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1 lg:h-full lg:pl-4">
         <div className="mb-5 flex shrink-0 items-center justify-between gap-2">
           <h3 className="ml-[48px] inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
             <Activity className="size-4 text-slate-600" />
@@ -1420,7 +1424,7 @@ export function SprintAnalytics({
       </article>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
       <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1 lg:h-full">
         <div className="mb-2.5 flex shrink-0 items-center justify-between gap-2">
           <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
@@ -1692,7 +1696,7 @@ export function SprintAnalytics({
         </div>
       </article>
 
-      <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:h-full lg:pl-4">
+      <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1 lg:h-full lg:pl-4">
         <h3 className="mb-2.5 ml-[48px] inline-flex shrink-0 items-center gap-1.5 text-[15px] font-semibold text-slate-800">
           <Activity className="size-4 text-slate-600" />
           Cumulative Flow
@@ -1847,7 +1851,7 @@ export function SprintAnalytics({
       </div>
 
       {burnUpData.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-5 lg:items-stretch">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
           {/* Sprint Load — left col (2/5 of the row, gives the per-assignee bars room to breathe) */}
           {(() => {
             const teamMode = !filterEpicTeamIds?.length || filterEpicTeamIds.length !== 1;
@@ -1914,9 +1918,9 @@ export function SprintAnalytics({
               const pctB = b.estTotal > 0 ? (b.estTotal - b.daysLeft) / b.estTotal : 1;
               return pctB - pctA;
             });
-            if (loadRows.length === 0 && !sprintLoadDrilldownAssignee) return <div className="hidden lg:block lg:col-span-2" />;
+            if (loadRows.length === 0 && !sprintLoadDrilldownAssignee) return <div className="hidden lg:block lg:col-span-1" />;
             return (
-              <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-2 lg:h-full">
+              <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1 lg:h-full">
                 <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
                   <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
                     <Users className="size-4 text-slate-600" />
@@ -2280,7 +2284,7 @@ export function SprintAnalytics({
           })()}
 
           {/* Burn Up — right col (3/5 of the row) */}
-          <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-3 lg:h-full lg:pl-4">
+          <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1 lg:h-full lg:pl-4">
             <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
               <h3 className="ml-[48px] inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
                 <Activity className="size-4 text-slate-600" />

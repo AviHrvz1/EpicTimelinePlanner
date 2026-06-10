@@ -4309,7 +4309,7 @@ export function MonthAnalytics({
             <ChartNoAxesCombined className="size-4 text-slate-500" aria-hidden />
             Epic / Initiative Scope
           </label>
-          <div className="relative min-w-[28rem] max-w-[44rem]">
+          <div className="relative min-w-0 max-w-[44rem] flex-1 basis-[20rem]">
             {/* Selected-scope glyph — Zap for initiative, Folder for epic.
              *  Hidden when scope is "All"; sits inside the input so the
              *  selected value reads "[icon] Epic Name". */}
@@ -4516,10 +4516,12 @@ export function MonthAnalytics({
            *  ToggleGroup on each of Epic Burndown + Epic Scope Burnup,
            *  collapsed into one source of truth that writes BOTH states
            *  so the two charts always carry the same basis. Pushed to the
-           *  far right via `ml-auto`; the selected-scope chips below
-           *  (when present) sit further right of it without a duplicate
-           *  ml-auto since `ml-auto` only absorbs free space once. */}
-          <div className="ml-auto min-w-[18rem] shrink-0">
+           *  far right via `ml-auto` when there's room; on narrower
+           *  viewports the parent's `flex-wrap` drops it onto a new line
+           *  inside the same banner. `basis-[18rem]` is the comfortable
+           *  width for all three labels on one row, but the picker can
+           *  shrink below that when space is tight (no `min-w` lock). */}
+          <div className="ml-auto shrink-0 basis-[18rem]">
             <ToggleGroup
               label=""
               options={

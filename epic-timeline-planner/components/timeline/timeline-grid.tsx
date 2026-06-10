@@ -9702,7 +9702,7 @@ export function TimelineGrid({
               })()
             ) : monthPlanTab === "month-status" ? (
               <DeferredMount placeholder={<MonthAnalyticsSkeleton />}>
-                <div className="p-3 sm:p-5">
+                <div className="pt-0 pb-3 pl-1 pr-3 sm:pb-5 sm:pr-5">
                   <MonthAnalytics
                     initiatives={initiatives}
                     month={activeMonth}
@@ -9724,7 +9724,7 @@ export function TimelineGrid({
                 </div>
               </DeferredMount>
             ) : (
-              <div className="p-3 sm:p-5">
+              <div className="pt-0 pb-3 pl-1 pr-3 sm:pb-5 sm:pr-5">
                 <SprintAnalytics
                   initiatives={initiatives}
                   month={sprintBoardContextMonth ?? activeMonth ?? 1}
