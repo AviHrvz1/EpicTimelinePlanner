@@ -4404,7 +4404,7 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
               {isEditingTitle ? (
                 <IsolatedTextInput
                   initial={editingTitleValue}
-                  inputClassName="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                  inputClassName="h-7 min-w-[180px] rounded-md bg-white px-2 text-[14px] ring-1 ring-slate-200 outline-none"
                   onCancel={() => ctx.setEditingStoryTitle(null)}
                   onSave={async (value) => {
                     const next = value.trim();
@@ -4416,7 +4416,7 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
                   }}
                 />
               ) : (
-                <span className="inline-flex w-full min-w-0 items-center gap-1 text-left text-[16px]">
+                <span className="inline-flex w-full min-w-0 items-center gap-1 text-left text-[14px]">
                   <button
                     type="button"
                     className="min-w-0 truncate text-left hover:underline hover:decoration-slate-400 hover:underline-offset-2"
@@ -4459,13 +4459,13 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
             {ctx.renderBacklogTeamCell(row.teamId)}
           </button>
         ),
-        year: <span className="text-center text-[16px] text-slate-700">{row.initiativeYear}</span>,
+        year: <span className="text-center text-[14px] text-slate-700">{row.initiativeYear}</span>,
         quarter: row.storyQuarterLabelValue ? (
           ctx.renderQuarterChipsCell([row.storyQuarterLabelValue])
         ) : (
-          <span className="text-center text-[16px] text-slate-400">—</span>
+          <span className="text-center text-[14px] text-slate-400">—</span>
         ),
-        month: <span className="text-center text-[16px] text-slate-700">{row.monthLabelValue}</span>,
+        month: <span className="text-center text-[14px] text-slate-700">{row.monthLabelValue}</span>,
         startDate: (
           <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
             {row.storyStartDateLabel && row.storyStartDateLabel !== "—" ? <CalendarDays className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
@@ -4510,7 +4510,7 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
             </button>
           </span>
         ) : (
-          <span className={cn("relative inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(row.storyStatus))}>
+          <span className={cn("relative inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[14px] font-normal tracking-wide", statusChip(row.storyStatus))}>
             <button
               type="button"
               onMouseDown={(event) => {
@@ -4518,7 +4518,7 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
                 ctx.beginStoryCellEdit(row.storyId, "status", row.storyStatus);
               }}
               title="Click to change status"
-              className="inline-flex items-center gap-1.5 font-semibold transition hover:ring-2 hover:ring-slate-300 focus-visible:ring-2 focus-visible:ring-slate-300 cursor-pointer rounded-full -mx-3 -my-[3px] px-3 py-[3px]"
+              className="inline-flex items-center gap-1.5 font-normal transition hover:ring-2 hover:ring-slate-300 focus-visible:ring-2 focus-visible:ring-slate-300 cursor-pointer rounded-full -mx-3 -my-[3px] px-3 py-[3px]"
             >
               {statusIcon(row.storyStatus)}
               {workflowStatusLabel(row.storyStatus as WorkflowStatus)}
@@ -4527,7 +4527,7 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
         ),
         health: renderBacklogHealthCell(row.storyHealth),
         sprint: (
-          <span className="text-center text-[16px] text-slate-700">
+          <span className="text-center text-[14px] text-slate-700">
             {isEditingCell && editingCellField === "sprint" ? (
               <span className="relative z-40 inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
                 <BacklogSprintPickEditor
@@ -4568,7 +4568,7 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
           </span>
         ),
         assignee: (
-          <span className="text-center text-[16px] text-slate-700">
+          <span className="text-center text-[14px] text-slate-700">
             {isEditingCell && editingCellField === "assignee" ? (
               // Same overlay polish as the epic-popup editors: a
               // rounded white pill with a subtle ring + shadow + nowrap
@@ -4695,12 +4695,12 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
           </div>
         ),
         estDays: (
-          <span className="text-center text-[16px] text-slate-700">
+          <span className="text-center text-[14px] text-slate-700">
             {isEditingCell && editingCellField === "estimatedDays" ? (
               <IsolatedStoryCellTextEditor
                 initial={editingCellValue}
                 inputType="number"
-                className="h-7 w-20 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                className="h-7 w-20 rounded-md bg-white px-2 text-[14px] ring-1 ring-slate-200 outline-none"
                 onCancel={ctx.cancelStoryCellEdit}
                 onSave={(value) =>
                   ctx.confirmStoryCellEdit(row.storyId, "estimatedDays", storyEditSnapshotFromGroupedRow(row), value)
@@ -4720,14 +4720,14 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
             )}
           </span>
         ),
-        epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
+        epicOriginalEst: <span className="text-center text-[14px] text-slate-400">-</span>,
         daysLeft: (
-          <span className="text-center text-[16px] text-slate-700">
+          <span className="text-center text-[14px] text-slate-700">
             {isEditingCell && editingCellField === "daysLeft" ? (
               <IsolatedStoryCellTextEditor
                 initial={editingCellValue}
                 inputType="number"
-                className="h-7 w-20 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                className="h-7 w-20 rounded-md bg-white px-2 text-[14px] ring-1 ring-slate-200 outline-none"
                 onCancel={ctx.cancelStoryCellEdit}
                 onSave={(value) =>
                   ctx.confirmStoryCellEdit(row.storyId, "daysLeft", storyEditSnapshotFromGroupedRow(row), value)
@@ -4753,7 +4753,7 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
             onClick={() => {}}
             className={backlogReadonlyProgressButtonClass}
           >
-            <div className="text-right text-[13px] tabular-nums text-slate-600">
+            <div className="text-right text-[14px] tabular-nums text-slate-600">
               <span>{progress.percent}%</span>
             </div>
             <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
@@ -7443,7 +7443,7 @@ export function BacklogPlanningPanel({
                  *  click-to-toggle button so existing click targets stay big. */}
                 {labelOverride ? (
                   <div
-                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[16px] font-normal text-slate-700"
+                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[14px] font-normal text-slate-700"
                     style={{ paddingLeft: indentPx }}
                   >
                     <button
@@ -7460,13 +7460,13 @@ export function BacklogPlanningPanel({
                     </button>
                     {leadingIcon}
                     {labelOverride}
-                    <span className="shrink-0 text-[12px] font-normal tabular-nums text-slate-500">({count})</span>
+                    <span className="shrink-0 text-[14px] font-normal tabular-nums text-slate-500">({count})</span>
                   </div>
                 ) : (
                   <button
                     type="button"
                     onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !(prev[folderId] ?? (defaultOpenOverride ?? defaultGroupExpanded)) }))}
-                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[16px] font-normal text-slate-700"
+                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[14px] font-normal text-slate-700"
                     style={{ paddingLeft: indentPx }}
                   >
                     <span className="inline-flex size-4 shrink-0 items-center justify-center">
@@ -7478,28 +7478,28 @@ export function BacklogPlanningPanel({
                     </span>
                     {leadingIcon}
                     <span className="truncate">{label}</span>
-                    <span className="shrink-0 text-[12px] font-normal tabular-nums text-slate-500">({count})</span>
+                    <span className="shrink-0 text-[14px] font-normal tabular-nums text-slate-500">({count})</span>
                   </button>
                 )}
                 {trailingAction}
               </div>
             ),
             team: renderBacklogTeamCell(null),
-            year: <span className="text-center text-[16px] text-slate-400">-</span>,
-            quarter: <span className="text-center text-[16px] text-slate-400">-</span>,
-            month: <span className="text-center text-[16px] text-slate-400">-</span>,
-            startDate: <span className="text-center text-[16px] text-slate-400">-</span>,
-            endDate: <span className="text-center text-[16px] text-slate-400">-</span>,
-            status: <span className="text-center text-[16px] text-slate-400">-</span>,
+            year: <span className="text-center text-[14px] text-slate-400">-</span>,
+            quarter: <span className="text-center text-[14px] text-slate-400">-</span>,
+            month: <span className="text-center text-[14px] text-slate-400">-</span>,
+            startDate: <span className="text-center text-[14px] text-slate-400">-</span>,
+            endDate: <span className="text-center text-[14px] text-slate-400">-</span>,
+            status: <span className="text-center text-[14px] text-slate-400">-</span>,
             health: renderBacklogHealthCell(null),
-            sprint: <span className="text-center text-[16px] text-slate-400">-</span>,
-            assignee: <span className="text-center text-[16px] text-slate-400">-</span>,
-            parent: <span className="text-[16px] text-slate-400">-</span>,
+            sprint: <span className="text-center text-[14px] text-slate-400">-</span>,
+            assignee: <span className="text-center text-[14px] text-slate-400">-</span>,
+            parent: <span className="text-[14px] text-slate-400">-</span>,
             labels: <BacklogLabelsEmptyRowSlot />,
-            estDays: <span className="text-center text-[16px] text-slate-400">-</span>,
-            epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
-            daysLeft: <span className="text-center text-[16px] text-slate-400">-</span>,
-            progress: <span className="text-center text-[16px] text-slate-400">-</span>,
+            estDays: <span className="text-center text-[14px] text-slate-400">-</span>,
+            epicOriginalEst: <span className="text-center text-[14px] text-slate-400">-</span>,
+            daysLeft: <span className="text-center text-[14px] text-slate-400">-</span>,
+            progress: <span className="text-center text-[14px] text-slate-400">-</span>,
           }, {
             team: { kind: "lock" },
             year: { kind: "lock" },
@@ -7538,7 +7538,7 @@ export function BacklogPlanningPanel({
         onClick={() => {}}
         className={backlogReadonlyProgressButtonClass}
       >
-        <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
+        <div className="flex items-center justify-between text-[14px] tabular-nums text-slate-600">
           <span>{total === 0 ? "No stories" : null}</span>
           <span>
             {finished}/{total} · {percent}%
@@ -7631,7 +7631,7 @@ export function BacklogPlanningPanel({
                   {editingParentTitle?.kind === "epic" && editingParentTitle.id === epicId ? (
                     renderParentTitleEditor("epic", epicId, epicTitle)
                   ) : (
-                    <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
+                    <span className="inline-flex w-full min-w-0 items-center gap-1 text-[14px] font-normal text-slate-900">
                       <span className="truncate">{highlightQueryInText(epicTitle, q)}</span>
                       <span
                         className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100"
@@ -7680,7 +7680,7 @@ export function BacklogPlanningPanel({
                       event.stopPropagation();
                       onJumpToRoadmapPlanning(epicTitle);
                     }}
-                    className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-sky-50 px-2 text-[11px] font-semibold text-sky-700 ring-1 ring-sky-200/80 transition hover:bg-sky-100 hover:ring-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+                    className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-sky-50 px-2 text-[14px] font-normal text-sky-700 ring-1 ring-sky-200/80 transition hover:bg-sky-100 hover:ring-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
                     aria-label={`Schedule epic "${epicTitle}" in Roadmap Planning`}
                   >
                     <ExternalLink className="size-3 text-sky-600" />
@@ -7694,14 +7694,14 @@ export function BacklogPlanningPanel({
             ) : (
               renderBacklogTeamCell(epicModelForRow?.team ?? epicRows[0]?.teamId ?? null)
             ),
-            year: <span className="text-center text-[16px] text-slate-700">{epicRows[0]?.initiativeYear ?? "-"}</span>,
+            year: <span className="text-center text-[14px] text-slate-700">{epicRows[0]?.initiativeYear ?? "-"}</span>,
             quarter: renderQuarterChipsCell(
               quartersForMonthRange(
                 epicModelForRow?.planStartMonth ?? null,
                 epicModelForRow?.planEndMonth ?? null,
               ),
             ),
-            month: <span className="text-center text-[16px] text-slate-700">{epicRows[0]?.monthLabelValue ?? "-"}</span>,
+            month: <span className="text-center text-[14px] text-slate-700">{epicRows[0]?.monthLabelValue ?? "-"}</span>,
             startDate: (
               <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
                 {isEditingParentDate("epic", epicId, "start") ? (
@@ -7731,7 +7731,7 @@ export function BacklogPlanningPanel({
               // instead of the misleading default "To Do" rollup.
               <span className="inline-flex min-w-[104px] items-center justify-center text-[14px] text-slate-400">—</span>
             ) : (
-              <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(rollupWorkflowStatusFromGroupedRows(epicRows)))}>
+              <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[14px] font-normal tracking-wide", statusChip(rollupWorkflowStatusFromGroupedRows(epicRows)))}>
                 {statusIcon(rollupWorkflowStatusFromGroupedRows(epicRows))}
                 {workflowStatusLabel(rollupWorkflowStatusFromGroupedRows(epicRows))}
               </span>
@@ -7741,9 +7741,9 @@ export function BacklogPlanningPanel({
                 ? computeEpicHealthVerdict(epicModelForRow, planYearForEpic, progressBasis)
                 : null,
             ),
-            sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
+            sprint: <span className="text-center text-[14px] text-slate-500">-</span>,
             assignee: (
-              <span className="text-center text-[16px] text-slate-700">
+              <span className="text-center text-[14px] text-slate-700">
                 {editingParentAssignee?.kind === "epic" && editingParentAssignee.id === epicId ? (
                   <span className="relative z-40 inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
                     <BacklogAssigneePickEditor
@@ -7831,7 +7831,7 @@ export function BacklogPlanningPanel({
                   event.preventDefault();
                   beginEpicEstimateEdit({ id: epicId, originalEstimateDays: originalEstimate });
                 }}
-                className="w-full text-center text-[16px] font-medium text-slate-600 hover:text-indigo-600"
+                className="w-full text-center text-[14px] font-normal text-slate-600 hover:text-indigo-600"
                 title="Click to edit estimate"
               >
                 {originalEstimate}d
@@ -7977,7 +7977,7 @@ export function BacklogPlanningPanel({
                   {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiativeId ? (
                     renderParentTitleEditor("initiative", initiativeId, initiativeTitle)
                   ) : (
-                    <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
+                    <span className="inline-flex w-full min-w-0 items-center gap-1 text-[14px] font-normal text-slate-900">
                       <span className="truncate">{highlightQueryInText(initiativeTitle, q)}</span>
                       <span
                         className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100"
@@ -8022,9 +8022,9 @@ export function BacklogPlanningPanel({
             ) : (
               renderBacklogTeamCell(initModelForRow?.team ?? (initModelForRow ? aggregateInitiativeTeamId(initModelForRow) : null))
             ),
-            year: <span className="text-center text-[16px] text-slate-700">{initiativeYear}</span>,
+            year: <span className="text-center text-[14px] text-slate-700">{initiativeYear}</span>,
             quarter: renderQuarterChipsCell(quartersForInitiative(initModelForRow)),
-            month: <span className="text-center text-[16px] text-slate-700">{initiativeMonthLabel}</span>,
+            month: <span className="text-center text-[14px] text-slate-700">{initiativeMonthLabel}</span>,
             startDate: isEditingParentDate("initiative", initiativeId, "start") ? (
               renderParentDateEditor({ kind: "initiative", id: initiativeId, field: "start" })
             ) : (
@@ -8052,7 +8052,7 @@ export function BacklogPlanningPanel({
             status: initiativeRows.length === 0 ? (
               <span className="inline-flex min-w-[104px] items-center justify-center text-[14px] text-slate-400">—</span>
             ) : (
-              <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(initiativeStatus))}>
+              <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[14px] font-normal tracking-wide", statusChip(initiativeStatus))}>
                 {statusIcon(initiativeStatus)}
                 {workflowStatusLabel(initiativeStatus)}
               </span>
@@ -8062,9 +8062,9 @@ export function BacklogPlanningPanel({
                 ? computeInitiativeHealthVerdict(initModelForRow, Number(initiativeYear), progressBasis)
                 : null,
             ),
-            sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
+            sprint: <span className="text-center text-[14px] text-slate-500">-</span>,
             assignee: (
-              <span className="text-center text-[16px] text-slate-700">
+              <span className="text-center text-[14px] text-slate-700">
                 {editingParentAssignee?.kind === "initiative" && editingParentAssignee.id === initiativeId ? (
                   <span className="relative z-40 inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
                     <BacklogAssigneePickEditor
@@ -8095,7 +8095,7 @@ export function BacklogPlanningPanel({
                 )}
               </span>
             ),
-            parent: <span className="text-[16px] text-slate-400">-</span>,
+            parent: <span className="text-[14px] text-slate-400">-</span>,
             labels: isEditingParentLabels("initiative", initiativeId) ? (
               renderParentLabelsEditor({ kind: "initiative", id: initiativeId })
             ) : (
@@ -8116,7 +8116,7 @@ export function BacklogPlanningPanel({
                 <BacklogSumChip value={estimated} />
               </button>
             ),
-            epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
+            epicOriginalEst: <span className="text-center text-[14px] text-slate-400">-</span>,
             daysLeft: (
               <button
                 type="button"
@@ -8161,7 +8161,7 @@ export function BacklogPlanningPanel({
               <select
                 value={storyTargetEpicId}
                 onChange={(event) => setStoryTargetEpicId(event.target.value)}
-                className="h-8 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
+                className="h-8 min-w-[180px] rounded-md bg-white px-2 text-[14px] ring-1 ring-slate-200 outline-none"
               >
                 {Array.from(new Map(initiativeRows.map((r) => [r.epicId, r.epicTitle])).entries()).map(([epicId, title]) => (
                   <option key={epicId} value={epicId}>{title}</option>
@@ -9045,7 +9045,7 @@ export function BacklogPlanningPanel({
                       {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.initiativeId ? (
                         renderParentTitleEditor("initiative", initiative.initiativeId, initiative.initiativeTitle)
                       ) : (
-                        <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
+                        <span className="inline-flex w-full min-w-0 items-center gap-1 text-[14px] font-normal text-slate-900">
                           <span className="truncate">{initiative.initiativeTitle}</span>
                           <span
                             className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100"
@@ -9091,9 +9091,9 @@ export function BacklogPlanningPanel({
                 ) : (
                   renderBacklogTeamCell(standInitModel?.team ?? initiative.initiativeTeamId)
                 ),
-                year: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeYear}</span>,
+                year: <span className="text-center text-[14px] text-slate-700">{initiative.initiativeYear}</span>,
                 quarter: renderQuarterChipsCell(quartersForInitiative(standInitModel)),
-                month: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeMonthLabelValue}</span>,
+                month: <span className="text-center text-[14px] text-slate-700">{initiative.initiativeMonthLabelValue}</span>,
                 startDate: isEditingParentDate("initiative", initiative.initiativeId, "start") ? (
                   renderParentDateEditor({ kind: "initiative", id: initiative.initiativeId, field: "start" })
                 ) : (
@@ -9126,14 +9126,14 @@ export function BacklogPlanningPanel({
                   <span className="inline-flex min-w-[104px] items-center justify-center text-[14px] text-slate-400">—</span>
                 ),
                 health: renderBacklogHealthCell(null),
-                sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
+                sprint: <span className="text-center text-[14px] text-slate-500">-</span>,
                 assignee: (
-                  <span className="inline-flex items-center justify-center gap-1.5 text-center text-[16px] text-slate-700">
+                  <span className="inline-flex items-center justify-center gap-1.5 text-center text-[14px] text-slate-700">
                     <BacklogRowAvatar name={initiative.initiativeAssignee} directoryUsers={workspaceDirectoryUsers} />
                     {initiative.initiativeAssignee}
                   </span>
                 ),
-                parent: <span className="text-[16px] text-slate-400">-</span>,
+                parent: <span className="text-[14px] text-slate-400">-</span>,
                 labels: isEditingParentLabels("initiative", initiative.initiativeId) ? (
                   renderParentLabelsEditor({ kind: "initiative", id: initiative.initiativeId })
                 ) : (
@@ -9154,7 +9154,7 @@ export function BacklogPlanningPanel({
                     <BacklogSumChip value={0} />
                   </button>
                 ),
-                epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
+                epicOriginalEst: <span className="text-center text-[14px] text-slate-400">-</span>,
                 daysLeft: (
                   <button
                     type="button"
@@ -9170,7 +9170,7 @@ export function BacklogPlanningPanel({
                     onClick={() => {}}
                     className={backlogReadonlyProgressButtonClass}
                   >
-                    <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
+                    <div className="flex items-center justify-between text-[14px] tabular-nums text-slate-600">
                       <span>No stories</span>
                       <span>0/0 · 0%</span>
                     </div>
@@ -9252,7 +9252,7 @@ export function BacklogPlanningPanel({
                               {editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.epicId ? (
                                 renderParentTitleEditor("epic", epic.epicId, epic.epicTitle)
                               ) : (
-                                <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-medium text-slate-900">
+                                <span className="inline-flex w-full min-w-0 items-center gap-1 text-[14px] font-normal text-slate-900">
                                   <span className="truncate">{epic.epicTitle}</span>
                                   <span
                                     className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100"
@@ -9294,7 +9294,7 @@ export function BacklogPlanningPanel({
                                   event.stopPropagation();
                                   onJumpToRoadmapPlanning(epic.epicTitle);
                                 }}
-                                className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-sky-50 px-2 text-[11px] font-semibold text-sky-700 ring-1 ring-sky-200/80 transition hover:bg-sky-100 hover:ring-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+                                className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-sky-50 px-2 text-[14px] font-normal text-sky-700 ring-1 ring-sky-200/80 transition hover:bg-sky-100 hover:ring-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
                                 title={`Open Roadmap Planning and search "${epic.epicTitle}" to schedule`}
                                 aria-label={`Schedule epic "${epic.epicTitle}" in Roadmap Planning`}
                               >
@@ -9309,14 +9309,14 @@ export function BacklogPlanningPanel({
                         ) : (
                           renderBacklogTeamCell(standEpicModel?.team ?? epic.epicTeamId)
                         ),
-                        year: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeYear}</span>,
+                        year: <span className="text-center text-[14px] text-slate-700">{initiative.initiativeYear}</span>,
                         quarter: renderQuarterChipsCell(
                           quartersForMonthRange(
                             standEpicModel?.planStartMonth ?? null,
                             standEpicModel?.planEndMonth ?? null,
                           ),
                         ),
-                        month: <span className="text-center text-[16px] text-slate-700">{epic.epicMonthLabelValue}</span>,
+                        month: <span className="text-center text-[14px] text-slate-700">{epic.epicMonthLabelValue}</span>,
                         startDate: (
                           <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
                             {isEditingParentDate("epic", epic.epicId, "start") ? (
@@ -9342,7 +9342,7 @@ export function BacklogPlanningPanel({
                           </span>
                         ),
                         status: (
-                          <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip("todo"))}>
+                          <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[14px] font-normal tracking-wide", statusChip("todo"))}>
                             {statusIcon("todo")}
                             To do
                           </span>
@@ -9352,9 +9352,9 @@ export function BacklogPlanningPanel({
                             ? computeEpicHealthVerdict(standEpicModel, Number(initiative.initiativeYear), progressBasis)
                             : null,
                         ),
-                        sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
+                        sprint: <span className="text-center text-[14px] text-slate-500">-</span>,
                         assignee: (
-                          <span className="inline-flex items-center justify-center gap-1.5 text-center text-[16px] text-slate-700">
+                          <span className="inline-flex items-center justify-center gap-1.5 text-center text-[14px] text-slate-700">
                             <BacklogRowAvatar name={epic.epicAssignee} directoryUsers={workspaceDirectoryUsers} />
                             {epic.epicAssignee}
                           </span>
@@ -9391,7 +9391,7 @@ export function BacklogPlanningPanel({
                               event.preventDefault();
                               beginEpicEstimateEdit({ id: epic.epicId, originalEstimateDays: epic.epicOriginalEstimateDays });
                             }}
-                            className="w-full text-center text-[16px] font-medium text-slate-600 hover:text-indigo-600"
+                            className="w-full text-center text-[14px] font-normal text-slate-600 hover:text-indigo-600"
                             title="Click to edit estimate"
                           >
                             {epic.epicOriginalEstimateDays}d
@@ -9412,7 +9412,7 @@ export function BacklogPlanningPanel({
                             onClick={() => {}}
                             className={backlogReadonlyProgressButtonClass}
                           >
-                            <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
+                            <div className="flex items-center justify-between text-[14px] tabular-nums text-slate-600">
                               <span>No stories</span>
                               <span>0/0 · 0%</span>
                             </div>
