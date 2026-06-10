@@ -505,23 +505,21 @@ export function RoadmapHealthHero({
             * full row instead of cards getting clipped. */}
           <div className="mt-2 flex w-full min-w-0 flex-nowrap items-center justify-between gap-x-2 overflow-x-auto [scrollbar-width:thin] [scrollbar-color:theme(colors.indigo.100)_transparent] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gradient-to-r [&::-webkit-scrollbar-thumb]:from-sky-100 [&::-webkit-scrollbar-thumb]:via-indigo-100 [&::-webkit-scrollbar-thumb]:to-violet-100">
           {(() => {
-            // Pick the scope-flavored team rollup. Unit suffix:
-            //   - story / initiative scopes count rows (no "d" suffix)
-            //   - epic scope keeps the existing day-or-blank behaviour
-            //     so the legacy display logic isn't regressed.
+            // Team Progress numbers come from a single basis-keyed
+            // rollup — `heroScope` only relabels the card title.
+            //   - basis `epicEst` / `days` → unit reads as "(days)"
+            //   - basis `stories`         → unit reads as "(stories)"
             const tpScope = heroScope ?? "epic";
-            const tpRows =
-              tpScope === "story"
-                ? stats.teamProgress.story
-                : tpScope === "initiative"
-                  ? stats.teamProgress.initiative
-                  : stats.teamProgress.epic;
-            const tpUnitSuffix =
-              tpScope === "epic" && progressBasis !== "stories" ? "d" : "";
+            const tpScopeLabel =
+              tpScope === "initiative" ? "Initiatives" : tpScope === "story" ? "Stories" : "Epics";
+            const tpTitle = `Team Progress · ${tpScopeLabel}`;
+            const tpUnitLabel: "days" | "stories" =
+              progressBasis === "stories" ? "stories" : "days";
             return (
           <TeamProgressCard
-            rows={tpRows}
-            unitSuffix={tpUnitSuffix}
+            rows={stats.teamProgress[tpScope]}
+            title={tpTitle}
+            unitLabel={tpUnitLabel}
             onRowClick={
               // App-supplied handler bypasses the per-team drilldown
               // popover and goes straight to scope-aware filtering /
@@ -1074,11 +1072,21 @@ function CircleProgress({
 
 function TeamProgressCard({
   rows,
-  unitSuffix = "d",
+  title = "Team Progress (all epics)",
+  unitLabel = "days",
   onRowClick,
   panelClassName,
 }: {
-  unitSuffix?: string;
+  /** Card heading text. The hero composes a scope-aware label
+   *  ("Team Progress · Initiatives", etc.) and passes it in; the
+   *  default keeps the legacy string for any caller that hasn't
+   *  been updated yet. */
+  title?: string;
+  /** Unit hint rendered in parens after each row's "left" pill —
+   *  `"days"` for `days` / `epicEst` basis, `"stories"` for `stories`
+   *  basis. Replaces the old per-number `"d"` suffix so the row
+   *  reads "10 / 10 left (days)" instead of "10d / 10d left". */
+  unitLabel?: "days" | "stories";
   onRowClick?: (teamId: string, label: string) => void;
   rows: Array<{
     teamId: string;
@@ -1134,7 +1142,7 @@ function TeamProgressCard({
     >
       <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500">
         <Users className="size-3.5 shrink-0 text-emerald-500" aria-hidden />
-        Team Progress (all epics)
+        {title}
       </span>
       <div
         className={cn(
@@ -1310,9 +1318,10 @@ function TeamProgressCard({
                        *  the primary content without going full black. */}
                       <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-[10.5px] font-semibold tabular-nums text-slate-700", tone.chipBg)}>
                         <Clock className={cn("size-3", tone.icon)} strokeWidth={2.2} aria-hidden />
-                        <span>{row.daysLeft}{unitSuffix}</span>
+                        <span>{Math.round(row.daysLeft)}</span>
                         <span className="text-slate-400">/</span>
-                        <span>{row.estTotal}{unitSuffix} left</span>
+                        <span>{Math.round(row.estTotal)} left</span>
+                        <span className="text-slate-400">({unitLabel})</span>
                       </span>
                       {/* Circular percent — same number as the inline
                        *  label, but visual; mirrors the donut-card
@@ -1780,25 +1789,28 @@ function computeRoadmapStats(
     status: HealthStatus;
   };
   /**
-   * Three independent maps — one per scope. Each accumulates the same
-   * shape but counts a different unit:
-   *   - epic: estTotal = sum of child story estimatedDays under each
-   *     epic the team owns; daysLeft = sum of child story daysLeft;
-   *     status = worst epic verdict for the team. Current behaviour.
-   *   - initiative: estTotal = sum of all stories across all epics of
-   *     all initiatives the team's epics belong to; status = worst
-   *     initiative verdict the team participates in.
-   *   - story: estTotal = number of stories assigned to the team (or
-   *     owned via epic.team); daysLeft = open story count; status =
-   *     worst per-story sprint-burndown verdict.
+   * Single team accumulator — driven by the Health Calculation basis
+   * chip, not by `heroScope`. The scope toggle (Initiatives / Epics /
+   * Stories) only changes the card title; the numbers are identical
+   * across scopes because the underlying work distribution per team
+   * does not depend on which scope we "look from". Differentiation
+   * between teams comes from the basis-aware math:
+   *   - basis `epicEst`: estTotal = sum of `epic.originalEstimateDays`
+   *     across team-owned epics; daysLeft = the same sum weighted by
+   *     each epic's open-story ratio (epic with all stories done →
+   *     0 left; epic untouched / no stories → full estimate left).
+   *   - basis `days`: estTotal = sum of child story `estimatedDays`;
+   *     daysLeft = sum of child story `daysLeft`.
+   *   - basis `stories`: estTotal = child story count; daysLeft =
+   *     open-story count.
+   * The per-team status is the worst per-epic verdict the team owns
+   * (same as today's epic-scope behaviour).
    */
   const teamAccs = new Map<string, TeamAcc>();
-  const teamAccsInitiative = new Map<string, TeamAcc>();
-  const teamAccsStory = new Map<string, TeamAcc>();
-  // Track which initiatives each team participates in (via its
-  // epics), so the initiative-scope rollup doesn't double-count an
-  // initiative that has multiple of the same team's epics.
-  const teamInitiativesSeen = new Map<string, Set<string>>();
+  // Epics whose per-epic accumulation (for `epicEst` basis) has
+  // already happened. Without this, the per-epic write below would
+  // fire once per child story instead of once per epic.
+  const epicAccountedForTeamAcc = new Set<string>();
   const STATUS_RANK_LOCAL: Record<HealthStatus, number> = {
     done: 0,
     onTrack: 0,
@@ -1864,30 +1876,25 @@ function computeRoadmapStats(
       if (epicHealth && STATUS_RANK_LOCAL[epicHealth] > STATUS_RANK_LOCAL[teamAcc.status]) {
         teamAcc.status = epicHealth;
       }
-      // Initiative-scope team accumulator: same team key, but the
-      // estTotal / daysLeft / status are kept on a separate map so
-      // each team's initiative-count is incremented at most once per
-      // initiative (via the `seen` set below), and the status uses
-      // the initiative-level verdict computed at the end of the outer
-      // loop. We touch the entry here so it exists for the
-      // outer-loop's status / estimate writes.
-      let teamAccInit = teamAccsInitiative.get(teamKey);
-      if (!teamAccInit) {
-        teamAccInit = { teamId: teamKey, estTotal: 0, daysLeft: 0, status: "onTrack" };
-        teamAccsInitiative.set(teamKey, teamAccInit);
-      }
-      let seenInits = teamInitiativesSeen.get(teamKey);
-      if (!seenInits) {
-        seenInits = new Set();
-        teamInitiativesSeen.set(teamKey, seenInits);
-      }
-      seenInits.add(initiative.id);
-      // Story-scope team accumulator — touch the entry up-front so
-      // the inner story loop can write into it.
-      let teamAccStory = teamAccsStory.get(teamKey);
-      if (!teamAccStory) {
-        teamAccStory = { teamId: teamKey, estTotal: 0, daysLeft: 0, status: "onTrack" };
-        teamAccsStory.set(teamKey, teamAccStory);
+      // Per-epic accumulation for the `epicEst` basis. Fires once per
+      // owned epic, regardless of how many stories the epic has —
+      // the per-story loop below will skip the team-acc writes when
+      // the basis is `epicEst` so we don't double-count.
+      if (progressBasis === "epicEst" && !epicAccountedForTeamAcc.has(epic.id)) {
+        epicAccountedForTeamAcc.add(epic.id);
+        const epicEstDays = Math.max(0, Number(epic.originalEstimateDays ?? 0));
+        if (epicEstDays > 0) {
+          const stories = epic.userStories ?? [];
+          // Epic with no stories: treat as fully untouched — full
+          // estimate counts toward "left". Otherwise weight by the
+          // share of stories still open.
+          const openRatio =
+            stories.length === 0
+              ? 1
+              : stories.filter((s) => s.status !== "done").length / stories.length;
+          teamAcc.estTotal += epicEstDays;
+          teamAcc.daysLeft += epicEstDays * openRatio;
+        }
       }
 
       for (const story of epic.userStories ?? []) {
@@ -1946,31 +1953,24 @@ function computeRoadmapStats(
           if (estDaysStory > 0) epicEstimates.estimated += 1;
           else epicEstimates.unestimated += 1;
         }
-        // Team Progress per-team rollup:
-        //  - stories: estTotal = story count, daysLeft = open story count
-        //  - days: estTotal = sum estimatedDays, daysLeft = sum story daysLeft
-        //  - epicEst: same as days; the team progress isn't naturally
-        //    epic-only since stories drive completion.
-        const left = Math.max(
-          0,
-          story.status === "done"
-            ? 0
-            : Number(story.daysLeft ?? story.estimatedDays ?? 0),
-        );
+        // Team Progress per-team rollup. Three basis-keyed paths:
+        //  - stories: estTotal = story count, daysLeft = open story count.
+        //  - days:    estTotal = sum `estimatedDays`, daysLeft = sum
+        //             `daysLeft` (clamped to 0 for done).
+        //  - epicEst: SKIPPED here — already accumulated once per
+        //             owned epic above (see `epicAccountedForTeamAcc`).
         if (progressBasis === "stories") {
           teamAcc.estTotal += 1;
           teamAcc.daysLeft += story.status === "done" ? 0 : 1;
-        } else {
+        } else if (progressBasis === "days") {
+          const left = Math.max(
+            0,
+            story.status === "done"
+              ? 0
+              : Number(story.daysLeft ?? story.estimatedDays ?? 0),
+          );
           teamAcc.estTotal += estDaysStory;
           teamAcc.daysLeft += left;
-        }
-        // Story-scope team rollup: estTotal = story count, daysLeft =
-        // open-story count, status = worst per-story sprint-burndown
-        // verdict.
-        teamAccStory.estTotal += 1;
-        teamAccStory.daysLeft += story.status === "done" ? 0 : 1;
-        if (storyVerdict && STATUS_RANK_LOCAL[storyVerdict.status] > STATUS_RANK_LOCAL[teamAccStory.status]) {
-          teamAccStory.status = storyVerdict.status;
         }
       }
 
@@ -2011,24 +2011,6 @@ function computeRoadmapStats(
         (healthDistribution.initiative[initVerdict.status] ?? 0) + 1;
       healthDistribution.initiative.total += 1;
     }
-    // Initiative-scope Team Progress: push the initiative's
-    // estimate/daysLeft AND its verdict into the acc of every team
-    // that participates in it (via epic ownership). estTotal counts
-    // initiatives the team participates in; status is the worst
-    // initiative verdict the team is associated with.
-    for (const [teamKey, seenInits] of teamInitiativesSeen.entries()) {
-      if (!seenInits.has(initiative.id)) continue;
-      const teamAccInit = teamAccsInitiative.get(teamKey);
-      if (!teamAccInit) continue;
-      teamAccInit.estTotal += 1;
-      // No clean "daysLeft" for an initiative outside of status, so use
-      // the same heuristic as the story acc: 0 when "done", 1 otherwise.
-      // The card will show this as a 0-or-1 progress count per initiative.
-      teamAccInit.daysLeft += initVerdict?.status === "done" ? 0 : 1;
-      if (initVerdict && STATUS_RANK_LOCAL[initVerdict.status] > STATUS_RANK_LOCAL[teamAccInit.status]) {
-        teamAccInit.status = initVerdict.status;
-      }
-    }
   }
 
   const coveragePercent =
@@ -2059,10 +2041,13 @@ function computeRoadmapStats(
       })
       .sort((a, b) => b.estTotal - a.estTotal);
   }
+  // Same rows under every key — scope toggle only relabels the
+  // card; the basis chip drives the math.
+  const teamProgressRows = finalizeTeamProgress(teamAccs);
   const teamProgress = {
-    epic: finalizeTeamProgress(teamAccs),
-    initiative: finalizeTeamProgress(teamAccsInitiative),
-    story: finalizeTeamProgress(teamAccsStory),
+    epic: teamProgressRows,
+    initiative: teamProgressRows,
+    story: teamProgressRows,
   };
 
   return {
