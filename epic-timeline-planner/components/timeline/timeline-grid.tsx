@@ -61,6 +61,7 @@ import { RoadmapHealthPopover, type ProgressBasis } from "@/components/timeline/
 import { computeInitiativeProgress, computeProgress, type HealthStatus } from "@/lib/progress";
 import { effectiveEpicStart } from "@/lib/epic-observed-start";
 import { computeEpicHealthVerdict, computeInitiativeHealthVerdict } from "@/lib/epic-health";
+import { rollupWorkflowStatus } from "@/lib/workflow-rollup";
 import { isPostDragClickSuppressed } from "@/components/timeline/drag-context";
 import { MonthAnalytics, MonthAnalyticsSkeleton } from "@/components/timeline/month-analytics";
 import { CapacityPlanTeamCombobox } from "@/components/timeline/capacity-plan-team-combobox";
@@ -778,6 +779,17 @@ function deriveEpicStatusKey(epic: EpicItem): UserStoryItem["status"] | null {
   if (counts.review > 0 && counts.todo === 0) return "review";
   if (counts.done > 0 || counts.review > 0) return "inProgress";
   return "todo";
+}
+
+/**
+ * Initiative-level workflow rollup — flattens stories across every
+ * child epic and folds via the canonical `rollupWorkflowStatus`
+ * helper. Matches the Hero's Work Progress donut at initiative scope,
+ * which calls the same helper with the same all-stories flatten.
+ * Returns null only when the initiative has zero stories anywhere.
+ */
+function deriveInitiativeStatusKey(initiative: InitiativeItem): UserStoryItem["status"] | null {
+  return rollupWorkflowStatus((initiative.epics ?? []).flatMap((e) => e.userStories ?? []));
 }
 
 /**
@@ -6613,9 +6625,22 @@ export function TimelineGrid({
   const initiativeMatchesGanttStatusFilter = useCallback(
     (initiative: InitiativeItem): boolean => {
       if (!ganttStatusFilter || ganttStatusFilter.size === 0) return true;
-      return (initiative.epics ?? []).some((epic) => epicMatchesGanttStatusFilter(epic));
+      // `backlogEpic` is a planning-status slice (epic without a plan
+      // window), not a workflow rollup. Keep the legacy any-epic logic
+      // for that specific slice — there's no initiative-level analog.
+      if (ganttStatusFilter.has("backlogEpic")) {
+        const epics = initiative.epics ?? [];
+        if (epics.some((e) => e.planStartMonth == null)) return true;
+      }
+      // Roll the initiative's stories up to a single workflow verdict
+      // (same recipe as the Hero's Work Progress donut at initiative
+      // scope) so picking "In progress" returns the same set the donut
+      // surfaces — not every initiative that happens to contain one
+      // in-progress epic.
+      const rolled = deriveInitiativeStatusKey(initiative);
+      return rolled != null && ganttStatusFilter.has(rolled);
     },
-    [ganttStatusFilter, epicMatchesGanttStatusFilter],
+    [ganttStatusFilter],
   );
   /**
    * Quarter filter — "show this epic if its plan-start quarter is in the
@@ -7272,14 +7297,22 @@ export function TimelineGrid({
                             progressLabel={initiativeTooltip}
                             showProgress={showRoadmapProgress || healthFilter.size > 0}
                             // Year view: last-picked lane wins so the bar carries
-                            // exactly one label. When the planner hasn't picked
-                            // anything yet, the health pill is the default since
-                            // initiatives don't have an execution-status pill of
-                            // their own.
+                            // exactly one label. Status wins when the planner
+                            // clicked a Work Progress slice; health is the
+                            // default otherwise (initiatives previously had no
+                            // execution-status pill — now they roll up the
+                            // child stories' workflow status, same recipe as
+                            // the Work Progress donut at initiative scope).
+                            workflowStatus={
+                              showRoadmapProgress && lastPickedLabelLane === "status"
+                                ? deriveInitiativeStatusKey(row.initiative)
+                                : null
+                            }
                             healthStatus={
                               showRoadmapProgress &&
                               initHasData &&
-                              lastPickedLabelLane !== "team"
+                              lastPickedLabelLane !== "team" &&
+                              lastPickedLabelLane !== "status"
                                 ? initHealth.status
                                 : null
                             }
@@ -9903,7 +9936,19 @@ export function TimelineGrid({
                                       progressPercent={initHealth.progressPercent}
                                       progressLabel={initiativeTooltip}
                                       showProgress={showRoadmapProgress}
-                                      healthStatus={showRoadmapProgress && initHasData ? initHealth.status : null}
+                                      workflowStatus={
+                                        showRoadmapProgress && lastPickedLabelLane === "status"
+                                          ? deriveInitiativeStatusKey(row.initiative)
+                                          : null
+                                      }
+                                      healthStatus={
+                                        showRoadmapProgress &&
+                                        initHasData &&
+                                        lastPickedLabelLane !== "team" &&
+                                        lastPickedLabelLane !== "status"
+                                          ? initHealth.status
+                                          : null
+                                      }
                                       healthTooltip={initiativeTooltip}
                                       teamAssignmentChip={showGanttTeamChips && row.initiative.team ? epicDeliveryTeamAssignmentChip(row.initiative.team) : null}
                                       onClick={() => onOpenInitiative(row.initiative.id)}

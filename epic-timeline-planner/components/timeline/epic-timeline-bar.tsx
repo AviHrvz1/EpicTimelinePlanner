@@ -391,6 +391,13 @@ type InitiativeTimelineBarProps = {
   healthStatus?: HealthStatus | null;
   /** Tooltip shown on hover of the health badge; falls back to the status label. */
   healthTooltip?: string;
+  /** Workflow rollup status (To do / In progress / Review / Done) —
+   *  initiative-level rollup of every child story's workflow status.
+   *  Renders as an `EpicStatusBadge` instead of the health badge when
+   *  the caller has decided status is the active label lane (the planner
+   *  clicked a Work Progress slice). Mutually exclusive with
+   *  `healthStatus` at the call site — the parent picks one. */
+  workflowStatus?: UserStoryItem["status"] | null;
   /** Optional team-assignment pill rendered below the bar (same pattern as
    *  the epic bar) when the toolbar's Teams toggle is on. */
   teamAssignmentChip?: { label: string; className: string; slug: string | null } | null;
@@ -416,6 +423,7 @@ export function InitiativeTimelineBar({
   onInsightsClick,
   healthStatus = null,
   healthTooltip,
+  workflowStatus = null,
   teamAssignmentChip = null,
   tooltipDateRange = null,
 }: InitiativeTimelineBarProps) {
@@ -503,9 +511,16 @@ export function InitiativeTimelineBar({
           ) : null}
         </span>
       </div>
-      {(showProgress && healthStatus) || teamAssignmentChip ? (
+      {(showProgress && (healthStatus || workflowStatus)) || teamAssignmentChip ? (
         <div className="-mb-1.5 mt-0.5 flex items-center justify-between gap-2 px-1">
-          {showProgress && healthStatus ? (
+          {showProgress && workflowStatus ? (
+            <EpicStatusBadge
+              status={workflowStatus}
+              isOverdue={false}
+              tooltip={healthTooltip}
+              onClick={onInsightsClick}
+            />
+          ) : showProgress && healthStatus ? (
             <HealthBadge
               status={healthStatus}
               tooltip={healthTooltip}

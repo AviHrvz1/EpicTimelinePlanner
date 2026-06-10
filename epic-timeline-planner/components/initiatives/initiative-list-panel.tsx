@@ -67,6 +67,7 @@ import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { resolveStoryYearSprint, sprintStartDate, sprintEndDate, globalSprintFromMonthLane } from "@/lib/year-sprint";
 import { computeProgress, type HealthStatus } from "@/lib/progress";
 import { computeEpicHealthVerdict, computeInitiativeHealthVerdict } from "@/lib/epic-health";
+import { rollupWorkflowStatus } from "@/lib/workflow-rollup";
 import { resolveAssigneeAvatar, UserAvatar } from "@/components/ui/user-avatar";
 import { TeamAvatar } from "@/components/ui/team-avatar";
 import { formatAssigneeShortLabel } from "@/lib/assignee-display";
@@ -1264,6 +1265,13 @@ type InitiativeListPanelProps = {
    *  scopes the legacy any-child-epic-matches semantics is preserved so
    *  the Roadmap Health popover keeps behaving as before. */
   heroScope?: "initiative" | "epic" | "story";
+  /** Parent-owned execution-status filter — currently the Gantt status
+   *  filter the Hero's Work Progress donut writes to. When `heroScope`
+   *  is `"initiative"` and this set is non-empty, the panel filters its
+   *  initiatives by the initiative-level workflow rollup (same recipe
+   *  as the Work Progress donut). At other scopes the existing
+   *  `panelStatusFilters` dropdown semantics is preserved. */
+  externalStatusFilter?: ReadonlySet<"todo" | "inProgress" | "review" | "done" | "backlogEpic"> | null;
   /** Fires whenever the planner picks a non-"all" option in the unified
    *  Statuses dropdown — either a regular status OR a health verdict. Used
    *  by the parent to force-enable the roadmap Progress toggle so the
@@ -2566,6 +2574,7 @@ export function InitiativeListPanel({
   healthFilter,
   onHealthFilterChange,
   heroScope,
+  externalStatusFilter,
   onUserPickedFilter,
   onPanelStatusFilterDerivedChange,
   onPanelQuarterFilterDerivedChange,
@@ -3233,6 +3242,25 @@ export function InitiativeListPanel({
           return false;
         }
       }
+      // External execution-status filter (currently driven by the
+      // Hero's Work Progress donut at initiative scope). When set and
+      // we're at initiative scope, fold every story under the
+      // initiative through the canonical workflow rollup and keep the
+      // initiative only if its rollup falls inside the filter set —
+      // matches the donut's "8 in-progress initiatives" exactly,
+      // instead of the panel's panel-dropdown any-epic semantics
+      // which would return all 10 (any initiative with one in-progress
+      // epic anywhere).
+      if (
+        heroScope === "initiative" &&
+        externalStatusFilter &&
+        externalStatusFilter.size > 0
+      ) {
+        const rolled = rollupWorkflowStatus(
+          (initiative.epics ?? []).flatMap((e) => e.userStories ?? []),
+        );
+        if (rolled == null || !externalStatusFilter.has(rolled)) return false;
+      }
       if (healthFilter && healthFilter.size > 0) {
         if (heroScope === "initiative") {
           // At initiative scope, match the Hero's Health Distribution
@@ -3254,7 +3282,7 @@ export function InitiativeListPanel({
       }
       return true;
     });
-  }, [initiativeList, initiativeSearch, panelQuarterFilters, panelStatusFilters, panelTeamFilterIds, healthFilter, healthByEpicId, heroScope, planYear, progressBasis]);
+  }, [initiativeList, initiativeSearch, panelQuarterFilters, panelStatusFilters, panelTeamFilterIds, healthFilter, healthByEpicId, heroScope, planYear, progressBasis, externalStatusFilter]);
   const initiativeSearchSuggestions = useMemo(() => {
     const set = new Set<string>();
     for (const initiative of initiativeList) {
