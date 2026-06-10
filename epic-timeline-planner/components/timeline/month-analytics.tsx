@@ -75,7 +75,7 @@ import { nowMs as clockNowMs } from "@/lib/clock";
 import { projectInitiativesToCloseDate } from "@/lib/story-snapshot-projection";
 import { SnapshotHeaderStrip, type SnapshotHeaderStripScope } from "@/components/timeline/snapshot-header-strip";
 import { ToggleGroup } from "@/components/timeline/basis-toggle-group";
-import { HealthBadge, HealthBadgeWithDetail, formatHealthTooltip } from "@/components/timeline/health-badge";
+import { HealthBadge, HealthBadgeWithDetail, HealthBadgeWithTextPopover, formatHealthTooltip } from "@/components/timeline/health-badge";
 import { UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { TeamAvatar } from "@/components/ui/team-avatar";
@@ -4812,7 +4812,7 @@ export function MonthAnalytics({
                               const v = computeEpicHealthVerdict(epic, planYear, progressBasis);
                               if (!v) return <span className="text-slate-300">—</span>;
                               const tip = formatHealthTooltip(v.result);
-                              return <HealthBadge size="xs" status={v.status} tooltip={tip} />;
+                              return <HealthBadgeWithTextPopover size="xs" status={v.status} tooltip={tip} />;
                             })()}
                           </td>
                           <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">
@@ -4871,7 +4871,7 @@ export function MonthAnalytics({
                               const v = computeStoryHealthVerdict(story, parentEpic, planYear);
                               if (!v) return <span className="text-slate-300">\u2014</span>;
                               const tip = formatStoryHealthTooltip(story, parentEpic, planYear, v.status);
-                              return <HealthBadge size="xs" status={v.status} tooltip={tip ?? undefined} />;
+                              return <HealthBadgeWithTextPopover size="xs" status={v.status} tooltip={tip} />;
                             })()}
                           </td>
                           <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.estimatedDays ?? "\u2014"}</td>
@@ -5561,7 +5561,7 @@ export function MonthAnalytics({
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
               <table className={drilldownTableClass}>
-                {drilldownColgroupWithTeam}
+                {drilldownColgroupWithTeamAndHealth}
                 <thead className="sticky top-0 z-10 overflow-hidden rounded-t-md border-b border-[#19abeb]/70 bg-[#0897d5] text-white shadow-[0_1px_0_rgba(15,23,42,0.04)]">
                   <tr>
                     <th className="min-w-0 px-2 py-1 text-right text-[14px]">#</th>
@@ -5581,6 +5581,7 @@ export function MonthAnalytics({
                     <th className="min-w-0 px-2 py-1 text-[14px] text-left">
                       <DrilldownSortHeader label="Status" column="status" sort={workloadDrilldownSort} onSortChange={setWorkloadDrilldownSort} />
                     </th>
+                    <th className="min-w-0 px-2 py-1 text-[14px] text-left">Health</th>
                     <th className="min-w-0 px-2 py-1 text-right text-[14px]">Est days</th>
                     <th className="min-w-0 px-2 py-1 text-right text-[14px]">Est days left</th>
                   </tr>
@@ -5644,6 +5645,15 @@ export function MonthAnalytics({
                         ariaLabel="Filter workload by status"
                       />
                     </th>
+                    <th className="min-w-0 px-1 py-0.5">
+                      <DrilldownFilterDropdown
+                        value={workloadDrilldownFilter.health}
+                        options={HEALTH_FILTER_OPTIONS}
+                        renderOption={renderHealthFilterOption}
+                        onChange={(v) => setWorkloadDrilldownFilter((p) => ({ ...p, health: v as HealthStatus | null }))}
+                        ariaLabel="Filter workload by health"
+                      />
+                    </th>
                     {/* Σ totals over the currently visible (filtered) rows. */}
                     <th className="min-w-0 px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
                       Σ <span className="text-slate-300">|</span> {workloadDrilldownStories.reduce((sum, s) => sum + (s.estimatedDays ?? 0), 0)}
@@ -5700,6 +5710,16 @@ export function MonthAnalytics({
                       <td className="min-w-0 px-2 py-0.5">
                         <StoryStatusPill status={story.status} />
                       </td>
+                      <td className="min-w-0 px-2 py-0.5">
+                        {(() => {
+                          const parentEpic = monthEpics.find(({ epic }) => (epic.userStories ?? []).some((s) => s.id === story.id))?.epic;
+                          if (!parentEpic) return <span className="text-slate-300">\u2014</span>;
+                          const v = computeStoryHealthVerdict(story, parentEpic, planYear);
+                          if (!v) return <span className="text-slate-300">\u2014</span>;
+                          const tip = formatStoryHealthTooltip(story, parentEpic, planYear, v.status);
+                          return <HealthBadgeWithTextPopover size="xs" status={v.status} tooltip={tip} />;
+                        })()}
+                      </td>
                       <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.estimatedDays ?? "\u2014"}</td>
                       <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.daysLeft ?? "\u2014"}</td>
                     </tr>
@@ -5708,7 +5728,7 @@ export function MonthAnalytics({
                   {workloadDrilldownEmptyRows > 0
                     ? Array.from({ length: workloadDrilldownEmptyRows }).map((_, index) => (
                         <tr key={`workload-empty-${index}`} className={drilldownTableEmptyRowZebra}>
-                          <td colSpan={9} className="px-3 py-0.5 text-[13px]">
+                          <td colSpan={10} className="px-3 py-0.5 text-[13px]">
                             {"\u00A0"}
                           </td>
                         </tr>
@@ -6354,7 +6374,7 @@ export function MonthAnalytics({
                                     const v = computeStoryHealthVerdict(story, parentEpic, planYear);
                                     if (!v) return <span className="text-slate-300">—</span>;
                                     const tip = formatStoryHealthTooltip(story, parentEpic, planYear, v.status);
-                                    return <HealthBadge size="xs" status={v.status} tooltip={tip ?? undefined} />;
+                                    return <HealthBadgeWithTextPopover size="xs" status={v.status} tooltip={tip} />;
                                   })()}
                                 </td>
                                 <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.estimatedDays ?? "—"}</td>
@@ -6545,7 +6565,7 @@ export function MonthAnalytics({
                                           windowDaysLeft: monthDaysLeft,
                                           windowDaysTotal: row.estTotal,
                                         });
-                                        return <HealthBadge size="xs" status={rowVerdict} tooltip={tip} />;
+                                        return <HealthBadgeWithTextPopover size="xs" status={rowVerdict} tooltip={tip} />;
                                       })() : null}
                                       <span
                                         className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1", tone.chip)}

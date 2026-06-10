@@ -283,6 +283,104 @@ export function formatHealthTooltip(args: {
 }
 
 /**
+ * Plain HealthBadge wrapped with a click-popover that renders an
+ * arbitrary multi-line `tooltip` string. Use this anywhere the
+ * verdict has a text explainer (one of the `formatStoryHealthTooltip`
+ * / `formatBundleHealthTooltip` helpers) but no `ProgressResult` —
+ * the heavier `HealthBadgeWithDetail` below requires a burndown
+ * result and is the wrong fit for story / bundle verdicts.
+ *
+ * Click toggles the popover; click outside or Escape closes. The
+ * popover is portaled to `document.body` so it escapes overflow:
+ * hidden ancestors (drill-down modals, kanban scroll regions, etc.)
+ * and `whitespace-pre-line` honors the `\n` separators in the
+ * tooltip string so each line stacks cleanly.
+ */
+export function HealthBadgeWithTextPopover({
+  status,
+  tooltip,
+  size = "xs",
+  className,
+}: {
+  status: HealthStatus;
+  /** Multi-line explanation string. `\n` separates lines (CSS handles
+   *  the rest via `whitespace-pre-line`). Null falls back to the
+   *  verdict label so the popover still has something to show. */
+  tooltip?: string | null;
+  size?: "xs" | "sm" | "md" | "chip";
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLSpanElement | null>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!open) {
+      setPos(null);
+      return;
+    }
+    const place = () => {
+      const r = anchorRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const popW = 280;
+      const right = Math.min(window.innerWidth - 8, r.right);
+      const left = Math.max(8, right - popW);
+      setPos({ left, top: r.bottom + 6 });
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node | null;
+      if (anchorRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    // Defer so the click that opened it doesn't immediately close it.
+    const tid = window.setTimeout(() => {
+      document.addEventListener("mousedown", onDoc);
+      document.addEventListener("keydown", onKey);
+    }, 0);
+    return () => {
+      window.clearTimeout(tid);
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  const text = tooltip ?? STATUS_META[status].label;
+  return (
+    <span ref={anchorRef} className={cn("relative inline-block", className)}>
+      <HealthBadge
+        status={status}
+        size={size}
+        tooltip={text}
+        onClick={() => setOpen((v) => !v)}
+      />
+      {open && pos
+        ? createPortal(
+            <div
+              style={{ position: "fixed", left: pos.left, top: pos.top, width: 280, zIndex: 9999 }}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] leading-relaxed text-slate-700 shadow-lg ring-1 ring-slate-100 whitespace-pre-line"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              {text}
+            </div>,
+            document.body,
+          )
+        : null}
+    </span>
+  );
+}
+
+/**
  * Clickable health badge with a designed click-popover explaining the
  * verdict — surfaces the calculation breakdown (total effort, remaining,
  * ideal-line target, delta) plus a plain-English "Why this status?"
