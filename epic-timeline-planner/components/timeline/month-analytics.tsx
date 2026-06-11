@@ -83,6 +83,24 @@ import { TeamAvatar } from "@/components/ui/team-avatar";
 import { useTeamImages } from "@/lib/use-team-images";
 
 type BurndownMetric = "daysLeft" | "storyCount";
+
+/** Advance a date by N working days (Mon–Fri only). Used by the
+ *  forecast computation: `forecastDate = dueDate + ceil(Δ) working days`.
+ *  When `days <= 0` returns the input date unchanged — the forecast
+ *  function short-circuits the "done / ahead" cases before getting here,
+ *  but the floor keeps the math defensive. */
+function addWorkingDays(start: Date, days: number): Date {
+  const target = Math.max(0, Math.ceil(days));
+  if (target === 0) return new Date(start);
+  const result = new Date(start);
+  let added = 0;
+  while (added < target) {
+    result.setDate(result.getDate() + 1);
+    const dow = result.getDay();
+    if (dow !== 0 && dow !== 6) added += 1;
+  }
+  return result;
+}
 type WorkloadStatusKey = "todo" | "inProgress" | "review" | "done";
 type WorkloadFilterKey = "all" | WorkloadStatusKey | "unassigned";
 
@@ -2690,23 +2708,48 @@ export function MonthAnalytics({
     }),
     [burnDownEpicsForSeries, burndownBasis, burnDownPeriodStart, burnDownPeriodEnd],
   );
-  /** Linear-extrapolation forecast: takes the current burn rate
-   *  ((scope − today's daysLeft) / calendar days elapsed) and projects
-   *  the date the actual line crosses zero. Null when there's no data,
-   *  no burn (rate ≤ 0), or no scope. */
+  /** Latest plan due date across the in-scope epics — `dueDate +
+   *  Δ working days` is anchored to this. Mirrors `burnUpDueDate`
+   *  but driven by the burndown's scope filter. */
+  const burnDownDueDate = useMemo<Date | null>(() => {
+    let latestMs = -Infinity;
+    let latestDate: Date | null = null;
+    for (const epic of burnDownEpicsForSeries) {
+      if (epic.planEndMonth == null) continue;
+      const year = epic.planYear ?? burnDownPeriodEnd.getFullYear();
+      const month = epic.planEndMonth;
+      const day = epic.planEndDay ?? (epic.planEndSprint === 1
+        ? 15
+        : new Date(year, month, 0).getDate());
+      const t = new Date(year, month - 1, day).getTime();
+      if (t > latestMs) { latestMs = t; latestDate = new Date(year, month - 1, day); }
+    }
+    return latestDate;
+  }, [burnDownEpicsForSeries, burnDownPeriodEnd]);
+  /** Δ-based forecast: take the planned due date and shift it later by
+   *  `ceil(Δ)` working days. Same input that drives the verdict chip on
+   *  this card, so chip and chart always tell the same story:
+   *
+   *    - Δ ≤ 1 (onTrack)       → forecast ≈ plan due date
+   *    - 1 < Δ < 4 (watch)     → forecast = due + 1–3 working days
+   *    - Δ ≥ 4 (atRisk)        → forecast = due + Δ working days (late)
+   *    - status === done       → no forecast (already finished)
+   *    - status === overdue    → still produces a (past) forecast so
+   *                              the planner can read "would have
+   *                              completed N days late had we kept pace"
+   *
+   *  Why this is "if the team holds today's gap" — Δ is a snapshot of
+   *  `remainingEffort − idealRemaining` at today. The forecast assumes
+   *  that gap stays flat going forward (team continues at the plan's
+   *  pace, just `Δ` working days behind). It does NOT extrapolate
+   *  acceleration or deceleration. As Δ shrinks day-to-day, the
+   *  forecast date pulls in toward the plan due date automatically. */
   const burnDownForecastDate = useMemo<Date | null>(() => {
-    const today = burnDownBaseSeries.perDay.find((r) => r.isToday);
-    if (!today || today.daysLeft == null || today.scope == null) return null;
-    const burned = today.scope - today.daysLeft;
-    const msSinceStart = today.date.getTime() - burnDownPeriodStart.getTime();
-    const elapsedDays = Math.max(1, Math.round(msSinceStart / 86400000));
-    const ratePerDay = burned / elapsedDays;
-    if (ratePerDay <= 0) return null;
-    const daysToZero = Math.ceil(today.daysLeft / ratePerDay);
-    const result = new Date(today.date);
-    result.setDate(result.getDate() + daysToZero);
-    return result;
-  }, [burnDownBaseSeries.perDay, burnDownPeriodStart]);
+    const head = burnDownBaseSeries.headline;
+    if (!head || head.status === "done") return null;
+    const due = burnDownDueDate ?? burnDownPeriodEnd;
+    return addWorkingDays(due, head.deltaDays);
+  }, [burnDownBaseSeries.headline, burnDownDueDate, burnDownPeriodEnd]);
   /** Period end the chart's data covers. Extended past the plan due date
    *  when forecast is on AND the projected completion is past the plan
    *  end — so the X-axis stretches to include the forecast endpoint. */
@@ -3261,19 +3304,34 @@ export function MonthAnalytics({
     }),
     [burnUpEpicsForSeries, burnupBasis, burnDownPeriodStart, burnDownPeriodEnd],
   );
+  /** Burnup mirror — same Δ-based formula. Due date derived inline so
+   *  this useMemo doesn't depend on `burnUpDueDate` (declared later in
+   *  the file). The burnup chart's blue line crosses `scope` at the
+   *  same calendar date the burndown's blue line crosses `0`, by
+   *  symmetry, so the formula matches exactly. */
   const burnUpForecastDate = useMemo<Date | null>(() => {
-    const today = burnUpBaseSeries.perDay.find((r) => r.isToday);
-    if (!today || today.completed == null || today.scope == null) return null;
-    const msSinceStart = today.date.getTime() - burnDownPeriodStart.getTime();
-    const elapsedDays = Math.max(1, Math.round(msSinceStart / 86400000));
-    const ratePerDay = today.completed / elapsedDays;
-    if (ratePerDay <= 0) return null;
-    const remaining = today.scope - today.completed;
-    const daysToScope = Math.ceil(remaining / ratePerDay);
-    const result = new Date(today.date);
-    result.setDate(result.getDate() + daysToScope);
-    return result;
-  }, [burnUpBaseSeries.perDay, burnDownPeriodStart]);
+    const head = burnUpBaseSeries.headline;
+    if (!head || head.status === "done") return null;
+    const epicsToCheck = selectedEpicOption != null
+      ? [selectedEpicOption.epic]
+      : monthEpics.map((r) => r.epic).filter(
+          (e) => burnUpVisibleKeys.length === 0 || burnUpVisibleKeys.includes(e.id),
+        );
+    let latestMs = -Infinity;
+    let latestDate: Date | null = null;
+    for (const epic of epicsToCheck) {
+      if (epic.planEndMonth == null) continue;
+      const year = epic.planYear ?? burnDownPeriodEnd.getFullYear();
+      const month = epic.planEndMonth;
+      const day = epic.planEndDay ?? (epic.planEndSprint === 1
+        ? 15
+        : new Date(year, month, 0).getDate());
+      const d = new Date(year, month - 1, day);
+      if (d.getTime() > latestMs) { latestMs = d.getTime(); latestDate = d; }
+    }
+    const due = latestDate ?? burnDownPeriodEnd;
+    return addWorkingDays(due, head.deltaDays);
+  }, [burnUpBaseSeries.headline, selectedEpicOption, monthEpics, burnUpVisibleKeys, burnDownPeriodEnd]);
   const burnUpEffectivePeriodEnd = useMemo(() => {
     if (!showBurnUpForecast || !burnUpForecastDate) return burnDownPeriodEnd;
     return burnUpForecastDate.getTime() > burnDownPeriodEnd.getTime()
