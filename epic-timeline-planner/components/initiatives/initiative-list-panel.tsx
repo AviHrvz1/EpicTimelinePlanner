@@ -444,12 +444,18 @@ function HealthFilterMenu({
   progressBasis,
   onProgressBasisChange,
   onAnyHealthPicked,
+  verdictCounts,
 }: {
   healthFilter: Set<HealthStatus> | undefined;
   onHealthFilterChange: ((next: Set<HealthStatus>) => void) | undefined;
   progressBasis: "days" | "stories" | "epicEst";
   onProgressBasisChange: ((next: "days" | "stories" | "epicEst") => void) | undefined;
   onAnyHealthPicked: (() => void) | undefined;
+  /** Per-verdict epic count for the panel population AFTER the other
+   *  filters (team / status / quarter) but BEFORE the health filter
+   *  itself — answers "if I picked this verdict now, how many epics
+   *  would I see?" Omit to hide the count column entirely. */
+  verdictCounts?: Record<HealthStatus, number>;
 }) {
   const detailsRef = useRef<HTMLDetailsElement | null>(null);
   const closeTimeoutRef = useRef<number | null>(null);
@@ -701,14 +707,27 @@ function HealthFilterMenu({
                 />
                 <span className="shrink-0">{v.icon}</span>
                 <span className="whitespace-nowrap">{v.label}</span>
-                <span
-                  className="ml-auto inline-flex shrink-0 cursor-help text-slate-400 hover:text-slate-600"
-                  aria-label={`${v.label}: ${v.tagline}. ${v.hint}`}
-                  onMouseEnter={(event) => showInfoTip(event, v.tagline, v.hint)}
-                  onMouseLeave={hideInfoTip}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <Info className="size-3.5" aria-hidden />
+                <span className="ml-auto inline-flex shrink-0 items-center gap-1.5">
+                  {verdictCounts ? (
+                    <span
+                      className={cn(
+                        "min-w-4 text-right tabular-nums text-[11.5px] font-medium",
+                        verdictCounts[v.value] > 0 ? "text-slate-600" : "text-slate-300",
+                      )}
+                      aria-label={`${verdictCounts[v.value]} epic${verdictCounts[v.value] === 1 ? "" : "s"}`}
+                    >
+                      {verdictCounts[v.value]}
+                    </span>
+                  ) : null}
+                  <span
+                    className="inline-flex shrink-0 cursor-help text-slate-400 hover:text-slate-600"
+                    aria-label={`${v.label}: ${v.tagline}. ${v.hint}`}
+                    onMouseEnter={(event) => showInfoTip(event, v.tagline, v.hint)}
+                    onMouseLeave={hideInfoTip}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <Info className="size-3.5" aria-hidden />
+                  </span>
                 </span>
               </button>
             );
@@ -2373,6 +2392,7 @@ function SprintEpicCard({
   workspaceDirectoryUsers = [],
   showTeamChips = false,
   showStatusChips = false,
+  showHealthChips = false,
   onOpenInsights,
 }: {
   epic: EpicItem;
@@ -2401,6 +2421,12 @@ function SprintEpicCard({
   /** Gated by the Hero "Work Progress" donut — when `false`, the epic's
    *  execution-status chip (In progress / Done / etc.) is hidden. */
   showStatusChips?: boolean;
+  /** Gated by the panel's Health filter menu — when `true`, the epic's
+   *  health-verdict chip (On Track / Watch / At Risk / Overdue / Done)
+   *  appears in the chip cluster. Mirrors the `EpicListItem` pattern so
+   *  picking a verdict in the menu surfaces the matching chip on every
+   *  card returned by the filter. */
+  showHealthChips?: boolean;
   /** Hover-revealed Insights icon at the card's top-right; click fires
    *  `("epic", epic.id)` so the parent can pre-scope the Insights tab. */
   onOpenInsights?: (kind: "epic" | "initiative", id: string) => void;
@@ -2604,6 +2630,28 @@ function SprintEpicCard({
                    *  are the top-level rows in the middle panel they need
                    *  to match the primary visual weight. */}
                   <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">
+                    {showHealthChips ? (() => {
+                      // Per-epic health verdict — same helper the Gantt
+                      // bars + Hero Health Distribution donut + the
+                      // EpicListItem panel mode use, so the chip on the
+                      // card reads identically wherever the planner sees
+                      // this epic. Null verdicts (no plan window / no
+                      // estimate) skip the chip entirely.
+                      const v = computeEpicHealthVerdict(
+                        epic,
+                        initiative.year ?? new Date().getFullYear(),
+                        progressBasis,
+                      );
+                      if (!v) return null;
+                      return (
+                        <HealthBadge
+                          size="sm"
+                          status={v.status}
+                          tooltip={formatHealthTooltip(v.result)}
+                          className={healthBadgeEpicRowOverride}
+                        />
+                      );
+                    })() : null}
                     {showTeamChips && epicTeamChip ? (
                       <span className={cn(epicTeamChip.className, epicBadgeBase, "text-[12.5px] max-w-[10rem] gap-1")}>
                         <TeamAvatar slug={epicTeamChip.slug} sizePx={10} fallback={<Users className="size-2.5 shrink-0" aria-hidden />} />
@@ -3394,7 +3442,13 @@ export function InitiativeListPanel({
     const filterId = normalizeWorkspaceUserTeam(monthEpicTeamFilterId);
     return monthAssignedEpics.filter(({ epic }) => normalizedEpicTeamId(epic) === filterId);
   }, [monthAssignedEpics, monthEpicTeamFilterId]);
-  const monthPanelEpicsFiltered = useMemo(() => {
+  /** Panel epics after team / status / quarter filters but BEFORE the
+   *  health filter. Used both as the input to `monthPanelEpicsFiltered`
+   *  (which just layers the health step on top) and as the population
+   *  for `verdictCountsForPanel` — so the per-verdict counts shown in
+   *  the Health menu reflect "if I picked this verdict NOW, given my
+   *  current other filters, how many epics would remain." */
+  const monthPanelEpicsBeforeHealth = useMemo(() => {
     return monthPanelEpics.filter(({ epic, initiative }) => {
       if (!panelQuarterFilters.includes("all")) {
         const monthForQuarter = epic.planStartMonth ?? initiative.startMonth;
@@ -3417,14 +3471,36 @@ export function InitiativeListPanel({
           return false;
         }
       }
-      if (healthFilter && healthFilter.size > 0) {
-        const verdict = healthByEpicId.get(epic.id);
-        // Skip epics without a verdict (no plan window) when filter is active.
-        if (verdict == null || !healthFilter.has(verdict)) return false;
-      }
       return true;
     });
   }, [monthPanelEpics, panelQuarterFilters, panelStatusFilters, panelTeamFilterIds]);
+  const monthPanelEpicsFiltered = useMemo(() => {
+    if (!healthFilter || healthFilter.size === 0) return monthPanelEpicsBeforeHealth;
+    return monthPanelEpicsBeforeHealth.filter(({ epic }) => {
+      const verdict = healthByEpicId.get(epic.id);
+      // Skip epics without a verdict (no plan window) when filter is active.
+      return verdict != null && healthFilter.has(verdict);
+    });
+  }, [monthPanelEpicsBeforeHealth, healthFilter, healthByEpicId]);
+  /** Per-verdict tallies surfaced as the count column in the Health
+   *  menu. Counted from `monthPanelEpicsBeforeHealth` so picking team /
+   *  status / quarter narrows the totals; the health filter itself does
+   *  not — picking a verdict shouldn't change the counts beside the
+   *  other verdicts (each row stays independently selectable). */
+  const verdictCountsForPanel = useMemo<Record<HealthStatus, number>>(() => {
+    const counts: Record<HealthStatus, number> = {
+      onTrack: 0,
+      watch: 0,
+      atRisk: 0,
+      overdue: 0,
+      done: 0,
+    };
+    for (const { epic } of monthPanelEpicsBeforeHealth) {
+      const v = healthByEpicId.get(epic.id);
+      if (v != null) counts[v] += 1;
+    }
+    return counts;
+  }, [monthPanelEpicsBeforeHealth, healthByEpicId]);
   const planAnchorMonth = epicPanelQuarterMonths?.[0] ?? epicListScopeMonth;
 
   const monthBacklogEpics = useMemo(() => {
@@ -3934,6 +4010,7 @@ export function InitiativeListPanel({
               onHealthFilterChange={onHealthFilterChange}
               progressBasis={progressBasis}
               onProgressBasisChange={onProgressBasisChange}
+              verdictCounts={verdictCountsForPanel}
               onAnyHealthPicked={() => {
                 // Picking any health verdict drops the execution-status
                 // filter — same mutual-exclusion contract the old unified
@@ -4208,6 +4285,7 @@ export function InitiativeListPanel({
                     activeYearSprint={activeYearSprint}
                     showTeamChips={showTeamChips}
                     showStatusChips={showStatusChips}
+                    showHealthChips={showHealthChips}
                     onOpenInsights={onOpenInsights}
                     onEpicAccordionChange={onEpicAccordionChange}
                     onOpenEpic={onOpenEpic}
