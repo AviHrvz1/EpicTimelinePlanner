@@ -1577,6 +1577,13 @@ export function MonthAnalytics({
   const [burndownVisibleKeys, setBurndownVisibleKeys] = useState<string[]>([]);
   const [burnUpVisibleKeys, setBurnUpVisibleKeys] = useState<string[]>([]);
   const [cfdVisibleKeys, setCfdVisibleKeys] = useState<string[]>([]);
+  /** "Forecast" toggles per chart. When on, project a straight-line
+   *  trend from today's actual point to its zero-crossing (burndown) /
+   *  scope-crossing (burnup) using the current burn rate, and extend
+   *  the chart's X-axis to include that projected completion day when
+   *  it falls past the period end. */
+  const [showBurndownForecast, setShowBurndownForecast] = useState(false);
+  const [showBurnUpForecast, setShowBurnUpForecast] = useState(false);
   const [statusDrilldownFilter, setStatusDrilldownFilter] = useState<string | null>(null);
   const [workloadDrilldownAssignee, setWorkloadDrilldownAssignee] = useState<string | null>(null);
   const [workloadDrilldownIsTeam, setWorkloadDrilldownIsTeam] = useState(false);
@@ -1752,23 +1759,20 @@ export function MonthAnalytics({
     });
     return { health: h.status, tooltip: formatHealthTooltip(h), result: h };
   }, [selectedInitiativeId, monthEpics, planYear, scopeStartMonth, scopeEndMonth, progressBasis]);
-  /** Suffix appended to every chart title so they read e.g. "Status (📁 Epic
-   *  Title ↗)" or "Status (⚡ Initiative Title ↗)" when a scope is pinned.
-   *  Epic scope gets a Folder glyph (slate-500) prefix; initiative scope gets
-   *  a Zap glyph (blue-500). The trailing ExternalLink pill opens the scoped
-   *  epic / initiative dialog. Empty when the scope is "all". */
+  /** Subtitle rendered BELOW each chart title (Status / Workload / CFD /
+   *  Month Load / Burndown / Burnup) when an epic or initiative is pinned.
+   *  Reads as a second line of context, not an inline parens-wrapped
+   *  parenthetical — the planner asked for the wider, more legible
+   *  treatment. The chart-title sites wrap their `<h3>` + this node in a
+   *  `flex-col` container so it lands on its own row beneath the title.
+   *  Returns `null` (not `""`) so `{scopeTitleSuffix}` renders nothing
+   *  cleanly when no scope is pinned. */
   const scopeTitleSuffix = useMemo<ReactNode>(() => {
-    // Comment-style suffix appended to chart titles when an epic /
-    // initiative is pinned. Smaller font, gray throughout (icons +
-    // brackets included) so it reads as supporting context, not a
-    // second heading. The ExternalLink stays clickable but inherits
-    // the same gray with a darker hover.
     if (selectedEpicOption) {
       const epicId = selectedEpicOption.epic.id;
       return (
-        <span className="ml-1 inline-flex translate-y-[2px] items-center gap-1 text-[13px] font-normal text-slate-400">
-          <span>(</span>
-          <span className="text-slate-500">{selectedEpicOption.epic.title}</span>
+        <span className="inline-flex items-center gap-1 text-[12.5px] font-normal text-slate-500">
+          <span className="truncate max-w-[24rem]">{selectedEpicOption.epic.title}</span>
           {onOpenEpic ? (
             <button
               type="button"
@@ -1780,7 +1784,6 @@ export function MonthAnalytics({
               <ExternalLink className="size-3.5" />
             </button>
           ) : null}
-          <span>)</span>
         </span>
       );
     }
@@ -1789,12 +1792,9 @@ export function MonthAnalytics({
       if (init) {
         const initId = init.id;
         return (
-          <span className="ml-1 inline-flex translate-y-[2px] items-center gap-1 text-[13px] font-normal text-slate-400">
-            <span>(</span>
-            <span className="inline-flex items-center gap-1">
-              <Zap className="size-3.5 shrink-0 text-slate-400" aria-hidden />
-              <span className="text-slate-500">{init.title}</span>
-            </span>
+          <span className="inline-flex items-center gap-1 text-[12.5px] font-normal text-slate-500">
+            <Zap className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+            <span className="truncate max-w-[24rem]">{init.title}</span>
             {onOpenInitiative ? (
               <button
                 type="button"
@@ -1806,12 +1806,11 @@ export function MonthAnalytics({
                 <ExternalLink className="size-3.5" />
               </button>
             ) : null}
-            <span>)</span>
           </span>
         );
       }
     }
-    return "";
+    return null;
   }, [selectedEpicOption, selectedInitiativeId, scopeInitiativeOptions, onOpenEpic, onOpenInitiative]);
   useEffect(() => {
     if (!initialSelectedEpicId) return;
@@ -2679,7 +2678,10 @@ export function MonthAnalytics({
     }
     return burndownScopedEpics;
   }, [selectedEpicOption, selectedInitiativeId, monthEpics, burndownScopedEpics, burndownVisibleKeys]);
-  const burnDownSeries = useMemo(
+  /** Base series — always computed against the planned `periodEnd`.
+   *  Used for the forecast-rate derivation below + as the chart source
+   *  when forecast is off. */
+  const burnDownBaseSeries = useMemo(
     () => buildBurnSeries({
       epics: burnDownEpicsForSeries,
       basis: burndownBasis,
@@ -2688,6 +2690,49 @@ export function MonthAnalytics({
     }),
     [burnDownEpicsForSeries, burndownBasis, burnDownPeriodStart, burnDownPeriodEnd],
   );
+  /** Linear-extrapolation forecast: takes the current burn rate
+   *  ((scope − today's daysLeft) / calendar days elapsed) and projects
+   *  the date the actual line crosses zero. Null when there's no data,
+   *  no burn (rate ≤ 0), or no scope. */
+  const burnDownForecastDate = useMemo<Date | null>(() => {
+    const today = burnDownBaseSeries.perDay.find((r) => r.isToday);
+    if (!today || today.daysLeft == null || today.scope == null) return null;
+    const burned = today.scope - today.daysLeft;
+    const msSinceStart = today.date.getTime() - burnDownPeriodStart.getTime();
+    const elapsedDays = Math.max(1, Math.round(msSinceStart / 86400000));
+    const ratePerDay = burned / elapsedDays;
+    if (ratePerDay <= 0) return null;
+    const daysToZero = Math.ceil(today.daysLeft / ratePerDay);
+    const result = new Date(today.date);
+    result.setDate(result.getDate() + daysToZero);
+    return result;
+  }, [burnDownBaseSeries.perDay, burnDownPeriodStart]);
+  /** Period end the chart's data covers. Extended past the plan due date
+   *  when forecast is on AND the projected completion is past the plan
+   *  end — so the X-axis stretches to include the forecast endpoint. */
+  const burnDownEffectivePeriodEnd = useMemo(() => {
+    if (!showBurndownForecast || !burnDownForecastDate) return burnDownPeriodEnd;
+    return burnDownForecastDate.getTime() > burnDownPeriodEnd.getTime()
+      ? burnDownForecastDate
+      : burnDownPeriodEnd;
+  }, [showBurndownForecast, burnDownForecastDate, burnDownPeriodEnd]);
+  const burnDownSeries = useMemo(
+    () => {
+      // Cache hit when the effective period matches the plan period —
+      // avoids rebuilding the per-day series on every render when the
+      // forecast either is off or fits inside the plan window.
+      if (burnDownEffectivePeriodEnd.getTime() === burnDownPeriodEnd.getTime()) {
+        return burnDownBaseSeries;
+      }
+      return buildBurnSeries({
+        epics: burnDownEpicsForSeries,
+        basis: burndownBasis,
+        periodStart: burnDownPeriodStart,
+        periodEnd: burnDownEffectivePeriodEnd,
+      });
+    },
+    [burnDownBaseSeries, burnDownEffectivePeriodEnd, burnDownPeriodEnd, burnDownEpicsForSeries, burndownBasis, burnDownPeriodStart],
+  );
   /** Recharts-compatible flat rows. Adds back the legacy field names the
    *  burndown JSX already consumes (`actual`, `ideal`, `isCalendarToday`,
    *  and per-epic `[epicId]: daysLeft`) so the chart JSX requires zero
@@ -2695,7 +2740,30 @@ export function MonthAnalytics({
    *  preserves `axisLabel`/`dayLabel`/`isCalendarToday` so downstream
    *  TypeScript narrows correctly. */
   const monthBurndownTruncated = useMemo(() => {
-    return burnDownSeries.perDay.map((row) => {
+    // Forecast injection (when the toggle is on). The forecast line is
+    // a STRAIGHT segment from today's actual point down to (forecast
+    // date, 0). We populate the `forecast` field at exactly two row
+    // indices and rely on Recharts `<Line connectNulls>` to draw the
+    // straight line between them.
+    let todayIdx = -1;
+    let forecastIdx = -1;
+    let todayDaysLeft: number | null = null;
+    if (showBurndownForecast && burnDownForecastDate) {
+      todayIdx = burnDownSeries.perDay.findIndex((r) => r.isToday);
+      if (todayIdx >= 0) {
+        todayDaysLeft = burnDownSeries.perDay[todayIdx].daysLeft;
+        const targetMs = burnDownForecastDate.getTime();
+        // Closest day-row to the forecast date — the series carries one
+        // row per calendar day, so closest = exact when the forecast
+        // falls inside the period (which is why we extend it above).
+        let bestDelta = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < burnDownSeries.perDay.length; i++) {
+          const delta = Math.abs(burnDownSeries.perDay[i].date.getTime() - targetMs);
+          if (delta < bestDelta) { bestDelta = delta; forecastIdx = i; }
+        }
+      }
+    }
+    return burnDownSeries.perDay.map((row, idx) => {
       const flat: {
         dayLabel: string;
         axisLabel: string;
@@ -2703,19 +2771,25 @@ export function MonthAnalytics({
         isCalendarToday: boolean;
         actual: number | null;
         ideal: number | null;
+        forecast: number | null;
         [k: string]: unknown;
       } = {
         ...row,
         isCalendarToday: row.isToday,
         actual: row.daysLeft,
         ideal: row.idealDaysLeft,
+        forecast: idx === todayIdx
+          ? todayDaysLeft
+          : idx === forecastIdx
+            ? 0
+            : null,
       };
       for (const [epicId, v] of Object.entries(row.perEpic)) {
         flat[epicId] = v?.daysLeft ?? null;
       }
       return flat;
     });
-  }, [burnDownSeries.perDay]);
+  }, [burnDownSeries.perDay, showBurndownForecast, burnDownForecastDate]);
 
   /** Aggregate scope at period-start across every in-scope epic (per the
    *  active basis). Used as the burndown tooltip's "total scope" label.
@@ -3175,7 +3249,10 @@ export function MonthAnalytics({
     }
     return burndownScopedEpics;
   }, [selectedEpicOption, selectedInitiativeId, monthEpics, burndownScopedEpics, burnUpVisibleKeys]);
-  const burnUpSeries = useMemo(
+  /** Burnup forecast — mirror of the burndown's. Rate = today's
+   *  `completed` / elapsed calendar days. Projects the date the actual
+   *  line reaches `scope`. Null when no work, no scope, or no data. */
+  const burnUpBaseSeries = useMemo(
     () => buildBurnSeries({
       epics: burnUpEpicsForSeries,
       basis: burnupBasis,
@@ -3184,6 +3261,39 @@ export function MonthAnalytics({
     }),
     [burnUpEpicsForSeries, burnupBasis, burnDownPeriodStart, burnDownPeriodEnd],
   );
+  const burnUpForecastDate = useMemo<Date | null>(() => {
+    const today = burnUpBaseSeries.perDay.find((r) => r.isToday);
+    if (!today || today.completed == null || today.scope == null) return null;
+    const msSinceStart = today.date.getTime() - burnDownPeriodStart.getTime();
+    const elapsedDays = Math.max(1, Math.round(msSinceStart / 86400000));
+    const ratePerDay = today.completed / elapsedDays;
+    if (ratePerDay <= 0) return null;
+    const remaining = today.scope - today.completed;
+    const daysToScope = Math.ceil(remaining / ratePerDay);
+    const result = new Date(today.date);
+    result.setDate(result.getDate() + daysToScope);
+    return result;
+  }, [burnUpBaseSeries.perDay, burnDownPeriodStart]);
+  const burnUpEffectivePeriodEnd = useMemo(() => {
+    if (!showBurnUpForecast || !burnUpForecastDate) return burnDownPeriodEnd;
+    return burnUpForecastDate.getTime() > burnDownPeriodEnd.getTime()
+      ? burnUpForecastDate
+      : burnDownPeriodEnd;
+  }, [showBurnUpForecast, burnUpForecastDate, burnDownPeriodEnd]);
+  const burnUpSeries = useMemo(
+    () => {
+      if (burnUpEffectivePeriodEnd.getTime() === burnDownPeriodEnd.getTime()) {
+        return burnUpBaseSeries;
+      }
+      return buildBurnSeries({
+        epics: burnUpEpicsForSeries,
+        basis: burnupBasis,
+        periodStart: burnDownPeriodStart,
+        periodEnd: burnUpEffectivePeriodEnd,
+      });
+    },
+    [burnUpBaseSeries, burnUpEffectivePeriodEnd, burnDownPeriodEnd, burnUpEpicsForSeries, burnupBasis, burnDownPeriodStart],
+  );
   /** Burnup adapter — flattens the canonical BurnPoint shape into the
    *  legacy field names the burnup `<LineChart>` consumes (`labelShort`,
    *  `scope`, `completed`, `ideal`, per-epic `[epicId]: completed`).
@@ -3191,18 +3301,42 @@ export function MonthAnalytics({
    *  aggregate `completed` reaches `scope` so the lines stop drawing —
    *  same UX behavior as the old `burnUpDataTruncated`. */
   const burnUpData = useMemo(() => {
-    return burnUpSeries.perDay.map((row) => {
+    // Forecast injection — burnup mirror of the burndown's. The line
+    // goes from (today, completed) UP to (forecast date, scope).
+    let todayIdx = -1;
+    let forecastIdx = -1;
+    let todayCompleted: number | null = null;
+    let forecastScope: number | null = null;
+    if (showBurnUpForecast && burnUpForecastDate) {
+      todayIdx = burnUpSeries.perDay.findIndex((r) => r.isToday);
+      if (todayIdx >= 0) {
+        todayCompleted = burnUpSeries.perDay[todayIdx].completed;
+        forecastScope = burnUpSeries.perDay[todayIdx].scope;
+        const targetMs = burnUpForecastDate.getTime();
+        let bestDelta = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < burnUpSeries.perDay.length; i++) {
+          const delta = Math.abs(burnUpSeries.perDay[i].date.getTime() - targetMs);
+          if (delta < bestDelta) { bestDelta = delta; forecastIdx = i; }
+        }
+      }
+    }
+    return burnUpSeries.perDay.map((row, idx) => {
       const flat: Record<string, unknown> = {
         ...row,
         labelShort: row.dayLabel,
         ideal: row.idealCompleted,
+        forecast: idx === todayIdx
+          ? todayCompleted
+          : idx === forecastIdx
+            ? forecastScope
+            : null,
       };
       for (const [epicId, v] of Object.entries(row.perEpic)) {
         flat[epicId] = v?.completed ?? null;
       }
-      return flat as { labelShort: string; isToday: boolean; completed: number | null; scope: number; ideal: number | null; [k: string]: unknown };
+      return flat as { labelShort: string; isToday: boolean; completed: number | null; scope: number; ideal: number | null; forecast: number | null; [k: string]: unknown };
     });
-  }, [burnUpSeries.perDay]);
+  }, [burnUpSeries.perDay, showBurnUpForecast, burnUpForecastDate]);
 
   /** Verdict shown alongside the burnup chart. Identical pattern to
    *  `burndownHealth`: sourced directly from `buildBurnSeries`'s
@@ -3416,9 +3550,8 @@ export function MonthAnalytics({
         const item = burndownLegendItems.find((i) => i.key === key);
         if (item) {
           return (
-            <span className="ml-1 inline-flex translate-y-[2px] items-center gap-1 text-[13px] font-normal text-slate-400">
-              <span>(</span>
-              <span className="text-slate-500">{item.label}</span>
+            <span className="inline-flex items-center gap-1 text-[12.5px] font-normal text-slate-500">
+              <span className="truncate max-w-[24rem]">{item.label}</span>
               {onOpenEpic ? (
                 <button
                   type="button"
@@ -3430,14 +3563,13 @@ export function MonthAnalytics({
                   <ExternalLink className="size-3.5" />
                 </button>
               ) : null}
-              <span>)</span>
             </span>
           );
         }
       }
     }
     if (scopeTitleSuffix) return scopeTitleSuffix;
-    return "";
+    return null;
   }, [scopeTitleSuffix, burndownVisibleKeys, burndownLegendItems, onOpenEpic]);
 
   /** Same shape as `burndownTitleSuffix`, against the Burnup legend.
@@ -3448,9 +3580,8 @@ export function MonthAnalytics({
       if (row) {
         const rowId = row.id;
         return (
-          <span className="ml-1 inline-flex translate-y-[2px] items-center gap-1 text-[13px] font-normal text-slate-400">
-            <span>(</span>
-            <span className="text-slate-500">{row.title}</span>
+          <span className="inline-flex items-center gap-1 text-[12.5px] font-normal text-slate-500">
+            <span className="truncate max-w-[24rem]">{row.title}</span>
             {onOpenEpic ? (
               <button
                 type="button"
@@ -3462,13 +3593,12 @@ export function MonthAnalytics({
                 <ExternalLink className="size-3.5" />
               </button>
             ) : null}
-            <span>)</span>
           </span>
         );
       }
     }
     if (scopeTitleSuffix) return scopeTitleSuffix;
-    return "";
+    return null;
   }, [scopeTitleSuffix, burnUpVisibleKeys, burnUpEpicRows, onOpenEpic]);
 
   const workloadStoriesScrollRef = useRef<HTMLDivElement | null>(null);
@@ -3956,6 +4086,7 @@ export function MonthAnalytics({
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
       <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1 lg:h-full">
         <div className={cn("mb-2 flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
+          <div className="flex min-w-0 flex-col">
           <h3
             className={cn(
               "inline-flex items-center gap-1.5 font-semibold text-slate-800",
@@ -3963,8 +4094,12 @@ export function MonthAnalytics({
             )}
           >
             <PieChartIcon className="size-4 text-slate-600" />
-            {statusPanelTitle}{scopeTitleSuffix}
+            {statusPanelTitle}
           </h3>
+          {scopeTitleSuffix ? (
+            <div className="mt-0.5">{scopeTitleSuffix}</div>
+          ) : null}
+          </div>
           {/* Mode switch — only shown when no specific epic is pinned
            *  (otherwise the chart always rolls up to user stories). Two
            *  small pill buttons that flip the donut between epic-level
@@ -4476,14 +4611,15 @@ export function MonthAnalytics({
 
       <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1 lg:h-full">
         <div className={cn("mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
+          <div className="ml-[35px] flex min-w-0 flex-col">
           <h3
             className={cn(
-              "ml-[35px] inline-flex items-center gap-1.5 font-semibold text-slate-800",
+              "inline-flex items-center gap-1.5 font-semibold text-slate-800",
               isMultiPeriodInsights ? "text-[16px]" : "text-[15px]",
             )}
           >
             <Activity className="size-4 text-slate-600" />
-            Epic Scope Burndown{burndownTitleSuffix}
+            Epic Scope Burndown
             {burndownHealth ? (() => {
               // Build a scope label that matches what the chart actually
               // plots: a single focused epic (via scope picker OR legend
@@ -4516,11 +4652,42 @@ export function MonthAnalytics({
               );
             })() : null}
           </h3>
-          {/* Per-chart basis toggle relocated — a single shared picker
-           *  lives in the "Epic / Initiative Scope" header row above the
-           *  Insights charts and writes to both burndown + burnup basis
-           *  state, so the two charts now move together (matches the
-           *  planner's mental model of "one health calc, one scope"). */}
+          {burndownTitleSuffix ? (
+            <div className="mt-0.5">{burndownTitleSuffix}</div>
+          ) : null}
+          </div>
+          {/* Forecast toggle — projects a straight-line trend from
+           *  today's actual point to a zero-crossing date using the
+           *  current burn rate. When the projected date is past the
+           *  plan end, the chart's X-axis extends to include it. */}
+          <button
+            type="button"
+            onClick={() => setShowBurndownForecast((v) => !v)}
+            title={
+              burnDownForecastDate
+                ? showBurndownForecast
+                  ? `Hide forecast (current pace → ${burnDownForecastDate.getDate()}/${burnDownForecastDate.getMonth() + 1})`
+                  : `Show forecast (current pace → ${burnDownForecastDate.getDate()}/${burnDownForecastDate.getMonth() + 1})`
+                : "Forecast unavailable (no burn yet)"
+            }
+            aria-pressed={showBurndownForecast}
+            disabled={!burnDownForecastDate}
+            className={cn(
+              "inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[12px] font-medium transition",
+              "disabled:cursor-not-allowed disabled:opacity-50",
+              showBurndownForecast
+                ? "border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100"
+                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+            )}
+          >
+            <TrendingUp className="size-3.5" aria-hidden />
+            Forecast
+            {showBurndownForecast && burnDownForecastDate ? (
+              <span className="ml-1 tabular-nums text-violet-600/90">
+                {burnDownForecastDate.getDate()}/{burnDownForecastDate.getMonth() + 1}
+              </span>
+            ) : null}
+          </button>
         </div>
         <div
           className={cn(
@@ -4680,6 +4847,22 @@ export function MonthAnalytics({
                         dot={false}
                         name="Epic ideal to due"
                         connectNulls={false}
+                        isAnimationActive={false}
+                      />
+                    ) : null}
+                    {showBurndownForecast && burnDownForecastDate ? (
+                      // Forecast line: connects today's actual to (forecast
+                      // date, 0). `connectNulls` is true so Recharts draws
+                      // the straight line between the two non-null points.
+                      <Line
+                        type="linear"
+                        dataKey="forecast"
+                        stroke="#7c3aed"
+                        strokeWidth={2}
+                        strokeDasharray="3 3"
+                        dot={{ r: 3, fill: "#7c3aed", strokeWidth: 0 }}
+                        name={`Forecast → ${burnDownForecastDate.getDate()}/${burnDownForecastDate.getMonth() + 1}`}
+                        connectNulls
                         isAnimationActive={false}
                       />
                     ) : null}
@@ -4859,6 +5042,7 @@ export function MonthAnalytics({
       <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
       <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1">
         <div className={cn("flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW, isMultiPeriodInsights ? "mb-3" : "mb-2")}>
+          <div className="flex min-w-0 flex-col">
           <h3
             className={cn(
               "inline-flex items-center gap-1.5 font-semibold text-slate-800",
@@ -4866,8 +5050,12 @@ export function MonthAnalytics({
             )}
           >
             <ChartNoAxesCombined className="size-4 text-slate-600" />
-            Workload Balance{scopeTitleSuffix}
+            Workload Balance
           </h3>
+          {scopeTitleSuffix ? (
+            <div className="mt-0.5">{scopeTitleSuffix}</div>
+          ) : null}
+          </div>
         </div>
         {workloadDrilldownAssignee ? (() => {
           // Unique values for the per-column dropdowns. Computed from the
@@ -5266,15 +5454,20 @@ export function MonthAnalytics({
 
       <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1 lg:h-full">
         <div className={cn("mb-2 flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
+          <div className="ml-[35px] flex min-w-0 flex-col">
           <h3
             className={cn(
-              "ml-[35px] inline-flex items-center gap-1.5 font-semibold text-slate-800",
+              "inline-flex items-center gap-1.5 font-semibold text-slate-800",
               isMultiPeriodInsights ? "text-[16px]" : "text-[15px]",
             )}
           >
             <Activity className="size-4 text-slate-600" />
-            Cumulative Flow{scopeTitleSuffix}
+            Cumulative Flow
           </h3>
+          {scopeTitleSuffix ? (
+            <div className="mt-0.5">{scopeTitleSuffix}</div>
+          ) : null}
+          </div>
           {/* Diagnostic Copy button — captures the CFD's source story
            *  state + a representative day-sample so the empty/mismatched
            *  chart can be reproduced. Click → JSON to clipboard. */}
@@ -5551,6 +5744,7 @@ export function MonthAnalytics({
             return (
               <div className="flex min-h-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1">
                 <div className={cn("mb-2 flex shrink-0 items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
+                  <div className="flex min-w-0 flex-col">
                   <h3 className={cn("inline-flex items-center gap-1.5 font-semibold text-slate-800", isMultiPeriodInsights ? "text-[16px]" : "text-[15px]")}>
                     <Users className="size-4 text-slate-600" />
                     {/* Title tracks the chart's mode: teams when nothing /
@@ -5563,8 +5757,11 @@ export function MonthAnalytics({
                     {isMultiPeriodInsights ? "" : (
                       <span className="ml-1 inline-block translate-y-[2px] text-[11px] font-normal text-slate-400">(this month)</span>
                     )}
-                    {scopeTitleSuffix}
                   </h3>
+                  {scopeTitleSuffix ? (
+                    <div className="mt-0.5">{scopeTitleSuffix}</div>
+                  ) : null}
+                  </div>
                 </div>
                 {monthLoadDrilldownAssignee ? (() => {
                   const uniqueSprints = Array.from(new Set(monthLoadDrilldownStoriesRaw.map((s) => storySprintDisplayLabel(s.sprint, scopeStartMonth)))).filter(Boolean).sort();
@@ -5984,14 +6181,15 @@ export function MonthAnalytics({
           {/* Burn Up chart + right-side epic legend */}
           <article className="flex min-h-0 min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm ring-1 ring-slate-100 p-3 lg:col-span-1 lg:h-full">
             <div className={cn("mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2", INSIGHTS_HEADER_ROW)}>
+              <div className="ml-[35px] flex min-w-0 flex-col">
               <h3
                 className={cn(
-                  "ml-[35px] inline-flex items-center gap-1.5 font-semibold text-slate-800",
+                  "inline-flex items-center gap-1.5 font-semibold text-slate-800",
                   isMultiPeriodInsights ? "text-[16px]" : "text-[15px]",
                 )}
               >
                 <TrendingUp className="size-4 text-slate-600" />
-                Epic Scope Burnup{burnUpTitleSuffix}
+                Epic Scope Burnup
                 {burnupHealth ? (() => {
                   // Same scope-resolution rule as burndown: focused epic
                   // wins (scope picker OR legend filtered to 1), then
@@ -6029,10 +6227,43 @@ export function MonthAnalytics({
                   );
                 })() : null}
               </h3>
-              {/* Per-chart basis toggle removed — see the shared picker in
-               *  the "Epic / Initiative Scope" header (it writes to both
-               *  burndownBasis and burnupBasis so the two charts stay
-               *  aligned to one health calc). */}
+              {burnUpTitleSuffix ? (
+                <div className="mt-0.5">{burnUpTitleSuffix}</div>
+              ) : null}
+              </div>
+              {/* Forecast toggle — same shape as burndown's, projects a
+               *  straight-line trend from today's `completed` value up to
+               *  the projected `scope` crossing using the current burn
+               *  rate. Extends the X-axis when the projected date is
+               *  past the plan end. */}
+              <button
+                type="button"
+                onClick={() => setShowBurnUpForecast((v) => !v)}
+                title={
+                  burnUpForecastDate
+                    ? showBurnUpForecast
+                      ? `Hide forecast (current pace → ${burnUpForecastDate.getDate()}/${burnUpForecastDate.getMonth() + 1})`
+                      : `Show forecast (current pace → ${burnUpForecastDate.getDate()}/${burnUpForecastDate.getMonth() + 1})`
+                    : "Forecast unavailable (no burn yet)"
+                }
+                aria-pressed={showBurnUpForecast}
+                disabled={!burnUpForecastDate}
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[12px] font-medium transition",
+                  "disabled:cursor-not-allowed disabled:opacity-50",
+                  showBurnUpForecast
+                    ? "border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+                )}
+              >
+                <TrendingUp className="size-3.5" aria-hidden />
+                Forecast
+                {showBurnUpForecast && burnUpForecastDate ? (
+                  <span className="ml-1 tabular-nums text-violet-600/90">
+                    {burnUpForecastDate.getDate()}/{burnUpForecastDate.getMonth() + 1}
+                  </span>
+                ) : null}
+              </button>
             </div>
             <div
               className={cn(
@@ -6127,6 +6358,22 @@ export function MonthAnalytics({
                           <Line type="monotone" dataKey="ideal" name={burnUpDueDateLabel ? `Ideal (due ${burnUpDueDateLabel})` : "Ideal"} stroke="#f97316" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} isAnimationActive={false} />
                           <Line type="monotone" dataKey="completed" name="Completed" stroke="#0ea5e9" strokeWidth={2.5} dot={false} connectNulls={false} isAnimationActive={false} />
                         </>
+                      ) : null}
+                      {showBurnUpForecast && burnUpForecastDate ? (
+                        // Forecast line: from today's completed up to
+                        // (forecast date, scope). Straight extrapolation
+                        // at the current burn rate.
+                        <Line
+                          type="linear"
+                          dataKey="forecast"
+                          stroke="#7c3aed"
+                          strokeWidth={2}
+                          strokeDasharray="3 3"
+                          dot={{ r: 3, fill: "#7c3aed", strokeWidth: 0 }}
+                          name={`Forecast → ${burnUpForecastDate.getDate()}/${burnUpForecastDate.getMonth() + 1}`}
+                          connectNulls
+                          isAnimationActive={false}
+                        />
                       ) : null}
                       {/* Per-epic completed lines — rendered only when a
                        *  HAND-PICKED SUBSET of epics is visible (not single,
