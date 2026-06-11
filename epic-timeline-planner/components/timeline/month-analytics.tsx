@@ -63,6 +63,7 @@ import {
 
 import { epicForBurndown, type EstimateSource } from "@/lib/epic-estimates";
 import { buildQuarterBurndownSeries } from "@/lib/quarter-analytics";
+import { buildBurnSeries } from "@/lib/burn-series";
 import { EpicItem, InitiativeItem, StoryDailySnapshotItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { MONTH_TEAM_COLUMNS, monthTeamLabelForId } from "@/lib/month-team-board";
@@ -2639,233 +2640,87 @@ export function MonthAnalytics({
     }));
   }, [burndownScopedEpics, estimateSource]);
 
-  const monthBurndown = useMemo(
-    () =>
-      buildQuarterBurndownSeries(
-        monthBurndownEpics,
-        "individual",
-        metric,
-        scopeMonths,
-        planYear,
-      ),
-    [monthBurndownEpics, metric, scopeMonths, planYear],
+  // ------------------------------------------------------------------
+  // Burndown — `lib/burn-series.ts` is the new single source of truth.
+  // The 8-step chained-useMemo pipeline that lived here previously
+  // reinvented the per-basis "completed" math inline (separately from
+  // `lib/progress.ts`) and produced a hybrid scope × story-fraction
+  // number that disagreed with both the verdict and the drilldown — see
+  // `lib/burn-series.ts` header. The single `buildBurnSeries` call below
+  // and the adapter that flattens its output to legacy Recharts field
+  // names replace ~600 lines of derived state with one round trip
+  // through the lib that powers the verdict.
+  // ------------------------------------------------------------------
+  const burnDownPeriodStart = useMemo(
+    () => new Date(planYear, scopeStartMonth - 1, 1),
+    [planYear, scopeStartMonth],
   );
-  const monthBurndownFilledToToday = useMemo(() => {
-    const horizon = monthBurndown.length;
-    if (horizon === 0) return monthBurndown;
-    const now = new Date();
-    const periodStartMs = new Date(planYear, scopeStartMonth - 1, 1).getTime();
-    const nowDayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    // Math.round (not floor) to survive DST hour shifts — see burnup notes.
-    const rawElapsed = Math.round((nowDayMs - periodStartMs) / 86400000) + 1;
-    const elapsedDays = Math.max(0, Math.min(horizon, rawElapsed));
-    const seriesKeys = monthBurndownEpics.map((epic) => epic.id);
-    const nextRows = monthBurndown.map((row) => ({ ...row })) as Array<
-      (typeof monthBurndown)[number] & Record<string, number | string | boolean | null | undefined>
-    >;
-    for (const key of seriesKeys) {
-      let lastSeen: number | null = null;
-      for (let i = 0; i < nextRows.length; i += 1) {
-        const dayIdx = i + 1;
-        const current = nextRows[i][key];
-        if (typeof current === "number") {
-          lastSeen = current;
-          continue;
-        }
-        if (dayIdx <= elapsedDays && lastSeen != null) {
-          nextRows[i][key] = lastSeen;
-        }
-      }
-      for (let i = elapsedDays; i < nextRows.length; i += 1) {
-        if (i + 1 > elapsedDays) nextRows[i][key] = null;
-      }
+  const burnDownPeriodEnd = useMemo(
+    () => new Date(planYear, scopeEndMonth, 0),
+    [planYear, scopeEndMonth],
+  );
+  /** Apply the same epic narrow the OLD burndown chain used:
+   *    - Single epic pinned via scope picker → that epic only.
+   *    - Initiative pinned → that initiative's child epics.
+   *    - Legend has a non-empty `visibleKeys` (subset) → that subset.
+   *    - Otherwise → all in-scope epics.
+   *  Without this the aggregate line + verdict would always reflect ALL
+   *  in-scope epics regardless of the planner's legend pick. */
+  const burnDownEpicsForSeries = useMemo<EpicItem[]>(() => {
+    if (selectedEpicOption) return [selectedEpicOption.epic];
+    if (selectedInitiativeId !== "all") {
+      return burndownScopedEpics.filter((epic) => {
+        const init = monthEpics.find((row) => row.epic.id === epic.id)?.initiative;
+        return init?.id === selectedInitiativeId;
+      });
     }
-    return nextRows;
-  }, [monthBurndown, monthBurndownEpics, planYear, month, scopeStartMonth]);
-  const monthBurndownFromSnapshots = useMemo(() => {
-    if (monthBurndown.length === 0) return null;
-    // Same epic scope as monthBurndownEpics — keeps the snapshot-aware
-    // per-epic values aligned with the chart's headline filter. Without
-    // this we'd pick up epics that the hero filters out (and that the
-    // burndown's own legend/series doesn't list), so the aggregate
-    // Actual would diverge again.
-    const sourceEpics = burndownScopedEpics;
-    const hasSnapshots = sourceEpics.some((epic) => (epic.userStories ?? []).some((story) => (story.snapshots?.length ?? 0) > 0));
-    if (!hasSnapshots) return null;
-
-    const now = new Date();
-    const periodStartMs2 = new Date(planYear, scopeStartMonth - 1, 1).getTime();
-    const nowDayMs2 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const rawElapsed2 = Math.round((nowDayMs2 - periodStartMs2) / 86400000) + 1;
-    const elapsedDays = Math.max(0, Math.min(monthBurndown.length, rawElapsed2));
-    const rows = monthBurndown.map((row) => ({ ...row })) as Array<Record<string, number | string | boolean | null | undefined>>;
-
-    for (let i = 0; i < rows.length; i += 1) {
-      const dayIdx = i + 1;
-      const day = new Date(planYear, scopeStartMonth - 1, 1, 23, 59, 59, 999);
-      day.setDate(day.getDate() + (dayIdx - 1));
-      let dayTotal = 0;
-      for (const epic of sourceEpics) {
-        const epicStories = epic.userStories ?? [];
-        let epicValue = 0;
-        for (const story of epicStories) {
-          const snapshot = latestSnapshotAtDayCached(story, day);
-          const status = snapshot?.status ?? story.status;
-          if (!isStoryOpen(status)) continue;
-          if (metric === "storyCount") {
-            epicValue += 1;
-          } else {
-            const daysLeft = snapshot?.daysLeft ?? snapshot?.estimatedDays ?? story.daysLeft ?? story.estimatedDays ?? 1;
-            epicValue += Math.max(0, daysLeft);
-          }
-        }
-        rows[i][epic.id] = dayIdx <= elapsedDays ? (metric === "storyCount" ? Math.round(epicValue) : Number(epicValue.toFixed(1))) : null;
-        dayTotal += epicValue;
-      }
-      rows[i].actual = dayIdx <= elapsedDays ? (metric === "storyCount" ? Math.round(dayTotal) : Number(dayTotal.toFixed(1))) : null;
+    if (burndownVisibleKeys.length > 0) {
+      return burndownScopedEpics.filter((e) => burndownVisibleKeys.includes(e.id));
     }
-    return rows as typeof monthBurndownFilledToToday;
-  }, [monthBurndown, monthBurndownFilledToToday, burndownScopedEpics, planYear, month, metric, scopeStartMonth]);
-  const monthBurndownResolvedRaw = monthBurndownFromSnapshots ?? monthBurndownFilledToToday;
-  /**
-   * In `epicEst` basis the chart's ideal line + scope-promise reference are in
-   * epic-estimate units, but the per-epic columns + aggregate `actual` are in
-   * story-day units (typically 2-3× the epic estimate). Without rescaling, the
-   * actual line floats above the chart and the burnup's mirror calculation
-   * underflows to zero. Scale per-epic by `epicEst / startingOpenStoryDays`
-   * so every series sits on the same axis. No-op for `days` / `stories`.
-   */
-  const monthBurndownResolved = useMemo(() => {
-    if (burndownBasis !== "epicEst" || metric === "storyCount") return monthBurndownResolvedRaw;
-    if (monthBurndownResolvedRaw.length === 0) return monthBurndownResolvedRaw;
-    const epicMeta = monthBurndownEpics.map((epic) => {
-      let startTotal = 0;
-      for (const row of monthBurndownResolvedRaw) {
-        const v = row[epic.id];
-        if (typeof v === "number") { startTotal = v; break; }
-      }
-      return { id: epic.id, startTotal, epicEst: epic.originalEstimateDays ?? 0 };
-    });
-    const epicEstSumAll = epicMeta.reduce((acc, m) => acc + m.epicEst, 0);
-    if (epicEstSumAll <= 0) return monthBurndownResolvedRaw;
-    return monthBurndownResolvedRaw.map((row) => {
-      const next: Record<string, number | string | boolean | null | undefined> = { ...row };
-      let aggregate = 0;
-      let anyValue = false;
-      for (const { id, startTotal, epicEst } of epicMeta) {
-        const current = row[id];
-        if (typeof current !== "number") continue;
-        anyValue = true;
-        let scaled = current;
-        if (startTotal > 0 && epicEst > 0) {
-          scaled = (current / startTotal) * epicEst;
-        } else if (epicEst > 0) {
-          scaled = Math.min(current, epicEst);
-        }
-        next[id] = Number(scaled.toFixed(1));
-        aggregate += scaled;
-      }
-      if (anyValue) next.actual = Number(aggregate.toFixed(1));
-      return next;
-    }) as typeof monthBurndownResolvedRaw;
-  }, [monthBurndownResolvedRaw, burndownBasis, metric, monthBurndownEpics]);
-  /**
-   * Aggregate `actual` line for the "All" view. The default `actual`
-   * field that buildQuarterBurndownSeries emits is a LINEAR
-   * interpolation from startTotal -> remainingTotal — fine in days /
-   * stories basis when no snapshot reconstruction is available, but it
-   * doesn't follow the snapshot-aware per-epic curves that
-   * monthBurndownFromSnapshots replaces. Result: the All-view aggregate
-   * Line looked like a straight slope while the per-epic lines (when
-   * shown) curved with real data.
-   *
-   * Replace `actual` with the SUM of per-epic snapshot-aware columns
-   * at each day so the aggregate Line traces the true rollup. The
-   * epicEst path already does this scaling above; here we just sum
-   * unscaled per-epic values for the days / stories paths. The
-   * resulting curve matches the hero PortfolioBurndownChart's
-   * snapshot-summed actual.
-   */
-  const monthBurndownChartData = useMemo(() => {
-    if (monthBurndownResolved.length === 0) return monthBurndownResolved;
-    const epicIds = monthBurndownEpics.map((e) => e.id);
-    const horizon = monthBurndownResolved.length;
-    // Per-epic plan window + scope, in QUARTER day-coordinates (1 =
-    // scope-start day). Plan start can be negative when the epic
-    // started before the quarter; plan end can exceed `horizon` when it
-    // ends after — both keep the slope true so a quarter-spanning epic
-    // shows the same daily delta across quarters.
-    const monthStart = new Date(planYear, scopeStartMonth - 1, 1);
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const planMeta = burndownScopedEpics.map((epic) => {
-      const allStories = epic.userStories ?? [];
-      const storyDaysSum = allStories.reduce((sum, s) => sum + (s.estimatedDays ?? s.daysLeft ?? 1), 0);
-      const epicScope =
-        metric === "storyCount"
-          ? allStories.length
-          : burndownBasis === "epicEst"
-            ? (epic.originalEstimateDays ?? storyDaysSum)
-            : storyDaysSum;
-      const startMonth = epic.planStartMonth ?? scopeStartMonth;
-      const startSprint = epic.planSprint === 2 ? 2 : 1;
-      const startDay = startSprint === 2 ? 16 : 1;
-      const startYear = epic.planYear ?? planYear;
-      const endMonth = epic.planEndMonth ?? startMonth;
-      const endSprint = epic.planEndSprint === 1 ? 1 : 2;
-      const endDay = endSprint === 1 ? 15 : new Date(startYear, endMonth, 0).getDate();
-      const planStartMs = new Date(startYear, startMonth - 1, startDay).getTime();
-      const planEndMs = new Date(startYear, endMonth - 1, endDay).getTime();
-      const planStartDayIdx = Math.floor((planStartMs - monthStart.getTime()) / msPerDay) + 1;
-      const planEndDayIdx = Math.floor((planEndMs - monthStart.getTime()) / msPerDay) + 1;
-      const span = Math.max(1, planEndDayIdx - planStartDayIdx);
-      // Fully overdue → plan ended before the quarter starts. These
-      // epics have no honest plan window in the visible quarter, so
-      // skip them from the aggregate ideal entirely (rather than
-      // letting them contribute a misleading "flat zero" baseline).
-      const isFullyOverdue = planEndDayIdx < 1;
-      return { id: epic.id, scope: epicScope, planStartDayIdx, planEndDayIdx, span, isFullyOverdue };
-    });
-    const idealAtDay = (dayIdx: number): number => {
-      let total = 0;
-      for (const m of planMeta) {
-        if (m.scope <= 0) continue;
-        if (m.isFullyOverdue) continue;                                    // fully-overdue: excluded — no plan in this Q
-        if (dayIdx < m.planStartDayIdx) { total += m.scope; continue; }    // 1a: flat at scope before start
-        if (dayIdx > m.planEndDayIdx) continue;                            // 3a: flat at zero after end
-        // 2a: per-epic ramp anchored at the true plan window
-        const raw = m.scope * (1 - (dayIdx - m.planStartDayIdx) / m.span);
-        total += Math.max(0, Math.min(m.scope, raw));
-      }
-      return total;
-    };
-    return monthBurndownResolved.map((row, idx) => {
-      let aggregate = 0;
-      let anyValue = false;
-      for (const id of epicIds) {
-        const v = row[id];
-        if (typeof v === "number") {
-          aggregate += v;
-          anyValue = true;
-        }
-      }
-      const idealRaw = idealAtDay(idx + 1);
-      const next: typeof row = {
+    return burndownScopedEpics;
+  }, [selectedEpicOption, selectedInitiativeId, monthEpics, burndownScopedEpics, burndownVisibleKeys]);
+  const burnDownSeries = useMemo(
+    () => buildBurnSeries({
+      epics: burnDownEpicsForSeries,
+      basis: burndownBasis,
+      periodStart: burnDownPeriodStart,
+      periodEnd: burnDownPeriodEnd,
+    }),
+    [burnDownEpicsForSeries, burndownBasis, burnDownPeriodStart, burnDownPeriodEnd],
+  );
+  /** Recharts-compatible flat rows. Adds back the legacy field names the
+   *  burndown JSX already consumes (`actual`, `ideal`, `isCalendarToday`,
+   *  and per-epic `[epicId]: daysLeft`) so the chart JSX requires zero
+   *  changes — only the data source flips. The explicit return type
+   *  preserves `axisLabel`/`dayLabel`/`isCalendarToday` so downstream
+   *  TypeScript narrows correctly. */
+  const monthBurndownTruncated = useMemo(() => {
+    return burnDownSeries.perDay.map((row) => {
+      const flat: {
+        dayLabel: string;
+        axisLabel: string;
+        monthLabel: string;
+        isCalendarToday: boolean;
+        actual: number | null;
+        ideal: number | null;
+        [k: string]: unknown;
+      } = {
         ...row,
-        ideal: Number(idealRaw.toFixed(1)),
+        isCalendarToday: row.isToday,
+        actual: row.daysLeft,
+        ideal: row.idealDaysLeft,
       };
-      // Only overwrite `actual` when we actually have per-epic values.
-      // Future days (everything past today) leave per-epic as null, so
-      // we preserve whatever `actual` already held (null, in that case).
-      if (anyValue) next.actual = Number(aggregate.toFixed(1));
-      return next;
-    }) as typeof monthBurndownResolved;
-  }, [monthBurndownResolved, monthBurndownEpics, burndownScopedEpics, metric, burndownBasis, planYear, scopeStartMonth]);
-  /** Aggregate scope total used by the burndown tooltip's "Total scope"
-   *  and "Completed" rows. Sum of FULL per-epic scopes (independent of
-   *  plan windows) — matches the user's mental model: "180 stories total
-   *  in Q2". The ideal line may anchor lower for pre-quarter-started
-   *  epics (2a), but the total scope number always reflects what was
-   *  promised, not what's left at quarter-start. */
+      for (const [epicId, v] of Object.entries(row.perEpic)) {
+        flat[epicId] = v?.daysLeft ?? null;
+      }
+      return flat;
+    });
+  }, [burnDownSeries.perDay]);
+
+  /** Aggregate scope at period-start across every in-scope epic (per the
+   *  active basis). Used as the burndown tooltip's "total scope" label.
+   *  Restored verbatim from the pre-rewrite chain — it's a small derivation
+   *  that the burndown JSX still consumes directly. */
   const burndownAggregateStartTotal = useMemo<number | null>(() => {
     if (burndownScopedEpics.length === 0) return null;
     let total = 0;
@@ -2882,26 +2737,16 @@ export function MonthAnalytics({
     }
     return total > 0 ? Number(total.toFixed(1)) : null;
   }, [burndownScopedEpics, metric, burndownBasis]);
+  /** The single epic the chart is currently focused on (when the user
+   *  pinned one or narrowed the legend to one). Drives the focused-epic
+   *  ideal line + "Done ✓" + Δ-pill rendering. */
   const burndownFocusedEpicOption = useMemo(() => {
     if (selectedEpicOption) return selectedEpicOption;
     if (burndownVisibleKeys.length !== 1) return null;
     return monthEpics.find((row) => row.epic.id === burndownVisibleKeys[0]) ?? null;
   }, [selectedEpicOption, burndownVisibleKeys, monthEpics]);
-  /**
-   * "Scope promise" horizontal reference line value for the burndown.
-   * Only computed when the user has picked the epic-estimate basis;
-   * lets the burndown chart show the epic-level estimate as a target
-   * the curve is being measured against.
-   *
-   *   - Epic pinned: that epic's `originalEstimateDays`.
-   *   - Initiative pinned: sum of `originalEstimateDays` across the
-   *     initiative's child epics that are in this view.
-   *   - "All" / aggregate: sum across every epic in the burndown's scope.
-   *
-   * Returns `null` when the line shouldn't render (wrong basis, no
-   * estimate, or chart on the story-count Y axis where the units don't
-   * match).
-   */
+  /** "Scope promise" horizontal reference line for the burndown — only
+   *  shown when basis is Epic Est on a days axis. */
   const scopePromiseDays = useMemo<number | null>(() => {
     if (burndownBasis !== "epicEst") return null;
     if (metric !== "daysLeft") return null;
@@ -2915,107 +2760,8 @@ export function MonthAnalytics({
     );
     return sum > 0 ? sum : null;
   }, [burndownBasis, metric, burndownFocusedEpicOption, monthBurndownEpics]);
-
-  /**
-   * Health verdict shown next to the burndown chart title. Uses the
-   * chart's own basis (not the popover's global) so flipping the
-   * chart-level toggle updates the badge alongside the curves. Scope:
-   *   - Epic focused (selectedEpicOption) → that epic's verdict
-   *   - Initiative focused (selectedInitiativeId !== "all") → rolled-up
-   *     verdict across the initiative's child epics
-   *   - "All" → aggregate verdict across the visible burndown epics
-   */
-  const burndownHealth = useMemo(() => {
-    // Health must describe what the chart visually shows — if the legend
-    // (or scope picker) has narrowed to one epic, the popover speaks for
-    // THAT epic, not the full in-scope aggregate. Otherwise respect any
-    // partial legend toggle so e.g. "7 of 10 epics visible" doesn't tally
-    // numbers from epics that aren't being plotted.
-    const epicsInScope = burndownFocusedEpicOption != null
-      ? [burndownFocusedEpicOption.epic]
-      : selectedInitiativeId !== "all"
-        ? monthEpics.filter((row) => row.initiative.id === selectedInitiativeId).map((row) => row.epic)
-        : monthBurndownEpics.filter((epic) => burndownVisibleKeys.length === 0 || burndownVisibleKeys.includes(epic.id));
-    if (epicsInScope.length === 0) return null;
-    const aggregateStories = epicsInScope.flatMap((epic) => epic.userStories ?? []);
-    if (burndownBasis !== "epicEst" && aggregateStories.length === 0) return null;
-    const periodStartDate = new Date(planYear, scopeStartMonth - 1, 1);
-    const periodEndDate = new Date(planYear, scopeEndMonth, 0);
-    // Each epic's verdict must use ITS OWN planned start/end window — the
-    // chart's ideal line for a focused single epic is anchored to the
-    // epic's due date, not the scope period. Using period bounds instead
-    // makes a 31/5-due epic look "mildly behind" in late May even when
-    // the chart shows it cliff-diving — because the period extends out
-    // to year-end, inflating "working days left". Fall back to the
-    // period bounds only when the epic has no plan dates.
-    // Resolve each epic's window using the OBSERVED start when child
-    // story snapshots show work began earlier than the planned start.
-    // Falls back to the planned start if no movement has been recorded.
-    // This keeps the verdict aligned with what the chart's ideal line
-    // actually draws — both anchor to the team's real timeline, not a
-    // calendar window the team may have started early on.
-    const epicBounds = (epic: EpicItem): { start: Date; end: Date } => {
-      const epicYear = epic.planYear ?? planYear;
-      const plannedStart = epic.planStartMonth != null
-        ? sprintStartDate(epicYear, globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1))
-        : periodStartDate;
-      const end = epic.planEndMonth != null
-        ? sprintEndDate(epicYear, globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2))
-        : periodEndDate;
-      const observed = computeEpicObservedStart(epic);
-      const start = observed != null && observed < plannedStart ? observed : plannedStart;
-      return { start, end };
-    };
-    const epicOriginalEstSum = epicsInScope.reduce(
-      (sum, e) => sum + (e.originalEstimateDays ?? 0),
-      0,
-    );
-    if (epicsInScope.length === 1) {
-      const bounds = epicBounds(epicsInScope[0]);
-      const h = computeProgress({
-        stories: epicsInScope[0].userStories ?? [],
-        start: bounds.start,
-        end: bounds.end,
-        basis: burndownBasis,
-        epicOriginalEstimateDays: epicsInScope[0].originalEstimateDays ?? null,
-      });
-      const hasData = burndownBasis === "stories"
-        ? aggregateStories.length > 0
-        : h.totalEffort > 0;
-      if (!hasData) return null;
-      return { status: h.status, tooltip: formatHealthTooltip(h), result: h };
-    }
-    const childStatuses: HealthStatus[] = epicsInScope.map((epic) => {
-      const bounds = epicBounds(epic);
-      const h = computeProgress({
-        stories: epic.userStories ?? [],
-        start: bounds.start,
-        end: bounds.end,
-        basis: burndownBasis,
-        epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
-      });
-      return h.status;
-    });
-    // Aggregate window = span of all child epics' (observed-or-planned)
-    // bounds — same rule as the per-epic verdict above. Earliest start,
-    // latest end.
-    const childBoundsList = epicsInScope.map(epicBounds);
-    const aggStart = childBoundsList.reduce((min, b) => b.start < min ? b.start : min, childBoundsList[0].start);
-    const aggEnd = childBoundsList.reduce((max, b) => b.end > max ? b.end : max, childBoundsList[0].end);
-    const h = computeInitiativeProgress({
-      stories: aggregateStories,
-      childStatuses,
-      start: aggStart,
-      end: aggEnd,
-      basis: burndownBasis,
-      epicOriginalEstimateDays: epicOriginalEstSum > 0 ? epicOriginalEstSum : null,
-    });
-    const hasData = burndownBasis === "stories"
-      ? aggregateStories.length > 0
-      : h.totalEffort > 0;
-    if (!hasData) return null;
-    return { status: h.status, tooltip: formatHealthTooltip(h), result: h };
-  }, [burndownBasis, burndownFocusedEpicOption, selectedInitiativeId, monthEpics, monthBurndownEpics, burndownVisibleKeys, planYear, scopeStartMonth, scopeEndMonth]);
+  /** Resolved due date for the focused epic — drives the due-date marker
+   *  and the focused-epic ideal line's right edge. */
   const selectedEpicDueDate = useMemo(() => {
     if (!burndownFocusedEpicOption) return null;
     const dueSprint = burndownFocusedEpicOption.epic.planEndSprint;
@@ -3024,108 +2770,51 @@ export function MonthAnalytics({
     const dueDay = dueSprint === 1 ? 15 : new Date(dueYear, dueMonth, 0).getDate();
     return new Date(dueYear, dueMonth - 1, dueDay);
   }, [burndownFocusedEpicOption, scopeEndMonth, planYear]);
-  /**
-   * Truncate each burndown series after the first day it reaches 0 — once
-   * an epic is fully burned down (or the aggregate hits 0) there's nothing
-   * more to plot, and the flat-line tail just adds visual noise. We swap
-   * subsequent values to `null` per series so the line ends cleanly and
-   * the chart shows a "Done ✓" marker on the due date instead.
-   */
-  const monthBurndownDoneByKey = useMemo(() => {
-    const m = new Map<string, number>();
-    if (monthBurndownResolved.length === 0) return m;
-    const keys: string[] = ["actual", ...monthBurndownEpics.map((e) => e.id)];
-    for (const key of keys) {
-      for (let i = 0; i < monthBurndownResolved.length; i++) {
-        const v = monthBurndownResolved[i]?.[key];
-        if (typeof v === "number" && v === 0) {
-          m.set(key, i);
-          break;
-        }
-      }
-    }
-    return m;
-  }, [monthBurndownResolved, monthBurndownEpics]);
-  const monthBurndownTruncated = useMemo(() => {
-    if (monthBurndownDoneByKey.size === 0) return monthBurndownChartData;
-    return monthBurndownChartData.map((row, i) => {
-      let next: Record<string, unknown> | null = null;
-      for (const [key, doneIdx] of monthBurndownDoneByKey) {
-        if (i > doneIdx) {
-          if (next == null) next = { ...row };
-          next[key] = null;
-        }
-      }
-      return (next ?? row) as (typeof monthBurndownChartData)[number];
-    }) as typeof monthBurndownChartData;
-  }, [monthBurndownChartData, monthBurndownDoneByKey]);
+
   /** True when the focused epic's actual line hits 0 anywhere in the
-   *  rendered window — drives the "Done ✓" marker on the due date. */
+   *  rendered window — drives the "Done ✓" marker on the due date.
+   *  Reads directly off `burnDownSeries.perDay` so the "done" check uses
+   *  the same per-epic daysLeft the chart line plots. */
   const isFocusedBurndownDone = useMemo(() => {
     if (!burndownFocusedEpicOption) return false;
-    return monthBurndownDoneByKey.has(burndownFocusedEpicOption.epic.id);
-  }, [burndownFocusedEpicOption, monthBurndownDoneByKey]);
+    const epicId = burndownFocusedEpicOption.epic.id;
+    for (const row of burnDownSeries.perDay) {
+      const v = row.perEpic[epicId];
+      if (v != null && v.daysLeft === 0) return true;
+    }
+    return false;
+  }, [burndownFocusedEpicOption, burnDownSeries.perDay]);
+  /** Adds a per-row `epicIdeal` field for the focused epic so the JSX's
+   *  `<Line dataKey="epicIdeal">` keeps rendering. Sources from
+   *  `burnDownSeries.perDay[i].perEpic[focusedId].idealDaysLeft` — which
+   *  the lib already computed correctly (linear ramp inside the epic's
+   *  plan window, null outside). Massive simplification: ~60 lines of
+   *  inline ramp math become a single passthrough that mirrors what the
+   *  aggregate ideal line uses. */
   const monthBurndownWithDueTarget = useMemo(() => {
     if (!burndownFocusedEpicOption || selectedEpicDueDate == null) return monthBurndownTruncated;
-    const totalDays = monthBurndownTruncated.length;
-    if (totalDays === 0) return monthBurndownTruncated;
-    // Scope = full epic promise (per basis). Ramp uses the TRUE plan slope
-    // (epic.planStart → epic.planEnd), so an epic spanning two quarters
-    // shows the same daily delta on either side — only the visible portion
-    // changes when the user navigates between quarters.
-    const stories = burndownFocusedEpicOption.epic.userStories ?? [];
-    const storyDaysSum = stories.reduce((sum, s) => sum + (s.estimatedDays ?? s.daysLeft ?? 1), 0);
-    const startValue =
-      metric === "storyCount"
-        ? stories.length
-        : burndownBasis === "epicEst"
-          ? (burndownFocusedEpicOption.epic.originalEstimateDays ?? storyDaysSum)
-          : storyDaysSum;
-    const monthStart = new Date(planYear, scopeStartMonth - 1, 1);
-    const msPerDay = 24 * 60 * 60 * 1000;
-    // Day indices in QUARTER coordinates (1 = scope-start day). The
-    // plan start can be NEGATIVE (epic started before quarter) and the
-    // plan end can be > totalDays (epic ends after quarter). Both are
-    // intentional — they keep the ramp slope true to the plan even
-    // when the visible window only shows a slice.
-    const planEndDayIdx = Math.floor((selectedEpicDueDate.getTime() - monthStart.getTime()) / msPerDay) + 1;
-    // Use planned start (not observed start) so the ideal line reflects
-    // the SCHEDULED promise — not where work actually began. Mirrors
-    // selectedEpicStartDate's plan branch.
-    const epic = burndownFocusedEpicOption.epic;
-    const planStartSprint = epic.planSprint;
-    const planStartMonth = epic.planStartMonth ?? scopeStartMonth;
-    const planStartYear = epic.planYear ?? planYear;
-    const planStartDayOfMonth = planStartSprint === 2 ? 16 : 1;
-    const plannedStartDate = new Date(planStartYear, planStartMonth - 1, planStartDayOfMonth);
-    const planStartDayIdx = Math.floor((plannedStartDate.getTime() - monthStart.getTime()) / msPerDay) + 1;
-    const epicSpan = Math.max(1, planEndDayIdx - planStartDayIdx);
-    // Fully-overdue (plan ended before quarter starts) — the plan window
-    // has no honest meaning in this quarter. A flat-at-zero line would
-    // read as "should already be done" instead of "no plan exists for
-    // this quarter — needs rescheduling". Return null so Recharts
-    // (connectNulls=false on the epicIdeal Line) skips drawing the line
-    // entirely; the legend label below switches to "Past plan — needs
-    // rescheduling" to explain the missing line.
-    const isFullyOverdue = planEndDayIdx < 1;
-    // Pinned to QUARTER window — never extend past totalDays. The ideal
-    // line outside the plan window stays flat (scope before start, zero
-    // after due) so the user always sees a baseline.
-    const idealAtDay = (dayIdx: number): number => {
-      if (startValue <= 0) return 0;
-      if (dayIdx < planStartDayIdx) return startValue; // 1a: flat at scope before epic plan start
-      if (dayIdx > planEndDayIdx) return 0;            // 3a: flat at zero after epic plan end
-      // 2a: partial ramp value at the visible day (works for pre-quarter
-      // starts because planStartDayIdx can be negative).
-      const raw = startValue * (1 - (dayIdx - planStartDayIdx) / epicSpan);
-      return Math.max(0, Math.min(startValue, raw));
-    };
-    const round = (v: number) => metric === "storyCount" ? Math.max(0, Math.round(v)) : Number(Math.max(0, v).toFixed(1));
-    return monthBurndownTruncated.map((row, idx) => ({
-      ...row,
-      epicIdeal: isFullyOverdue ? null : round(idealAtDay(idx + 1)),
-    })) as typeof monthBurndownResolved;
-  }, [monthBurndownTruncated, burndownFocusedEpicOption, selectedEpicDueDate, metric, burndownBasis, planYear, month, scopeStartMonth]);
+    const focusedId = burndownFocusedEpicOption.epic.id;
+    const roundFn = (v: number) => metric === "storyCount" ? Math.round(v) : Number(v.toFixed(1));
+    return monthBurndownTruncated.map((row, idx) => {
+      const epicIdeal = burnDownSeries.perDay[idx]?.perEpic[focusedId]?.idealDaysLeft ?? null;
+      return {
+        ...row,
+        epicIdeal: epicIdeal == null ? null : roundFn(Math.max(0, epicIdeal)),
+      };
+    });
+  }, [monthBurndownTruncated, burnDownSeries.perDay, burndownFocusedEpicOption, selectedEpicDueDate, metric]);
+  /** Verdict displayed alongside the burndown chart. Sourced directly from
+   *  `buildBurnSeries`'s headline — the SAME function call that drives the
+   *  chart line, so the chip and the line are guaranteed to agree. The
+   *  prior implementation (a separate `useMemo` that called
+   *  `computeProgress` again with a slightly different filter) is gone. */
+  const burndownHealth = burnDownSeries.headline
+    ? {
+        status: burnDownSeries.headline.status,
+        result: burnDownSeries.headline.result,
+        tooltip: undefined as string | undefined,
+      }
+    : null;
   const selectedEpicDueMarker = useMemo(() => {
     if (!selectedEpicDueDate || !burndownFocusedEpicOption) return null;
     if (monthBurndownWithDueTarget.length === 0) return null;
@@ -3463,86 +3152,68 @@ export function MonthAnalytics({
   const allCfdKeysSelected =
     CFD_FLOW_SEGMENTS.length > 0 && CFD_FLOW_SEGMENTS.every((seg) => cfdVisibleKeys.includes(seg.key));
 
-  /** Same shape as `burndownHealth`, scoped to the burnup chart's basis. */
-  const burnupHealth = useMemo(() => {
-    // Use the same plan-overlap filter as burndownScopedEpics so the
-    // verdict respects the same epic population the chart plots.
-    const epicsInScope = selectedEpicOption != null
-      ? [selectedEpicOption.epic]
-      : selectedInitiativeId !== "all"
-        ? burndownScopedEpics.filter((epic) => {
-            const init = monthEpics.find((row) => row.epic.id === epic.id)?.initiative;
-            return init?.id === selectedInitiativeId;
-          })
-        : burndownScopedEpics.filter((e) => burnUpVisibleKeys.length === 0 || burnUpVisibleKeys.includes(e.id));
-    if (epicsInScope.length === 0) return null;
-    const aggregateStories = epicsInScope.flatMap((epic) => epic.userStories ?? []);
-    if (burnupBasis !== "epicEst" && aggregateStories.length === 0) return null;
-    const periodStartDate = new Date(planYear, scopeStartMonth - 1, 1);
-    const periodEndDate = new Date(planYear, scopeEndMonth, 0);
-    // Same anchor rule as burndownHealth — verdict reads off each epic's
-    // own planned window, not the scope period.
-    // Same observed-start rule as burndownHealth — use the team's
-    // actual start when it's earlier than the planned start.
-    const epicBounds = (epic: EpicItem): { start: Date; end: Date } => {
-      const epicYear = epic.planYear ?? planYear;
-      const plannedStart = epic.planStartMonth != null
-        ? sprintStartDate(epicYear, globalSprintFromMonthLane(epic.planStartMonth, epic.planSprint === 2 ? 2 : 1))
-        : periodStartDate;
-      const end = epic.planEndMonth != null
-        ? sprintEndDate(epicYear, globalSprintFromMonthLane(epic.planEndMonth, epic.planEndSprint === 1 ? 1 : 2))
-        : periodEndDate;
-      const observed = computeEpicObservedStart(epic);
-      const start = observed != null && observed < plannedStart ? observed : plannedStart;
-      return { start, end };
-    };
-    const epicOriginalEstSum = epicsInScope.reduce(
-      (sum, e) => sum + (e.originalEstimateDays ?? 0),
-      0,
-    );
-    if (epicsInScope.length === 1) {
-      const bounds = epicBounds(epicsInScope[0]);
-      const h = computeProgress({
-        stories: epicsInScope[0].userStories ?? [],
-        start: bounds.start,
-        end: bounds.end,
-        basis: burnupBasis,
-        epicOriginalEstimateDays: epicsInScope[0].originalEstimateDays ?? null,
+  // ------------------------------------------------------------------
+  // Burnup — same `lib/burn-series.ts` powers both charts. The 470-line
+  // inline `useMemo` previously here reinvented the basis math against
+  // the chart's data shape instead of calling `lib/progress.ts`, which
+  // is the root cause of the bug class this rewrite eliminates. The
+  // burndown's `burnDownSeries` already carries the full per-day series
+  // — burnup just renders the SAME data with `completed` driving the
+  // blue line instead of `daysLeft`.
+  // ------------------------------------------------------------------
+  /** Same legend-aware narrow as the burndown but using `burnUpVisibleKeys`. */
+  const burnUpEpicsForSeries = useMemo<EpicItem[]>(() => {
+    if (selectedEpicOption) return [selectedEpicOption.epic];
+    if (selectedInitiativeId !== "all") {
+      return burndownScopedEpics.filter((epic) => {
+        const init = monthEpics.find((row) => row.epic.id === epic.id)?.initiative;
+        return init?.id === selectedInitiativeId;
       });
-      const hasData = burnupBasis === "stories"
-        ? aggregateStories.length > 0
-        : h.totalEffort > 0;
-      if (!hasData) return null;
-      return { status: h.status, tooltip: formatHealthTooltip(h), result: h };
     }
-    const childStatuses: HealthStatus[] = epicsInScope.map((epic) => {
-      const bounds = epicBounds(epic);
-      const h = computeProgress({
-        stories: epic.userStories ?? [],
-        start: bounds.start,
-        end: bounds.end,
-        basis: burnupBasis,
-        epicOriginalEstimateDays: epic.originalEstimateDays ?? null,
-      });
-      return h.status;
-    });
-    const childBoundsList = epicsInScope.map(epicBounds);
-    const aggStart = childBoundsList.reduce((min, b) => b.start < min ? b.start : min, childBoundsList[0].start);
-    const aggEnd = childBoundsList.reduce((max, b) => b.end > max ? b.end : max, childBoundsList[0].end);
-    const h = computeInitiativeProgress({
-      stories: aggregateStories,
-      childStatuses,
-      start: aggStart,
-      end: aggEnd,
+    if (burnUpVisibleKeys.length > 0) {
+      return burndownScopedEpics.filter((e) => burnUpVisibleKeys.includes(e.id));
+    }
+    return burndownScopedEpics;
+  }, [selectedEpicOption, selectedInitiativeId, monthEpics, burndownScopedEpics, burnUpVisibleKeys]);
+  const burnUpSeries = useMemo(
+    () => buildBurnSeries({
+      epics: burnUpEpicsForSeries,
       basis: burnupBasis,
-      epicOriginalEstimateDays: epicOriginalEstSum > 0 ? epicOriginalEstSum : null,
+      periodStart: burnDownPeriodStart,
+      periodEnd: burnDownPeriodEnd,
+    }),
+    [burnUpEpicsForSeries, burnupBasis, burnDownPeriodStart, burnDownPeriodEnd],
+  );
+  /** Burnup adapter — flattens the canonical BurnPoint shape into the
+   *  legacy field names the burnup `<LineChart>` consumes (`labelShort`,
+   *  `scope`, `completed`, `ideal`, per-epic `[epicId]: completed`).
+   *  Truncates per-epic + scope/completed/ideal numerics AFTER the
+   *  aggregate `completed` reaches `scope` so the lines stop drawing —
+   *  same UX behavior as the old `burnUpDataTruncated`. */
+  const burnUpData = useMemo(() => {
+    return burnUpSeries.perDay.map((row) => {
+      const flat: Record<string, unknown> = {
+        ...row,
+        labelShort: row.dayLabel,
+        ideal: row.idealCompleted,
+      };
+      for (const [epicId, v] of Object.entries(row.perEpic)) {
+        flat[epicId] = v?.completed ?? null;
+      }
+      return flat as { labelShort: string; isToday: boolean; completed: number | null; scope: number; ideal: number | null; [k: string]: unknown };
     });
-    const hasData = burnupBasis === "stories"
-      ? aggregateStories.length > 0
-      : h.totalEffort > 0;
-    if (!hasData) return null;
-    return { status: h.status, tooltip: formatHealthTooltip(h), result: h };
-  }, [burnupBasis, selectedEpicOption, selectedInitiativeId, monthEpics, burnUpVisibleKeys, planYear, scopeStartMonth, scopeEndMonth]);
+  }, [burnUpSeries.perDay]);
+
+  /** Verdict shown alongside the burnup chart. Identical pattern to
+   *  `burndownHealth`: sourced directly from `buildBurnSeries`'s
+   *  headline so the chip can't drift from the chart line. */
+  const burnupHealth = burnUpSeries.headline
+    ? {
+        status: burnUpSeries.headline.status,
+        result: burnUpSeries.headline.result,
+        tooltip: undefined as string | undefined,
+      }
+    : null;
 
   // --- Burn Up chart (epic scope) ---
   // `burnUpMetric` is derived from `burnupBasis` near the top of the
@@ -3571,300 +3242,6 @@ export function MonthAnalytics({
     return latestDate;
   }, [selectedEpicOption, monthEpics, burnUpVisibleKeys, scopeEndMonth, planYear]);
 
-  const burnUpData = useMemo(() => {
-    // Use the same plan-overlap filter as burndownScopedEpics so the
-    // burnup chart's series + aggregate sit on the same population as
-    // its legend (which is keyed off burnUpEpicRows / burndownScopedEpics).
-    const epicsInScope = selectedEpicOption != null
-      ? [selectedEpicOption.epic]
-      : burndownScopedEpics.filter((e) => burnUpVisibleKeys.length === 0 || burnUpVisibleKeys.includes(e.id));
-    const allStories = epicsInScope.flatMap((e) => (e.userStories ?? []).filter((s) => s.sprint != null));
-    const isDays = burnUpMetric === "daysLeft";
-    const useEpicEst = isDays && burnupBasis === "epicEst";
-
-    const storyValue = (s: (typeof allStories)[number]) =>
-      isDays ? Math.max(0, s.estimatedDays ?? s.daysLeft ?? 0) : 1;
-    // "Completed" on a burnup means the story has actually shipped —
-    // status === "done". Stories in review/testing are NOT considered
-    // completed here even though some surfaces (e.g. the workload
-    // balance "review" bucket) lump them together: a review story
-    // can still be sent back to in-progress, so it hasn't crossed the
-    // burnup's promise yet. Matches the Sprint Load fix (e026fce)
-    // which already uses status === "done" for the "Y done" count.
-    const storyDone = (status: string) => status === "done";
-
-    // Per-epic baseline (story-day sum of open stories at start) so we can
-    // scale openRemaining into epic-est units in `epicEst` basis. Without
-    // this, the burnup uses totalScope = epicEst but openRemaining stays in
-    // story-day units — the chart then underflows to zero.
-    //
-    // We also pre-compute per-epic snapshot coverage + current totals so the
-    // per-day loop can fall back to a linear ramp for epics that have no
-    // snapshot history (otherwise their lines render flat at 0 when "All"
-    // is selected, because `latestSnapshotAtDayCached` returns null and the
-    // calculation freezes every story at its current `todo`/`inProgress`
-    // status across every historical day).
-    const epicMeta = epicsInScope.map((e) => {
-      const stories = (e.userStories ?? []).filter((s) => s.sprint != null);
-      const hasSnap = stories.some((s) => (s.snapshots?.length ?? 0) > 0);
-      const totalStoryValue = stories.reduce((sum, s) => sum + storyValue(s), 0);
-      const currentOpen = stories.reduce((sum, s) => {
-        if (storyDone(s.status)) return sum;
-        if (isDays) return sum + Math.max(0, s.daysLeft ?? s.estimatedDays ?? 0);
-        return sum + 1;
-      }, 0);
-      // For each story, resolve the timestamp of its FIRST known snapshot.
-      // We treat that moment as when the story became "real" in the
-      // reconstruction window — before that, the story is assumed to be
-      // todo with its full estimate (since story.createdAt in demo /
-      // bulk-seeded data is effectively `now()` and can't be trusted for
-      // back-in-time scope). Stories with no snapshots at all default to
-      // 0 (always present), preserving the pre-snapshot fallback path.
-      const firstSnapMsByStory = new Map<string, number>(
-        stories.map((s) => {
-          const snaps = s.snapshots ?? [];
-          let earliest = Number.POSITIVE_INFINITY;
-          for (const sn of snaps) {
-            const t = new Date(sn.snapshotDate).getTime();
-            if (Number.isFinite(t) && t < earliest) earliest = t;
-          }
-          return [s.id, Number.isFinite(earliest) ? earliest : 0];
-        }),
-      );
-      return {
-        id: e.id,
-        epicEst: e.originalEstimateDays ?? 0,
-        stories,
-        hasSnap,
-        totalStoryValue,
-        currentCompleted: Math.max(0, totalStoryValue - currentOpen),
-        firstSnapMsByStory,
-      };
-    });
-
-    // Total scope follows the basis (same rule as the burndown ideal):
-    //   - epicEst → Σ originalEstimateDays across in-scope epics (falls
-    //     back to the story-day sum when no epic has an estimate set)
-    //   - days → Σ child story estimated days (today's behavior)
-    //   - stories → total story count
-    const storyDaySum = allStories.reduce((sum, s) => sum + storyValue(s), 0);
-    const epicEstSum = epicsInScope.reduce((sum, e) => sum + (e.originalEstimateDays ?? 0), 0);
-    const totalScope =
-      useEpicEst && epicEstSum > 0
-        ? epicEstSum
-        : storyDaySum;
-    if (totalScope === 0) return [] as Array<{ labelShort: string; isToday: boolean; completed: number | null; scope: number; ideal: number | null }>;
-
-    const round = (n: number) => isDays ? Number(n.toFixed(1)) : Math.round(n);
-
-    const periodStartDate = new Date(planYear, scopeStartMonth - 1, 1);
-    const quarterEndDate = new Date(planYear, scopeEndMonth, 0);
-    // ALWAYS pin the burnup's right edge to quarter-end — even when a
-    // focused epic's due date falls outside the quarter. Keeps the
-    // burndown, burnup, and CFD sharing a single X-axis horizon
-    // (quarter-start → quarter-end) so the three insights charts line
-    // up tick-for-tick. Out-of-quarter portions of an epic's plan are
-    // handled by the per-epic ideal logic below (flat-at-scope past
-    // due, partial-ramp at quarter-start for pre-quarter starts).
-    const periodEndDate = quarterEndDate;
-    // Use Math.round (not Math.floor) for ms→day so a DST hour shift can't
-    // truncate a day. With Math.floor, going from a no-DST date to a DST
-    // date subtracts one hour, dropping the floor by 1 → today gets treated
-    // as "past elapsed range" → every per-epic line goes null from day 2 on
-    // and Recharts paints flat 0.
-    const msToDays = (ms: number) => Math.round(ms / (24 * 60 * 60 * 1000));
-    const totalDays = msToDays(periodEndDate.getTime() - periodStartDate.getTime()) + 1;
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const afterPeriod = todayStart.getTime() > periodEndDate.getTime();
-    const beforePeriod = todayStart.getTime() < periodStartDate.getTime();
-    const elapsedDays = afterPeriod
-      ? totalDays
-      : beforePeriod
-        ? 0
-        : Math.max(1, Math.min(totalDays, msToDays(todayStart.getTime() - periodStartDate.getTime()) + 1));
-
-    // Per-epic plan window + scope (in quarter day-coordinates). The
-    // ideal is summed across epics — each epic's ramp respects its
-    // OWN planned start/due. So a quarter-spanning epic shows the
-    // same daily delta on either side of the quarter boundary;
-    // an epic that ends mid-quarter contributes a flat-at-scope tail
-    // (1b mirror) for the days past its due.
-    const epicIdealMeta = epicsInScope.map((epic) => {
-      const allStories = epic.userStories ?? [];
-      const storyDaysSumEpic = allStories.reduce((sum, s) => sum + storyValue(s), 0);
-      const epicScope =
-        useEpicEst && (epic.originalEstimateDays ?? 0) > 0
-          ? (epic.originalEstimateDays ?? storyDaysSumEpic)
-          : storyDaysSumEpic;
-      const startMonth = epic.planStartMonth ?? scopeStartMonth;
-      const startSprint = epic.planSprint === 2 ? 2 : 1;
-      const startDay = startSprint === 2 ? 16 : 1;
-      const startYearE = epic.planYear ?? planYear;
-      const endMonth = epic.planEndMonth ?? startMonth;
-      const endSprint = epic.planEndSprint === 1 ? 1 : 2;
-      const endDay = endSprint === 1 ? 15 : new Date(startYearE, endMonth, 0).getDate();
-      const planStartMs = new Date(startYearE, startMonth - 1, startDay).getTime();
-      const planEndMs = new Date(startYearE, endMonth - 1, endDay).getTime();
-      const planStartDayIdx = msToDays(planStartMs - periodStartDate.getTime()) + 1;
-      const planEndDayIdx = msToDays(planEndMs - periodStartDate.getTime()) + 1;
-      const span = Math.max(1, planEndDayIdx - planStartDayIdx);
-      // Fully overdue → plan ended before the quarter starts. Same
-      // treatment as the burndown: skip from the aggregate ideal so a
-      // slipped epic doesn't pin the line at full scope across all of Q
-      // ("should already be 100% done" — misleading; the true signal is
-      // "no plan exists in this quarter, reschedule").
-      const isFullyOverdue = planEndDayIdx < 1;
-      return { id: epic.id, scope: epicScope, planStartDayIdx, planEndDayIdx, span, isFullyOverdue };
-    });
-
-    return Array.from({ length: totalDays }, (_, idx): { labelShort: string; isToday: boolean; completed: number | null; scope: number; ideal: number | null; [epicKey: string]: number | string | boolean | null } => {
-      const dayIdx = idx + 1;
-      const dayDate = new Date(periodStartDate);
-      dayDate.setDate(dayDate.getDate() + idx);
-      const dayStart = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate());
-      const isToday = dayStart.getTime() === todayStart.getTime();
-
-      let completed: number | null = null;
-      // End-of-day (23:59:59.999 local) — used as both the firstSnap
-      // cutoff AND the snapshot-bisection cutoff, matching the burndown's
-      // `monthBurndownFromSnapshots` which queries snapshots with an
-      // end-of-day Date. Without this, a snapshot stored at e.g.
-      // `2026-05-28T00:00:00.000Z` (which is local 03:00 on 28/5 in
-      // UTC+3) would be excluded as "tomorrow's snapshot" because local
-      // midnight cuts off before it — that was the exact reason the
-      // burnup wasn't dropping on 28/5 when the burndown spiked up.
-      const dayEnd = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), 23, 59, 59, 999);
-      const dayEndMs = dayEnd.getTime();
-      // Per-epic completed values — one entry per epic in scope so that the
-      // legend's "All" toggle can render every epic's line. Each epic uses
-      // snapshot reconstruction when it has snapshot history, and a linear
-      // ramp (0 → currentCompleted across elapsedDays) when it doesn't.
-      const perEpic: Record<string, number | null> = {};
-      for (const m of epicMeta) perEpic[m.id] = null;
-      // Per-day scope aggregate — a story enters scope the day its first
-      // snapshot was recorded (the moment it became "real" in the chart's
-      // historical view). Before that, it contributes nothing to either
-      // scope or open work, so completed = scope − open is preserved AND
-      // the scope line correctly steps up when stories were attached
-      // mid-period. Stories with no snapshots at all are always in scope
-      // (firstSnapMs = 0).
-      let dayScopeAgg = 0;
-      if (dayIdx <= elapsedDays) {
-        // Burnup mirrors burndown: completed = scope − open work remaining.
-        // We compute per-epic completed inside the same pass, then sum for
-        // the aggregate `completed`.
-        let openRemainingScaledAgg = 0;
-        const rampRatio = elapsedDays <= 1 ? 1 : (dayIdx - 1) / Math.max(elapsedDays - 1, 1);
-        const isFinalDay = dayIdx === elapsedDays;
-        for (const m of epicMeta) {
-          // Stories that have appeared in the snapshot record by this day.
-          // No-snapshot stories (firstSnap = 0) are always present.
-          const dayStories = m.stories.filter((s) => (m.firstSnapMsByStory.get(s.id) ?? 0) <= dayEndMs);
-          const dayTotalStoryValue = dayStories.reduce((sum, s) => sum + storyValue(s), 0);
-          let epicScope: number;
-          let epicScaledOpen: number;
-          if (m.hasSnap) {
-            let epicOpenStoryDays = 0;
-            let epicTotalStoryValue = 0;
-            for (const story of dayStories) {
-              epicTotalStoryValue += storyValue(story);
-              const snap = latestSnapshotAtDayCached(story, dayEnd);
-              // Fall back to the story's CURRENT status when no
-              // snapshot exists at/before this day. Matches the CFD's
-              // snapshot loop (which uses story.status as fallback) so
-              // both surfaces count the same stories as done — without
-              // this, a currently-done story with no snapshot record
-              // counts as todo and the burnup's Completed line stays
-              // at 0 even when CFD's Done band correctly reads 106.
-              // The earlier "leaked back to day 1" concern that drove
-              // the todo fallback is moot now that "completed" means
-              // status === "done" only (e026fce / b69b0aa / 948b94f).
-              const status = snap?.status ?? story.status;
-              // "Open" = anything that isn't truly shipped. Now includes
-              // review/testing alongside todo + inProgress, since a
-              // review story can still bounce back to in-progress.
-              // Matches the storyDone helper above + the Sprint Load
-              // fix (e026fce). We skip ONLY status === "done" so the
-              // per-day "completed" line tracks status="done" stories
-              // (~106 in Q2) instead of the hybrid 123 the loop was
-              // emitting when it treated review as completed.
-              if (status === "done") continue;
-              if (isDays) {
-                const daysLeft = snap?.daysLeft ?? snap?.estimatedDays ?? story.estimatedDays ?? story.daysLeft ?? 1;
-                epicOpenStoryDays += Math.max(0, daysLeft);
-              } else {
-                epicOpenStoryDays += 1;
-              }
-            }
-            if (useEpicEst && m.epicEst > 0) {
-              // epicEst basis: scope is the epic's own promise — but
-              // only once the epic has any visible story-record. Before
-              // that, scope is 0 (matching the burndown's empty state).
-              epicScope = epicTotalStoryValue > 0 ? m.epicEst : 0;
-              if (epicTotalStoryValue > 0) {
-                const openRatio = Math.min(1, Math.max(0, epicOpenStoryDays / epicTotalStoryValue));
-                epicScaledOpen = m.epicEst * openRatio;
-              } else {
-                epicScaledOpen = 0;
-              }
-            } else {
-              epicScope = epicTotalStoryValue;
-              epicScaledOpen = epicOpenStoryDays;
-            }
-          } else {
-            // No snapshot history → linear ramp from 0 → currentCompleted
-            // across the elapsed window.
-            const mCompletedRamped = isFinalDay ? m.currentCompleted : m.currentCompleted * rampRatio;
-            if (useEpicEst && m.epicEst > 0) {
-              epicScope = m.epicEst;
-              if (dayTotalStoryValue > 0) {
-                epicScaledOpen = m.epicEst * (1 - mCompletedRamped / dayTotalStoryValue);
-              } else {
-                epicScaledOpen = m.epicEst;
-              }
-            } else {
-              epicScope = dayTotalStoryValue;
-              epicScaledOpen = Math.max(0, dayTotalStoryValue - mCompletedRamped);
-            }
-          }
-          const epicCompleted = Math.max(0, epicScope - epicScaledOpen);
-          perEpic[m.id] = round(epicCompleted);
-          openRemainingScaledAgg += epicScaledOpen;
-          dayScopeAgg += epicScope;
-        }
-        completed = round(Math.max(0, dayScopeAgg - openRemainingScaledAgg));
-      } else {
-        // Future day — scope falls back to "stories existing now" so the
-        // post-today projection doesn't collapse.
-        dayScopeAgg = totalScope;
-      }
-
-      const scopeForRow = round(dayScopeAgg);
-      // Ideal = SUM of per-epic ideals at this day, where each epic
-      // follows its own plan window.
-      //   - dayIdx < epic.planStart   → contributes 0 (work hasn't begun)
-      //   - dayIdx > epic.planEnd     → contributes scope (plan finished)
-      //   - inside                    → linear ramp from 0 to scope
-      // 2a (pre-quarter starts): planStartDayIdx can be ≤ 0, so the
-      // ramp value at dayIdx=1 already reflects how far the plan is
-      // through its slope by the time the quarter starts.
-      let idealAgg = 0;
-      let anyIdeal = false;
-      for (const m of epicIdealMeta) {
-        if (m.scope <= 0) continue;
-        if (m.isFullyOverdue) continue;                    // fully-overdue: excluded — no plan in this Q
-        anyIdeal = true;
-        if (dayIdx < m.planStartDayIdx) continue;          // before start: 0
-        if (dayIdx > m.planEndDayIdx) { idealAgg += m.scope; continue; } // after end: scope (flat at top)
-        const raw = m.scope * ((dayIdx - m.planStartDayIdx) / m.span);
-        idealAgg += Math.max(0, Math.min(m.scope, raw));
-      }
-      const ideal = anyIdeal ? round(idealAgg) : null;
-
-      return { labelShort: flowChartDayLabel(dayDate), isToday, completed, scope: scopeForRow, ideal, ...perEpic };
-    });
-  }, [selectedEpicOption, monthEpics, burnUpVisibleKeys, planYear, scopeStartMonth, scopeEndMonth, burnUpDueDate, burnUpMetric, burnupBasis]);
 
   /** Short date label used in tooltip text (e.g. "Due 31/12"). */
   const burnUpDueDateLabel = useMemo(() => {
@@ -3946,12 +3323,13 @@ export function MonthAnalytics({
     }
     return -1;
   }, [burnUpData]);
+  /** Truncate per-row numerics past the row where the aggregate
+   *  completed reaches scope — UX parity with the prior version of this
+   *  pipeline. Recharts already handles `null` data points cleanly, so
+   *  the labelShort + isToday string fields stay intact for the X-axis
+   *  and Today marker. */
   const burnUpDataTruncated = useMemo(() => {
     if (burnUpDoneAtIdx < 0) return burnUpData;
-    // After the chart reaches scope, null EVERY numeric field (completed,
-    // scope, ideal, every per-epic key) so the scope / ideal / completed /
-    // per-epic lines all stop drawing. The labelShort + isToday string
-    // fields stay so the X-axis ticks + Today reference line still render.
     return burnUpData.map((row, i) => {
       if (i <= burnUpDoneAtIdx) return row;
       const blanked: Record<string, number | string | boolean | null> = {};
@@ -3959,7 +3337,7 @@ export function MonthAnalytics({
         const v = (row as Record<string, unknown>)[key];
         blanked[key] = typeof v === "number" ? null : (v as string | boolean | null);
       }
-      return blanked;
+      return blanked as typeof row;
     });
   }, [burnUpData, burnUpDoneAtIdx]);
   const isBurnUpDone = burnUpDoneAtIdx >= 0;
@@ -5430,119 +4808,50 @@ export function MonthAnalytics({
               </div>
             )}
           </div>
-          {/* Right-side burndown legend (initiative + epic list) removed —
-           *  scope picker above is the canonical filter surface now. */}
-          {false ? (
-          <div className={`relative ${INSIGHTS_CONTENT_HEIGHT}`}>
-            <div
-              ref={burndownLegendScrollRef}
-              onScroll={updateBurndownArrowState}
-              className={INSIGHTS_SCROLL_MAIN}
-              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-            >
-              {(() => {
-                // When the user has scoped Insights to a single initiative,
-                // the "All" button reads as that initiative — its title +
-                // Zap icon — and the child epics below sit under a tree
-                // connector. Otherwise it's the generic "All" with Layers.
-                const initiativeScope = selectedInitiativeId !== "all"
-                  ? scopeInitiativeOptions.find((i) => i.id === selectedInitiativeId) ?? null
-                  : null;
-                return (
-                  <button
-                    type="button"
-                    onClick={showAllBurndownKeys}
-                    className={cn(
-                      "mb-1 w-full rounded-md px-1 py-1 text-left font-medium transition",
-                      isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
-                      // When the legend is in "show all" state, the highlight
-                      // belongs HERE (on the All / Initiative row) — not on
-                      // every epic below. The epic rows render flat in that
-                      // state so the user can clearly see which item drives
-                      // the chart scope.
-                      allBurndownKeysSelected
-                        ? "bg-indigo-50 font-semibold text-slate-900 hover:bg-slate-200/70"
-                        : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
-                    )}
-                  >
-                    <span className="inline-flex w-full items-center gap-1.5">
-                      {initiativeScope ? (
-                        <Zap className="size-3.5 shrink-0 text-blue-500" aria-hidden />
-                      ) : (
-                        <Layers className="size-3.5 shrink-0" aria-hidden />
-                      )}
-                      <span className="min-w-0 truncate">
-                        {initiativeScope?.title ?? "All"}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })()}
-              {/* Tree connector under the initiative row: when scoped to one,
-               *  child epics sit beneath a vertical line + horizontal stub
-               *  so the legend reads like a file tree. */}
-              <div className={cn(selectedInitiativeId !== "all" && "relative ml-3 border-l border-slate-200 pl-1")}>
-              {burndownLegendItems.map((item) => {
-                const on = burndownVisibleKeys.includes(item.key);
-                // "epicIdeal" is the synthetic ideal-line series, not a real
-                // epic — skip the folder glyph for it. Every other legend row
-                // is a real epic and gets the canonical Folder icon to read
-                // as "this row = one epic".
-                const isEpic = item.key !== "epicIdeal";
-                // Suppress the indigo highlight when the chart is in
-                // "show all" mode — the All-row carries the highlight then.
-                // Per-epic highlight only kicks in when the user has narrowed
-                // to a specific subset.
-                const showHighlight = on && !allBurndownKeysSelected;
-                return (
-                  <EpicLegendRowButton
-                    key={item.key}
-                    label={item.label}
-                    color={item.color}
-                    on={showHighlight}
-                    isEpic={isEpic}
-                    onClick={() => toggleBurndownKey(item.key)}
-                    treeRow={selectedInitiativeId !== "all" && isEpic}
-                    textClass={cn(
-                      isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
-                      on
-                        ? "text-slate-900 hover:bg-slate-200/70"
-                        : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
-                    )}
-                  />
-                );
-              })}
-              </div>
-              {burndownFocusedEpicOption ? (
-                <p className="mt-1 pl-0 text-[12px] text-slate-500">
-                  Due: {selectedEpicDueDate ? selectedEpicDueDate.toLocaleDateString() : "N/A"}
-                </p>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              onClick={() => scrollBurndownLegendBy(-96)}
-              className={cn(
-                "absolute right-0 top-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
-                canScrollBurndownUp && "bg-slate-200/70 text-slate-800",
-              )}
-              aria-label="Scroll up burndown legend"
-            >
-              <ChevronUp className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => scrollBurndownLegendBy(96)}
-              className={cn(
-                "absolute bottom-0 right-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
-                canScrollBurndownDown && "bg-slate-200/70 text-slate-800",
-              )}
-              aria-label="Scroll down burndown legend"
-            >
-              <ChevronDown className="size-3.5" />
-            </button>
-          </div>
-          ) : null}
+        </div>
+        {/* Burndown legend — horizontal chip row beneath the chart.
+         *  Mirrors the CFD legend layout (relocated from the prior
+         *  24rem right-column form). "All" toggles every series on;
+         *  per-epic chips toggle visibility individually. */}
+        <div
+          className={cn(
+            "mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-1",
+            isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
+          )}
+        >
+          <button
+            type="button"
+            onClick={showAllBurndownKeys}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 font-medium transition",
+              allBurndownKeysSelected
+                ? "text-slate-900 hover:bg-slate-200/70"
+                : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
+            )}
+          >
+            <Layers className="size-3.5" aria-hidden />
+            All
+          </button>
+          {burndownLegendItems.map((item) => {
+            const on = burndownVisibleKeys.includes(item.key);
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => toggleBurndownKey(item.key)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 transition",
+                  on ? "text-slate-900 hover:bg-slate-200/70" : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
+                )}
+              >
+                <span
+                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-[2px] ring-1 ring-black/10"
+                  style={{ backgroundColor: item.color, opacity: on ? 1 : 0.35 }}
+                />
+                <span className="max-w-[14rem] truncate">{item.label}</span>
+              </button>
+            );
+          })}
         </div>
       </article>
       </div>
@@ -6595,7 +5904,13 @@ export function MonthAnalytics({
                                           windowDaysLeft: monthDaysLeft,
                                           windowDaysTotal: row.estTotal,
                                         });
-                                        return <HealthBadgeWithTextPopover size="xs" status={rowVerdict} tooltip={tip} />;
+                                        // Plain HealthBadge (renders as <span>) — NOT the
+                                        // popover variant. The Month Load row itself is a
+                                        // <button> (`row.onRowClick`), so a <button>-rendering
+                                        // popover anchor inside it would be a nested-button
+                                        // hydration error. The `title` attribute on the span
+                                        // still provides the multi-line verdict explanation.
+                                        return <HealthBadge size="xs" status={rowVerdict} tooltip={tip} />;
                                       })() : null}
                                       <span
                                         className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1", tone.chip)}
@@ -6951,111 +6266,49 @@ export function MonthAnalytics({
                 )}
               </div>
 
-              {/* Right-side burnup legend (initiative + epic list) removed —
-               *  scope picker above is the canonical filter surface now. */}
-              {false ? (
-              <div className={`relative ${INSIGHTS_CONTENT_HEIGHT}`}>
-                <div
-                  ref={burnUpLegendScrollRef}
-                  onScroll={updateBurnUpLegendArrowState}
-                  className={INSIGHTS_SCROLL_MAIN}
-                  style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-                >
-                  {(() => {
-                    // Same "All" / initiative-scoped header pattern as the
-                    // burndown legend (see comment there).
-                    const initiativeScope = selectedInitiativeId !== "all"
-                      ? scopeInitiativeOptions.find((i) => i.id === selectedInitiativeId) ?? null
-                      : null;
-                    return (
-                      <button
-                        type="button"
-                        onClick={showAllBurnUpKeys}
-                        className={cn(
-                          "mb-1 w-full rounded-md px-1 py-1 text-left font-medium transition hover:bg-slate-200/70",
-                          isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
-                          // Highlight the All/Initiative row (not the epic
-                          // rows below) when all keys are visible — matches
-                          // the burndown legend behavior.
-                          allBurnUpKeysSelected
-                            ? "bg-indigo-50 font-semibold text-slate-900"
-                            : "text-slate-400",
-                        )}
-                      >
-                        <span className="inline-flex w-full items-center gap-1.5">
-                          {initiativeScope ? (
-                            <Zap className="size-3.5 shrink-0 text-blue-500" aria-hidden />
-                          ) : (
-                            <Layers className="size-3.5 shrink-0" aria-hidden />
-                          )}
-                          <span className="min-w-0 truncate">
-                            {initiativeScope?.title ?? "All"}
-                          </span>
-                        </span>
-                      </button>
-                    );
-                  })()}
-                  {/* Epic rows — wrapped in a tree-connector container when
-                   *  scoped to a single initiative. */}
-                  <div className={cn(selectedInitiativeId !== "all" && "relative ml-3 border-l border-slate-200 pl-1")}>
-                  {burnUpEpicRows.map((row) => {
-                    const on = burnUpVisibleKeys.includes(row.id);
-                    // Suppress the indigo highlight when all are visible —
-                    // the All-row carries the highlight in that state.
-                    const showHighlight = on && !allBurnUpKeysSelected;
-                    return (
-                      <EpicLegendRowButton
-                        key={row.id}
-                        label={row.title}
-                        // Always pass the row's natural color — don't fade the
-                        // glyph to slate-300 when off (matches burndown).
-                        color={row.color}
-                        on={showHighlight}
-                        isEpic
-                        onClick={() => toggleBurnUpKey(row.id)}
-                        treeRow={selectedInitiativeId !== "all"}
-                        textClass={cn(
-                          "hover:bg-slate-200/70",
-                          isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
-                          on ? "text-slate-900" : "text-slate-500",
-                        )}
-                      />
-                    );
-                  })}
-                  </div>
-                  {/* Mirror the burndown's "Due:" footer — shown when the
-                   *  burnup is focused on a single epic (scope picker or
-                   *  legend narrowed to one). */}
-                  {burnUpSingleEpicVisible && burnUpDueDate ? (
-                    <p className="mt-1 pl-0 text-[12px] text-slate-500">
-                      Due: {burnUpDueDate.toLocaleDateString()}
-                    </p>
-                  ) : null}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => scrollBurnUpLegendBy(-96)}
-                  className={cn(
-                    "absolute right-0 top-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
-                    canScrollBurnUpUp && "bg-slate-200/70 text-slate-800",
-                  )}
-                  aria-label="Scroll up burn up legend"
-                >
-                  <ChevronUp className="size-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => scrollBurnUpLegendBy(96)}
-                  className={cn(
-                    "absolute bottom-0 right-0 inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800",
-                    canScrollBurnUpDown && "bg-slate-200/70 text-slate-800",
-                  )}
-                  aria-label="Scroll down burn up legend"
-                >
-                  <ChevronDown className="size-3.5" />
-                </button>
-              </div>
-              ) : null}
+            </div>
+            {/* Burnup legend — horizontal chip row beneath the chart,
+             *  same shape as the burndown + CFD legends. */}
+            <div
+              className={cn(
+                "mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-1",
+                isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
+              )}
+            >
+              <button
+                type="button"
+                onClick={showAllBurnUpKeys}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 font-medium transition",
+                  allBurnUpKeysSelected
+                    ? "text-slate-900 hover:bg-slate-200/70"
+                    : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
+                )}
+              >
+                <Layers className="size-3.5" aria-hidden />
+                All
+              </button>
+              {burnUpEpicRows.map((row, rowIdx) => {
+                const on = burnUpVisibleKeys.includes(row.id);
+                const color = LINE_PALETTE[rowIdx % LINE_PALETTE.length];
+                return (
+                  <button
+                    key={row.id}
+                    type="button"
+                    onClick={() => toggleBurnUpKey(row.id)}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 transition",
+                      on ? "text-slate-900 hover:bg-slate-200/70" : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
+                    )}
+                  >
+                    <span
+                      className="inline-block h-2.5 w-2.5 shrink-0 rounded-[2px] ring-1 ring-black/10"
+                      style={{ backgroundColor: color, opacity: on ? 1 : 0.35 }}
+                    />
+                    <span className="max-w-[14rem] truncate">{row.title}</span>
+                  </button>
+                );
+              })}
             </div>
           </article>
 
