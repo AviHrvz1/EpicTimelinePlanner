@@ -34,7 +34,7 @@
  *   the chip are now wired to the SAME function call.
  */
 
-import type { EpicItem } from "@/lib/types";
+import type { EpicItem, StoryDailySnapshotItem, UserStoryItem } from "@/lib/types";
 import {
   computeInitiativeProgress,
   computeProgress,
@@ -46,7 +46,6 @@ import {
 } from "@/lib/progress";
 import { now as clockNow } from "@/lib/clock";
 import { computeEpicObservedStart } from "@/lib/epic-observed-start";
-import { projectStoryToCloseDate } from "@/lib/story-snapshot-projection";
 
 // Re-export the verdict thresholds so callers don't need to import them
 // from a different module than the series itself.
@@ -134,6 +133,46 @@ export type BuildBurnSeriesArgs = {
 // Internal helpers
 // ----------------------------------------------------------------------
 
+/** Sweep-line projection state for one story. `sortedMs` and `sortedSnaps`
+ *  are parallel arrays of pre-parsed snapshot timestamps + their snapshot
+ *  payloads, both sorted ascending by date. `pointer` is the index of the
+ *  LATEST snapshot whose timestamp is ≤ the cursor day (or `-1` when no
+ *  snapshot has been crossed yet). Because the per-day loop walks
+ *  calendar days forward in time, the pointer only ever advances — never
+ *  rewinds — so each story's projection is amortized O(1) per day. */
+type StoryProjector = {
+  story: UserStoryItem;
+  sortedMs: number[];
+  sortedSnaps: StoryDailySnapshotItem[];
+  pointer: number;
+};
+
+/** Advance the projector's pointer to the latest snapshot ≤ `dayEndMs` and
+ *  return the projected story view. Mirrors `projectStoryToCloseDate` from
+ *  `lib/story-snapshot-projection.ts` field-for-field; the only difference
+ *  is that the linear `O(snapshots)` scan is replaced with the amortized
+ *  `O(1)` pointer walk. Callers MUST invoke this with monotonically
+ *  non-decreasing `dayEndMs` values within a single `buildBurnSeries`
+ *  call — going backwards would silently return a too-late snapshot. */
+function advanceProjector(sp: StoryProjector, dayEndMs: number): UserStoryItem {
+  while (sp.pointer + 1 < sp.sortedMs.length && sp.sortedMs[sp.pointer + 1] <= dayEndMs) {
+    sp.pointer++;
+  }
+  if (sp.pointer < 0) return sp.story;
+  const best = sp.sortedSnaps[sp.pointer];
+  return {
+    ...sp.story,
+    status: best.status,
+    daysLeft: best.daysLeft,
+    estimatedDays: best.estimatedDays ?? sp.story.estimatedDays,
+    sprint: best.sprint ?? sp.story.sprint,
+    title: best.title ?? sp.story.title,
+    description: best.description ?? sp.story.description,
+    priority: best.priority ?? sp.story.priority,
+    labels: best.labels ?? sp.story.labels,
+  };
+}
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const WEEKDAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const MONTH_SHORT = [
@@ -209,6 +248,17 @@ function basisValuesForEpic(
   planEnd: Date,
   now: Date,
 ): { scope: number; completed: number; daysLeft: number } {
+  // Stories basis short-circuit — return values come straight from
+  // `projectedStories.length` and the `"done"` count, no story-day or
+  // epic-estimate math involved. Doing this BEFORE the `computeProgress`
+  // call (rather than after) saves one call + one full `projectedStories`
+  // sweep per epic per day, which adds up to ~18k unnecessary calls in
+  // the aggregate year view.
+  if (basis === "stories") {
+    const total = projectedStories.length;
+    const done = projectedStories.filter((s) => s.status === "done").length;
+    return { scope: total, completed: done, daysLeft: total - done };
+  }
   const r = computeProgress({
     stories: projectedStories.map((s) => ({
       estimatedDays: s.estimatedDays,
@@ -223,16 +273,10 @@ function basisValuesForEpic(
   });
   // `r.totalEffort` is the basis-scoped scope:
   //   - basis="days"     → Σ story.estimatedDays
-  //   - basis="stories"  → not used (we override below)
   //   - basis="epicEst"  → epic.originalEstimateDays
   // `r.remainingEffort` is the basis-scoped days-left (computed inside
   // `computeProgress` via the SAME `epicEst − storyDaysBurned` formula
   // that fixes the basis-leak bug).
-  if (basis === "stories") {
-    const total = projectedStories.length;
-    const done = projectedStories.filter((s) => s.status === "done").length;
-    return { scope: total, completed: done, daysLeft: total - done };
-  }
   const scope = r.totalEffort;
   const daysLeft = Math.max(0, Math.min(scope, r.remainingEffort));
   const completed = Math.max(0, scope - daysLeft);
@@ -293,6 +337,33 @@ export function buildBurnSeries(args: BuildBurnSeriesArgs): BurnSeries {
     // ("should already be 100% done" — misleading; the true signal is
     // "no plan exists in this period, reschedule").
     const isFullyOverdue = planEndDayIdx < 1;
+    // Sweep-line projection state — one entry per story. Snapshot
+    // timestamps are parsed once here instead of `O(days × snapshots)`
+    // times inside the per-day loop, and the `pointer` advances
+    // monotonically as the per-day loop walks calendar days forward.
+    // Replaces the `projectStoryToCloseDate` call that previously ran
+    // for every (day × story) pair — the dominant cost in the aggregate
+    // view (51 epics × ~10 stories × ~5 snapshots × 365 days ≈ 930k
+    // redundant Date parses per chart).
+    const storyProjectors: StoryProjector[] = (epic.userStories ?? []).map((story) => {
+      const snaps = story.snapshots ?? [];
+      if (snaps.length === 0) {
+        return { story, sortedMs: [], sortedSnaps: [], pointer: -1 };
+      }
+      // Defensive sort — the Prisma loader already orders snapshots by
+      // `snapshotDate` ascending, but if a caller hands us un-ordered
+      // data the sweep depends on ascending order, so spend the O(n log n)
+      // here once rather than be wrong forever.
+      const indexed = snaps
+        .map((snap) => ({ ms: new Date(snap.snapshotDate).getTime(), snap }))
+        .sort((a, b) => a.ms - b.ms);
+      return {
+        story,
+        sortedMs: indexed.map((x) => x.ms),
+        sortedSnaps: indexed.map((x) => x.snap),
+        pointer: -1,
+      };
+    });
     return {
       epic,
       plannedStart,
@@ -301,8 +372,44 @@ export function buildBurnSeries(args: BuildBurnSeriesArgs): BurnSeries {
       planStartDayIdx,
       planEndDayIdx,
       isFullyOverdue,
+      storyProjectors,
     };
   });
+
+  // Pre-compute the AGGREGATE ideal-line endpoints — one straight ramp
+  // across the whole portfolio rather than a sum of per-epic ramps. The
+  // sum-of-ramps version (which we used before) produced a bendy
+  // piecewise composite that reads as "many plans, can't tell what's
+  // ideal." The straight ramp from `Σ scope` at the earliest plan start
+  // down to 0 at the latest plan end gives the planner one clean
+  // reference line they can compare the blue actual against. Per-epic
+  // ideals (stored on `perEpic[id].idealDaysLeft`) are still computed
+  // below — those are used by the focused-epic view where the chart
+  // shows a single epic's plan.
+  const inScopeMetas = epicMeta.filter((m) => !m.isFullyOverdue);
+  let aggregateBaselineScope = 0;
+  let aggregateStartDayIdx = Number.POSITIVE_INFINITY;
+  let aggregateEndDayIdx = Number.NEGATIVE_INFINITY;
+  for (const m of inScopeMetas) {
+    const stories = m.epic.userStories ?? [];
+    let perEpicBaseline = 0;
+    if (args.basis === "stories") {
+      perEpicBaseline = stories.length;
+    } else if (args.basis === "epicEst") {
+      perEpicBaseline = m.epic.originalEstimateDays
+        ?? stories.reduce((s, st) => s + (st.estimatedDays ?? 0), 0);
+    } else {
+      // "days" basis — Σ Child Est.
+      perEpicBaseline = stories.reduce((s, st) => s + (st.estimatedDays ?? 0), 0);
+    }
+    aggregateBaselineScope += perEpicBaseline;
+    if (m.planStartDayIdx < aggregateStartDayIdx) aggregateStartDayIdx = m.planStartDayIdx;
+    if (m.planEndDayIdx > aggregateEndDayIdx) aggregateEndDayIdx = m.planEndDayIdx;
+  }
+  const hasAggregateIdeal = inScopeMetas.length > 0
+    && aggregateBaselineScope > 0
+    && Number.isFinite(aggregateStartDayIdx)
+    && Number.isFinite(aggregateEndDayIdx);
 
   // For each day, project every story to end-of-day and apply the basis
   // formula via `computeProgress`. Same formula end-to-end → no leak.
@@ -322,10 +429,7 @@ export function buildBurnSeries(args: BuildBurnSeriesArgs): BurnSeries {
     let aggScope = 0;
     let aggCompleted = 0;
     let aggDaysLeft = 0;
-    let aggIdealDaysLeft = 0;
-    let aggIdealCompleted = 0;
     let anyEpicHasData = false;
-    let anyEpicHasIdeal = false;
     const perEpic: Record<string, EpicDayValues | null> = {};
 
     for (const meta of epicMeta) {
@@ -338,9 +442,19 @@ export function buildBurnSeries(args: BuildBurnSeriesArgs): BurnSeries {
       let epicCompleted: number | null = null;
       let epicDaysLeft: number | null = null;
       if (!isFuture) {
-        const projectedStories = (epic.userStories ?? []).map((s) =>
-          projectStoryToCloseDate(s, dayEndMs),
-        );
+        // Snapshots are for HISTORICAL reconstruction — they answer
+        // "what was true on date X". "Today" is the present, and the
+        // live `userStories` array is the authoritative present-day
+        // state. Projecting today through stale snapshots can overwrite
+        // a live `"done"` with the last snapshot's `"review"` /
+        // `"inProgress"` when no snapshot ever captured the final
+        // transition — the chart line then disagreed with the Status
+        // pie + verdict chip (which both already read live). At today,
+        // bypass projection so the chart matches the pie and the
+        // verdict.
+        const projectedStories = isToday
+          ? (epic.userStories ?? [])
+          : meta.storyProjectors.map((sp) => advanceProjector(sp, dayEndMs));
         const v = basisValuesForEpic(
           epic,
           projectedStories,
@@ -358,15 +472,10 @@ export function buildBurnSeries(args: BuildBurnSeriesArgs): BurnSeries {
         if (epicScope > 0) anyEpicHasData = true;
       }
 
-      // Ideal — computed for EVERY day inside the plan window (past +
-      // today + future). The plan line is what the planner agreed to
-      // at scope-set time and should extend all the way to the epic's
-      // due date so the planner can read the trajectory and the gap to
-      // the actual line at any point.
-      //   - Past/today: anchor to the day's measured scope.
-      //   - Future:     anchor to `originalEstimateDays` (or the story-
-      //                 day fallback so the ideal still draws when no
-      //                 explicit epic-est is set).
+      // Per-epic ideal — kept for the focused-epic view (`perEpic[id]
+      // .idealDaysLeft` is the data source for that chart line). The
+      // aggregate ideal is now computed separately, OUTSIDE this loop,
+      // as one straight ramp (see `hasAggregateIdeal` block below).
       let epicIdealDaysLeft: number | null = null;
       let epicIdealCompleted: number | null = null;
       if (!meta.isFullyOverdue) {
@@ -384,9 +493,6 @@ export function buildBurnSeries(args: BuildBurnSeriesArgs): BurnSeries {
         );
         if (epicIdealDaysLeft != null) {
           epicIdealCompleted = Math.max(0, baselineScope - epicIdealDaysLeft);
-          aggIdealDaysLeft += epicIdealDaysLeft;
-          aggIdealCompleted += epicIdealCompleted;
-          anyEpicHasIdeal = true;
         }
       }
 
@@ -399,6 +505,24 @@ export function buildBurnSeries(args: BuildBurnSeriesArgs): BurnSeries {
       };
     }
 
+    // Aggregate ideal — single straight ramp from `aggregateBaselineScope`
+    // at `aggregateStartDayIdx` to 0 at `aggregateEndDayIdx`. Null when
+    // there's no scope or the day is outside the [start, end] window.
+    let aggIdealDaysLeft: number | null = null;
+    let aggIdealCompleted: number | null = null;
+    if (hasAggregateIdeal) {
+      const v = idealDaysLeftFor(
+        dayIdx,
+        aggregateBaselineScope,
+        aggregateStartDayIdx,
+        aggregateEndDayIdx,
+      );
+      if (v != null) {
+        aggIdealDaysLeft = v;
+        aggIdealCompleted = Math.max(0, aggregateBaselineScope - v);
+      }
+    }
+
     perDay.push({
       dayLabel: dayLabelFor(date),
       axisLabel: dayLabelFor(date),
@@ -408,8 +532,8 @@ export function buildBurnSeries(args: BuildBurnSeriesArgs): BurnSeries {
       scope: isFuture ? null : (anyEpicHasData ? aggScope : 0),
       completed: isFuture ? null : aggCompleted,
       daysLeft: isFuture ? null : aggDaysLeft,
-      idealDaysLeft: anyEpicHasIdeal ? aggIdealDaysLeft : null,
-      idealCompleted: anyEpicHasIdeal ? aggIdealCompleted : null,
+      idealDaysLeft: aggIdealDaysLeft,
+      idealCompleted: aggIdealCompleted,
       perEpic,
     });
   }

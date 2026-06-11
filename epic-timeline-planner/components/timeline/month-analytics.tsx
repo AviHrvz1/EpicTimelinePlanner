@@ -84,20 +84,21 @@ import { useTeamImages } from "@/lib/use-team-images";
 
 type BurndownMetric = "daysLeft" | "storyCount";
 
-/** Advance a date by N working days (Mon–Fri only). Used by the
- *  forecast computation: `forecastDate = dueDate + ceil(Δ) working days`.
- *  When `days <= 0` returns the input date unchanged — the forecast
- *  function short-circuits the "done / ahead" cases before getting here,
- *  but the floor keeps the math defensive. */
+/** Shift a date by N working days (Mon–Fri only). Used by the forecast
+ *  computation: `forecastDate = dueDate + ceil(Δ) working days`.
+ *  Positive `days` advance forward (team is behind plan → forecast slips
+ *  later); negative `days` step backward (team is ahead → forecast pulls
+ *  earlier than the plan due date). `days === 0` returns the input date. */
 function addWorkingDays(start: Date, days: number): Date {
-  const target = Math.max(0, Math.ceil(days));
+  const target = Math.ceil(Math.abs(days));
   if (target === 0) return new Date(start);
+  const step = days >= 0 ? 1 : -1;
   const result = new Date(start);
-  let added = 0;
-  while (added < target) {
-    result.setDate(result.getDate() + 1);
+  let moved = 0;
+  while (moved < target) {
+    result.setDate(result.getDate() + step);
     const dow = result.getDay();
-    if (dow !== 0 && dow !== 6) added += 1;
+    if (dow !== 0 && dow !== 6) moved += 1;
   }
   return result;
 }
@@ -2691,8 +2692,14 @@ export function MonthAnalytics({
         return init?.id === selectedInitiativeId;
       });
     }
-    if (burndownVisibleKeys.length > 0) {
-      return burndownScopedEpics.filter((e) => burndownVisibleKeys.includes(e.id));
+    // `"__all__"` is the sentinel key the aggregate legend chip carries
+    // — it means "no narrowing," NOT an epic id, so when it appears
+    // alone we pass all in-scope epics through. Treating it as an id
+    // would filter to zero epics and leave the chart empty (the bug
+    // this branch defends against).
+    const realVisible = burndownVisibleKeys.filter((k) => k !== "__all__");
+    if (realVisible.length > 0) {
+      return burndownScopedEpics.filter((e) => realVisible.includes(e.id));
     }
     return burndownScopedEpics;
   }, [selectedEpicOption, selectedInitiativeId, monthEpics, burndownScopedEpics, burndownVisibleKeys]);
@@ -3003,14 +3010,26 @@ export function MonthAnalytics({
         },
       ];
     }
-    return [
-      ...monthBurndownEpics.map((epic, idx) => ({
-        key: epic.id,
-        label: epic.title,
-        color: LINE_PALETTE[idx % LINE_PALETTE.length],
-      })),
-    ];
-  }, [selectedEpicOption, monthBurndownEpics, selectedEpicDueDate, planYear, scopeStartMonth]);
+    // No epic pinned. When an initiative is pinned via the scope picker,
+    // collapse the legend to one "All <initiative> epics" chip; when
+    // truly "all" scope, one "All epics" chip. The per-epic chip list
+    // (10 chips when there are 10 epics) was visual noise — the planner
+    // narrows via the Epic / Initiative Scope picker above, not the
+    // legend, so the legend only needs to label the aggregate view.
+    if (selectedInitiativeId !== "all") {
+      const init = scopeInitiativeOptions.find((i) => i.id === selectedInitiativeId);
+      return [{
+        key: "__all__",
+        label: init ? `All ${init.title} epics` : "All epics",
+        color: "#64748b",
+      }];
+    }
+    return [{
+      key: "__all__",
+      label: "All epics",
+      color: "#64748b",
+    }];
+  }, [selectedEpicOption, selectedInitiativeId, scopeInitiativeOptions, selectedEpicDueDate, planYear, scopeStartMonth]);
   useEffect(() => {
     setBurndownVisibleKeys((prev) => {
       const available = new Set(burndownLegendItems.map((item) => item.key));
@@ -3287,22 +3306,39 @@ export function MonthAnalytics({
         return init?.id === selectedInitiativeId;
       });
     }
-    if (burnUpVisibleKeys.length > 0) {
-      return burndownScopedEpics.filter((e) => burnUpVisibleKeys.includes(e.id));
+    // Same `"__all__"` sentinel handling as the burndown side — see the
+    // comment in `burnDownEpicsForSeries`.
+    const realVisible = burnUpVisibleKeys.filter((k) => k !== "__all__");
+    if (realVisible.length > 0) {
+      return burndownScopedEpics.filter((e) => realVisible.includes(e.id));
     }
     return burndownScopedEpics;
   }, [selectedEpicOption, selectedInitiativeId, monthEpics, burndownScopedEpics, burnUpVisibleKeys]);
   /** Burnup forecast — mirror of the burndown's. Rate = today's
    *  `completed` / elapsed calendar days. Projects the date the actual
-   *  line reaches `scope`. Null when no work, no scope, or no data. */
+   *  line reaches `scope`. Null when no work, no scope, or no data.
+   *
+   *  Perf: when the burnup's args match the burndown's (same epic list,
+   *  same basis, same period), reuse the burndown's series instead of
+   *  recomputing. `buildBurnSeries` is pure — same inputs ⇒ same output —
+   *  and in the aggregate-all view (no legend narrowing, shared basis
+   *  picker) the two charts always have identical inputs. Halves the
+   *  per-day projection work in the slowest case. */
   const burnUpBaseSeries = useMemo(
-    () => buildBurnSeries({
-      epics: burnUpEpicsForSeries,
-      basis: burnupBasis,
-      periodStart: burnDownPeriodStart,
-      periodEnd: burnDownPeriodEnd,
-    }),
-    [burnUpEpicsForSeries, burnupBasis, burnDownPeriodStart, burnDownPeriodEnd],
+    () => {
+      const sameEpics = burnUpEpicsForSeries.length === burnDownEpicsForSeries.length
+        && burnUpEpicsForSeries.every((e, i) => e.id === burnDownEpicsForSeries[i]?.id);
+      if (sameEpics && burnupBasis === burndownBasis) {
+        return burnDownBaseSeries;
+      }
+      return buildBurnSeries({
+        epics: burnUpEpicsForSeries,
+        basis: burnupBasis,
+        periodStart: burnDownPeriodStart,
+        periodEnd: burnDownPeriodEnd,
+      });
+    },
+    [burnUpEpicsForSeries, burnupBasis, burnDownPeriodStart, burnDownPeriodEnd, burnDownEpicsForSeries, burndownBasis, burnDownBaseSeries],
   );
   /** Burnup mirror — same Δ-based formula. Due date derived inline so
    *  this useMemo doesn't depend on `burnUpDueDate` (declared later in
@@ -3343,6 +3379,18 @@ export function MonthAnalytics({
       if (burnUpEffectivePeriodEnd.getTime() === burnDownPeriodEnd.getTime()) {
         return burnUpBaseSeries;
       }
+      // Forecast-extended path: same dedupe trick — if the burndown's
+      // extended series happens to share the same args (same epics, same
+      // basis, same extended periodEnd), reuse it.
+      const sameEpics = burnUpEpicsForSeries.length === burnDownEpicsForSeries.length
+        && burnUpEpicsForSeries.every((e, i) => e.id === burnDownEpicsForSeries[i]?.id);
+      if (
+        sameEpics
+        && burnupBasis === burndownBasis
+        && burnUpEffectivePeriodEnd.getTime() === burnDownEffectivePeriodEnd.getTime()
+      ) {
+        return burnDownSeries;
+      }
       return buildBurnSeries({
         epics: burnUpEpicsForSeries,
         basis: burnupBasis,
@@ -3350,7 +3398,7 @@ export function MonthAnalytics({
         periodEnd: burnUpEffectivePeriodEnd,
       });
     },
-    [burnUpBaseSeries, burnUpEffectivePeriodEnd, burnDownPeriodEnd, burnUpEpicsForSeries, burnupBasis, burnDownPeriodStart],
+    [burnUpBaseSeries, burnUpEffectivePeriodEnd, burnDownPeriodEnd, burnUpEpicsForSeries, burnupBasis, burnDownPeriodStart, burnDownEpicsForSeries, burndownBasis, burnDownEffectivePeriodEnd, burnDownSeries],
   );
   /** Burnup adapter — flattens the canonical BurnPoint shape into the
    *  legacy field names the burnup `<LineChart>` consumes (`labelShort`,
@@ -3564,6 +3612,33 @@ export function MonthAnalytics({
     });
   }, [selectedEpicOption, monthEpics]);
 
+  /** Legend chip list for the burnup. Collapsed to a single "All epics"
+   *  / "All <initiative> epics" / focused-epic chip in non-subset modes.
+   *  Per-epic line rendering on the chart still reads `burnUpEpicRows`
+   *  directly (the full list); only the chip ROW is collapsed. */
+  const burnUpLegendItems = useMemo(() => {
+    if (selectedEpicOption) {
+      return [{
+        id: selectedEpicOption.epic.id,
+        title: selectedEpicOption.epic.title,
+        color: LINE_PALETTE[0],
+      }];
+    }
+    if (selectedInitiativeId !== "all") {
+      const init = scopeInitiativeOptions.find((i) => i.id === selectedInitiativeId);
+      return [{
+        id: "__all__",
+        title: init ? `All ${init.title} epics` : "All epics",
+        color: "#64748b",
+      }];
+    }
+    return [{
+      id: "__all__",
+      title: "All epics",
+      color: "#64748b",
+    }];
+  }, [selectedEpicOption, selectedInitiativeId, scopeInitiativeOptions]);
+
   useEffect(() => {
     setBurnUpVisibleKeys((prev) => {
       const available = new Set(burnUpEpicRows.map((r) => r.id));
@@ -3604,7 +3679,9 @@ export function MonthAnalytics({
   const burndownTitleSuffix = useMemo<ReactNode>(() => {
     if (burndownVisibleKeys.length === 1) {
       const key = burndownVisibleKeys[0]!;
-      if (key !== "epicIdeal") {
+      // Skip the "single-visible-key" treatment when the lone key is the
+      // aggregate sentinel — there's no single epic to label or link to.
+      if (key !== "epicIdeal" && key !== "__all__") {
         const item = burndownLegendItems.find((i) => i.key === key);
         if (item) {
           return (
@@ -5060,19 +5137,24 @@ export function MonthAnalytics({
             isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
           )}
         >
-          <button
-            type="button"
-            onClick={showAllBurndownKeys}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 font-medium transition",
-              allBurndownKeysSelected
-                ? "text-slate-900 hover:bg-slate-200/70"
-                : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
-            )}
-          >
-            <Layers className="size-3.5" aria-hidden />
-            All
-          </button>
+          {/* "All" toggle hides in aggregate mode where the legend is a
+           *  single "All epics" chip — clicking either would do the same
+           *  thing, so showing both reads as redundant chrome. */}
+          {burndownLegendItems.length > 1 ? (
+            <button
+              type="button"
+              onClick={showAllBurndownKeys}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 font-medium transition",
+                allBurndownKeysSelected
+                  ? "text-slate-900 hover:bg-slate-200/70"
+                  : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
+              )}
+            >
+              <Layers className="size-3.5" aria-hidden />
+              All
+            </button>
+          ) : null}
           {burndownLegendItems.map((item) => {
             const on = burndownVisibleKeys.includes(item.key);
             return (
@@ -6580,27 +6662,35 @@ export function MonthAnalytics({
                 isMultiPeriodInsights ? "text-[14px]" : "text-[13px]",
               )}
             >
-              <button
-                type="button"
-                onClick={showAllBurnUpKeys}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 font-medium transition",
-                  allBurnUpKeysSelected
-                    ? "text-slate-900 hover:bg-slate-200/70"
-                    : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
-                )}
-              >
-                <Layers className="size-3.5" aria-hidden />
-                All
-              </button>
-              {burnUpEpicRows.map((row, rowIdx) => {
-                const on = burnUpVisibleKeys.includes(row.id);
-                const color = LINE_PALETTE[rowIdx % LINE_PALETTE.length];
+              {/* "All" toggle hides in aggregate mode — see burndown
+               *  comment. */}
+              {burnUpLegendItems.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={showAllBurnUpKeys}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 font-medium transition",
+                    allBurnUpKeysSelected
+                      ? "text-slate-900 hover:bg-slate-200/70"
+                      : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-800",
+                  )}
+                >
+                  <Layers className="size-3.5" aria-hidden />
+                  All
+                </button>
+              ) : null}
+              {burnUpLegendItems.map((row) => {
+                const isAggregate = row.id === "__all__";
+                const on = isAggregate
+                  ? allBurnUpKeysSelected
+                  : burnUpVisibleKeys.includes(row.id);
                 return (
                   <button
                     key={row.id}
                     type="button"
-                    onClick={() => toggleBurnUpKey(row.id)}
+                    onClick={() => isAggregate
+                      ? showAllBurnUpKeys()
+                      : toggleBurnUpKey(row.id)}
                     className={cn(
                       "inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 transition",
                       on ? "text-slate-900 hover:bg-slate-200/70" : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
@@ -6608,7 +6698,7 @@ export function MonthAnalytics({
                   >
                     <span
                       className="inline-block h-2.5 w-2.5 shrink-0 rounded-[2px] ring-1 ring-black/10"
-                      style={{ backgroundColor: color, opacity: on ? 1 : 0.35 }}
+                      style={{ backgroundColor: row.color, opacity: on ? 1 : 0.35 }}
                     />
                     <span className="max-w-[14rem] truncate">{row.title}</span>
                   </button>
