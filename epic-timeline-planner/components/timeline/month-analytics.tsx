@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   ChartNoAxesCombined,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Circle,
   Clock,
@@ -71,12 +72,13 @@ import { clampYearSprint, globalSprintFromMonthLane, monthLaneFromGlobalSprint, 
 import { computeProgress, computeInitiativeProgress, type HealthStatus, type ProgressBasis, type ProgressResult } from "@/lib/progress";
 import { computeEpicObservedStart, effectiveEpicStart } from "@/lib/epic-observed-start";
 import { computeEpicHealthVerdict } from "@/lib/epic-health";
-import { computeStoryHealthVerdict, formatStoryHealthTooltip, formatBundleHealthTooltip } from "@/lib/story-health";
+import { computeStoryHealthVerdict, formatStoryHealthTooltip } from "@/lib/story-health";
 import { nowMs as clockNowMs } from "@/lib/clock";
 import { projectInitiativesToCloseDate } from "@/lib/story-snapshot-projection";
 import { SnapshotHeaderStrip, type SnapshotHeaderStripScope } from "@/components/timeline/snapshot-header-strip";
 import { ToggleGroup } from "@/components/timeline/basis-toggle-group";
 import { HealthBadge, HealthBadgeWithDetail, HealthBadgeWithTextPopover, formatHealthTooltip } from "@/components/timeline/health-badge";
+import { VerdictDistributionChip, type VerdictBuckets } from "@/components/timeline/verdict-distribution-chip";
 import { UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { TeamAvatar } from "@/components/ui/team-avatar";
@@ -481,6 +483,8 @@ function TeamHealthBadgeWithList({
   atRiskEpics,
   watchEpics,
   overdueEpics,
+  buckets,
+  total,
   teamLabel,
   onOpenEpic,
 }: {
@@ -488,188 +492,327 @@ function TeamHealthBadgeWithList({
   atRiskEpics: FlaggedEpicEntry[];
   watchEpics: FlaggedEpicEntry[];
   overdueEpics: FlaggedEpicEntry[];
+  /** All five verdict counts for this team's in-scope epics. The chip
+   *  renders this as a segmented bar — the proportion IS the verdict,
+   *  no worst-of-children word. */
+  buckets: VerdictBuckets;
+  total: number;
   teamLabel: string;
   onOpenEpic?: (epicId: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLSpanElement | null>(null);
-  const popoverRef = useRef<HTMLDivElement | null>(null);
-  // Portal-positioned popover: anchored to the badge but rendered to
-  // document.body so it escapes any `overflow:hidden` ancestor (the
-  // Team Progress rows scroll inside a clipped container, which is
-  // why z-index alone couldn't lift the panel out). Opens ABOVE the
-  // badge by default — the Team Progress list often sits near the
-  // bottom of a card and a downward-opening popover would clip.
-  const [pos, setPos] = useState<{ left: number; bottom: number } | null>(null);
-  useEffect(() => {
-    if (!open) {
-      setPos(null);
-      return;
-    }
-    const place = () => {
-      const el = wrapRef.current;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      const popW = 384; // matches w-96
-      const right = Math.min(window.innerWidth - 8, r.right);
-      const left = Math.max(8, right - popW);
-      // Anchor by the popover's bottom edge: it stays 6px ABOVE the
-      // badge's top edge regardless of the popover's own height (which
-      // varies with how many epics are flagged).
-      const bottom = Math.max(8, window.innerHeight - r.top + 6);
-      setPos({ left, bottom });
-    };
-    place();
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
-    return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
-    };
-  }, [open]);
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      const t = e.target as Node | null;
-      if (wrapRef.current?.contains(t)) return;
-      if (popoverRef.current?.contains(t)) return;
-      setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
   const verdict =
     status === "overdue" ? "Overdue"
     : status === "atRisk" ? "At Risk"
     : status === "watch" ? "Watch"
     : status === "done" ? "Done"
     : "On Track";
-  const tipLines: string[] = [`${teamLabel} — ${verdict}`, "Click for details."];
   const flagged = overdueEpics.length + atRiskEpics.length + watchEpics.length;
 
-  // The badge sits inside the row's <button>, so nesting another <button>
-  // (HealthBadge with onClick) would be invalid HTML and browsers split
-  // it inconsistently — that's why "nothing happens" on click. Render
-  // HealthBadge as a plain span (no onClick) and put the toggle on this
-  // wrapper span, stopping propagation so the row's onClick (which opens
-  // the drilldown) doesn't also fire.
-  return (
-    <span
-      ref={wrapRef}
-      className="relative inline-flex cursor-pointer"
-      onClick={(e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        setOpen((v) => !v);
-      }}
-      onMouseDown={(e) => e.stopPropagation()}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          e.stopPropagation();
-          setOpen((v) => !v);
-        }
-      }}
-      aria-haspopup="dialog"
-      aria-expanded={open}
-    >
-      {/* "xs" size — the Team Progress rows on the insights page are
-          dense (team name + est/review/left numerics + progress bar),
-          so the verdict badge drops to text-[10px] / px-1.5 / py-px
-          to sit alongside without dominating the row. */}
-      <HealthBadge size="xs" status={status} tooltip={tipLines.join("\n")} />
-      {open && pos && typeof document !== "undefined" ? createPortal(
-        <div
-          ref={popoverRef}
-          role="dialog"
-          aria-label={`${teamLabel} — ${verdict} details`}
-          style={{ position: "fixed", left: pos.left, bottom: pos.bottom, zIndex: 1000 }}
-          className="w-96 max-w-[calc(100vw-2rem)] rounded-lg border border-slate-200 bg-white p-3.5 text-left text-slate-800 shadow-xl"
-          onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <p className="mb-2 inline-flex w-full items-center justify-between text-[12.5px] font-bold uppercase tracking-wide text-slate-500">
-            <span>{teamLabel} · {verdict}</span>
-            {flagged > 0 ? <span className="text-[12px] font-semibold normal-case tracking-normal text-slate-400">{flagged} flagged</span> : null}
-          </p>
-          {/** One-line reason for a flagged epic. The verdict is set by
-           *  `deltaDays = remaining − ideal` where ideal interpolates
-           *  linearly from total-effort at the epic's planned start to 0
-           *  at its planned end. We surface the same numbers so the user
-           *  can sanity-check the verdict against the chart. */}
-          {(() => {
-            const reasonFor = (entry: FlaggedEpicEntry, kind: "overdue" | "atRisk" | "watch") => {
-              const r = entry.result;
-              if (kind === "overdue") {
-                return `${fmtDays(r.remainingEffort)} still open · due ${fmtDM(entry.end)} (passed)`;
-              }
-              const delta = r.deltaDays;
-              const ahead = delta < 0 ? `-${fmtDays(-delta)}` : `+${fmtDays(delta)}`;
-              return `${fmtDays(r.remainingEffort)} left · ${r.daysRemaining}d to ${fmtDM(entry.end)} · ${ahead} vs ideal`;
-            };
-            const renderList = (
-              key: "overdue" | "atRisk" | "watch",
-              entries: FlaggedEpicEntry[],
-              titleClass: string,
-              heading: string,
-            ) => {
-              // Per-bucket warning glyph + tint — overdue uses an octagon
-              // since "past deadline" is a harder failure than "drifting".
-              const warnIcon = key === "overdue"
-                ? { Icon: AlertOctagon, className: "text-rose-700" }
-                : key === "atRisk"
-                  ? { Icon: AlertTriangle, className: "text-rose-600" }
-                  : { Icon: AlertTriangle, className: "text-amber-600" };
-              const WarnIcon = warnIcon.Icon;
-              return entries.length === 0 ? null : (
-                <div className="mb-2.5">
-                  <p className={cn("text-[13px] font-semibold", titleClass)}>{heading} ({entries.length})</p>
-                  <ul className="mt-1.5 space-y-1.5">
-                    {entries.map((e) => (
-                      <li key={e.epic.id} className="leading-snug">
-                        <button
-                          type="button"
-                          onClick={() => { onOpenEpic?.(e.epic.id); setOpen(false); }}
-                          className="inline-flex w-full items-center gap-1.5 text-left text-[13.5px] font-medium text-blue-700 underline-offset-2 hover:underline"
-                        >
-                          <Folder className="size-3.5 shrink-0 text-slate-500" aria-hidden />
-                          <span className="min-w-0 truncate">{e.title}</span>
-                          <WarnIcon className={cn("size-3.5 shrink-0", warnIcon.className)} aria-hidden />
-                        </button>
-                        <p className="truncate text-[12px] tabular-nums text-slate-500">{reasonFor(e, key)}</p>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            };
-            return (
-              <>
-                {renderList("overdue", overdueEpics, "text-rose-900", "Overdue — planned end passed")}
-                {renderList("atRisk", atRiskEpics, "text-rose-800", "At Risk — ≥4d above ideal")}
-                {renderList("watch", watchEpics, "text-amber-800", "Watch — 1–4d above ideal")}
-              </>
-            );
-          })()}
-          {flagged === 0 ? (
-            <p className="text-[13px] text-slate-500">No flagged epics — everything is on or ahead of pace.</p>
-          ) : null}
-          <div className="mt-2 border-t border-slate-100 pt-2.5 text-[12.5px] leading-snug text-slate-500">
-            <p className="mb-1"><span className="font-semibold text-slate-600">How we score:</span> at each point in an epic's window we compare its remaining work to the ideal linear burndown — Δ = remaining − ideal.</p>
-            <p>≤ 1d → On Track · 1–4d → Watch · ≥ 4d → At Risk · past planned end → Overdue.</p>
-          </div>
-        </div>,
-        document.body,
+  const reasonFor = (entry: FlaggedEpicEntry, kind: "overdue" | "atRisk" | "watch") => {
+    const r = entry.result;
+    if (kind === "overdue") {
+      return `${fmtDays(r.remainingEffort)} still open · due ${fmtDM(entry.end)} (passed)`;
+    }
+    const delta = r.deltaDays;
+    const ahead = delta < 0 ? `-${fmtDays(-delta)}` : `+${fmtDays(delta)}`;
+    return `${fmtDays(r.remainingEffort)} left · ${r.daysRemaining}d to ${fmtDM(entry.end)} · ${ahead} vs ideal`;
+  };
+  const renderList = (
+    key: "overdue" | "atRisk" | "watch",
+    entries: FlaggedEpicEntry[],
+    titleClass: string,
+    heading: string,
+  ) => {
+    // Per-bucket warning glyph + tint — overdue uses an octagon since
+    // "past deadline" is a harder failure than "drifting".
+    const warnIcon = key === "overdue"
+      ? { Icon: AlertOctagon, className: "text-rose-700" }
+      : key === "atRisk"
+        ? { Icon: AlertTriangle, className: "text-rose-600" }
+        : { Icon: AlertTriangle, className: "text-amber-600" };
+    const WarnIcon = warnIcon.Icon;
+    return entries.length === 0 ? null : (
+      <div className="mb-2.5">
+        <p className={cn("text-[13px] font-semibold", titleClass)}>{heading} ({entries.length})</p>
+        <ul className="mt-1.5 space-y-1.5">
+          {entries.map((e) => (
+            <li key={e.epic.id} className="leading-snug">
+              <button
+                type="button"
+                onClick={() => { onOpenEpic?.(e.epic.id); }}
+                className="inline-flex w-full items-center gap-1.5 text-left text-[13.5px] font-medium text-blue-700 underline-offset-2 hover:underline"
+              >
+                <Folder className="size-3.5 shrink-0 text-slate-500" aria-hidden />
+                <span className="min-w-0 truncate">{e.title}</span>
+                <WarnIcon className={cn("size-3.5 shrink-0", warnIcon.className)} aria-hidden />
+              </button>
+              <p className="truncate text-[12px] tabular-nums text-slate-500">{reasonFor(e, key)}</p>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  const popoverBody = (
+    <>
+      <p className="mb-2 inline-flex w-full items-center justify-between text-[12.5px] font-bold uppercase tracking-wide text-slate-500">
+        {/* Lead-in disambiguates the baseline: this verdict measures each
+         *  epic's own plan-end vs ideal-burndown delta. Same chip shape
+         *  is used by Sprint Load — that header leads with the sprint
+         *  label for the same reason. */}
+        <span>Epic plan · {teamLabel} · {verdict}</span>
+        {flagged > 0 ? <span className="text-[12px] font-semibold normal-case tracking-normal text-slate-400">{flagged} flagged</span> : null}
+      </p>
+      {renderList("overdue", overdueEpics, "text-rose-900", "Overdue — planned end passed")}
+      {renderList("atRisk", atRiskEpics, "text-rose-800", "At Risk — ≥4d above ideal")}
+      {renderList("watch", watchEpics, "text-amber-800", "Watch — 1–4d above ideal")}
+      {flagged === 0 ? (
+        <p className="text-[13px] text-slate-500">No flagged epics — everything is on or ahead of pace.</p>
       ) : null}
-    </span>
+      <div className="mt-2 border-t border-slate-100 pt-2.5 text-[12.5px] leading-snug text-slate-500">
+        <p className="mb-1"><span className="font-semibold text-slate-600">How we score:</span> at each point in an epic&rsquo;s window we compare its remaining work to the ideal linear burndown — Δ = remaining − ideal.</p>
+        <p>≤ 1d → On Track · 1–4d → Watch · ≥ 4d → At Risk · past planned end → Overdue.</p>
+      </div>
+    </>
+  );
+
+  return (
+    <VerdictDistributionChip
+      buckets={buckets}
+      total={total}
+      ariaLabel={`${teamLabel} — epic health distribution`}
+      popoverBody={popoverBody}
+      unitLabel="epic"
+      size="xs"
+    />
+  );
+}
+
+/**
+ * User-mode mirror of {@link TeamHealthBadgeWithList} for the Team
+ * Progress card when the breadcrumb pins a single team. Each row is one
+ * user; the chip's segments reflect the proportion of that user's
+ * in-scope stories by health, the popover lists flagged stories with
+ * click-through to open the story dialog.
+ */
+function UserHealthBadgeWithList({
+  buckets,
+  total,
+  status,
+  atRiskStories,
+  watchStories,
+  overdueStories,
+  assigneeLabel,
+  onOpenStory,
+}: {
+  buckets: VerdictBuckets;
+  total: number;
+  status: HealthStatus;
+  atRiskStories: Array<{ story: UserStoryItem; epic: EpicItem }>;
+  watchStories: Array<{ story: UserStoryItem; epic: EpicItem }>;
+  overdueStories: Array<{ story: UserStoryItem; epic: EpicItem }>;
+  assigneeLabel: string;
+  onOpenStory?: (storyId: string) => void;
+}) {
+  const verdict =
+    status === "overdue" ? "Overdue"
+    : status === "atRisk" ? "At Risk"
+    : status === "watch" ? "Watch"
+    : status === "done" ? "Done"
+    : "On Track";
+  const flagged = overdueStories.length + atRiskStories.length + watchStories.length;
+
+  const renderList = (
+    key: "overdue" | "atRisk" | "watch",
+    entries: Array<{ story: UserStoryItem; epic: EpicItem }>,
+    titleClass: string,
+    heading: string,
+  ) => {
+    const warnIcon = key === "overdue"
+      ? { Icon: AlertOctagon, className: "text-rose-700" }
+      : key === "atRisk"
+        ? { Icon: AlertTriangle, className: "text-rose-600" }
+        : { Icon: AlertTriangle, className: "text-amber-600" };
+    const WarnIcon = warnIcon.Icon;
+    return entries.length === 0 ? null : (
+      <div className="mb-2.5">
+        <p className={cn("text-[13px] font-semibold", titleClass)}>{heading} ({entries.length})</p>
+        <ul className="mt-1.5 space-y-1.5">
+          {entries.map(({ story, epic }) => (
+            <li key={story.id} className="leading-snug">
+              <button
+                type="button"
+                onClick={() => { onOpenStory?.(story.id); }}
+                className="inline-flex w-full items-center gap-1.5 text-left text-[13.5px] font-medium text-blue-700 underline-offset-2 hover:underline"
+              >
+                <BookOpen className="size-3.5 shrink-0 text-slate-500" aria-hidden />
+                <span className="min-w-0 truncate">{story.title}</span>
+                <WarnIcon className={cn("size-3.5 shrink-0", warnIcon.className)} aria-hidden />
+              </button>
+              <p className="truncate text-[12px] text-slate-500">{epic.title}</p>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  const popoverBody = (
+    <>
+      <p className="mb-2 inline-flex w-full items-center justify-between text-[12.5px] font-bold uppercase tracking-wide text-slate-500">
+        {/* Lead-in mirrors the team variant — story-level verdict against
+         *  each story's own sprint, so the planner knows the chip's
+         *  baseline isn't "fits in the period" or "epic plan". */}
+        <span>Sprint commit · {assigneeLabel} · {verdict}</span>
+        {flagged > 0 ? <span className="text-[12px] font-semibold normal-case tracking-normal text-slate-400">{flagged} flagged</span> : null}
+      </p>
+      {renderList("overdue", overdueStories, "text-rose-900", "Overdue — sprint closed, not done")}
+      {renderList("atRisk", atRiskStories, "text-rose-800", "At Risk — needs more days than sprint has")}
+      {renderList("watch", watchStories, "text-amber-800", "Watch — exactly the sprint's days-left")}
+      {flagged === 0 ? (
+        <p className="text-[13px] text-slate-500">No flagged stories — everything is on or ahead of pace.</p>
+      ) : null}
+      <div className="mt-2 border-t border-slate-100 pt-2.5 text-[12.5px] leading-snug text-slate-500">
+        <p className="mb-1"><span className="font-semibold text-slate-600">How we score:</span> each story&rsquo;s remaining days vs. its sprint&rsquo;s days-left.</p>
+        <p>less → On Track · equal → Watch · more → At Risk · sprint closed and not done → Overdue.</p>
+      </div>
+    </>
+  );
+
+  return (
+    <VerdictDistributionChip
+      buckets={buckets}
+      total={total}
+      ariaLabel={`${assigneeLabel} — story health distribution`}
+      popoverBody={popoverBody}
+      unitLabel="story"
+      size="xs"
+    />
+  );
+}
+
+/**
+ * Body of the User Progress drilldown modal — replaces the table for
+ * user-mode rows. Renders one accordion row per epic that has any of
+ * the user's in-scope stories; expanding the epic reveals those
+ * stories underneath with a tree-style left-rail connector (matches
+ * the sprint card's nested-story visual). Clicking a story opens the
+ * story dialog; clicking an epic title opens the epic dialog.
+ */
+function UserEpicAccordionView({
+  rowLabel,
+  storiesByEpic,
+  onOpenEpic,
+  onOpenStory,
+}: {
+  rowLabel: string;
+  storiesByEpic: Array<{ epic: EpicItem; stories: UserStoryItem[] }>;
+  onOpenEpic?: (epicId: string) => void;
+  onOpenStory?: (storyId: string) => void;
+}) {
+  // All epics start expanded — the planner opened the drilldown to see
+  // the stories, so collapsing them by default would force a second
+  // click. The chevron still toggles per-epic if they want to compact a
+  // long list.
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const totalStories = storiesByEpic.reduce((sum, g) => sum + g.stories.length, 0);
+  if (storiesByEpic.length === 0) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8 text-[13px] text-slate-500">
+        No in-scope stories for {rowLabel}.
+      </div>
+    );
+  }
+  return (
+    <div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
+      <p className="shrink-0 px-1 pt-1 pb-2 text-[12px] text-slate-500">
+        {storiesByEpic.length} epic{storiesByEpic.length === 1 ? "" : "s"} · {totalStories} stor{totalStories === 1 ? "y" : "ies"}
+      </p>
+      <div className="min-h-0 flex-1 overflow-y-auto pr-2">
+        <ul className="space-y-2">
+          {storiesByEpic.map(({ epic, stories }) => {
+            const isCollapsed = collapsed.has(epic.id);
+            return (
+              <li key={epic.id} className="rounded-lg border border-slate-200 bg-white">
+                <div className="flex items-center gap-1 px-2 py-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCollapsed((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(epic.id)) next.delete(epic.id);
+                        else next.add(epic.id);
+                        return next;
+                      });
+                    }}
+                    className="inline-flex size-5 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                    aria-expanded={!isCollapsed}
+                    aria-label={isCollapsed ? "Expand epic" : "Collapse epic"}
+                  >
+                    <ChevronRight className={cn("size-4 transition-transform", !isCollapsed && "rotate-90")} aria-hidden />
+                  </button>
+                  <Folder className="size-3.5 shrink-0 text-sky-500" aria-hidden />
+                  <button
+                    type="button"
+                    onClick={() => onOpenEpic?.(epic.id)}
+                    className="min-w-0 flex-1 truncate text-left text-[13.5px] font-semibold text-slate-800 hover:underline"
+                  >
+                    {epic.title}
+                  </button>
+                  <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600">
+                    {stories.length}
+                  </span>
+                </div>
+                {!isCollapsed ? (
+                  <ul className="space-y-1.5 px-2 pb-2 pl-7 pt-0.5">
+                    {stories.map((story, idx) => {
+                      const isLast = idx === stories.length - 1;
+                      const statusMeta = (() => {
+                        switch (story.status) {
+                          case "done": return { label: "Done", className: "bg-emerald-100 text-emerald-800 ring-emerald-300/60" };
+                          case "review": return { label: "Review", className: "bg-violet-100 text-violet-800 ring-violet-300/60" };
+                          case "inProgress": return { label: "In progress", className: "bg-sky-100 text-sky-800 ring-sky-300/60" };
+                          default: return { label: "To do", className: "bg-amber-100 text-amber-800 ring-amber-300/60" };
+                        }
+                      })();
+                      return (
+                        <li key={story.id} className="relative pl-5">
+                          {/* Tree connector: vertical rail down the left
+                           *  edge (stops at the last item's elbow), plus
+                           *  a horizontal elbow into each story. Matches
+                           *  the SprintEpicCard's nested-story tree visual. */}
+                          <span
+                            className="absolute left-0 top-0 w-px bg-slate-200"
+                            style={{ height: isLast ? "12px" : "100%" }}
+                            aria-hidden
+                          />
+                          <span
+                            className="absolute left-0 top-[12px] h-px w-3.5 -translate-y-px bg-slate-200"
+                            aria-hidden
+                          />
+                          <button
+                            type="button"
+                            onClick={() => onOpenStory?.(story.id)}
+                            className="flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-left text-[13px] hover:bg-slate-50"
+                          >
+                            <BookOpen className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+                            <span className="min-w-0 flex-1 truncate text-slate-800">{story.title}</span>
+                            <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ring-1", statusMeta.className)}>
+                              {statusMeta.label}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
   );
 }
 
@@ -1636,6 +1779,13 @@ export function MonthAnalytics({
   const [statusChartMode, setStatusChartMode] = useState<"epics" | "stories">("epics");
   const [monthLoadDrilldownAssignee, setMonthLoadDrilldownAssignee] = useState<string | null>(null);
   const [monthLoadDrilldownIsTeam, setMonthLoadDrilldownIsTeam] = useState(false);
+  /** Per-epic expanded state shared across the Team/User Progress,
+   *  Workload Balance, and Epic / Stories Progress drilldown modals.
+   *  An epic id appears in the set only when the planner has clicked
+   *  its chevron — default is empty so every epic group starts
+   *  COLLAPSED. The set is cleared each time a drilldown closes so the
+   *  next open starts collapsed too. */
+  const [expandedDrilldownEpics, setExpandedDrilldownEpics] = useState<Set<string>>(() => new Set());
   // When the breadcrumb team filter changes (e.g. user switches between
   // "All teams" and a specific team while a drilldown is open), reset any
   // open drilldown — the assignee/team pinned by the previous filter is
@@ -2508,6 +2658,14 @@ export function MonthAnalytics({
       atRiskEpics: FlaggedEpicEntry[];
       watchEpics: FlaggedEpicEntry[];
       overdueEpics: FlaggedEpicEntry[];
+      /** Per-verdict tally across ALL of the team's in-scope epics —
+       *  drives `VerdictDistributionChip`'s segments. The `*Epics`
+       *  arrays above only carry flagged buckets (used by the click-
+       *  through popover); the `buckets` map carries the count for
+       *  every verdict including On Track / Done so the chip can
+       *  render the full proportional bar. */
+      buckets: Record<HealthStatus, number>;
+      total: number;
     }>();
     const STATUS_RANK_LOCAL: Record<HealthStatus, number> = {
       done: 0,
@@ -2529,16 +2687,69 @@ export function MonthAnalytics({
         atRiskEpics: [],
         watchEpics: [],
         overdueEpics: [],
+        buckets: { done: 0, onTrack: 0, watch: 0, atRisk: 0, overdue: 0 } as Record<HealthStatus, number>,
+        total: 0,
       };
       const flagged: FlaggedEpicEntry = { title: epic.title, epic, result: h, end: v.end };
       if (h.status === "atRisk") entry.atRiskEpics.push(flagged);
       else if (h.status === "watch") entry.watchEpics.push(flagged);
       else if (h.status === "overdue") entry.overdueEpics.push(flagged);
+      entry.buckets[h.status] += 1;
+      entry.total += 1;
       if (STATUS_RANK_LOCAL[h.status] > STATUS_RANK_LOCAL[entry.status]) entry.status = h.status;
       map.set(teamKey, entry);
     }
     return map;
   }, [monthEpics, planYear, progressBasis]);
+
+  /** Per-assignee verdict tally — mirror of `teamHealthByTeamKey` for
+   *  user-mode rows on Team Progress. Iterates every in-scope story,
+   *  computes its story-level health verdict via the canonical
+   *  `computeStoryHealthVerdict`, and tallies by assignee. The chip on
+   *  each user row reads this for its segmented bar; the popover lists
+   *  flagged stories with click-through. */
+  type FlaggedStoryListEntry = { story: UserStoryItem; epic: EpicItem };
+  const userVerdictBucketsByAssignee = useMemo(() => {
+    const map = new Map<string, {
+      buckets: Record<HealthStatus, number>;
+      total: number;
+      status: HealthStatus;
+      atRiskStories: FlaggedStoryListEntry[];
+      watchStories: FlaggedStoryListEntry[];
+      overdueStories: FlaggedStoryListEntry[];
+    }>();
+    const STATUS_RANK_LOCAL: Record<HealthStatus, number> = {
+      done: 0,
+      onTrack: 0,
+      watch: 1,
+      atRisk: 2,
+      overdue: 3,
+    };
+    for (const { epic } of monthEpics) {
+      for (const story of epic.userStories ?? []) {
+        const assignee = story.assignee?.trim();
+        if (!assignee) continue;
+        const v = computeStoryHealthVerdict(story, epic, planYear);
+        if (v == null) continue;
+        const entry = map.get(assignee) ?? {
+          buckets: { done: 0, onTrack: 0, watch: 0, atRisk: 0, overdue: 0 } as Record<HealthStatus, number>,
+          total: 0,
+          status: "onTrack" as HealthStatus,
+          atRiskStories: [],
+          watchStories: [],
+          overdueStories: [],
+        };
+        entry.buckets[v.status] += 1;
+        entry.total += 1;
+        if (v.status === "atRisk") entry.atRiskStories.push({ story, epic });
+        else if (v.status === "watch") entry.watchStories.push({ story, epic });
+        else if (v.status === "overdue") entry.overdueStories.push({ story, epic });
+        if (STATUS_RANK_LOCAL[v.status] > STATUS_RANK_LOCAL[entry.status]) entry.status = v.status;
+        map.set(assignee, entry);
+      }
+    }
+    return map;
+  }, [monthEpics, planYear]);
 
   const teamByAssigneeFallback = useMemo(() => {
     const counts = new Map<string, Map<string, number>>();
@@ -2600,7 +2811,7 @@ export function MonthAnalytics({
     setStatusDrilldownColFilter({ ...EMPTY_DRILLDOWN_FILTER, status: storyStatusKey });
     setStatusDrilldownEpicFilter({ ...EMPTY_EPIC_DRILLDOWN_FILTER, status: colPrefill });
   };
-  const clearStatusDrilldown = () => setStatusDrilldownFilter(null);
+  const clearStatusDrilldown = () => { setStatusDrilldownFilter(null); setExpandedDrilldownEpics(new Set()); };
   /**
    * Epics in scope for the burndown / burnup charts. An epic counts as
    * "in this period" when EITHER of these is true:
@@ -4452,122 +4663,266 @@ export function MonthAnalytics({
                 </thead>
                 <tbody>
                   {statusChartShowsEpics
-                    ? statusDrilldownEpics.map((epic, idx) => {
-                        const epicStatusLabel = epicStatusById.get(epic.id) ?? "To do";
-                        // Map the epic-status label back to a story-status
-                        // key so we can reuse StoryStatusPill's colored icon
-                        // language. Epics introduce one extra "Unscheduled"
-                        // bucket that has no story-side analogue — render
-                        // a neutral Circle for it.
-                        const epicStatusKey =
-                          epicStatusLabel === "Done" ? "done"
-                          : epicStatusLabel === "Review / Testing" ? "review"
-                          : epicStatusLabel === "In progress" ? "inProgress"
-                          : epicStatusLabel === "To do" ? "todo"
-                          : null;
-                        return (
-                        <tr key={epic.id} className={drilldownTableRowZebra}>
-                          <td className="min-w-0 px-2 py-0.5 text-right tabular-nums text-slate-500">{idx + 1}</td>
-                          <td className="min-w-0 px-2 py-0.5">
-                            <span className="inline-flex min-w-0 items-center gap-1.5">
-                              <Folder className="size-3.5 shrink-0 text-slate-500" aria-hidden />
-                              <InsightsTruncatedHoverButton
-                                label={scopedEpicDisplayIds.get(epic.id) ?? epic.id.slice(0, 8)}
-                                onClick={() => onOpenEpic?.(epic.id)}
-                                className="block min-w-0 max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
-                              />
-                            </span>
-                          </td>
-                          <td className="min-w-0 px-2 py-0.5">
-                            <span className="inline-flex min-w-0 items-center gap-1.5">
-                              <Folder className="size-3.5 shrink-0 text-slate-500" aria-hidden />
-                              <InsightsTruncatedHoverLabel text={epic.title} />
-                            </span>
-                          </td>
-                          <td className="min-w-0 px-2 py-0.5">
-                            <DrilldownAssigneeCell assignee={epic.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
-                          </td>
-                          <td className="min-w-0 px-2 py-0.5">
-                            {epicStatusKey ? (
-                              <StoryStatusPill status={epicStatusKey} />
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 font-semibold">
-                                <Circle className="size-3.5 shrink-0 text-slate-400" aria-hidden />
-                                <span className="truncate text-slate-700">{epicStatusLabel}</span>
-                              </span>
-                            )}
-                          </td>
-                          <td className="min-w-0 px-2 py-0.5">
-                            {(() => {
-                              const v = computeEpicHealthVerdict(epic, planYear, progressBasis);
-                              if (!v) return <span className="text-slate-300">—</span>;
-                              const tip = formatHealthTooltip(v.result);
-                              return <HealthBadgeWithTextPopover size="xs" status={v.status} tooltip={tip} />;
-                            })()}
-                          </td>
-                          <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">
-                            {(epic.userStories ?? []).reduce((a, s) => a + (s.estimatedDays ?? 0), 0) || "—"}
-                          </td>
-                          <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">
-                            {(epic.userStories ?? []).reduce((a, s) => a + (s.daysLeft ?? 0), 0) || "—"}
-                          </td>
-                        </tr>
-                        );
-                      })
-                    : statusDrilldownStories.map((story, idx) => (
-                        <tr key={story.id} className={drilldownTableRowZebra}>
-                          <td className="min-w-0 px-2 py-0.5 text-right tabular-nums text-slate-500">{idx + 1}</td>
-                          <td className="min-w-0 px-2 py-0.5">
-                            <InsightsTruncatedHoverButton
-                              label={scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
-                              onClick={() => onOpenStory?.(story.id)}
-                              className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
-                            />
-                          </td>
-                          <td className="min-w-0 px-2 py-0.5">
-                            <InsightsTruncatedHoverLabel text={story.title} />
-                          </td>
-                          <td className="min-w-0 px-2 py-0.5">
-                            <span className="inline-flex min-w-0 items-center gap-1.5">
-                              <Flag className="size-3.5 shrink-0 text-rose-500" aria-hidden />
-                              {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
-                                <InsightsTruncatedHoverButton
-                                  label={storySprintDisplayLabel(story.sprint, scopeStartMonth)}
+                    ? (() => {
+                        // Epic-variant: each epic row becomes an
+                        // accordion header (chevron in the `#` cell);
+                        // expanding it reveals the epic's child stories
+                        // with a tree connector. Same 8 columns map to
+                        // the story rows (sprint + team dropped — they
+                        // don't have epic-level analogues here).
+                        const rendered: ReactNode[] = [];
+                        statusDrilldownEpics.forEach((epic, idx) => {
+                          const epicStatusLabel = epicStatusById.get(epic.id) ?? "To do";
+                          const epicStatusKey =
+                            epicStatusLabel === "Done" ? "done"
+                            : epicStatusLabel === "Review / Testing" ? "review"
+                            : epicStatusLabel === "In progress" ? "inProgress"
+                            : epicStatusLabel === "To do" ? "todo"
+                            : null;
+                          const isCollapsed = !expandedDrilldownEpics.has(epic.id);
+                          const stories = epic.userStories ?? [];
+                          const epicEstSum = stories.reduce((a, s) => a + (s.estimatedDays ?? 0), 0);
+                          const epicLeftSum = stories.reduce((a, s) => a + (s.daysLeft ?? 0), 0);
+                          rendered.push(
+                            <tr key={epic.id} className={drilldownTableRowZebra}>
+                              <td className="min-w-0 px-2 py-0.5 text-right tabular-nums text-slate-500">
+                                <button
+                                  type="button"
                                   onClick={() => {
-                                    const targetYearSprint = normalizeStoryYearSprint(story.sprint, scopeStartMonth);
-                                    if (targetYearSprint == null) return;
-                                    onOpenSprintKanban?.(targetYearSprint, resolveStoryTeamForSprintNav(story));
+                                    setExpandedDrilldownEpics((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(epic.id)) next.delete(epic.id);
+                                      else next.add(epic.id);
+                                      return next;
+                                    });
                                   }}
-                                  className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
-                                />
-                              ) : (
-                                <InsightsTruncatedHoverLabel text="Unscheduled" />
-                              )}
-                            </span>
-                          </td>
-                          {/* Match the workload + month-load drilldowns:
-                           *  avatar + "First L." for the assignee, and the
-                           *  colored StoryStatusPill for the status. */}
-                          <td className="min-w-0 px-2 py-0.5">
-                            <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
-                          </td>
-                          <td className="min-w-0 px-2 py-0.5">
-                            <StoryStatusPill status={story.status} />
-                          </td>
-                          <td className="min-w-0 px-2 py-0.5">
-                            {(() => {
-                              const parentEpic = monthEpics.find(({ epic }) => (epic.userStories ?? []).some((s) => s.id === story.id))?.epic;
-                              if (!parentEpic) return <span className="text-slate-300">\u2014</span>;
-                              const v = computeStoryHealthVerdict(story, parentEpic, planYear);
-                              if (!v) return <span className="text-slate-300">\u2014</span>;
-                              const tip = formatStoryHealthTooltip(story, parentEpic, planYear, v.status);
-                              return <HealthBadgeWithTextPopover size="xs" status={v.status} tooltip={tip} />;
-                            })()}
-                          </td>
-                          <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.estimatedDays ?? "\u2014"}</td>
-                          <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.daysLeft ?? "\u2014"}</td>
-                        </tr>
-                      ))}
+                                  className="inline-flex items-center gap-1"
+                                  aria-label={isCollapsed ? "Expand epic stories" : "Collapse epic stories"}
+                                >
+                                  <ChevronRight
+                                    className={cn("size-3.5 shrink-0 text-slate-500 transition-transform", !isCollapsed && "rotate-90")}
+                                    aria-hidden
+                                  />
+                                  <span>{idx + 1}</span>
+                                </button>
+                              </td>
+                              <td className="min-w-0 px-2 py-0.5">
+                                <span className="inline-flex min-w-0 items-center gap-1.5">
+                                  <Folder className="size-3.5 shrink-0 text-slate-500" aria-hidden />
+                                  <InsightsTruncatedHoverButton
+                                    label={scopedEpicDisplayIds.get(epic.id) ?? epic.id.slice(0, 8)}
+                                    onClick={() => onOpenEpic?.(epic.id)}
+                                    className="block min-w-0 max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
+                                  />
+                                </span>
+                              </td>
+                              <td className="min-w-0 px-2 py-0.5">
+                                <span className="inline-flex min-w-0 items-center gap-1.5">
+                                  <Folder className="size-3.5 shrink-0 text-slate-500" aria-hidden />
+                                  <InsightsTruncatedHoverLabel text={epic.title} />
+                                </span>
+                              </td>
+                              <td className="min-w-0 px-2 py-0.5">
+                                <DrilldownAssigneeCell assignee={epic.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
+                              </td>
+                              <td className="min-w-0 px-2 py-0.5">
+                                {epicStatusKey ? (
+                                  <StoryStatusPill status={epicStatusKey} />
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 font-semibold">
+                                    <Circle className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+                                    <span className="truncate text-slate-700">{epicStatusLabel}</span>
+                                  </span>
+                                )}
+                              </td>
+                              <td className="min-w-0 px-2 py-0.5">
+                                {(() => {
+                                  const v = computeEpicHealthVerdict(epic, planYear, progressBasis);
+                                  if (!v) return <span className="text-slate-300">—</span>;
+                                  const tip = formatHealthTooltip(v.result);
+                                  return <HealthBadgeWithTextPopover size="xs" status={v.status} tooltip={tip} />;
+                                })()}
+                              </td>
+                              <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">
+                                {epicEstSum || "—"}
+                              </td>
+                              <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">
+                                {epicLeftSum || "—"}
+                              </td>
+                            </tr>
+                          );
+                          if (isCollapsed || stories.length === 0) return;
+                          stories.forEach((story, storyIdx) => {
+                            const isLast = storyIdx === stories.length - 1;
+                            rendered.push(
+                              <tr key={`${epic.id}-${story.id}`} className="bg-white">
+                                <td className="relative min-w-0 px-2 py-0.5 pl-6 text-right tabular-nums text-slate-500">
+                                  <span
+                                    className="absolute left-3 top-0 w-px bg-indigo-300"
+                                    style={{ height: isLast ? "50%" : "100%" }}
+                                    aria-hidden
+                                  />
+                                  <span className="absolute left-3 top-1/2 h-px w-3 -translate-y-px bg-indigo-300" aria-hidden />
+                                  <span className="text-slate-400">·</span>
+                                </td>
+                                <td className="min-w-0 px-2 py-0.5">
+                                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                                    <UserStoryIcon className="size-3.5" />
+                                    <InsightsTruncatedHoverButton
+                                      label={scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
+                                      onClick={() => onOpenStory?.(story.id)}
+                                      className="block min-w-0 max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
+                                    />
+                                  </span>
+                                </td>
+                                <td className="min-w-0 px-2 py-0.5">
+                                  <InsightsTruncatedHoverLabel text={story.title} />
+                                </td>
+                                <td className="min-w-0 px-2 py-0.5">
+                                  <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
+                                </td>
+                                <td className="min-w-0 px-2 py-0.5">
+                                  <StoryStatusPill status={story.status} />
+                                </td>
+                                <td className="min-w-0 px-2 py-0.5">
+                                  {(() => {
+                                    const v = computeStoryHealthVerdict(story, epic, planYear);
+                                    if (!v) return <span className="text-slate-300">—</span>;
+                                    const tip = formatStoryHealthTooltip(story, epic, planYear, v.status);
+                                    return <HealthBadgeWithTextPopover size="xs" status={v.status} tooltip={tip} />;
+                                  })()}
+                                </td>
+                                <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.estimatedDays ?? "—"}</td>
+                                <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.daysLeft ?? "—"}</td>
+                              </tr>
+                            );
+                          });
+                        });
+                        return rendered;
+                      })()
+                    : (() => {
+                        // Stories-variant: group filtered stories by
+                        // parent epic, render each epic as a header row
+                        // with chevron, children with tree connector.
+                        // Mirrors the Team Progress / Workload Balance
+                        // drilldowns.
+                        const storyEpic = new Map<string, EpicItem>();
+                        for (const { epic } of monthEpics) {
+                          for (const s of epic.userStories ?? []) storyEpic.set(s.id, epic);
+                        }
+                        type Group = { epic: EpicItem; stories: typeof statusDrilldownStories };
+                        const groupsMap = new Map<string, Group>();
+                        for (const story of statusDrilldownStories) {
+                          const epic = storyEpic.get(story.id);
+                          if (!epic) continue;
+                          const g = groupsMap.get(epic.id);
+                          if (g) g.stories.push(story);
+                          else groupsMap.set(epic.id, { epic, stories: [story] });
+                        }
+                        const groups = Array.from(groupsMap.values()).sort(
+                          (a, b) => a.epic.title.localeCompare(b.epic.title),
+                        );
+                        let rowIdx = 0;
+                        const rendered: ReactNode[] = [];
+                        for (const { epic, stories } of groups) {
+                          const isCollapsed = !expandedDrilldownEpics.has(epic.id);
+                          const epicEstSum = stories.reduce((s, st) => s + (st.estimatedDays ?? 0), 0);
+                          const epicLeftSum = stories.reduce((s, st) => s + (st.daysLeft ?? 0), 0);
+                          rendered.push(
+                            <tr key={`epic-${epic.id}`} className="bg-indigo-50/70 ring-1 ring-inset ring-indigo-100/80">
+                              <td colSpan={7} className="px-2 py-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setExpandedDrilldownEpics((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(epic.id)) next.delete(epic.id);
+                                      else next.add(epic.id);
+                                      return next;
+                                    });
+                                  }}
+                                  className="inline-flex w-full min-w-0 items-center gap-1.5 text-left"
+                                >
+                                  <ChevronRight
+                                    className={cn("size-4 shrink-0 text-slate-500 transition-transform", !isCollapsed && "rotate-90")}
+                                    aria-hidden
+                                  />
+                                  <Folder className="size-3.5 shrink-0 text-sky-500" aria-hidden />
+                                  <span className="min-w-0 truncate text-[13.5px] font-semibold text-slate-800">{epic.title}</span>
+                                  <span className="ml-1 shrink-0 rounded-full bg-white/80 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600 ring-1 ring-slate-200">
+                                    {stories.length}
+                                  </span>
+                                </button>
+                              </td>
+                              <td className="bg-indigo-50/70 px-2 py-1.5 text-right text-[12px] font-semibold tabular-nums text-slate-700">{epicEstSum}</td>
+                              <td className="bg-indigo-50/70 px-2 py-1.5 text-right text-[12px] font-semibold tabular-nums text-slate-700">{epicLeftSum}</td>
+                            </tr>
+                          );
+                          if (isCollapsed) continue;
+                          stories.forEach((story, storyIdx) => {
+                            rowIdx += 1;
+                            const isLast = storyIdx === stories.length - 1;
+                            rendered.push(
+                              <tr key={story.id} className={drilldownTableRowZebra}>
+                                <td className="relative min-w-0 px-2 py-0.5 pl-6 text-right tabular-nums text-slate-500">
+                                  <span
+                                    className="absolute left-3 top-0 w-px bg-indigo-300"
+                                    style={{ height: isLast ? "50%" : "100%" }}
+                                    aria-hidden
+                                  />
+                                  <span className="absolute left-3 top-1/2 h-px w-3 -translate-y-px bg-indigo-300" aria-hidden />
+                                  {rowIdx}
+                                </td>
+                                <td className="min-w-0 px-2 py-0.5">
+                                  <InsightsTruncatedHoverButton
+                                    label={scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
+                                    onClick={() => onOpenStory?.(story.id)}
+                                    className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
+                                  />
+                                </td>
+                                <td className="min-w-0 px-2 py-0.5">
+                                  <InsightsTruncatedHoverLabel text={story.title} />
+                                </td>
+                                <td className="min-w-0 px-2 py-0.5">
+                                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                                    <Flag className="size-3.5 shrink-0 text-rose-500" aria-hidden />
+                                    {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
+                                      <InsightsTruncatedHoverButton
+                                        label={storySprintDisplayLabel(story.sprint, scopeStartMonth)}
+                                        onClick={() => {
+                                          const targetYearSprint = normalizeStoryYearSprint(story.sprint, scopeStartMonth);
+                                          if (targetYearSprint == null) return;
+                                          onOpenSprintKanban?.(targetYearSprint, resolveStoryTeamForSprintNav(story));
+                                        }}
+                                        className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
+                                      />
+                                    ) : (
+                                      <InsightsTruncatedHoverLabel text="Unscheduled" />
+                                    )}
+                                  </span>
+                                </td>
+                                <td className="min-w-0 px-2 py-0.5">
+                                  <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
+                                </td>
+                                <td className="min-w-0 px-2 py-0.5">
+                                  <StoryStatusPill status={story.status} />
+                                </td>
+                                <td className="min-w-0 px-2 py-0.5">
+                                  {(() => {
+                                    const v = computeStoryHealthVerdict(story, epic, planYear);
+                                    if (!v) return <span className="text-slate-300">—</span>;
+                                    const tip = formatStoryHealthTooltip(story, epic, planYear, v.status);
+                                    return <HealthBadgeWithTextPopover size="xs" status={v.status} tooltip={tip} />;
+                                  })()}
+                                </td>
+                                <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.estimatedDays ?? "—"}</td>
+                                <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.daysLeft ?? "—"}</td>
+                              </tr>
+                            );
+                          });
+                        }
+                        return rendered;
+                      })()}
                   {statusDrilldownEmptyRows > 0
                     ? Array.from({ length: statusDrilldownEmptyRows }).map((_, index) => (
                         <tr key={`status-empty-${index}`} className={drilldownTableEmptyRowZebra}>
@@ -5212,7 +5567,7 @@ export function MonthAnalytics({
               const countLabel = `${count} user stor${count === 1 ? "y" : "ies"} presented`;
               return scopeTitleSuffix ? `${scopeTitleSuffix} · ${countLabel}` : countLabel;
             })()}
-            onClose={() => { setWorkloadDrilldownAssignee(null); setWorkloadDrilldownIsTeam(false); }}
+            onClose={() => { setWorkloadDrilldownAssignee(null); setWorkloadDrilldownIsTeam(false); setExpandedDrilldownEpics(new Set()); }}
           >
           <div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
             <div className="relative flex-1 min-h-0 min-w-0">
@@ -5326,76 +5681,154 @@ export function MonthAnalytics({
                   </tr>
                 </thead>
                 <tbody>
-                  {workloadDrilldownStories.map((story, idx) => {
-                    const storyTeamId = epicTeamByStoryId.get(story.id) ?? "";
-                    const storyTeamLabel = monthTeamLabelForId(storyTeamId) ?? (storyTeamId || "—");
-                    return (
-                    <tr key={story.id} className={drilldownTableRowZebra}>
-                      <td className="min-w-0 px-2 py-0.5 text-right tabular-nums text-slate-500">{idx + 1}</td>
-                      <td className="min-w-0 px-2 py-0.5">
-                        <span className="inline-flex min-w-0 items-center gap-1.5">
-                          <UserStoryIcon className="size-3.5" />
-                          <InsightsTruncatedHoverButton
-                            label={scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
-                            onClick={() => onOpenStory?.(story.id)}
-                            className="block min-w-0 max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
-                          />
-                        </span>
-                      </td>
-                      <td className="min-w-0 px-2 py-0.5">
-                        <InsightsTruncatedHoverLabel text={story.title} />
-                      </td>
-                      <td className="min-w-0 px-2 py-0.5">
-                        <span className="inline-flex min-w-0 items-center gap-1.5">
-                          <Flag className="size-3.5 shrink-0 text-rose-500" aria-hidden />
-                          {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
-                            <InsightsTruncatedHoverButton
-                              label={storySprintDisplayLabel(story.sprint, scopeStartMonth)}
-                              onClick={() => {
-                                const targetYearSprint = normalizeStoryYearSprint(story.sprint, scopeStartMonth);
-                                if (targetYearSprint == null) return;
-                                onOpenSprintKanban?.(targetYearSprint, resolveStoryTeamForSprintNav(story));
-                              }}
-                              className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
-                            />
-                          ) : (
-                            <InsightsTruncatedHoverLabel text="Unscheduled" />
-                          )}
-                        </span>
-                      </td>
-                      <td className="min-w-0 px-2 py-0.5">
-                        <InsightsTruncatedHoverLabel text={storyTeamLabel} />
-                      </td>
-                      <td className="min-w-0 px-2 py-0.5">
-                        <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
-                      </td>
-                      <td className="min-w-0 px-2 py-0.5">
-                        <StoryStatusPill status={story.status} />
-                      </td>
-                      <td className="min-w-0 px-2 py-0.5">
-                        {(() => {
-                          const parentEpic = monthEpics.find(({ epic }) => (epic.userStories ?? []).some((s) => s.id === story.id))?.epic;
-                          if (!parentEpic) return <span className="text-slate-300">\u2014</span>;
-                          const v = computeStoryHealthVerdict(story, parentEpic, planYear);
-                          if (!v) return <span className="text-slate-300">\u2014</span>;
-                          const tip = formatStoryHealthTooltip(story, parentEpic, planYear, v.status);
-                          return <HealthBadgeWithTextPopover size="xs" status={v.status} tooltip={tip} />;
-                        })()}
-                      </td>
-                      <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.estimatedDays ?? "\u2014"}</td>
-                      <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.daysLeft ?? "\u2014"}</td>
-                    </tr>
+                  {(() => {
+                    // Group filtered stories by parent epic — each epic
+                    // becomes a collapsible header row, child stories
+                    // render with a tree connector in the `#` cell.
+                    // Mirrors the Team Progress drilldown pattern.
+                    const storyEpic = new Map<string, EpicItem>();
+                    for (const { epic } of monthEpics) {
+                      for (const s of epic.userStories ?? []) storyEpic.set(s.id, epic);
+                    }
+                    type Group = { epic: EpicItem; stories: typeof workloadDrilldownStories };
+                    const groupsMap = new Map<string, Group>();
+                    for (const story of workloadDrilldownStories) {
+                      const epic = storyEpic.get(story.id);
+                      if (!epic) continue;
+                      const g = groupsMap.get(epic.id);
+                      if (g) g.stories.push(story);
+                      else groupsMap.set(epic.id, { epic, stories: [story] });
+                    }
+                    const groups = Array.from(groupsMap.values()).sort(
+                      (a, b) => a.epic.title.localeCompare(b.epic.title),
                     );
-                  })}
-                  {workloadDrilldownEmptyRows > 0
-                    ? Array.from({ length: workloadDrilldownEmptyRows }).map((_, index) => (
-                        <tr key={`workload-empty-${index}`} className={drilldownTableEmptyRowZebra}>
-                          <td colSpan={10} className="px-3 py-0.5 text-[13px]">
-                            {"\u00A0"}
+                    let rowIdx = 0;
+                    const rendered: ReactNode[] = [];
+                    for (const { epic, stories } of groups) {
+                      const isCollapsed = !expandedDrilldownEpics.has(epic.id);
+                      const epicEstSum = stories.reduce((s, st) => s + (st.estimatedDays ?? 0), 0);
+                      const epicLeftSum = stories.reduce((s, st) => s + (st.daysLeft ?? 0), 0);
+                      rendered.push(
+                        <tr key={`epic-${epic.id}`} className="bg-indigo-50/70 ring-1 ring-inset ring-indigo-100/80">
+                          <td colSpan={8} className="px-2 py-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setExpandedDrilldownEpics((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(epic.id)) next.delete(epic.id);
+                                  else next.add(epic.id);
+                                  return next;
+                                });
+                              }}
+                              className="inline-flex w-full min-w-0 items-center gap-1.5 text-left"
+                            >
+                              <ChevronRight
+                                className={cn("size-4 shrink-0 text-slate-500 transition-transform", !isCollapsed && "rotate-90")}
+                                aria-hidden
+                              />
+                              <Folder className="size-3.5 shrink-0 text-sky-500" aria-hidden />
+                              <span className="min-w-0 truncate text-[13.5px] font-semibold text-slate-800">{epic.title}</span>
+                              <span className="ml-1 shrink-0 rounded-full bg-white/80 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600 ring-1 ring-slate-200">
+                                {stories.length}
+                              </span>
+                            </button>
+                          </td>
+                          <td className="bg-indigo-50/70 px-2 py-1.5 text-right text-[12px] font-semibold tabular-nums text-slate-700">{epicEstSum}</td>
+                          <td className="bg-indigo-50/70 px-2 py-1.5 text-right text-[12px] font-semibold tabular-nums text-slate-700">{epicLeftSum}</td>
+                        </tr>
+                      );
+                      if (isCollapsed) continue;
+                      stories.forEach((story, storyIdx) => {
+                        rowIdx += 1;
+                        const isLast = storyIdx === stories.length - 1;
+                        const storyTeamId = epicTeamByStoryId.get(story.id) ?? "";
+                        const storyTeamLabel = monthTeamLabelForId(storyTeamId) ?? (storyTeamId || "—");
+                        rendered.push(
+                          <tr key={story.id} className={drilldownTableRowZebra}>
+                            <td className="relative min-w-0 px-2 py-0.5 pl-6 text-right tabular-nums text-slate-500">
+                              <span
+                                className="absolute left-3 top-0 w-px bg-indigo-300"
+                                style={{ height: isLast ? "50%" : "100%" }}
+                                aria-hidden
+                              />
+                              <span className="absolute left-3 top-1/2 h-px w-3 -translate-y-px bg-indigo-300" aria-hidden />
+                              {rowIdx}
+                            </td>
+                            <td className="min-w-0 px-2 py-0.5">
+                              <span className="inline-flex min-w-0 items-center gap-1.5">
+                                <UserStoryIcon className="size-3.5" />
+                                <InsightsTruncatedHoverButton
+                                  label={scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)}
+                                  onClick={() => onOpenStory?.(story.id)}
+                                  className="block min-w-0 max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
+                                />
+                              </span>
+                            </td>
+                            <td className="min-w-0 px-2 py-0.5">
+                              <InsightsTruncatedHoverLabel text={story.title} />
+                            </td>
+                            <td className="min-w-0 px-2 py-0.5">
+                              <span className="inline-flex min-w-0 items-center gap-1.5">
+                                <Flag className="size-3.5 shrink-0 text-rose-500" aria-hidden />
+                                {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
+                                  <InsightsTruncatedHoverButton
+                                    label={storySprintDisplayLabel(story.sprint, scopeStartMonth)}
+                                    onClick={() => {
+                                      const targetYearSprint = normalizeStoryYearSprint(story.sprint, scopeStartMonth);
+                                      if (targetYearSprint == null) return;
+                                      onOpenSprintKanban?.(targetYearSprint, resolveStoryTeamForSprintNav(story));
+                                    }}
+                                    className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline"
+                                  />
+                                ) : (
+                                  <InsightsTruncatedHoverLabel text="Unscheduled" />
+                                )}
+                              </span>
+                            </td>
+                            <td className="min-w-0 px-2 py-0.5">
+                              <InsightsTruncatedHoverLabel text={storyTeamLabel} />
+                            </td>
+                            <td className="min-w-0 px-2 py-0.5">
+                              <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
+                            </td>
+                            <td className="min-w-0 px-2 py-0.5">
+                              <StoryStatusPill status={story.status} />
+                            </td>
+                            <td className="min-w-0 px-2 py-0.5">
+                              {(() => {
+                                const v = computeStoryHealthVerdict(story, epic, planYear);
+                                if (!v) return <span className="text-slate-300">—</span>;
+                                const tip = formatStoryHealthTooltip(story, epic, planYear, v.status);
+                                return <HealthBadgeWithTextPopover size="xs" status={v.status} tooltip={tip} />;
+                              })()}
+                            </td>
+                            <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.estimatedDays ?? "—"}</td>
+                            <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.daysLeft ?? "—"}</td>
+                          </tr>
+                        );
+                      });
+                    }
+                    if (rendered.length === 0) {
+                      rendered.push(
+                        <tr key="workload-empty">
+                          <td colSpan={10} className="px-3 py-6 text-center text-[13px] text-slate-400">
+                            No in-scope stories match the current filters.
                           </td>
                         </tr>
-                      ))
-                    : null}
+                      );
+                    }
+                    if (workloadDrilldownEmptyRows > 0) {
+                      for (let i = 0; i < workloadDrilldownEmptyRows; i++) {
+                        rendered.push(
+                          <tr key={`workload-empty-${i}`} className={drilldownTableEmptyRowZebra}>
+                            <td colSpan={10} className="px-3 py-0.5 text-[13px]">{" "}</td>
+                          </tr>
+                        );
+                      }
+                    }
+                    return rendered;
+                  })()}
                 </tbody>
               </table>
             </div>
@@ -5916,7 +6349,7 @@ export function MonthAnalytics({
                       const countLabel = `${count} user stor${count === 1 ? "y" : "ies"} presented`;
                       return scopeTitleSuffix ? `${scopeTitleSuffix} · ${countLabel}` : countLabel;
                     })()}
-                    onClose={() => { setMonthLoadDrilldownAssignee(null); setMonthLoadDrilldownIsTeam(false); }}
+                    onClose={() => { setMonthLoadDrilldownAssignee(null); setMonthLoadDrilldownIsTeam(false); setExpandedDrilldownEpics(new Set()); }}
                   >
                   <div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
                     <div className="relative flex-1 min-h-0 min-w-0">
@@ -6011,58 +6444,144 @@ export function MonthAnalytics({
                             </tr>
                           </thead>
                           <tbody>
-                            {monthLoadDrilldownStories.map((story, idx) => {
-                              const storyTeamId = epicTeamByStoryId.get(story.id) ?? "";
-                              const storyTeamLabel = monthTeamLabelForId(storyTeamId) ?? (storyTeamId || "—");
-                              return (
-                              <tr key={story.id} className={drilldownTableRowZebra}>
-                                <td className="min-w-0 px-2 py-0.5 text-right tabular-nums text-slate-500">{idx + 1}</td>
-                                <td className="min-w-0 px-2 py-0.5">
-                                  <span className="inline-flex min-w-0 items-center gap-1.5">
-                                    <UserStoryIcon className="size-3.5" />
-                                    <InsightsTruncatedHoverButton label={scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)} onClick={() => onOpenStory?.(story.id)} className="block min-w-0 max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline" />
-                                  </span>
-                                </td>
-                                <td className="min-w-0 px-2 py-0.5"><InsightsTruncatedHoverLabel text={story.title} /></td>
-                                <td className="min-w-0 px-2 py-0.5">
-                                  <span className="inline-flex min-w-0 items-center gap-1.5">
-                                    <Flag className="size-3.5 shrink-0 text-rose-500" aria-hidden />
-                                    {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
-                                      <InsightsTruncatedHoverButton label={storySprintDisplayLabel(story.sprint, scopeStartMonth)} onClick={() => { const t = normalizeStoryYearSprint(story.sprint, scopeStartMonth); if (t) onOpenSprintKanban?.(t, resolveStoryTeamForSprintNav(story)); }} className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline" />
-                                    ) : (
-                                      <InsightsTruncatedHoverLabel text="Unscheduled" />
-                                    )}
-                                  </span>
-                                </td>
-                                <td className="min-w-0 px-2 py-0.5">
-                                  <InsightsTruncatedHoverLabel text={storyTeamLabel} />
-                                </td>
-                                <td className="min-w-0 px-2 py-0.5">
-                                  <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
-                                </td>
-                                <td className="min-w-0 px-2 py-0.5">
-                                  <StoryStatusPill status={story.status} />
-                                </td>
-                                <td className="min-w-0 px-2 py-0.5">
-                                  {(() => {
-                                    const parentEpic = monthEpics.find(({ epic }) => (epic.userStories ?? []).some((s) => s.id === story.id))?.epic;
-                                    if (!parentEpic) return <span className="text-slate-300">—</span>;
-                                    const v = computeStoryHealthVerdict(story, parentEpic, planYear);
-                                    if (!v) return <span className="text-slate-300">—</span>;
-                                    const tip = formatStoryHealthTooltip(story, parentEpic, planYear, v.status);
-                                    return <HealthBadgeWithTextPopover size="xs" status={v.status} tooltip={tip} />;
-                                  })()}
-                                </td>
-                                <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.estimatedDays ?? "—"}</td>
-                                <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.daysLeft ?? "—"}</td>
-                              </tr>
-                              );
-                            })}
-                            {monthLoadDrilldownEmptyRows > 0 && Array.from({ length: monthLoadDrilldownEmptyRows }).map((_, i) => (
-                              <tr key={`ml-empty-${i}`} className={drilldownTableEmptyRowZebra}>
-                                <td colSpan={10} className="px-3 py-0.5 text-[13px]">{" "}</td>
-                              </tr>
-                            ))}
+                            {(() => {
+                              // Group the filtered stories by parent epic, then
+                              // render each epic as a parent header row (full-
+                              // width, with chevron) followed by its child
+                              // story rows when expanded. Each story row carries
+                              // a tree connector in its `#` cell (vertical line
+                              // + horizontal elbow), mirroring the Estimate
+                              // Coverage table pattern at
+                              // `timeline-grid.tsx:4932-4939`.
+                              const storyById = new Map(monthLoadDrilldownStories.map((s) => [s.id, s] as const));
+                              type Group = { epic: EpicItem; stories: typeof monthLoadDrilldownStories };
+                              const groups: Group[] = [];
+                              for (const { epic } of monthEpics) {
+                                const matching = (epic.userStories ?? [])
+                                  .filter((s) => storyById.has(s.id))
+                                  .map((s) => storyById.get(s.id)!);
+                                if (matching.length > 0) groups.push({ epic, stories: matching });
+                              }
+                              groups.sort((a, b) => a.epic.title.localeCompare(b.epic.title));
+                              let rowIdx = 0;
+                              const rendered: ReactNode[] = [];
+                              for (const { epic, stories } of groups) {
+                                const isCollapsed = !expandedDrilldownEpics.has(epic.id);
+                                const epicEstSum = stories.reduce((s, st) => s + (st.estimatedDays ?? 0), 0);
+                                const epicLeftSum = stories.reduce((s, st) => s + (st.daysLeft ?? 0), 0);
+                                rendered.push(
+                                  <tr key={`epic-${epic.id}`} className="bg-indigo-50/70 ring-1 ring-inset ring-indigo-100/80">
+                                    <td colSpan={8} className="px-2 py-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setExpandedDrilldownEpics((prev) => {
+                                            const next = new Set(prev);
+                                            if (next.has(epic.id)) next.delete(epic.id);
+                                            else next.add(epic.id);
+                                            return next;
+                                          });
+                                        }}
+                                        className="inline-flex w-full min-w-0 items-center gap-1.5 text-left"
+                                      >
+                                        <ChevronRight
+                                          className={cn("size-4 shrink-0 text-slate-500 transition-transform", !isCollapsed && "rotate-90")}
+                                          aria-hidden
+                                        />
+                                        <Folder className="size-3.5 shrink-0 text-sky-500" aria-hidden />
+                                        <span className="min-w-0 truncate text-[13.5px] font-semibold text-slate-800">{epic.title}</span>
+                                        <span className="ml-1 shrink-0 rounded-full bg-white/80 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600 ring-1 ring-slate-200">
+                                          {stories.length}
+                                        </span>
+                                      </button>
+                                    </td>
+                                    <td className="bg-indigo-50/70 px-2 py-1.5 text-right text-[12px] font-semibold tabular-nums text-slate-700">{epicEstSum}</td>
+                                    <td className="bg-indigo-50/70 px-2 py-1.5 text-right text-[12px] font-semibold tabular-nums text-slate-700">{epicLeftSum}</td>
+                                  </tr>
+                                );
+                                if (isCollapsed) continue;
+                                stories.forEach((story, storyIdx) => {
+                                  rowIdx += 1;
+                                  const isLast = storyIdx === stories.length - 1;
+                                  const storyTeamId = epicTeamByStoryId.get(story.id) ?? "";
+                                  const storyTeamLabel = monthTeamLabelForId(storyTeamId) ?? (storyTeamId || "—");
+                                  rendered.push(
+                                    <tr key={story.id} className={drilldownTableRowZebra}>
+                                      <td className="relative min-w-0 px-2 py-0.5 pl-6 text-right tabular-nums text-slate-500">
+                                        {/* Tree connector — vertical rail down
+                                         *  the left edge (stops at the elbow
+                                         *  for the last story in the group)
+                                         *  plus a horizontal elbow into the
+                                         *  cell. Same visual the Estimate
+                                         *  Coverage table uses. */}
+                                        <span
+                                          className="absolute left-3 top-0 w-px bg-indigo-300"
+                                          style={{ height: isLast ? "50%" : "100%" }}
+                                          aria-hidden
+                                        />
+                                        <span className="absolute left-3 top-1/2 h-px w-3 -translate-y-px bg-indigo-300" aria-hidden />
+                                        {rowIdx}
+                                      </td>
+                                      <td className="min-w-0 px-2 py-0.5">
+                                        <span className="inline-flex min-w-0 items-center gap-1.5">
+                                          <UserStoryIcon className="size-3.5" />
+                                          <InsightsTruncatedHoverButton label={scopedStoryDisplayIds.get(story.id) ?? story.id.slice(0, 8)} onClick={() => onOpenStory?.(story.id)} className="block min-w-0 max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline" />
+                                        </span>
+                                      </td>
+                                      <td className="min-w-0 px-2 py-0.5"><InsightsTruncatedHoverLabel text={story.title} /></td>
+                                      <td className="min-w-0 px-2 py-0.5">
+                                        <span className="inline-flex min-w-0 items-center gap-1.5">
+                                          <Flag className="size-3.5 shrink-0 text-rose-500" aria-hidden />
+                                          {normalizeStoryYearSprint(story.sprint, scopeStartMonth) != null ? (
+                                            <InsightsTruncatedHoverButton label={storySprintDisplayLabel(story.sprint, scopeStartMonth)} onClick={() => { const t = normalizeStoryYearSprint(story.sprint, scopeStartMonth); if (t) onOpenSprintKanban?.(t, resolveStoryTeamForSprintNav(story)); }} className="block w-full max-w-full truncate text-left font-semibold text-blue-700 underline-offset-2 hover:underline" />
+                                          ) : (
+                                            <InsightsTruncatedHoverLabel text="Unscheduled" />
+                                          )}
+                                        </span>
+                                      </td>
+                                      <td className="min-w-0 px-2 py-0.5">
+                                        <InsightsTruncatedHoverLabel text={storyTeamLabel} />
+                                      </td>
+                                      <td className="min-w-0 px-2 py-0.5">
+                                        <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
+                                      </td>
+                                      <td className="min-w-0 px-2 py-0.5">
+                                        <StoryStatusPill status={story.status} />
+                                      </td>
+                                      <td className="min-w-0 px-2 py-0.5">
+                                        {(() => {
+                                          const v = computeStoryHealthVerdict(story, epic, planYear);
+                                          if (!v) return <span className="text-slate-300">—</span>;
+                                          const tip = formatStoryHealthTooltip(story, epic, planYear, v.status);
+                                          return <HealthBadgeWithTextPopover size="xs" status={v.status} tooltip={tip} />;
+                                        })()}
+                                      </td>
+                                      <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.estimatedDays ?? "—"}</td>
+                                      <td className="min-w-0 px-2 py-0.5 text-right tabular-nums">{story.daysLeft ?? "—"}</td>
+                                    </tr>
+                                  );
+                                });
+                              }
+                              if (rendered.length === 0) {
+                                rendered.push(
+                                  <tr key="ml-empty">
+                                    <td colSpan={10} className="px-3 py-6 text-center text-[13px] text-slate-400">
+                                      No in-scope stories match the current filters.
+                                    </td>
+                                  </tr>
+                                );
+                              }
+                              if (monthLoadDrilldownEmptyRows > 0) {
+                                for (let i = 0; i < monthLoadDrilldownEmptyRows; i++) {
+                                  rendered.push(
+                                    <tr key={`ml-empty-${i}`} className={drilldownTableEmptyRowZebra}>
+                                      <td colSpan={10} className="px-3 py-0.5 text-[13px]">{" "}</td>
+                                    </tr>
+                                  );
+                                }
+                              }
+                              return rendered;
+                            })()}
                           </tbody>
                         </table>
                       </div>
@@ -6087,6 +6606,10 @@ export function MonthAnalytics({
                     // Team-level health from the per-epic rollup. Only set
                     // for teams (rows generated from analytics.workloadByTeam).
                     const teamHealth = row.teamSlug ? teamHealthByTeamKey.get(row.teamSlug) : undefined;
+                    // User-level health from the per-story rollup. Set
+                    // when the row is in user mode (no `teamSlug`) and
+                    // the assignee has any in-scope verdicted stories.
+                    const userHealth = !row.teamSlug ? userVerdictBucketsByAssignee.get(row.key) : undefined;
                     // Row-level verdict — applies the same days-vs-days
                     // rule the sprint-story verdict uses, treating the
                     // row's total daysLeft as the "story" and the
@@ -6106,25 +6629,12 @@ export function MonthAnalytics({
                             : row.daysLeft === monthDaysLeft
                               ? "watch"
                               : "onTrack";
-                    // Hex strokes match the HealthBadge palette so the
-                    // chip next to the name and the donut to the right
-                    // read as the same signal. `null` falls back to a
-                    // neutral slate so the donut still has a stroke.
-                    const verdictStroke: string = rowVerdict === "done"
-                      ? "#10b981"
-                      : rowVerdict === "onTrack"
-                        ? "#0ea5e9"
-                        : rowVerdict === "watch"
-                          ? "#f59e0b"
-                          : rowVerdict === "atRisk"
-                            ? "#f43f5e"
-                            : rowVerdict === "overdue"
-                              ? "#be123c"
-                              : "#94a3b8";
                     // Avatar ring / bar tint still uses the team-level
-                    // health when present, so team rows keep their
-                    // amber-on-risk / emerald-on-done ring. User rows
-                    // use the new rowVerdict.
+                    // health when present, so team rows keep a soft
+                    // amber/emerald accent — much subtler than the
+                    // previous full-row verdict tint. The row's verdict
+                    // information now lives entirely in the
+                    // `VerdictDistributionChip`.
                     const atRisk = teamHealth
                       ? (teamHealth.status === "atRisk" || teamHealth.status === "overdue")
                       : (rowVerdict === "atRisk" || rowVerdict === "overdue");
@@ -6194,31 +6704,23 @@ export function MonthAnalytics({
                             </span>
                           )}
                           {(() => {
-                            // Per-row chip palette for the clock chip
-                            // still cycles (cosmetic only). The donut
-                            // stroke now mirrors the verdict tone via
-                            // `verdictStroke` instead, so the round
-                            // ring on the right reads as the same
-                            // signal as the HealthBadge next to the
-                            // name on the left.
-                            // Clock-chip palette: same verdict tones as
-                            // the HealthBadge + donut so the trio reads
-                            // as one signal. Null verdicts (unestimated
-                            // rows) get a neutral slate chip.
-                            const verdictChipClass: string = rowVerdict === "done"
-                              ? "bg-emerald-50 text-emerald-800 ring-emerald-200/70"
-                              : rowVerdict === "onTrack"
-                                ? "bg-sky-50 text-sky-800 ring-sky-200/70"
-                                : rowVerdict === "watch"
-                                  ? "bg-amber-50 text-amber-800 ring-amber-200/70"
-                                  : rowVerdict === "atRisk"
-                                    ? "bg-rose-50 text-rose-800 ring-rose-200/70"
-                                    : rowVerdict === "overdue"
-                                      ? "bg-rose-100 text-rose-900 ring-rose-300/80"
-                                      : "bg-slate-50 text-slate-700 ring-slate-200/70";
-                            const bar = atRisk ? "bg-amber-400" : allDone ? "bg-emerald-400" : watch ? "bg-amber-300" : "bg-indigo-400";
-                            const pct = atRisk || watch ? "text-amber-700" : allDone ? "text-emerald-700" : "text-indigo-600";
-                            const tone = { bar, pct, chip: verdictChipClass, stroke: verdictStroke };
+                            // Row tones are now neutral — the
+                            // `VerdictDistributionChip` is the ONLY
+                            // surface that carries verdict info, so the
+                            // progress bar fill, clock-chip background,
+                            // and circle stroke all stay color-calm.
+                            // Previously they all keyed off `rowVerdict`
+                            // (worst-of-children), which tinted the
+                            // entire row red for a team with one slipping
+                            // epic — misleading when 90% of the work was
+                            // healthy. The distribution chip surfaces the
+                            // proportional truth instead.
+                            const tone = {
+                              bar: "bg-indigo-400",
+                              pct: "text-indigo-600",
+                              chip: "bg-slate-50 text-slate-700 ring-slate-200/70",
+                              stroke: "#6366f1",
+                            };
                             return (
                               <>
                                 <div className="min-w-0 flex-1">
@@ -6232,23 +6734,13 @@ export function MonthAnalytics({
                                   <div className="flex items-center gap-2">
                                     <span className="truncate text-[12.5px] font-semibold text-slate-800">{row.label}</span>
                                     <div className="ml-auto flex shrink-0 items-center gap-1.5">
-                                      {rowVerdict ? (() => {
-                                        const tip = formatBundleHealthTooltip({
-                                          verdict: rowVerdict,
-                                          bundleLabel: row.label,
-                                          bundleDaysLeft: row.daysLeft,
-                                          windowLabel: scopeLabel ?? "Window",
-                                          windowDaysLeft: monthDaysLeft,
-                                          windowDaysTotal: row.estTotal,
-                                        });
-                                        // Plain HealthBadge (renders as <span>) — NOT the
-                                        // popover variant. The Month Load row itself is a
-                                        // <button> (`row.onRowClick`), so a <button>-rendering
-                                        // popover anchor inside it would be a nested-button
-                                        // hydration error. The `title` attribute on the span
-                                        // still provides the multi-line verdict explanation.
-                                        return <HealthBadge size="xs" status={rowVerdict} tooltip={tip} />;
-                                      })() : null}
+                                      {/* Verdict distribution chip was
+                                       *  here briefly — removed at the
+                                       *  user's request. Row click is
+                                       *  the click target now (Month
+                                       *  Load drilldown in team mode,
+                                       *  epic-accordion popover in
+                                       *  user mode). */}
                                       <span
                                         className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1", tone.chip)}
                                         title={`${row.estTotal}d estimated total · ${doneDays}d in review · ${row.daysLeft}d left`}
@@ -6267,18 +6759,6 @@ export function MonthAnalytics({
                                     />
                                   </div>
                                 </div>
-                                {teamHealth ? (
-                                  <span className="inline-flex shrink-0 items-center">
-                                    <TeamHealthBadgeWithList
-                                      status={teamHealth.status}
-                                      atRiskEpics={teamHealth.atRiskEpics}
-                                      watchEpics={teamHealth.watchEpics}
-                                      overdueEpics={teamHealth.overdueEpics}
-                                      teamLabel={row.label}
-                                      onOpenEpic={onOpenEpic}
-                                    />
-                                  </span>
-                                ) : null}
                                 <CircleProgress percent={donePct} color={tone.stroke} />
                               </>
                             );

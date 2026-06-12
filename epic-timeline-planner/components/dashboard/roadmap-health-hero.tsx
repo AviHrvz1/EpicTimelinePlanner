@@ -1183,6 +1183,10 @@ function TeamProgressCard({
     doneDays: number;
     donePct: number;
     status: HealthStatus;
+    /** Per-verdict tally for this team's in-scope epics — drives the
+     *  `VerdictDistributionChip` segmented bar. */
+    buckets: Record<HealthStatus, number>;
+    total: number;
   }>;
   /** Tailwind classes added to the outer card wrapper so this card can sit
    *  on a distinctly tinted background alongside the donut cards in the
@@ -1350,49 +1354,22 @@ function TeamProgressCard({
                   // — adjacent rows distinguish by name + verdict tint
                   // instead of by hue.
                   void rowIdx;
-                  const verdictStroke = row.status === "done"
-                    ? "#10b981"
-                    : row.status === "onTrack"
-                      ? "#0ea5e9"
-                      : row.status === "watch"
-                        ? "#f59e0b"
-                        : row.status === "atRisk"
-                          ? "#f43f5e"
-                          : "#be123c";
-                  const verdictChipBg = row.status === "done"
-                    ? "bg-emerald-50/80"
-                    : row.status === "onTrack"
-                      ? "bg-sky-50/80"
-                      : row.status === "watch"
-                        ? "bg-amber-50/80"
-                        : row.status === "atRisk"
-                          ? "bg-rose-50/80"
-                          : "bg-rose-100/80";
-                  const verdictIcon = row.status === "done"
-                    ? "text-emerald-500"
-                    : row.status === "onTrack"
-                      ? "text-sky-500"
-                      : row.status === "watch"
-                        ? "text-amber-500"
-                        : row.status === "atRisk"
-                          ? "text-rose-500"
-                          : "text-rose-700";
-                  const verdictAccent = row.status === "done"
-                    ? "text-emerald-600"
-                    : row.status === "onTrack"
-                      ? "text-sky-600"
-                      : row.status === "watch"
-                        ? "text-amber-600"
-                        : row.status === "atRisk"
-                          ? "text-rose-600"
-                          : "text-rose-700";
-                  const bar = atRisk ? "bg-amber-400" : allDone ? "bg-emerald-400" : watch ? "bg-amber-300" : "bg-indigo-400";
+                  // Row tones are now neutral — the
+                  // `VerdictDistributionChip` is the only surface that
+                  // carries verdict info, so the progress bar fill,
+                  // clock-chip background, and circle stroke all stay
+                  // color-calm. Previously every row tinted by the
+                  // worst-of-children verdict, which made a team with
+                  // one slipping epic register as loud as a team in
+                  // total trouble. The distribution chip carries the
+                  // proportional truth instead.
+                  void atRisk; void allDone; void watch;
                   const tone = {
-                    bar,
-                    chipBg: verdictChipBg,
-                    icon: verdictIcon,
-                    accent: verdictAccent,
-                    stroke: verdictStroke,
+                    bar: "bg-indigo-400",
+                    chipBg: "bg-slate-50",
+                    icon: "text-slate-500",
+                    accent: "text-indigo-600",
+                    stroke: "#6366f1",
                   };
                   return (
                     <div className="flex items-center gap-2">
@@ -1433,10 +1410,12 @@ function TeamProgressCard({
                           />
                         </div>
                       </div>
-                      {/* Single pill chip: soft tone-tinted background +
-                       *  tone-colored clock icon. Text in slate-700
-                       *  (dark gray) so the days-left values read as
-                       *  the primary content without going full black. */}
+                      {/* Single pill chip: neutral background + clock icon.
+                       *  Days-left value reads as the primary content. The
+                       *  verdict-distribution chip we briefly added here
+                       *  was removed at the user's request — the row click
+                       *  still syncs the Gantt + initiative panel filter,
+                       *  which is the planner's primary handle on this row. */}
                       <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-[10.5px] font-semibold tabular-nums text-slate-700", tone.chipBg)}>
                         <Clock className={cn("size-3", tone.icon)} strokeWidth={2.2} aria-hidden />
                         <span>{Math.round(row.daysLeft)}</span>
@@ -1939,6 +1918,13 @@ function computeRoadmapStats(
     estTotal: number;
     daysLeft: number;
     status: HealthStatus;
+    /** Per-verdict tally across the team's in-scope epics — feeds the
+     *  `VerdictDistributionChip`'s segmented bar. The `status` field
+     *  above is the worst-of-children rollup (kept for back-compat
+     *  with any consumer reading just one verdict); the chip reads
+     *  `buckets` directly so the proportion is the truth. */
+    buckets: Record<HealthStatus, number>;
+    total: number;
   };
   /**
    * Single team accumulator — driven by the Health Calculation basis
@@ -2039,11 +2025,22 @@ function computeRoadmapStats(
       const teamKey = team || "__unassigned__";
       let teamAcc = teamAccs.get(teamKey);
       if (!teamAcc) {
-        teamAcc = { teamId: teamKey, estTotal: 0, daysLeft: 0, status: "onTrack" };
+        teamAcc = {
+          teamId: teamKey,
+          estTotal: 0,
+          daysLeft: 0,
+          status: "onTrack",
+          buckets: { done: 0, onTrack: 0, watch: 0, atRisk: 0, overdue: 0 },
+          total: 0,
+        };
         teamAccs.set(teamKey, teamAcc);
       }
-      if (epicHealth && STATUS_RANK_LOCAL[epicHealth] > STATUS_RANK_LOCAL[teamAcc.status]) {
-        teamAcc.status = epicHealth;
+      if (epicHealth) {
+        teamAcc.buckets[epicHealth] += 1;
+        teamAcc.total += 1;
+        if (STATUS_RANK_LOCAL[epicHealth] > STATUS_RANK_LOCAL[teamAcc.status]) {
+          teamAcc.status = epicHealth;
+        }
       }
       // Per-epic accumulation for the `epicEst` basis. Fires once per
       // owned epic, regardless of how many stories the epic has —
@@ -2220,6 +2217,8 @@ function computeRoadmapStats(
           doneDays,
           donePct,
           status: t.status,
+          buckets: t.buckets,
+          total: t.total,
         };
       })
       .sort((a, b) => b.estTotal - a.estTotal);

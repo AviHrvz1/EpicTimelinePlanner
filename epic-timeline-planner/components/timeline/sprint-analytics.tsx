@@ -4,6 +4,7 @@ import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } 
 import { Activity, AlertOctagon, AlertTriangle, CalendarDays, ChartNoAxesCombined, CheckCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clock, Folder, Layers, ListTodo, PieChart as PieChartIcon, PlayCircle, User, UserRound, Users } from "lucide-react";
 import { createPortal } from "react-dom";
 import { HealthBadge } from "@/components/timeline/health-badge";
+import { VerdictDistributionChip, type VerdictBuckets } from "@/components/timeline/verdict-distribution-chip";
 import { InsightsDrilldownModal } from "@/components/timeline/insights-drilldown-modal";
 import { DrilldownFilterDropdown, DrilldownFilterInputText } from "@/components/timeline/insights-drilldown-filters";
 import type { HealthStatus } from "@/lib/progress";
@@ -270,6 +271,8 @@ function SprintLoadHealthBadge({
   atRiskStories,
   watchStories,
   overdueStories,
+  buckets,
+  total,
   sprintLabel,
   onOpenStory,
 }: {
@@ -278,159 +281,92 @@ function SprintLoadHealthBadge({
   atRiskStories: FlaggedStoryEntry[];
   watchStories: FlaggedStoryEntry[];
   overdueStories: FlaggedStoryEntry[];
+  buckets: VerdictBuckets;
+  total: number;
   sprintLabel?: string;
   onOpenStory?: (storyId: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLSpanElement | null>(null);
-  const popoverRef = useRef<HTMLDivElement | null>(null);
-  const [pos, setPos] = useState<{ left: number; bottom: number } | null>(null);
-  useEffect(() => {
-    if (!open) {
-      setPos(null);
-      return;
-    }
-    const place = () => {
-      const el = wrapRef.current;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      const popW = 384;
-      const right = Math.min(window.innerWidth - 8, r.right);
-      const left = Math.max(8, right - popW);
-      const bottom = Math.max(8, window.innerHeight - r.top + 6);
-      setPos({ left, bottom });
-    };
-    place();
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
-    return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
-    };
-  }, [open]);
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      const t = e.target as Node | null;
-      if (wrapRef.current?.contains(t)) return;
-      if (popoverRef.current?.contains(t)) return;
-      setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
   const verdict =
     status === "overdue" ? "Overdue"
     : status === "atRisk" ? "At Risk"
     : status === "watch" ? "Watch"
     : status === "done" ? "Done"
     : "On Track";
-  const tipLines: string[] = [`${rowLabel} — ${verdict}`, "Click for details."];
   const flagged = overdueStories.length + atRiskStories.length + watchStories.length;
 
-  return (
-    <span
-      ref={wrapRef}
-      className="relative inline-flex cursor-pointer"
-      onClick={(e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        setOpen((v) => !v);
-      }}
-      onMouseDown={(e) => e.stopPropagation()}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          e.stopPropagation();
-          setOpen((v) => !v);
-        }
-      }}
-      aria-haspopup="dialog"
-      aria-expanded={open}
-    >
-      <HealthBadge status={status} size="xs" tooltip={tipLines.join("\n")} />
-      {open && pos && typeof document !== "undefined" ? createPortal(
-        <div
-          ref={popoverRef}
-          role="dialog"
-          aria-label={`${rowLabel} — ${verdict} details`}
-          style={{ position: "fixed", left: pos.left, bottom: pos.bottom, zIndex: 1000 }}
-          className="w-96 max-w-[calc(100vw-2rem)] rounded-lg border border-slate-200 bg-white p-3.5 text-left text-slate-800 shadow-xl"
-          onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <p className="mb-2 inline-flex w-full items-center justify-between text-[12.5px] font-bold uppercase tracking-wide text-slate-500">
-            <span>{rowLabel} · {verdict}{sprintLabel ? ` · ${sprintLabel}` : ""}</span>
-            {flagged > 0 ? <span className="text-[12px] font-semibold normal-case tracking-normal text-slate-400">{flagged} flagged</span> : null}
-          </p>
-          {(() => {
-            const fmtGap = (g: number) => `${g >= 0 ? "+" : "−"}${(Math.round(Math.abs(g) * 10) / 10).toFixed(1)}d`;
-            const reasonFor = (entry: FlaggedStoryEntry, kind: "overdue" | "atRisk" | "watch") => {
-              const left = Math.max(0, entry.story.daysLeft ?? entry.story.estimatedDays ?? 0);
-              if (kind === "overdue") return `${left}d still open · sprint ended`;
-              return `${left}d left · ${fmtGap(entry.gap)} vs ideal`;
-            };
-            const renderList = (
-              kind: "overdue" | "atRisk" | "watch",
-              entries: FlaggedStoryEntry[],
-              titleClass: string,
-              heading: string,
-            ) => {
-              const warnIcon = kind === "overdue"
-                ? { Icon: AlertOctagon, className: "text-rose-700" }
-                : kind === "atRisk"
-                  ? { Icon: AlertTriangle, className: "text-rose-600" }
-                  : { Icon: AlertTriangle, className: "text-amber-600" };
-              const WarnIcon = warnIcon.Icon;
-              return entries.length === 0 ? null : (
-                <div className="mb-2.5">
-                  <p className={cn("text-[13px] font-semibold", titleClass)}>{heading} ({entries.length})</p>
-                  <ul className="mt-1.5 space-y-1.5">
-                    {entries.map((e) => (
-                      <li key={e.story.id} className="leading-snug">
-                        <button
-                          type="button"
-                          onClick={() => { onOpenStory?.(e.story.id); setOpen(false); }}
-                          className="inline-flex w-full items-center gap-1.5 text-left text-[13.5px] font-medium text-blue-700 underline-offset-2 hover:underline"
-                        >
-                          <UserStoryIcon className="size-3.5 shrink-0 text-sky-500" aria-hidden />
-                          <span className="min-w-0 truncate">{e.story.title}</span>
-                          <WarnIcon className={cn("size-3.5 shrink-0", warnIcon.className)} aria-hidden />
-                        </button>
-                        <p className="truncate text-[12px] tabular-nums text-slate-500">{reasonFor(e, kind)}</p>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            };
-            return (
-              <>
-                {renderList("overdue", overdueStories, "text-rose-900", "Overdue — sprint ended")}
-                {renderList("atRisk", atRiskStories, "text-rose-800", "At Risk — ≥4d above ideal")}
-                {renderList("watch", watchStories, "text-amber-800", "Watch — 1–4d above ideal")}
-              </>
-            );
-          })()}
-          {flagged === 0 ? (
-            <p className="text-[13px] text-slate-500">No flagged stories — everything is on or ahead of pace.</p>
-          ) : null}
-          <div className="mt-2 border-t border-slate-100 pt-2.5 text-[12.5px] leading-snug text-slate-500">
-            <p className="mb-1"><span className="font-semibold text-slate-600">How we score:</span> at each point in the sprint we compare each story&apos;s remaining work to its ideal linear burndown — Δ = remaining − ideal.</p>
-            <p>≤ 1d → On Track · 1–4d → Watch · ≥ 4d → At Risk · sprint ended with work left → Overdue.</p>
-          </div>
-        </div>,
-        document.body,
+  const fmtGap = (g: number) => `${g >= 0 ? "+" : "−"}${(Math.round(Math.abs(g) * 10) / 10).toFixed(1)}d`;
+  const reasonFor = (entry: FlaggedStoryEntry, kind: "overdue" | "atRisk" | "watch") => {
+    const left = Math.max(0, entry.story.daysLeft ?? entry.story.estimatedDays ?? 0);
+    if (kind === "overdue") return `${left}d still open · sprint ended`;
+    return `${left}d left · ${fmtGap(entry.gap)} vs ideal`;
+  };
+  const renderList = (
+    kind: "overdue" | "atRisk" | "watch",
+    entries: FlaggedStoryEntry[],
+    titleClass: string,
+    heading: string,
+  ) => {
+    const warnIcon = kind === "overdue"
+      ? { Icon: AlertOctagon, className: "text-rose-700" }
+      : kind === "atRisk"
+        ? { Icon: AlertTriangle, className: "text-rose-600" }
+        : { Icon: AlertTriangle, className: "text-amber-600" };
+    const WarnIcon = warnIcon.Icon;
+    return entries.length === 0 ? null : (
+      <div className="mb-2.5">
+        <p className={cn("text-[13px] font-semibold", titleClass)}>{heading} ({entries.length})</p>
+        <ul className="mt-1.5 space-y-1.5">
+          {entries.map((e) => (
+            <li key={e.story.id} className="leading-snug">
+              <button
+                type="button"
+                onClick={() => { onOpenStory?.(e.story.id); }}
+                className="inline-flex w-full items-center gap-1.5 text-left text-[13.5px] font-medium text-blue-700 underline-offset-2 hover:underline"
+              >
+                <UserStoryIcon className="size-3.5 shrink-0 text-sky-500" aria-hidden />
+                <span className="min-w-0 truncate">{e.story.title}</span>
+                <WarnIcon className={cn("size-3.5 shrink-0", warnIcon.className)} aria-hidden />
+              </button>
+              <p className="truncate text-[12px] tabular-nums text-slate-500">{reasonFor(e, kind)}</p>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
+
+  const popoverBody = (
+    <>
+      <p className="mb-2 inline-flex w-full items-center justify-between text-[12.5px] font-bold uppercase tracking-wide text-slate-500">
+        {/* Lead-in disambiguates the baseline — each story's verdict
+         *  is measured against its own sprint window, NOT epic plan
+         *  dates. Mirrors Month Team Progress's `Epic plan · …`
+         *  header for the same reason. */}
+        <span>Sprint commit · {rowLabel} · {verdict}{sprintLabel ? ` · ${sprintLabel}` : ""}</span>
+        {flagged > 0 ? <span className="text-[12px] font-semibold normal-case tracking-normal text-slate-400">{flagged} flagged</span> : null}
+      </p>
+      {renderList("overdue", overdueStories, "text-rose-900", "Overdue — sprint ended")}
+      {renderList("atRisk", atRiskStories, "text-rose-800", "At Risk — ≥4d above ideal")}
+      {renderList("watch", watchStories, "text-amber-800", "Watch — 1–4d above ideal")}
+      {flagged === 0 ? (
+        <p className="text-[13px] text-slate-500">No flagged stories — everything is on or ahead of pace.</p>
       ) : null}
-    </span>
+      <div className="mt-2 border-t border-slate-100 pt-2.5 text-[12.5px] leading-snug text-slate-500">
+        <p className="mb-1"><span className="font-semibold text-slate-600">How we score:</span> at each point in the sprint we compare each story&apos;s remaining work to its ideal linear burndown — Δ = remaining − ideal.</p>
+        <p>≤ 1d → On Track · 1–4d → Watch · ≥ 4d → At Risk · sprint ended with work left → Overdue.</p>
+      </div>
+    </>
+  );
+
+  return (
+    <VerdictDistributionChip
+      buckets={buckets}
+      total={total}
+      ariaLabel={`${rowLabel} — sprint story health distribution`}
+      popoverBody={popoverBody}
+      unitLabel="story"
+      size="xs"
+    />
   );
 }
 
@@ -2196,9 +2132,13 @@ export function SprintAnalytics({
                         const overdueStories: FlaggedStoryEntry[] = [];
                         const atRiskStories: FlaggedStoryEntry[] = [];
                         const watchStories: FlaggedStoryEntry[] = [];
+                        const verdictBuckets: VerdictBuckets = { done: 0, onTrack: 0, watch: 0, atRisk: 0, overdue: 0 };
+                        let verdictTotal = 0;
                         if (metric === "daysLeft") {
                           for (const s of rowStories) {
                             const v = sprintStoryVerdict(s, sprintDaysLeft, sprintDaysTotal);
+                            verdictBuckets[v.status] += 1;
+                            verdictTotal += 1;
                             if (v.status === "overdue") overdueStories.push({ story: s, gap: v.gap });
                             else if (v.status === "atRisk") atRiskStories.push({ story: s, gap: v.gap });
                             else if (v.status === "watch") watchStories.push({ story: s, gap: v.gap });
@@ -2248,44 +2188,24 @@ export function SprintAnalytics({
                                 </span>
                               )}
                               {(() => {
-                                // Health-tone palette: chip + circle stroke +
-                                // clock icon all key off the row's verdict
-                                // so the chip / badge / donut read as one
-                                // signal. Mirrors the new treatment on the
-                                // RoadmapHealthHero + Insights User Progress
-                                // rows — cycling 6-color palette retired.
+                                // Row tones are now neutral — the
+                                // `VerdictDistributionChip` is the ONLY
+                                // surface that carries verdict info.
+                                // Previously each row's bar / clock chip
+                                // / circle stroke tinted by the worst-
+                                // of-children verdict, which made a row
+                                // with one slipping story scream as
+                                // loud as one with every story flagged.
+                                // The distribution chip surfaces the
+                                // proportional truth instead.
                                 void rowIdx;
-                                const verdictStatus = verdict.status;
-                                const verdictStroke = verdictStatus === "done"
-                                  ? "#10b981"
-                                  : verdictStatus === "onTrack"
-                                    ? "#0ea5e9"
-                                    : verdictStatus === "watch"
-                                      ? "#f59e0b"
-                                      : verdictStatus === "atRisk"
-                                        ? "#f43f5e"
-                                        : "#be123c";
-                                const verdictChipClass = verdictStatus === "done"
-                                  ? "bg-emerald-50 ring-emerald-200/70"
-                                  : verdictStatus === "onTrack"
-                                    ? "bg-sky-50 ring-sky-200/70"
-                                    : verdictStatus === "watch"
-                                      ? "bg-amber-50 ring-amber-200/70"
-                                      : verdictStatus === "atRisk"
-                                        ? "bg-rose-50 ring-rose-200/70"
-                                        : "bg-rose-100 ring-rose-300/80";
-                                const verdictIconClass = verdictStatus === "done"
-                                  ? "text-emerald-500"
-                                  : verdictStatus === "onTrack"
-                                    ? "text-sky-500"
-                                    : verdictStatus === "watch"
-                                      ? "text-amber-500"
-                                      : verdictStatus === "atRisk"
-                                        ? "text-rose-500"
-                                        : "text-rose-700";
-                                const teamColor = { chip: verdictChipClass, icon: verdictIconClass, stroke: verdictStroke };
-                                const bar = atRisk ? "bg-amber-400" : allDone ? "bg-emerald-400" : watch ? "bg-amber-300" : "bg-indigo-400";
-                                const pctClass = atRisk || watch ? "text-amber-700" : allDone ? "text-emerald-700" : "text-indigo-600";
+                                const teamColor = {
+                                  chip: "bg-slate-50 ring-slate-200/70",
+                                  icon: "text-slate-500",
+                                  stroke: "#6366f1",
+                                };
+                                const bar = "bg-indigo-400";
+                                const pctClass = "text-indigo-600";
                                 return (
                                   <>
                                     <div className="min-w-0 flex-1">
@@ -2314,6 +2234,8 @@ export function SprintAnalytics({
                                         atRiskStories={atRiskStories}
                                         watchStories={watchStories}
                                         overdueStories={overdueStories}
+                                        buckets={verdictBuckets}
+                                        total={verdictTotal}
                                         sprintLabel={sprintEnded ? "Sprint ended" : `${sprintDaysLeft}d left`}
                                         onOpenStory={onOpenStory}
                                       />

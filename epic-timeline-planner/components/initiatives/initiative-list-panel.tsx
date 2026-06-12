@@ -67,7 +67,7 @@ import { EpicItem, InitiativeItem, UserStoryItem } from "@/lib/types";
 import { resolveStoryYearSprint, sprintStartDate, sprintEndDate, globalSprintFromMonthLane } from "@/lib/year-sprint";
 import { computeProgress, type HealthStatus } from "@/lib/progress";
 import { computeEpicHealthVerdict, computeInitiativeHealthVerdict } from "@/lib/epic-health";
-import { HealthBadge, formatHealthTooltip } from "@/components/timeline/health-badge";
+import { HealthBadgeWithTextPopover, formatHealthTooltip } from "@/components/timeline/health-badge";
 import { rollupWorkflowStatus } from "@/lib/workflow-rollup";
 import { resolveAssigneeAvatar, UserAvatar } from "@/components/ui/user-avatar";
 import { TeamAvatar } from "@/components/ui/team-avatar";
@@ -1690,7 +1690,7 @@ function InitiativeTreeEpicRow({
                   const v = computeEpicHealthVerdict(epic, initiative.year ?? new Date().getFullYear(), progressBasis);
                   if (!v) return null;
                   return (
-                    <HealthBadge
+                    <HealthBadgeWithTextPopover
                       size="sm"
                       status={v.status}
                       tooltip={formatHealthTooltip(v.result)}
@@ -2195,7 +2195,7 @@ function InitiativeTreeCard({
                         const v = computeInitiativeHealthVerdict(initiative, initiative.year ?? new Date().getFullYear(), progressBasis);
                         if (!v) return null;
                         return (
-                          <HealthBadge
+                          <HealthBadgeWithTextPopover
                             size="sm"
                             status={v.status}
                             tooltip={formatHealthTooltip(v.result)}
@@ -2644,7 +2644,7 @@ function SprintEpicCard({
                       );
                       if (!v) return null;
                       return (
-                        <HealthBadge
+                        <HealthBadgeWithTextPopover
                           size="sm"
                           status={v.status}
                           tooltip={formatHealthTooltip(v.result)}
