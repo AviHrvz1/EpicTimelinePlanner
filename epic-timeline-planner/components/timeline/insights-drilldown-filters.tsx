@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, X as XIcon } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -76,7 +76,21 @@ export function DrilldownFilterDropdown({
   emptyLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
+  /** Substring filter typed inside the popover — narrows the visible
+   *  options as the planner searches. Reset to empty whenever the
+   *  dropdown closes so re-opening starts fresh. */
+  const [query, setQuery] = useState("");
   const ref = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (!open) {
+      setQuery("");
+      return;
+    }
+    // Focus the search box on open so the planner can type immediately.
+    const tid = window.setTimeout(() => { searchRef.current?.focus(); }, 0);
+    return () => window.clearTimeout(tid);
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -85,6 +99,15 @@ export function DrilldownFilterDropdown({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
+  // Search-box is rendered for non-trivial option lists. Very short lists
+  // (statuses, health) get the bare option buttons — typing to filter 4
+  // rows reads as overkill.
+  const showSearch = options.length > 5;
+  const filteredOptions = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((o) => o.toLowerCase().includes(q));
+  }, [options, query]);
   return (
     <div ref={ref} className="group relative">
       <button
@@ -111,24 +134,60 @@ export function DrilldownFilterDropdown({
         <ChevronDown className="size-3 shrink-0 opacity-60" aria-hidden />
       </button>
       {open ? (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded border border-slate-200 bg-white py-0.5 text-slate-800 shadow-md">
-          <button
-            type="button"
-            onClick={() => { onChange(null); setOpen(false); }}
-            className={cn("block w-full truncate px-2 py-1 text-left text-[11px] text-slate-800 hover:bg-slate-50", value == null && "bg-indigo-50 font-semibold")}
-          >
-            {emptyLabel}
-          </button>
-          {options.map((opt) => (
+        <div
+          // `min-w-[14rem]` lets the popup breathe past the narrow
+          // column cell that holds the trigger button — long option
+          // labels (team names like "Data & analytics" or full
+          // assignee names) need more horizontal room than the
+          // typical 9–14% table column gives them. The popup still
+          // anchors to the left edge of the trigger.
+          className="absolute left-0 top-full z-50 mt-1 max-h-56 min-w-[14rem] overflow-hidden rounded border border-slate-200 bg-white text-slate-800 shadow-md"
+        >
+          {showSearch ? (
+            <div className="sticky top-0 z-10 border-b border-slate-100 bg-white p-1">
+              <input
+                ref={searchRef}
+                type="text"
+                value={query}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setQuery(next);
+                  // Push the typed substring directly into the filter
+                  // so the parent table updates live as the planner
+                  // types — clears when the box is emptied. Picking a
+                  // specific option afterward still overrides with the
+                  // exact label.
+                  onChange(next.length > 0 ? next : null);
+                }}
+                placeholder="Search…"
+                aria-label={`Search ${ariaLabel}`}
+                autoComplete="off"
+                className="block h-6 w-full rounded-sm border border-slate-200 bg-white px-1.5 text-[11px] !text-slate-800 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300/40"
+              />
+            </div>
+          ) : null}
+          <div className="max-h-48 overflow-y-auto py-0.5">
             <button
-              key={opt}
               type="button"
-              onClick={() => { onChange(opt); setOpen(false); }}
-              className={cn("block w-full truncate px-2 py-1 text-left text-[11px] text-slate-800 hover:bg-slate-50", value === opt && "bg-indigo-50 font-semibold")}
+              onClick={() => { onChange(null); setOpen(false); }}
+              className={cn("block w-full truncate px-2 py-1 text-left text-[11px] text-slate-800 hover:bg-slate-50", value == null && "bg-indigo-50 font-semibold")}
             >
-              {renderOption(opt)}
+              {emptyLabel}
             </button>
-          ))}
+            {filteredOptions.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => { onChange(opt); setOpen(false); }}
+                className={cn("block w-full truncate px-2 py-1 text-left text-[11px] text-slate-800 hover:bg-slate-50", value === opt && "bg-indigo-50 font-semibold")}
+              >
+                {renderOption(opt)}
+              </button>
+            ))}
+            {showSearch && filteredOptions.length === 0 ? (
+              <p className="px-2 py-1.5 text-[11px] text-slate-400">No matches.</p>
+            ) : null}
+          </div>
         </div>
       ) : null}
     </div>

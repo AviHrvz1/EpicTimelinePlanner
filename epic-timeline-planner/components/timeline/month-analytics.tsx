@@ -314,8 +314,14 @@ function applyEpicDrilldownFilterSort<T extends { id: string; title: string; ass
   const titleQ = filter.title.trim().toLowerCase();
   let filtered = rows;
   if (titleQ) filtered = filtered.filter((r) => r.title.toLowerCase().includes(titleQ));
-  if (filter.initiative != null) filtered = filtered.filter((r) => initiativeTitle(r.id) === filter.initiative);
-  if (filter.assignee != null) filtered = filtered.filter((r) => (r.assignee?.trim() || "Unassigned") === filter.assignee);
+  // Initiative / Assignee use case-insensitive substring — same reason
+  // as the story-drilldown helper above (search-as-you-type in the
+  // dropdown pushes typed queries straight into the filter).
+  const initiativeQ = filter.initiative?.trim().toLowerCase();
+  if (initiativeQ) filtered = filtered.filter((r) => initiativeTitle(r.id).toLowerCase().includes(initiativeQ));
+  const assigneeQ = filter.assignee?.trim().toLowerCase();
+  if (assigneeQ) filtered = filtered.filter((r) => (r.assignee?.trim() || "Unassigned").toLowerCase().includes(assigneeQ));
+  // Status is categorical (no search input) — exact match.
   if (filter.status != null) filtered = filtered.filter((r) => epicStatusLabel(r.id) === filter.status);
   if (!sort) return filtered;
   const dir = sort.dir === "asc" ? 1 : -1;
@@ -348,6 +354,33 @@ interface DrilldownFilter {
   /** Sprint-burndown health verdict per story. Same `HealthStatus`
    *  values the rest of the app uses; `null` means "show all". */
   health: HealthStatus | null;
+}
+
+/** Cheap "is this drilldown narrowed by any column filter" probe. Used
+ *  by the tbody renderers to force-expand every epic accordion when a
+ *  filter is on — otherwise the planner picks a story-level value
+ *  (e.g. story assignee "Alice"), the matching story group is created,
+ *  but the epic header (showing the epic's own assignee) stays
+ *  collapsed and visually reads as "no match". */
+function isDrilldownFilterActive(f: DrilldownFilter): boolean {
+  return (
+    f.title.trim().length > 0
+    || f.sprint != null
+    || f.team != null
+    || f.assignee != null
+    || f.status != null
+    || f.health != null
+  );
+}
+
+function isEpicDrilldownFilterActive(f: EpicDrilldownFilter): boolean {
+  return (
+    f.title.trim().length > 0
+    || f.initiative != null
+    || f.assignee != null
+    || f.status != null
+    || f.health != null
+  );
 }
 
 const EMPTY_DRILLDOWN_FILTER: DrilldownFilter = {
@@ -410,9 +443,17 @@ function applyDrilldownFilterSort<T extends { id: string; title: string; sprint:
   const titleQ = filter.title.trim().toLowerCase();
   let filtered = rows;
   if (titleQ) filtered = filtered.filter((r) => r.title.toLowerCase().includes(titleQ));
-  if (filter.sprint != null) filtered = filtered.filter((r) => sprintLabel(r.sprint) === filter.sprint);
-  if (filter.team != null && teamLabel) filtered = filtered.filter((r) => teamLabel(r.id) === filter.team);
-  if (filter.assignee != null) filtered = filtered.filter((r) => (r.assignee?.trim() || "Unassigned") === filter.assignee);
+  // Sprint / Team / Assignee filters use case-insensitive substring
+  // match so the dropdown's search box can push typed-but-unpicked
+  // queries directly into the table filter. Picking an option from the
+  // dropdown sets the exact label, which substring-matches itself.
+  const sprintQ = filter.sprint?.trim().toLowerCase();
+  if (sprintQ) filtered = filtered.filter((r) => sprintLabel(r.sprint).toLowerCase().includes(sprintQ));
+  const teamQ = filter.team?.trim().toLowerCase();
+  if (teamQ && teamLabel) filtered = filtered.filter((r) => teamLabel(r.id).toLowerCase().includes(teamQ));
+  const assigneeQ = filter.assignee?.trim().toLowerCase();
+  if (assigneeQ) filtered = filtered.filter((r) => (r.assignee?.trim() || "Unassigned").toLowerCase().includes(assigneeQ));
+  // Status is categorical (no search input) — exact match.
   if (filter.status != null) filtered = filtered.filter((r) => r.status === filter.status);
   if (!sort) return filtered;
   const dir = sort.dir === "asc" ? 1 : -1;
@@ -2539,31 +2580,10 @@ export function MonthAnalytics({
   const statusDrilldownRowCount = statusChartShowsEpics ? statusDrilldownEpics.length : statusDrilldownStories.length;
   const tableTargetRows = 6;
   const statusDrilldownEmptyRows = Math.max(0, tableTargetRows - statusDrilldownRowCount);
-  const statusDrilldownScrollRef = useRef<HTMLDivElement | null>(null);
-  const [canScrollStatusDrilldownUp, setCanScrollStatusDrilldownUp] = useState(false);
-  const [canScrollStatusDrilldownDown, setCanScrollStatusDrilldownDown] = useState(false);
-  const updateStatusDrilldownArrowState = () => {
-    const node = statusDrilldownScrollRef.current;
-    if (!node) {
-      setCanScrollStatusDrilldownUp(false);
-      setCanScrollStatusDrilldownDown(false);
-      return;
-    }
-    const epsilon = 2;
-    setCanScrollStatusDrilldownUp(node.scrollTop > epsilon);
-    setCanScrollStatusDrilldownDown(node.scrollTop + node.clientHeight < node.scrollHeight - epsilon);
-  };
-  const scrollStatusDrilldownBy = (delta: number) => {
-    statusDrilldownScrollRef.current?.scrollBy({ top: delta, behavior: "smooth" });
-  };
-  useEffect(() => {
-    if (!statusDrilldownFilter) {
-      setCanScrollStatusDrilldownUp(false);
-      setCanScrollStatusDrilldownDown(false);
-      return;
-    }
-    updateStatusDrilldownArrowState();
-  }, [statusDrilldownFilter, statusDrilldownRowCount, statusChartShowsEpics]);
+  // Native scrollbar handles all of this now; the up/down arrow
+  // chrome that used to manage `canScroll*` state + scroll-by helpers
+  // here was deleted along with its render block.
+
   // Title swaps with statusChartShowsEpics (which is now driven by the
   // user toggle when available). When the toggle is OFF (e.g. an epic
   // is pinned), the chart always shows user-story progress and the
@@ -3964,36 +3984,9 @@ export function MonthAnalytics({
   const scrollWorkloadStoriesBy = (delta: number) => {
     workloadStoriesScrollRef.current?.scrollBy({ top: delta, behavior: "smooth" });
   };
-  const workloadDrilldownScrollRef = useRef<HTMLDivElement | null>(null);
-  const monthLoadDrilldownScrollRef = useRef<HTMLDivElement | null>(null);
-  const [canScrollWorkloadDrilldownUp, setCanScrollWorkloadDrilldownUp] = useState(false);
-  const [canScrollWorkloadDrilldownDown, setCanScrollWorkloadDrilldownDown] = useState(false);
-  const [canScrollMonthLoadDrilldownUp, setCanScrollMonthLoadDrilldownUp] = useState(false);
-  const [canScrollMonthLoadDrilldownDown, setCanScrollMonthLoadDrilldownDown] = useState(false);
-  const updateWorkloadDrilldownArrowState = () => {
-    const node = workloadDrilldownScrollRef.current;
-    if (!node) {
-      setCanScrollWorkloadDrilldownUp(false);
-      setCanScrollWorkloadDrilldownDown(false);
-      return;
-    }
-    const epsilon = 2;
-    setCanScrollWorkloadDrilldownUp(node.scrollTop > epsilon);
-    setCanScrollWorkloadDrilldownDown(node.scrollTop + node.clientHeight < node.scrollHeight - epsilon);
-  };
-  const scrollWorkloadDrilldownBy = (delta: number) => {
-    workloadDrilldownScrollRef.current?.scrollBy({ top: delta, behavior: "smooth" });
-  };
-  const updateMonthLoadDrilldownArrowState = () => {
-    const node = monthLoadDrilldownScrollRef.current;
-    if (!node) { setCanScrollMonthLoadDrilldownUp(false); setCanScrollMonthLoadDrilldownDown(false); return; }
-    const epsilon = 2;
-    setCanScrollMonthLoadDrilldownUp(node.scrollTop > epsilon);
-    setCanScrollMonthLoadDrilldownDown(node.scrollTop + node.clientHeight < node.scrollHeight - epsilon);
-  };
-  const scrollMonthLoadDrilldownBy = (delta: number) => {
-    monthLoadDrilldownScrollRef.current?.scrollBy({ top: delta, behavior: "smooth" });
-  };
+  // Workload / Month-Load drilldown arrow-state helpers + scroll refs
+  // were removed — native scrollbar replaces the chevron chrome.
+
   const monthLoadScrollRef = useRef<HTMLDivElement | null>(null);
   const [canScrollMonthLoadUp, setCanScrollMonthLoadUp] = useState(false);
   const [canScrollMonthLoadDown, setCanScrollMonthLoadDown] = useState(false);
@@ -4017,23 +4010,77 @@ export function MonthAnalytics({
   useEffect(() => {
     updateMonthLoadArrowState();
   }, [analytics.workloadCapacityByAssignee.length, analytics.monthDaysLeft]);
+  /** Auto-expand epic accordion groups whose children match the active
+   *  column filter — fires once per filter change (every keystroke
+   *  counts as a "change", which is what the planner asked for: "if I
+   *  type anything new in the filter it can open the accordion"). The
+   *  pure-state `isCollapsed` check in each tbody then honors any
+   *  manual chevron-click between filter changes, so the planner can
+   *  collapse an uninteresting epic and have that stick until they
+   *  type more. When the filter clears, every epic collapses back to
+   *  the browse default. */
   useEffect(() => {
-    if (!workloadDrilldownAssignee) {
-      setCanScrollWorkloadDrilldownUp(false);
-      setCanScrollWorkloadDrilldownDown(false);
+    if (monthLoadDrilldownAssignee == null) return;
+    if (!isDrilldownFilterActive(monthLoadDrilldownFilter)) {
+      setExpandedDrilldownEpics(new Set());
       return;
     }
-    updateWorkloadDrilldownArrowState();
-  }, [workloadDrilldownAssignee, workloadDrilldownStories.length]);
+    const storyIdSet = new Set(monthLoadDrilldownStories.map((s) => s.id));
+    const matching = new Set<string>();
+    for (const { epic } of monthEpics) {
+      if ((epic.userStories ?? []).some((s) => storyIdSet.has(s.id))) matching.add(epic.id);
+    }
+    setExpandedDrilldownEpics(matching);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthLoadDrilldownFilter, monthLoadDrilldownAssignee]);
   useEffect(() => {
-    if (!monthLoadDrilldownAssignee) { setCanScrollMonthLoadDrilldownUp(false); setCanScrollMonthLoadDrilldownDown(false); return; }
-    updateMonthLoadDrilldownArrowState();
-  }, [monthLoadDrilldownAssignee, monthLoadDrilldownStories.length]);
+    if (workloadDrilldownAssignee == null) return;
+    if (!isDrilldownFilterActive(workloadDrilldownFilter)) {
+      setExpandedDrilldownEpics(new Set());
+      return;
+    }
+    const storyIdSet = new Set(workloadDrilldownStories.map((s) => s.id));
+    const matching = new Set<string>();
+    for (const { epic } of monthEpics) {
+      if ((epic.userStories ?? []).some((s) => storyIdSet.has(s.id))) matching.add(epic.id);
+    }
+    setExpandedDrilldownEpics(matching);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workloadDrilldownFilter, workloadDrilldownAssignee]);
+  useEffect(() => {
+    if (statusDrilldownFilter == null) return;
+    if (statusChartShowsEpics) {
+      // Epics variant: each row IS an epic. "Expanded" means the epic
+      // shows its child stories. Pre-expand every epic in the filtered
+      // list so child rows are visible under each.
+      if (!isEpicDrilldownFilterActive(statusDrilldownEpicFilter)) {
+        setExpandedDrilldownEpics(new Set());
+        return;
+      }
+      setExpandedDrilldownEpics(new Set(statusDrilldownEpics.map((e) => e.id)));
+      return;
+    }
+    if (!isDrilldownFilterActive(statusDrilldownColFilter)) {
+      setExpandedDrilldownEpics(new Set());
+      return;
+    }
+    const storyIdSet = new Set(statusDrilldownStories.map((s) => s.id));
+    const matching = new Set<string>();
+    for (const { epic } of monthEpics) {
+      if ((epic.userStories ?? []).some((s) => storyIdSet.has(s.id))) matching.add(epic.id);
+    }
+    setExpandedDrilldownEpics(matching);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusDrilldownColFilter, statusDrilldownEpicFilter, statusDrilldownFilter, statusChartShowsEpics]);
 
   const legendRowClass =
     "flex items-center gap-1.5 rounded-lg bg-slate-50/80 px-1.5 py-1.5 text-[13px] font-medium text-slate-700";
+  /** Project-standard pastel scrollbar — matches the initiative-list
+   *  panel + roadmap-health-hero scrollers so the drilldown tables
+   *  scroll the same way as the rest of the planner. Replaces the
+   *  hidden-scrollbar + up/down arrow chrome that used to live here. */
   const sharedDrilldownScrollAreaClass =
-    "h-full min-h-0 w-full min-w-0 overflow-y-auto overflow-x-hidden bg-white pr-5 [&::-webkit-scrollbar]:hidden";
+    "h-full min-h-0 w-full min-w-0 overflow-y-auto overflow-x-hidden bg-white pr-2 [scrollbar-color:theme(colors.indigo.100)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gradient-to-b [&::-webkit-scrollbar-thumb]:from-sky-100 [&::-webkit-scrollbar-thumb]:via-indigo-100 [&::-webkit-scrollbar-thumb]:to-violet-100 hover:[&::-webkit-scrollbar-thumb]:from-sky-200 hover:[&::-webkit-scrollbar-thumb]:via-indigo-200 hover:[&::-webkit-scrollbar-thumb]:to-violet-200";
   /** Matches backlog / users directory soft zebra (#f4f7fc / white) */
   const drilldownTableRowZebra =
     "border-t border-[#7cd3f7]/95 text-slate-700 odd:bg-[#f4f7fc] even:bg-white transition hover:bg-[#c5ebff]";
@@ -4090,14 +4137,14 @@ export function MonthAnalytics({
     <colgroup>
       <col className="w-[4%]" />
       <col className="w-[9%]" />
-      <col className="w-[17%]" />
+      <col className="w-[14%]" />
       <col className="w-[10%]" />
+      <col className="w-[13%]" />
+      <col className="w-[9%]" />
+      <col className="w-[12%]" />
       <col className="w-[10%]" />
       <col className="w-[9%]" />
-      <col className="w-[14%]" />
-      <col className="w-[11%]" />
-      <col className="w-[8%]" />
-      <col className="w-[8%]" />
+      <col className="w-[10%]" />
     </colgroup>
   );
   const drilldownColgroupEpic = (
@@ -4112,9 +4159,6 @@ export function MonthAnalytics({
       <col className="w-[8.5%]" />
     </colgroup>
   );
-  const sharedDrilldownArrowClass =
-    "absolute -right-[2px] inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-800";
-
   // Snapshot strip framing for charts surface — when the scope period has
   // ended, tell the user the charts are read from end-of-period snapshots,
   // not live state. Scope determined by scopeMonths length: 1 = month,
@@ -4507,10 +4551,8 @@ export function MonthAnalytics({
           <div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
             <div className="relative flex-1 min-h-0 min-w-0">
               <div
-                ref={statusDrilldownScrollRef}
-                onScroll={updateStatusDrilldownArrowState}
                 className={sharedDrilldownScrollAreaClass}
-                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+                style={{ scrollbarWidth: "thin" }}
               >
               <table className={drilldownTableClass}>
                 {statusChartShowsEpics ? drilldownColgroupEpic : drilldownColgroupWithHealth}
@@ -4828,36 +4870,66 @@ export function MonthAnalytics({
                           const isCollapsed = !expandedDrilldownEpics.has(epic.id);
                           const epicEstSum = stories.reduce((s, st) => s + (st.estimatedDays ?? 0), 0);
                           const epicLeftSum = stories.reduce((s, st) => s + (st.daysLeft ?? 0), 0);
-                          rendered.push(
-                            <tr key={`epic-${epic.id}`} className="bg-indigo-50/70 ring-1 ring-inset ring-indigo-100/80">
-                              <td colSpan={7} className="px-2 py-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setExpandedDrilldownEpics((prev) => {
-                                      const next = new Set(prev);
-                                      if (next.has(epic.id)) next.delete(epic.id);
-                                      else next.add(epic.id);
-                                      return next;
-                                    });
-                                  }}
-                                  className="inline-flex w-full min-w-0 items-center gap-1.5 text-left"
-                                >
-                                  <ChevronRight
-                                    className={cn("size-4 shrink-0 text-slate-500 transition-transform", !isCollapsed && "rotate-90")}
-                                    aria-hidden
-                                  />
-                                  <Folder className="size-3.5 shrink-0 text-sky-500" aria-hidden />
-                                  <span className="min-w-0 truncate text-[13.5px] font-semibold text-slate-800">{epic.title}</span>
-                                  <span className="ml-1 shrink-0 rounded-full bg-white/80 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600 ring-1 ring-slate-200">
-                                    {stories.length}
-                                  </span>
-                                </button>
-                              </td>
-                              <td className="bg-indigo-50/70 px-2 py-1.5 text-right text-[12px] font-semibold tabular-nums text-slate-700">{epicEstSum}</td>
-                              <td className="bg-indigo-50/70 px-2 py-1.5 text-right text-[12px] font-semibold tabular-nums text-slate-700">{epicLeftSum}</td>
-                            </tr>
-                          );
+                          {
+                            const epicStatusLabel = epicStatusById.get(epic.id) ?? "To do";
+                            const epicStatusKey =
+                              epicStatusLabel === "Done" ? "done"
+                              : epicStatusLabel === "Review / Testing" ? "review"
+                              : epicStatusLabel === "In progress" ? "inProgress"
+                              : epicStatusLabel === "To do" ? "todo"
+                              : null;
+                            rendered.push(
+                              <tr key={`epic-${epic.id}`} className="bg-indigo-50/70 ring-1 ring-inset ring-indigo-100/80">
+                                <td colSpan={4} className="px-2 py-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setExpandedDrilldownEpics((prev) => {
+                                        const next = new Set(prev);
+                                        if (next.has(epic.id)) next.delete(epic.id);
+                                        else next.add(epic.id);
+                                        return next;
+                                      });
+                                    }}
+                                    className="inline-flex w-full min-w-0 items-center gap-1.5 text-left"
+                                  >
+                                    <ChevronRight
+                                      className={cn("size-4 shrink-0 text-slate-500 transition-transform", !isCollapsed && "rotate-90")}
+                                      aria-hidden
+                                    />
+                                    <Folder className="size-3.5 shrink-0 text-sky-500" aria-hidden />
+                                    <span className="min-w-0 truncate text-[13.5px] font-semibold text-slate-800">{epic.title}</span>
+                                    <span className="ml-1 shrink-0 rounded-full bg-white/80 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600 ring-1 ring-slate-200">
+                                      {stories.length}
+                                    </span>
+                                  </button>
+                                </td>
+                                <td className="bg-indigo-50/70 px-2 py-1.5">
+                                  <DrilldownAssigneeCell assignee={epic.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
+                                </td>
+                                <td className="bg-indigo-50/70 px-2 py-1.5">
+                                  {epicStatusKey ? (
+                                    <StoryStatusPill status={epicStatusKey} />
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-slate-700">
+                                      <Circle className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+                                      <span className="truncate">{epicStatusLabel}</span>
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="bg-indigo-50/70 px-2 py-1.5">
+                                  {(() => {
+                                    const v = computeEpicHealthVerdict(epic, planYear, progressBasis);
+                                    if (!v) return <span className="text-slate-300">—</span>;
+                                    const tip = formatHealthTooltip(v.result);
+                                    return <HealthBadgeWithTextPopover size="xs" status={v.status} tooltip={tip} />;
+                                  })()}
+                                </td>
+                                <td className="bg-indigo-50/70 px-2 py-1.5 text-right text-[12px] font-semibold tabular-nums text-slate-700">{epicEstSum}</td>
+                                <td className="bg-indigo-50/70 px-2 py-1.5 text-right text-[12px] font-semibold tabular-nums text-slate-700">{epicLeftSum}</td>
+                              </tr>
+                            );
+                          }
                           if (isCollapsed) continue;
                           stories.forEach((story, storyIdx) => {
                             rowIdx += 1;
@@ -4935,30 +5007,6 @@ export function MonthAnalytics({
                 </tbody>
               </table>
               </div>
-              <button
-                type="button"
-                onClick={() => scrollStatusDrilldownBy(-96)}
-                className={cn(
-                  sharedDrilldownArrowClass,
-                  "top-0",
-                  canScrollStatusDrilldownUp && "bg-slate-200/70 text-slate-800",
-                )}
-                aria-label="Scroll up status drilldown table"
-              >
-                <ChevronUp className="size-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollStatusDrilldownBy(96)}
-                className={cn(
-                  sharedDrilldownArrowClass,
-                  "bottom-0",
-                  canScrollStatusDrilldownDown && "bg-slate-200/70 text-slate-800",
-                )}
-                aria-label="Scroll down status drilldown table"
-              >
-                <ChevronDown className="size-3.5" />
-              </button>
             </div>
           </div>
           </InsightsDrilldownModal>
@@ -5572,10 +5620,8 @@ export function MonthAnalytics({
           <div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
             <div className="relative flex-1 min-h-0 min-w-0">
             <div
-              ref={workloadDrilldownScrollRef}
-              onScroll={updateWorkloadDrilldownArrowState}
               className={sharedDrilldownScrollAreaClass}
-              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+              style={{ scrollbarWidth: "thin" }}
             >
               <table className={drilldownTableClass}>
                 {drilldownColgroupWithTeamAndHealth}
@@ -5631,7 +5677,15 @@ export function MonthAnalytics({
                           const teamId = epicTeamByStoryId.get(s.id) ?? "";
                           return monthTeamLabelForId(teamId) ?? (teamId || "—");
                         }))).filter(Boolean).sort()}
-                        renderOption={(v) => <span className="truncate">{v}</span>}
+                        renderOption={(v) => {
+                          const slug = MONTH_TEAM_COLUMNS.find((t) => t.label === v)?.id ?? null;
+                          return (
+                            <span className="inline-flex items-center gap-1.5">
+                              <TeamAvatar slug={slug} sizePx={16} fallback={<Users className="size-3.5 text-slate-400" aria-hidden />} />
+                              <span className="truncate">{v}</span>
+                            </span>
+                          );
+                        }}
                         onChange={(v) => setWorkloadDrilldownFilter((p) => ({ ...p, team: v }))}
                         ariaLabel="Filter workload by team"
                       />
@@ -5708,36 +5762,74 @@ export function MonthAnalytics({
                       const isCollapsed = !expandedDrilldownEpics.has(epic.id);
                       const epicEstSum = stories.reduce((s, st) => s + (st.estimatedDays ?? 0), 0);
                       const epicLeftSum = stories.reduce((s, st) => s + (st.daysLeft ?? 0), 0);
-                      rendered.push(
-                        <tr key={`epic-${epic.id}`} className="bg-indigo-50/70 ring-1 ring-inset ring-indigo-100/80">
-                          <td colSpan={8} className="px-2 py-1.5">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setExpandedDrilldownEpics((prev) => {
-                                  const next = new Set(prev);
-                                  if (next.has(epic.id)) next.delete(epic.id);
-                                  else next.add(epic.id);
-                                  return next;
-                                });
-                              }}
-                              className="inline-flex w-full min-w-0 items-center gap-1.5 text-left"
-                            >
-                              <ChevronRight
-                                className={cn("size-4 shrink-0 text-slate-500 transition-transform", !isCollapsed && "rotate-90")}
-                                aria-hidden
-                              />
-                              <Folder className="size-3.5 shrink-0 text-sky-500" aria-hidden />
-                              <span className="min-w-0 truncate text-[13.5px] font-semibold text-slate-800">{epic.title}</span>
-                              <span className="ml-1 shrink-0 rounded-full bg-white/80 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600 ring-1 ring-slate-200">
-                                {stories.length}
+                      {
+                        const epicTeamSlug = epic.team ?? null;
+                        const epicTeamLabel = monthTeamLabelForId(epicTeamSlug ?? "") ?? (epicTeamSlug || "—");
+                        const epicStatusLabel = epicStatusById.get(epic.id) ?? "To do";
+                        const epicStatusKey =
+                          epicStatusLabel === "Done" ? "done"
+                          : epicStatusLabel === "Review / Testing" ? "review"
+                          : epicStatusLabel === "In progress" ? "inProgress"
+                          : epicStatusLabel === "To do" ? "todo"
+                          : null;
+                        rendered.push(
+                          <tr key={`epic-${epic.id}`} className="bg-indigo-50/70 ring-1 ring-inset ring-indigo-100/80">
+                            <td colSpan={4} className="px-2 py-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setExpandedDrilldownEpics((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(epic.id)) next.delete(epic.id);
+                                    else next.add(epic.id);
+                                    return next;
+                                  });
+                                }}
+                                className="inline-flex w-full min-w-0 items-center gap-1.5 text-left"
+                              >
+                                <ChevronRight
+                                  className={cn("size-4 shrink-0 text-slate-500 transition-transform", !isCollapsed && "rotate-90")}
+                                  aria-hidden
+                                />
+                                <Folder className="size-3.5 shrink-0 text-sky-500" aria-hidden />
+                                <span className="min-w-0 truncate text-[13.5px] font-semibold text-slate-800">{epic.title}</span>
+                                <span className="ml-1 shrink-0 rounded-full bg-white/80 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600 ring-1 ring-slate-200">
+                                  {stories.length}
+                                </span>
+                              </button>
+                            </td>
+                            <td className="bg-indigo-50/70 px-2 py-1.5">
+                              <span className="inline-flex min-w-0 items-center gap-1.5">
+                                <TeamAvatar slug={epicTeamSlug} sizePx={16} fallback={<Users className="size-3.5 text-slate-400" aria-hidden />} />
+                                <span className="truncate text-[12.5px] text-slate-700">{epicTeamLabel}</span>
                               </span>
-                            </button>
-                          </td>
-                          <td className="bg-indigo-50/70 px-2 py-1.5 text-right text-[12px] font-semibold tabular-nums text-slate-700">{epicEstSum}</td>
-                          <td className="bg-indigo-50/70 px-2 py-1.5 text-right text-[12px] font-semibold tabular-nums text-slate-700">{epicLeftSum}</td>
-                        </tr>
-                      );
+                            </td>
+                            <td className="bg-indigo-50/70 px-2 py-1.5">
+                              <DrilldownAssigneeCell assignee={epic.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
+                            </td>
+                            <td className="bg-indigo-50/70 px-2 py-1.5">
+                              {epicStatusKey ? (
+                                <StoryStatusPill status={epicStatusKey} />
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-slate-700">
+                                  <Circle className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+                                  <span className="truncate">{epicStatusLabel}</span>
+                                </span>
+                              )}
+                            </td>
+                            <td className="bg-indigo-50/70 px-2 py-1.5">
+                              {(() => {
+                                const v = computeEpicHealthVerdict(epic, planYear, progressBasis);
+                                if (!v) return <span className="text-slate-300">—</span>;
+                                const tip = formatHealthTooltip(v.result);
+                                return <HealthBadgeWithTextPopover size="xs" status={v.status} tooltip={tip} />;
+                              })()}
+                            </td>
+                            <td className="bg-indigo-50/70 px-2 py-1.5 text-right text-[12px] font-semibold tabular-nums text-slate-700">{epicEstSum}</td>
+                            <td className="bg-indigo-50/70 px-2 py-1.5 text-right text-[12px] font-semibold tabular-nums text-slate-700">{epicLeftSum}</td>
+                          </tr>
+                        );
+                      }
                       if (isCollapsed) continue;
                       stories.forEach((story, storyIdx) => {
                         rowIdx += 1;
@@ -5787,7 +5879,10 @@ export function MonthAnalytics({
                               </span>
                             </td>
                             <td className="min-w-0 px-2 py-0.5">
-                              <InsightsTruncatedHoverLabel text={storyTeamLabel} />
+                              <span className="inline-flex min-w-0 items-center gap-1.5">
+                                <TeamAvatar slug={storyTeamId || null} sizePx={16} fallback={<Users className="size-3.5 text-slate-400" aria-hidden />} />
+                                <InsightsTruncatedHoverLabel text={storyTeamLabel} />
+                              </span>
                             </td>
                             <td className="min-w-0 px-2 py-0.5">
                               <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
@@ -5832,30 +5927,6 @@ export function MonthAnalytics({
                 </tbody>
               </table>
             </div>
-            <button
-              type="button"
-              onClick={() => scrollWorkloadDrilldownBy(-96)}
-              className={cn(
-                sharedDrilldownArrowClass,
-                "top-0",
-                canScrollWorkloadDrilldownUp && "bg-slate-200/70 text-slate-800",
-              )}
-              aria-label="Scroll up workload stories table"
-            >
-              <ChevronUp className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => scrollWorkloadDrilldownBy(96)}
-              className={cn(
-                sharedDrilldownArrowClass,
-                "bottom-0",
-                canScrollWorkloadDrilldownDown && "bg-slate-200/70 text-slate-800",
-              )}
-              aria-label="Scroll down workload stories table"
-            >
-              <ChevronDown className="size-3.5" />
-            </button>
             </div>
           </div>
           </InsightsDrilldownModal>
@@ -6354,10 +6425,8 @@ export function MonthAnalytics({
                   <div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
                     <div className="relative flex-1 min-h-0 min-w-0">
                       <div
-                        ref={monthLoadDrilldownScrollRef}
-                        onScroll={updateMonthLoadDrilldownArrowState}
                         className={sharedDrilldownScrollAreaClass}
-                        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+                        style={{ scrollbarWidth: "thin" }}
                       >
                         <table className={drilldownTableClass}>
                           {drilldownColgroupWithTeamAndHealth}
@@ -6400,7 +6469,15 @@ export function MonthAnalytics({
                                     const teamId = epicTeamByStoryId.get(s.id) ?? "";
                                     return monthTeamLabelForId(teamId) ?? (teamId || "—");
                                   }))).filter(Boolean).sort()}
-                                  renderOption={(v) => <span className="truncate">{v}</span>}
+                                  renderOption={(v) => {
+                                    const slug = MONTH_TEAM_COLUMNS.find((t) => t.label === v)?.id ?? null;
+                                    return (
+                                      <span className="inline-flex items-center gap-1.5">
+                                        <TeamAvatar slug={slug} sizePx={16} fallback={<Users className="size-3.5 text-slate-400" aria-hidden />} />
+                                        <span className="truncate">{v}</span>
+                                      </span>
+                                    );
+                                  }}
                                   onChange={(v) => setMonthLoadDrilldownFilter((p) => ({ ...p, team: v }))}
                                   ariaLabel="Filter month load by team"
                                 />
@@ -6469,36 +6546,74 @@ export function MonthAnalytics({
                                 const isCollapsed = !expandedDrilldownEpics.has(epic.id);
                                 const epicEstSum = stories.reduce((s, st) => s + (st.estimatedDays ?? 0), 0);
                                 const epicLeftSum = stories.reduce((s, st) => s + (st.daysLeft ?? 0), 0);
-                                rendered.push(
-                                  <tr key={`epic-${epic.id}`} className="bg-indigo-50/70 ring-1 ring-inset ring-indigo-100/80">
-                                    <td colSpan={8} className="px-2 py-1.5">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setExpandedDrilldownEpics((prev) => {
-                                            const next = new Set(prev);
-                                            if (next.has(epic.id)) next.delete(epic.id);
-                                            else next.add(epic.id);
-                                            return next;
-                                          });
-                                        }}
-                                        className="inline-flex w-full min-w-0 items-center gap-1.5 text-left"
-                                      >
-                                        <ChevronRight
-                                          className={cn("size-4 shrink-0 text-slate-500 transition-transform", !isCollapsed && "rotate-90")}
-                                          aria-hidden
-                                        />
-                                        <Folder className="size-3.5 shrink-0 text-sky-500" aria-hidden />
-                                        <span className="min-w-0 truncate text-[13.5px] font-semibold text-slate-800">{epic.title}</span>
-                                        <span className="ml-1 shrink-0 rounded-full bg-white/80 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600 ring-1 ring-slate-200">
-                                          {stories.length}
+                                {
+                                  const epicTeamSlug = epic.team ?? null;
+                                  const epicTeamLabel = monthTeamLabelForId(epicTeamSlug ?? "") ?? (epicTeamSlug || "—");
+                                  const epicStatusLabel = epicStatusById.get(epic.id) ?? "To do";
+                                  const epicStatusKey =
+                                    epicStatusLabel === "Done" ? "done"
+                                    : epicStatusLabel === "Review / Testing" ? "review"
+                                    : epicStatusLabel === "In progress" ? "inProgress"
+                                    : epicStatusLabel === "To do" ? "todo"
+                                    : null;
+                                  rendered.push(
+                                    <tr key={`epic-${epic.id}`} className="bg-indigo-50/70 ring-1 ring-inset ring-indigo-100/80">
+                                      <td colSpan={4} className="px-2 py-1.5">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setExpandedDrilldownEpics((prev) => {
+                                              const next = new Set(prev);
+                                              if (next.has(epic.id)) next.delete(epic.id);
+                                              else next.add(epic.id);
+                                              return next;
+                                            });
+                                          }}
+                                          className="inline-flex w-full min-w-0 items-center gap-1.5 text-left"
+                                        >
+                                          <ChevronRight
+                                            className={cn("size-4 shrink-0 text-slate-500 transition-transform", !isCollapsed && "rotate-90")}
+                                            aria-hidden
+                                          />
+                                          <Folder className="size-3.5 shrink-0 text-sky-500" aria-hidden />
+                                          <span className="min-w-0 truncate text-[13.5px] font-semibold text-slate-800">{epic.title}</span>
+                                          <span className="ml-1 shrink-0 rounded-full bg-white/80 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600 ring-1 ring-slate-200">
+                                            {stories.length}
+                                          </span>
+                                        </button>
+                                      </td>
+                                      <td className="bg-indigo-50/70 px-2 py-1.5">
+                                        <span className="inline-flex min-w-0 items-center gap-1.5">
+                                          <TeamAvatar slug={epicTeamSlug} sizePx={16} fallback={<Users className="size-3.5 text-slate-400" aria-hidden />} />
+                                          <span className="truncate text-[12.5px] text-slate-700">{epicTeamLabel}</span>
                                         </span>
-                                      </button>
-                                    </td>
-                                    <td className="bg-indigo-50/70 px-2 py-1.5 text-right text-[12px] font-semibold tabular-nums text-slate-700">{epicEstSum}</td>
-                                    <td className="bg-indigo-50/70 px-2 py-1.5 text-right text-[12px] font-semibold tabular-nums text-slate-700">{epicLeftSum}</td>
-                                  </tr>
-                                );
+                                      </td>
+                                      <td className="bg-indigo-50/70 px-2 py-1.5">
+                                        <DrilldownAssigneeCell assignee={epic.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
+                                      </td>
+                                      <td className="bg-indigo-50/70 px-2 py-1.5">
+                                        {epicStatusKey ? (
+                                          <StoryStatusPill status={epicStatusKey} />
+                                        ) : (
+                                          <span className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-slate-700">
+                                            <Circle className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+                                            <span className="truncate">{epicStatusLabel}</span>
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td className="bg-indigo-50/70 px-2 py-1.5">
+                                        {(() => {
+                                          const v = computeEpicHealthVerdict(epic, planYear, progressBasis);
+                                          if (!v) return <span className="text-slate-300">—</span>;
+                                          const tip = formatHealthTooltip(v.result);
+                                          return <HealthBadgeWithTextPopover size="xs" status={v.status} tooltip={tip} />;
+                                        })()}
+                                      </td>
+                                      <td className="bg-indigo-50/70 px-2 py-1.5 text-right text-[12px] font-semibold tabular-nums text-slate-700">{epicEstSum}</td>
+                                      <td className="bg-indigo-50/70 px-2 py-1.5 text-right text-[12px] font-semibold tabular-nums text-slate-700">{epicLeftSum}</td>
+                                    </tr>
+                                  );
+                                }
                                 if (isCollapsed) continue;
                                 stories.forEach((story, storyIdx) => {
                                   rowIdx += 1;
@@ -6585,8 +6700,6 @@ export function MonthAnalytics({
                           </tbody>
                         </table>
                       </div>
-                      <button type="button" onClick={() => scrollMonthLoadDrilldownBy(-96)} className={cn(sharedDrilldownArrowClass, "top-0", canScrollMonthLoadDrilldownUp && "bg-slate-200/70 text-slate-800")} aria-label="Scroll up"><ChevronUp className="size-3.5" /></button>
-                      <button type="button" onClick={() => scrollMonthLoadDrilldownBy(96)} className={cn(sharedDrilldownArrowClass, "bottom-0", canScrollMonthLoadDrilldownDown && "bg-slate-200/70 text-slate-800")} aria-label="Scroll down"><ChevronDown className="size-3.5" /></button>
                     </div>
                   </div>
                   </InsightsDrilldownModal>
