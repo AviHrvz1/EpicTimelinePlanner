@@ -31,6 +31,7 @@ import {
   ListTodo,
   Lock,
   Map as MapIcon,
+  MapPin,
   PlayCircle,
   Plus,
   Save,
@@ -7745,23 +7746,27 @@ export function BacklogPlanningPanel({
                     className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[14px] font-normal text-slate-700"
                     style={{ paddingLeft: indentPx }}
                   >
-                    <button
-                      type="button"
-                      onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !(prev[folderId] ?? (defaultOpenOverride ?? defaultGroupExpanded)) }))}
-                      className="inline-flex size-4 shrink-0 items-center justify-center rounded hover:bg-slate-100"
-                      aria-label={isOpen ? "Collapse" : "Expand"}
-                    >
-                      {isOpen ? (
-                        <ChevronDown className="size-4 text-slate-600" strokeWidth={2.2} />
-                      ) : (
-                        <ChevronRight className="size-4 text-slate-600" strokeWidth={2.2} />
-                      )}
-                    </button>
+                    {count > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !(prev[folderId] ?? (defaultOpenOverride ?? defaultGroupExpanded)) }))}
+                        className="inline-flex size-4 shrink-0 items-center justify-center rounded hover:bg-slate-100"
+                        aria-label={isOpen ? "Collapse" : "Expand"}
+                      >
+                        {isOpen ? (
+                          <ChevronDown className="size-4 text-slate-600" strokeWidth={2.2} />
+                        ) : (
+                          <ChevronRight className="size-4 text-slate-600" strokeWidth={2.2} />
+                        )}
+                      </button>
+                    ) : (
+                      <span className="inline-flex size-4 shrink-0" aria-hidden />
+                    )}
                     {leadingIcon}
                     {labelOverride}
                     <span className="shrink-0 text-[14px] font-normal tabular-nums text-slate-500">({count})</span>
                   </div>
-                ) : (
+                ) : count > 0 ? (
                   <button
                     type="button"
                     onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !(prev[folderId] ?? (defaultOpenOverride ?? defaultGroupExpanded)) }))}
@@ -7779,6 +7784,16 @@ export function BacklogPlanningPanel({
                     <span className="truncate">{label}</span>
                     <span className="shrink-0 text-[14px] font-normal tabular-nums text-slate-500">({count})</span>
                   </button>
+                ) : (
+                  <div
+                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[14px] font-normal text-slate-700"
+                    style={{ paddingLeft: indentPx }}
+                  >
+                    <span className="inline-flex size-4 shrink-0" aria-hidden />
+                    {leadingIcon}
+                    <span className="truncate">{label}</span>
+                    <span className="shrink-0 text-[14px] font-normal tabular-nums text-slate-500">({count})</span>
+                  </div>
                 )}
                 {trailingAction}
               </div>
@@ -11163,8 +11178,52 @@ export function BacklogPlanningPanel({
           </div>
         ) : null}
 
-        {fullyFiltered.length === 0 && effectiveGroupLevels.length === 0 ? (
-          <div className="px-4 py-10 text-[16px] text-slate-600">No items match your search/filter settings.</div>
+        {fullyFiltered.length === 0 ? (
+          <div className="sticky left-0 flex min-h-[420px] w-screen max-w-full items-start justify-center px-4 pt-20 pb-16">
+            <div className="flex max-w-2xl items-center gap-6 rounded-3xl border border-slate-200/70 bg-gradient-to-br from-white via-white to-indigo-50/30 px-8 py-6 shadow-[0_12px_32px_-12px_rgba(15,23,42,0.20),0_4px_10px_-4px_rgba(15,23,42,0.10)] ring-1 ring-slate-100/80">
+              <div className="relative shrink-0">
+                <div className="flex size-20 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-100 via-indigo-100 to-violet-100 ring-1 ring-indigo-200/60 shadow-sm">
+                  <CalendarDays className="size-9 text-indigo-500" strokeWidth={1.75} aria-hidden />
+                  <Flag
+                    className="absolute left-7 top-9 size-4 text-indigo-600 drop-shadow-sm"
+                    strokeWidth={2.25}
+                    fill="currentColor"
+                    aria-hidden
+                  />
+                </div>
+                <svg
+                  className="pointer-events-none absolute -bottom-2 -right-7 h-12 w-16 text-indigo-300"
+                  viewBox="0 0 64 48"
+                  fill="none"
+                  aria-hidden
+                >
+                  <path
+                    d="M2 26 C 16 38, 36 36, 52 24"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeDasharray="3 4"
+                    strokeLinecap="round"
+                  />
+                  <circle cx="2" cy="26" r="2.5" fill="currentColor" />
+                </svg>
+                <MapPin
+                  className="absolute -right-6 -top-1 size-7 text-violet-500 drop-shadow-md"
+                  strokeWidth={1.75}
+                  fill="currentColor"
+                  fillOpacity={0.25}
+                  aria-hidden
+                />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[20px] font-extrabold leading-tight tracking-tight text-slate-900">
+                  No Data Found
+                </p>
+                <p className="mt-1.5 text-[14px] leading-relaxed text-slate-500">
+                  Try adjusting your search or filter settings, or add an initiative to get started.
+                </p>
+              </div>
+            </div>
+          </div>
         ) : (
           <div className="min-w-max bg-white" ref={backlogRowsRootRef}>
             {/* Header-level "New initiative" composer — sits ABOVE the
