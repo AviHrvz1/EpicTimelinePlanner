@@ -5070,7 +5070,7 @@ export function BacklogPlanningPanel({
   summaryBarPortalElement,
   suppressInlineChips,
   workspaceDirectoryUsers,
-  progressBasis = "epicEst",
+  progressBasis = "days",
   externalStatusFilter,
   externalHealthFilter,
   externalWorkItemFilter,

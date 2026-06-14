@@ -383,14 +383,14 @@ export function RoadmapHealthPopover({
             <ToggleGroup
               label=""
               options={
+                // Epic Est removed from the health UI — story-level only.
+                // The `epic.originalEstimateDays` field stays for capacity.
                 barMode === "initiatives"
                   ? [
-                      { value: "epicEst", label: "Σ | Epic Est (d)", icon: Folder },
                       { value: "days", label: "Σ | Child Est (d)", icon: StickyNote },
                       { value: "stories", label: "Stories Completed (%)", icon: CheckCircle2 },
                     ]
                   : [
-                      { value: "epicEst", label: "Epic Est (d)", icon: Folder },
                       { value: "days", label: "Σ | Child Est (d)", icon: StickyNote },
                       { value: "stories", label: "Stories Completed (%)", icon: CheckCircle2 },
                     ]
@@ -766,17 +766,11 @@ function BasisHelpBody() {
     breakdown: { label: string; body: React.ReactNode }[];
     note: string;
   };
+  // Epic Est mode was retired from the health-calculation UI — only
+  // the two story-level bases are surfaced here now. The
+  // `epic.originalEstimateDays` field still drives capacity planning
+  // outside this popup.
   const modes: ModeRow[] = [
-    {
-      icon: Folder,
-      iconTint: "bg-sky-50 text-sky-700 ring-sky-100",
-      title: "Epic Est (d)",
-      breakdown: [
-        { label: "Epic", body: <>Uses this epic&apos;s <em>Est. Days</em>.</> },
-        { label: "Initiative", body: <>Sums <em>Est. Days</em> across the initiative&apos;s child epics.</> },
-      ],
-      note: "Useful for early-stage epics that don't have stories yet.",
-    },
     {
       icon: StickyNote,
       iconTint: "bg-violet-50 text-violet-700 ring-violet-100",
@@ -785,7 +779,7 @@ function BasisHelpBody() {
         { label: "Epic", body: <>Sums <em>Est. Days</em> on every child story.</> },
         { label: "Initiative", body: <>Sums across <em>initiative → epics → stories</em>.</> },
       ],
-      note: "Most accurate once user stories are written.",
+      note: "Default — most accurate once user stories are written.",
     },
     {
       icon: CheckCircle2,

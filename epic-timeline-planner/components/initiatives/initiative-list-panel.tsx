@@ -550,14 +550,11 @@ function HealthFilterMenu({
       hint: "Every story in this epic is completed. The work has shipped.",
     },
   ];
+  // Epic Est basis was retired from the health-calculation UI — see
+  // plan-mode plan + business notes. The `epic.originalEstimateDays`
+  // field still drives capacity planning, but the health verdict bases
+  // are limited to story-level effort and story-level count.
   const bases: Array<{ value: "days" | "stories" | "epicEst"; label: string; icon: ReactNode; tagline: string; hint: string }> = [
-    {
-      value: "epicEst",
-      label: "Epic days estimate",
-      icon: <Folder className="size-3.5 text-violet-500" />,
-      tagline: "Size set at the epic level",
-      hint: "Each epic contributes the days estimate written on the epic itself. Best when you plan scope per epic and don't track per-story estimates.",
-    },
     {
       value: "days",
       label: "Stories days estimate",

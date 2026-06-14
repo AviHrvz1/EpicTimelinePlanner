@@ -4425,12 +4425,13 @@ export function MonthAnalytics({
               options={
                 selectedEpicOption != null
                   ? [
-                      { value: "epicEst", label: "Epic Est (d)", icon: Folder },
+                      // Epic Est removed from the health UI; capacity-
+                      // planning still reads `epic.originalEstimateDays`
+                      // through other surfaces.
                       { value: "days", label: "Σ | Child Est (d)", icon: BookOpen },
                       { value: "stories", label: "Stories Completed (%)", icon: CheckCircle2 },
                     ]
                   : [
-                      { value: "epicEst", label: "Σ | Epic Est (d)", icon: Folder },
                       { value: "days", label: "Σ | Child Est (d)", icon: BookOpen },
                       { value: "stories", label: "Stories Completed (%)", icon: CheckCircle2 },
                     ]

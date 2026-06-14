@@ -564,7 +564,9 @@ export function RoadmapHealthHero({
                     value={progressBasis}
                     onChange={(v) => onProgressBasisChange(v as "days" | "stories" | "epicEst")}
                     options={[
-                      { value: "epicEst", label: "Epic Est (d)" },
+                      // Epic Est option retired from the health UI; field
+                      // still powers capacity planning, but the basis here
+                      // is story-level only now.
                       { value: "days", label: "Σ | Child Est (d)" },
                       { value: "stories", label: "Stories Completed (%)" },
                     ]}

@@ -46,12 +46,15 @@ type Annotation =
   | { kind: "delta"; atDay: number; label: string }
   | { kind: "pin"; atDay: number; label: string };
 
-type Basis = "stories" | "story_days" | "epic_days";
+// Epic Est was retired from the health-calculation UI — only the two
+// story-level bases are exposed here now. `epic_days` would map to the
+// lib's `"epicEst"` if we still surfaced it; keep the type narrow so
+// callers can't reintroduce it without an explicit edit here.
+type Basis = "stories" | "story_days";
 
 const BASIS_LABELS: Record<Basis, string> = {
   stories: "Stories Completed (%)",
   story_days: "Σ | Child Est (d)",
-  epic_days: "Epic Est (d)",
 };
 
 /** Per-basis chart + headline data for a verdict slide. */
@@ -102,28 +105,24 @@ const SLIDES: Slide[] = [
   {
     key: "basis",
     title: "Health calculation",
-    question: "Three ways we count progress",
+    question: "Two ways we count progress",
     badge: BADGE.basis,
     paragraphs: [
       <p key="p1">
         The dashboard lets you pick how progress is measured. The toggle at the top of
-        the Roadmap Health hero switches between three modes:
+        the Roadmap Health hero switches between two modes:
       </p>,
       <ul key="p2" className="ml-4 list-disc space-y-2 text-[13px] text-slate-700">
         <li>
+          <strong>Σ | Child Est (d)</strong> (default): sum of every story's{" "}
+          <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] font-mono">estimatedDays</code>{" "}
+          as the baseline. Effort-weighted — a 10-day story moves the verdict more
+          than a 1-day story, so this is the truest signal once stories are estimated.
+        </li>
+        <li>
           <strong>Stories Completed (%)</strong>: count of stories in Review/Done out of the total.
           Simplest, ignores effort. A 1-day story and a 10-day story count the same.
-        </li>
-        <li>
-          <strong>Σ | Child Est (d)</strong>: sum of every story's{" "}
-          <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] font-mono">estimatedDays</code>{" "}
-          as the baseline. Most granular once every story has been estimated.
-        </li>
-        <li>
-          <strong>Epic Est (d)</strong> (default): uses the epic's own{" "}
-          <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] font-mono">originalEstimateDays</code>{" "}
-          as the baseline. Works from the moment the epic is created, before any
-          stories have been broken down. That's why it's the default.
+          Use this when estimates are missing or stories are similar in size.
         </li>
       </ul>,
       <p key="p3">
@@ -132,7 +131,7 @@ const SLIDES: Slide[] = [
         shown).
       </p>,
     ],
-    rule: "Choose the basis on the dashboard · Δ thresholds apply identically across all three",
+    rule: "Choose the basis on the dashboard · Δ thresholds apply identically across both",
     actualLine: [],
     customLeftPane: <BasisIllustration />,
   },
@@ -154,10 +153,10 @@ const SLIDES: Slide[] = [
       </p>,
       <p key="p3">
         The <strong>Y axis</strong> starts at the baseline you chose with the basis
-        toggle — by default that's the epic's{" "}
-        <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] font-mono">Days Est</code>{" "}
-        field on the details form (40 in the example below). Switch the toggle and the
-        Y title, ticks, and callout update to match.
+        toggle — by default that&apos;s the sum of every child story&apos;s{" "}
+        <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] font-mono">estimatedDays</code>{" "}
+        (40 in the example below). Switch the toggle and the Y title, ticks, and
+        callout update to match.
       </p>,
       <p key="p4">
         The orange dashed line is the <strong>ideal pace</strong>, a straight slope from the baseline at Day 0 down to zero on the last day. The blue line is the{" "}
@@ -178,7 +177,6 @@ const SLIDES: Slide[] = [
     // values aren't actually consumed. They exist only so `slide.byBasis`
     // is truthy and the BasisToggle UI appears.
     byBasis: {
-      epic_days: { actualLine: [], totalDays: 20, totalEffort: 40, yAxisUnit: "d", yAxisTitle: "", exampleHeadline: "", annotation: { kind: "pin", atDay: 0, label: "" } },
       story_days: { actualLine: [], totalDays: 20, totalEffort: 40, yAxisUnit: "d", yAxisTitle: "", exampleHeadline: "", annotation: { kind: "pin", atDay: 0, label: "" } },
       stories: { actualLine: [], totalDays: 20, totalEffort: 40, yAxisUnit: "%", yAxisTitle: "", exampleHeadline: "", annotation: { kind: "pin", atDay: 0, label: "" } },
     },
@@ -220,15 +218,6 @@ const SLIDES: Slide[] = [
         yAxisTitle: "Σ | Child Est (d)",
         exampleHeadline: "Day 10 of 20 · 21 days remaining · ideal = 20 · Δ = +1 → On Track",
         annotation: { kind: "delta", atDay: 10, label: "Δ = +1" },
-      },
-      epic_days: {
-        actualLine: [35, 33, 31, 30, 27, 25, 23, 22, 21, 19, 18],
-        totalDays: 20,
-        totalEffort: 35,
-        yAxisUnit: "d",
-        yAxisTitle: "Epic Est (d)",
-        exampleHeadline: "Day 10 of 20 · 18 days remaining · ideal = 17.5 · Δ = +0.5 → On Track",
-        annotation: { kind: "delta", atDay: 10, label: "Δ = +0.5" },
       },
     },
   },
@@ -272,15 +261,6 @@ const SLIDES: Slide[] = [
         exampleHeadline: "Day 10 of 20 · 23 days remaining · ideal = 20 · Δ = +3 → Watch",
         annotation: { kind: "delta", atDay: 10, label: "Δ = +3" },
       },
-      epic_days: {
-        actualLine: [35, 34, 33, 31, 29, 27.5, 26, 24.5, 23, 21.5, 20.5],
-        totalDays: 20,
-        totalEffort: 35,
-        yAxisUnit: "d",
-        yAxisTitle: "Epic Est (d)",
-        exampleHeadline: "Day 10 of 20 · 20.5 days remaining · ideal = 17.5 · Δ = +3 → Watch",
-        annotation: { kind: "delta", atDay: 10, label: "Δ = +3" },
-      },
     },
   },
   {
@@ -320,15 +300,6 @@ const SLIDES: Slide[] = [
         yAxisUnit: "d",
         yAxisTitle: "Σ | Child Est (d)",
         exampleHeadline: "Day 10 of 20 · 25 days remaining · ideal = 20 · Δ = +5 → At Risk",
-        annotation: { kind: "delta", atDay: 10, label: "Δ = +5" },
-      },
-      epic_days: {
-        actualLine: [35, 34.5, 33.5, 32.5, 31, 29.5, 28, 26.5, 25, 23.5, 22.5],
-        totalDays: 20,
-        totalEffort: 35,
-        yAxisUnit: "d",
-        yAxisTitle: "Epic Est (d)",
-        exampleHeadline: "Day 10 of 20 · 22.5 days remaining · ideal = 17.5 · Δ = +5 → At Risk",
         annotation: { kind: "delta", atDay: 10, label: "Δ = +5" },
       },
     },
@@ -372,15 +343,6 @@ const SLIDES: Slide[] = [
         exampleHeadline: "End was Day 20 · Today is Day 22 · 4 days still remain → Overdue",
         annotation: { kind: "pin", atDay: 22, label: "Past end · 4 days left" },
       },
-      epic_days: {
-        actualLine: [35, 33, 31, 29, 27, 25, 23, 21, 19, 17, 15, 13, 11, 10, 9, 8, 7, 6, 5, 4, 3.5, 3.5, 3.5],
-        totalDays: 20,
-        totalEffort: 35,
-        yAxisUnit: "d",
-        yAxisTitle: "Epic Est (d)",
-        exampleHeadline: "End was Day 20 · Today is Day 22 · 3.5 days from budget still remain → Overdue",
-        annotation: { kind: "pin", atDay: 22, label: "Past end · 3.5d left" },
-      },
     },
   },
   {
@@ -397,8 +359,8 @@ const SLIDES: Slide[] = [
         <strong>At the story level:</strong> every child story is in <em>Review</em> or{" "}
         <em>Done</em>. The sum of their remaining{" "}
         <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] font-mono">daysLeft</code>{" "}
-        is zero, and the epic-est budget has fully burnt down at the same pace. Done
-        overrides On Track / Watch / At Risk because there is no work left to evaluate.
+        is zero. Done overrides On Track / Watch / At Risk because there is no work
+        left to evaluate.
       </p>,
       <p key="p3">
         Done is also the only verdict where the chart's <em>actual</em> line meets the X
@@ -427,15 +389,6 @@ const SLIDES: Slide[] = [
         exampleHeadline: "Day 10 of 20 · 0 days remaining · 100% burnt → Done",
         annotation: { kind: "pin", atDay: 10, label: "0d remaining" },
       },
-      epic_days: {
-        actualLine: [35, 31.5, 28, 24.5, 21, 17.5, 14, 10.5, 7, 3.5, 0],
-        totalDays: 20,
-        totalEffort: 35,
-        yAxisUnit: "d",
-        yAxisTitle: "Epic Est (d)",
-        exampleHeadline: "Day 10 of 20 · 0 days remaining · budget fully burnt → Done",
-        annotation: { kind: "pin", atDay: 10, label: "0d remaining" },
-      },
     },
   },
 ];
@@ -451,18 +404,17 @@ type Props = {
 
 export function HealthExplainerPopover({ open, onClose }: Props) {
   const [index, setIndex] = useState(0);
-  // Selected basis persists across verdict slides while the popover is open.
-  // Defaults to story_days (the dashboard's default selection).
-  // Default matches the dashboard's own default (`epicEst` in epic-planner-app.tsx)
-  // so the explainer's first verdict slide reflects what the user actually sees on
-  // the dashboard. Story est days is only meaningful once stories have been
-  // decomposed and estimated; epic est days works from day 1 of planning.
-  const [basis, setBasis] = useState<Basis>("epic_days");
+  // Selected basis persists across verdict slides while the popover is
+  // open. Now that Epic Est is retired from the health-calculation UI,
+  // the explainer defaults to the new global default — Σ Child Est
+  // (story-level effort) — so the first verdict slide reflects what
+  // the planner actually sees on the dashboard.
+  const [basis, setBasis] = useState<Basis>("story_days");
 
   useEffect(() => {
     if (!open) return;
     setIndex(0);
-    setBasis("epic_days");
+    setBasis("story_days");
   }, [open]);
 
   useEffect(() => {
@@ -549,10 +501,10 @@ export function HealthExplainerPopover({ open, onClose }: Props) {
         <div className="grid gap-6 px-6 pb-5 md:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
           <div className="rounded-xl bg-slate-50/60 p-3 ring-1 ring-slate-200/70">
             {/* The intro slide's custom illustration needs the live basis
-                so its Y title, Y tick labels, and "Days Est" callout update
-                with the toggle. Other slides either use a static custom
-                pane (e.g. the basis-overview slide) or the BurndownExample
-                fed by byBasis values. */}
+                so its Y title, Y tick labels, and "Σ child story est. days"
+                callout update with the toggle. Other slides either use a
+                static custom pane (e.g. the basis-overview slide) or the
+                BurndownExample fed by byBasis values. */}
             {slide.key === "intro" ? (
               <GanttContextIllustration basis={basis} />
             ) : slide.customLeftPane ?? (
@@ -1251,12 +1203,12 @@ function BurndownExample({
 /* Slide 1 — Gantt context illustration                                */
 /* ------------------------------------------------------------------ */
 
-function GanttContextIllustration({ basis = "epic_days" }: { basis?: Basis }) {
+function GanttContextIllustration({ basis = "story_days" }: { basis?: Basis }) {
   // Two stacks: a compact Gantt strip on top that aligns horizontally with
   // the burndown chart below it. The epic bar on the Gantt spans EXACTLY
   // from `chartL` to `chartR` so Day 0 / Day 20 on the burndown line up
   // vertically with Start / End on the Gantt. The Y axis is annotated to
-  // call out that its top value is the epic's "Days Est" field.
+  // call out that its top value is the sum of child-story estimates.
   //
   // The same Y SCALE (0–50, with 40 highlighted) is used in every basis —
   // what changes are the LABELS the viewer reads. For story_days the
@@ -1281,15 +1233,11 @@ function GanttContextIllustration({ basis = "epic_days" }: { basis?: Basis }) {
   const yAxisTitle =
     basis === "stories"
       ? "% of stories pending"
-      : basis === "story_days"
-        ? "Σ child story est. days"
-        : "Σ Days Est on the epic";
+      : "Σ child story est. days";
   const calloutText =
     basis === "stories"
       ? "↓ 100% = all child stories pending"
-      : basis === "story_days"
-        ? "↓ 40d = Σ of child story estimates"
-        : '↓ 40d = epic\'s "Days Est" value';
+      : "↓ 40d = Σ of child story estimates";
   const W = 580;
   const H = 480;
   const PAD_L = 20;
@@ -1306,12 +1254,14 @@ function GanttContextIllustration({ basis = "epic_days" }: { basis?: Basis }) {
   const chartW = chartR - chartL;
   const chartH = chartB - chartT;
   const totalDays = 20;
-  // The actual "Days Est" the team set on the epic. The ideal line goes from
-  // this value at Day 0 down to zero at Day totalDays.
+  // Σ child-story estimates — the bottom-up effort total the planner
+  // is tracking against. The ideal line goes from this value at Day 0
+  // down to zero at Day totalDays.
   const totalEffort = 40;
   // The Y axis itself extends a step higher than totalEffort so there is
-  // breathing room above the 40d marker for the "= Days Est value" callout
-  // pill, and the planner-facing chart isn't visually capped by the data.
+  // breathing room above the 40d marker for the "= Σ child estimates"
+  // callout pill, and the planner-facing chart isn't visually capped by
+  // the data.
   const yAxisMax = 50;
   const xForDay = (d: number) => chartL + (d / totalDays) * chartW;
   const yForEffort = (e: number) => chartT + (1 - e / yAxisMax) * chartH;
@@ -1461,10 +1411,11 @@ function GanttContextIllustration({ basis = "epic_days" }: { basis?: Basis }) {
         {yAxisTitle}
       </text>
 
-      {/* "Days Est" callout — now lives entirely INSIDE the chart, in the
-          headroom between the 50d top of the Y axis and the highlighted 40d
-          marker (which is the actual Days Est value). A short down-arrow
-          from the pill points straight at the 40d label. */}
+      {/* Baseline callout — lives entirely INSIDE the chart, in the
+          headroom between the 50d top of the Y axis and the highlighted
+          40d marker (which is the actual Σ child-story est. days). A
+          short down-arrow from the pill points straight at the 40d
+          label. */}
       {(() => {
         const y40 = yForEffort(40);
         const y50 = yForEffort(50);
@@ -1477,8 +1428,8 @@ function GanttContextIllustration({ basis = "epic_days" }: { basis?: Basis }) {
         const arrowX = chartL + 14;
         return (
           <g>
-            {/* Arrow shaft + arrowhead pointing DOWN at the 40d label so the
-                viewer reads "this 40d is the Days Est value". */}
+            {/* Arrow shaft + arrowhead pointing DOWN at the 40d label so
+                the viewer reads "this 40d is the baseline value". */}
             <line x1={arrowX} y1={pillCenterY} x2={arrowX} y2={y40 - 4} stroke="rgb(99 102 241)" strokeWidth={1.4} />
             <path
               d={`M ${arrowX - 4} ${y40 - 8} L ${arrowX} ${y40 - 2} L ${arrowX + 4} ${y40 - 8}`}
@@ -1498,8 +1449,9 @@ function GanttContextIllustration({ basis = "epic_days" }: { basis?: Basis }) {
       })()}
 
       {/* Y gridlines + tick labels. 0d and 50d (the axis bounds) are the
-          solid frame lines; 40d (the Days Est value) is emphasized so its
-          significance reads at a glance; the other ticks are dashed. */}
+          solid frame lines; 40d (the Σ child-story est. days baseline)
+          is emphasized so its significance reads at a glance; the other
+          ticks are dashed. */}
       {[0, 10, 20, 30, 40, 50].map((eff) => {
         const y = yForEffort(eff);
         const isFrame = eff === 0 || eff === 50;
@@ -1607,10 +1559,12 @@ function GanttContextIllustration({ basis = "epic_days" }: { basis?: Basis }) {
 function BasisIllustration() {
   return (
     <div className="flex h-full flex-col gap-3 px-1 py-1">
-      {/* Mockup of where the user picks the basis on the actual dashboard.
-          Mirrors the Roadmap Health hero row: HeartPulse + "Health calculation"
-          + Info icon + PillToggle with the three options. The "Epic Est (d)"
-          pill is shown as active (highlighted indigo) — the dashboard default. */}
+      {/* Mockup of where the planner picks the basis on the actual
+       *  dashboard. Mirrors the Roadmap Health hero row: HeartPulse +
+       *  "Health calculation" + Info icon + PillToggle with the two
+       *  options now that Epic Est has been retired. The
+       *  "Σ | Child Est (d)" pill is shown as active (highlighted
+       *  indigo) — the new default. */}
       <div className="rounded-lg border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-3">
         <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">
           What you see on the dashboard
@@ -1623,9 +1577,6 @@ function BasisIllustration() {
           </span>
           <div className="inline-flex items-center rounded-full border border-slate-200 bg-white p-0.5 shadow-sm">
             <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-medium leading-none text-indigo-700 ring-1 ring-indigo-200">
-              Epic Est (d)
-            </span>
-            <span className="rounded-full px-2.5 py-1 text-[11px] font-medium leading-none text-slate-600">
               Σ | Child Est (d)
             </span>
             <span className="rounded-full px-2.5 py-1 text-[11px] font-medium leading-none text-slate-600">
@@ -1634,26 +1585,18 @@ function BasisIllustration() {
           </div>
         </div>
         <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-          Pick one of three modes. The verdict on every epic recomputes against the
+          Pick one of two modes. The verdict on every epic recomputes against the
           mode you select.
         </p>
       </div>
 
       <BasisRow
-        title="Epic Est (d)"
-        subtitle="Epic's own originalEstimateDays · 'Epic Est (d)' (default)"
-        progressLabel="16 / 35d burnt"
-        progressPct={46}
-        accent="rgb(20 184 166)"
-        highlight
-        rendering={<BasisBar pct={46} accent="rgb(20 184 166)" labels={["35d", "0d"]} />}
-      />
-      <BasisRow
         title="Σ | Child Est (d)"
-        subtitle="Sum of estimatedDays · 'Σ | Child Est (d)'"
+        subtitle="Sum of estimatedDays · 'Σ | Child Est (d)' (default)"
         progressLabel="18 / 40d burnt"
         progressPct={45}
         accent="rgb(37 99 235)"
+        highlight
         rendering={<BasisBar pct={45} accent="rgb(37 99 235)" labels={["40d", "0d"]} />}
       />
       <BasisRow
@@ -1710,7 +1653,7 @@ function InfoGlyph() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Per-verdict basis toggle (Stories Completed % / Σ | Child Est d / Epic Est d) */
+/* Per-verdict basis toggle (Σ | Child Est d / Stories Completed %) */
 /* ------------------------------------------------------------------ */
 
 /** At Risk story-level paragraph — basis-aware so the "what fits in
@@ -1724,18 +1667,12 @@ function renderAtRiskParagraphs(basis: Basis): React.ReactNode[] {
         <em>Review</em> or <em>Done</em> for the percent-complete line to catch up to
         plan before the end date.
       </p>
-    ) : basis === "story_days" ? (
+    ) : (
       <p key="p2">
         <strong>At the story level:</strong> several stories are stuck in <em>Todo</em>{" "}
         or <em>In Progress</em> past where they should be, and the sum of their{" "}
         <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] font-mono">daysLeft</code>{" "}
         exceeds what fits in the remaining calendar.
-      </p>
-    ) : (
-      <p key="p2">
-        <strong>At the story level:</strong> several stories are stuck in <em>Todo</em>{" "}
-        or <em>In Progress</em> past where they should be — the epic-est budget can&apos;t
-        fit in what&apos;s left of the calendar.
       </p>
     );
   return [
@@ -1759,19 +1696,13 @@ function renderDoneParagraphs(basis: Basis): React.ReactNode[] {
         <em>Done</em> — that&apos;s 100% of them. Done overrides On Track / Watch / At
         Risk because there is no work left to evaluate.
       </p>
-    ) : basis === "story_days" ? (
+    ) : (
       <p key="p2">
         <strong>At the story level:</strong> every child story is in <em>Review</em> or{" "}
         <em>Done</em>, and the sum of their remaining{" "}
         <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] font-mono">daysLeft</code>{" "}
         is zero. Done overrides On Track / Watch / At Risk because there is no work
         left to evaluate.
-      </p>
-    ) : (
-      <p key="p2">
-        <strong>At the story level:</strong> every child story is in <em>Review</em> or{" "}
-        <em>Done</em>, and the epic-est budget has burnt down to zero. Done overrides
-        On Track / Watch / At Risk because there is no work left to evaluate.
       </p>
     );
   return [
@@ -1802,19 +1733,12 @@ function renderIntroParagraphs(basis: Basis): React.ReactNode[] {
         <strong> 100%</strong> in the example below means every story is still to do.
         Switch the basis toggle and the Y title, ticks, and callout update together.
       </p>
-    ) : basis === "story_days" ? (
+    ) : (
       <p key="p3">
         The <strong>Y axis</strong> starts at the sum of every child story&apos;s{" "}
         <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] font-mono">estimatedDays</code>{" "}
         — <strong>40d</strong> in the example below. Switch the basis toggle and the Y
         title, ticks, and callout update together.
-      </p>
-    ) : (
-      <p key="p3">
-        The <strong>Y axis</strong> starts at the epic&apos;s{" "}
-        <code className="rounded bg-slate-100 px-1 py-0.5 text-[12px] font-mono">Days Est</code>{" "}
-        field on the details form — <strong>40d</strong> in the example below. Switch the
-        basis toggle and the Y title, ticks, and callout update together.
       </p>
     );
   return [
@@ -1853,8 +1777,9 @@ function BasisToggle({
   accent: string;
 }) {
   // Order matches the dashboard's Health calculation PillToggle:
-  // Epic Est (d) → Σ | Child Est (d) → Stories Completed (%).
-  const options: Basis[] = ["epic_days", "story_days", "stories"];
+  // Σ | Child Est (d) → Stories Completed (%). Epic Est was retired
+  // from the health UI; the basis toggle here mirrors that.
+  const options: Basis[] = ["story_days", "stories"];
   return (
     // Tight padding + smaller font + whitespace-nowrap keep all three
     // labels on a single line. "Stories Completed (%)" is the

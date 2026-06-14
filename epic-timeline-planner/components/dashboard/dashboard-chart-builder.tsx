@@ -670,15 +670,22 @@ function SprintChartForm({
   // The Epic Est (d) / Σ | Child Est (d) / Stories Completed (%) toggle
   // drives the scope-promise reference line on Epic Burndown / Epic Burnup
   // charts. Stored per-chart in `params.basis` so a chart created with
-  // "epicEst" stays on that basis even if the global popover later flips.
-  // Defaults to the planner-wide global default ("epicEst") for newly
-  // created charts; uses the saved value when editing an existing chart.
+  // a specific basis stays on that basis even if the global popover
+  // later flips. Defaults to `"days"` (Σ Child Est) for newly created
+  // charts now that Epic Est has been retired from the health UI;
+  // existing charts that were saved on Epic Est migrate to `"days"`
+  // on read so they keep loading without surfacing a now-invisible
+  // basis option.
   const supportsBasisPicker = chartType === "epic-burndown" || chartType === "epic-burnup";
   const initBasis = useMemo((): "days" | "stories" | "epicEst" => {
-    if (!editTarget) return "epicEst";
+    if (!editTarget) return "days";
     let cfg: Record<string, unknown> = {};
     try { cfg = JSON.parse(editTarget.config); } catch { /* ignore */ }
-    return cfg.basis === "days" || cfg.basis === "stories" || cfg.basis === "epicEst" ? cfg.basis : "epicEst";
+    if (cfg.basis === "days" || cfg.basis === "stories") return cfg.basis;
+    // Migrate any pre-existing `"epicEst"` saved on this chart to the
+    // new default. The chart will continue to render correctly because
+    // the lib still supports the old basis; we just stop surfacing it.
+    return "days";
   }, [editTarget]);
   const [basis, setBasis] = useState<"days" | "stories" | "epicEst">(initBasis);
   useEffect(() => { setBasis(initBasis); }, [initBasis]);
@@ -1147,16 +1154,8 @@ function SprintChartForm({
               <p className="text-[15px] font-bold text-slate-700">Health basis</p>
             </div>
             <div className="inline-flex w-full rounded-xl bg-slate-100 p-1 ring-1 ring-slate-200">
-              <button
-                type="button"
-                onClick={() => setBasis("epicEst")}
-                className={cn(
-                  "flex-1 rounded-lg px-2 py-2 text-[12px] font-semibold transition-all",
-                  basis === "epicEst" ? "bg-white text-slate-800 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-slate-700",
-                )}
-              >
-                Epic Est (d)
-              </button>
+              {/* Epic Est button retired from the health-basis picker —
+               *  the basis here is story-level only now. */}
               <button
                 type="button"
                 onClick={() => setBasis("days")}

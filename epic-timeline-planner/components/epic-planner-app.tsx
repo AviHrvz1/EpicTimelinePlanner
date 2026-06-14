@@ -1361,11 +1361,23 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
    *  or a flat story-count completion ("stories"). Lives here so the middle
    *  panel + the Gantt show consistent numbers, and persisted to
    *  localStorage so the user's pick survives reloads. */
-  const [progressBasis, setProgressBasis] = useState<"days" | "stories" | "epicEst">("epicEst");
+  // Default basis is `"days"` (Σ Child Est — effort-weighted). Epic Est
+  // was retired from the health-calculation UI; the field still drives
+  // capacity planning elsewhere. The `"epicEst"` value can still appear
+  // in lib types and old localStorage entries, which is why the
+  // migration branch below silently rewrites those to `"days"` on load.
+  const [progressBasis, setProgressBasis] = useState<"days" | "stories" | "epicEst">("days");
   useEffect(() => {
     if (typeof window === "undefined") return;
     const raw = window.localStorage.getItem("epicPlanner.progressBasis");
-    if (raw === "days" || raw === "stories" || raw === "epicEst") {
+    // Migrate any pre-existing `"epicEst"` persisted basis to the new
+    // default — the picker no longer exposes that option, so a
+    // returning planner would otherwise be stuck on an invisible basis.
+    if (raw === "epicEst") {
+      setProgressBasis("days");
+      return;
+    }
+    if (raw === "days" || raw === "stories") {
       setProgressBasis(raw);
     }
   }, []);

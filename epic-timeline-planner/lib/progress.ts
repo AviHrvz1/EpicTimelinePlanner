@@ -133,6 +133,26 @@ export function computeProgress(input: ProgressInputs): ProgressResult {
     }
   }
 
+  // `stories` basis: drive the verdict from STORY COUNT, not story-days.
+  // Without this branch, `totalEffort` / `remainingEffort` / `deltaDays`
+  // would stay in story-day units (from the loop above), and the
+  // `stories` basis would produce the same verdict as the `days` basis
+  // for every epic — only `progressPercent` would differ. The
+  // dashboard's Health Distribution donut couldn't react to the basis
+  // chip, which was the bug surfaced by switching the chip from
+  // Σ Child Est to Stories Completed and seeing no number change.
+  // After this rewrite, `deltaDays` is "stories late": a 1-story slip
+  // reads as Watch (≥ 1), a 4-story slip reads as At Risk (≥ 4) — the
+  // same thresholds, interpreted in the basis the planner picked.
+  if (basis === "stories") {
+    totalEffort = totalStoryCount;
+    remainingEffort = totalStoryCount - doneStoryCount;
+    // `unestimatedCount` is a child-story-coverage signal that only
+    // makes sense for effort-weighted bases. In count-mode every
+    // story counts the same regardless of estimate, so surface 0.
+    unestimatedCount = 0;
+  }
+
   // `epicEst` basis: scale ACTUAL story progress into epic-estimate units.
   // - totalEffort = the epic's own originalEstimateDays
   // - remainingEffort = epicEst × (currentOpenStoryDays / totalStoryDays)

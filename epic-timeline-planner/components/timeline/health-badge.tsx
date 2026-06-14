@@ -584,9 +584,9 @@ export function HealthBadgeWithDetail({
               <p className="mb-1.5 text-[10.5px] font-bold uppercase tracking-wide text-slate-500">Calculation</p>
               <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[12px]">
                 <dt className="text-slate-500">Total effort</dt>
-                <dd className="text-right tabular-nums font-medium text-slate-800">{formatDays(result.totalEffort)}</dd>
+                <dd className="text-right tabular-nums font-medium text-slate-800">{formatEffort(result.totalEffort, basis)}</dd>
                 <dt className="text-slate-500">Remaining</dt>
-                <dd className="text-right tabular-nums font-medium text-slate-800">{formatDays(result.remainingEffort)}</dd>
+                <dd className="text-right tabular-nums font-medium text-slate-800">{formatEffort(result.remainingEffort, basis)}</dd>
                 <dt className="text-slate-500">Working days left</dt>
                 <dd className="text-right tabular-nums font-medium text-slate-800">{result.daysRemaining}d</dd>
                 <dt className="text-slate-500">Delta from ideal</dt>
@@ -594,7 +594,7 @@ export function HealthBadgeWithDetail({
                   "text-right tabular-nums font-semibold",
                   result.deltaDays > 1 ? "text-rose-700" : result.deltaDays < -1 ? "text-emerald-700" : "text-slate-800",
                 )}>
-                  {result.deltaDays > 0 ? `+${formatDays(result.deltaDays)}` : formatDays(result.deltaDays)}
+                  {result.deltaDays > 0 ? `+${formatEffort(result.deltaDays, basis)}` : formatEffort(result.deltaDays, basis)}
                 </dd>
                 {result.unestimatedCount > 0 ? (
                   <>
@@ -639,6 +639,22 @@ function formatDays(n: number): string {
   return `${sign}${Number.isInteger(abs) ? abs : abs.toFixed(1)}d`;
 }
 
+/** Effort formatter that adapts the unit to the active basis. Under the
+ *  `days` / `epicEst` bases `result.totalEffort` and friends are in
+ *  story-day units → render as `Nd`. Under the `stories` basis the same
+ *  numbers are in story-count units (see the `stories` branch in
+ *  `lib/progress.ts:computeProgress`) → render as `N storie(s)` so the
+ *  health-badge tooltip and reason strings don't claim "5d" when the
+ *  underlying scope is 5 stories. */
+function formatEffort(n: number, basis: ProgressBasis): string {
+  if (basis !== "stories") return formatDays(n);
+  if (!Number.isFinite(n)) return "—";
+  const sign = n < 0 ? "-" : "";
+  const abs = Math.abs(n);
+  const rounded = Number.isInteger(abs) ? abs : Math.round(abs * 10) / 10;
+  return `${sign}${rounded} ${Math.abs(rounded) === 1 ? "story" : "stories"}`;
+}
+
 /**
  * Plain-English explanation of the verdict, derived from the same
  * `ProgressResult` the badge uses. `chartKind` swaps "burndown" vs
@@ -658,11 +674,11 @@ function buildHealthReason(
   const aheadDirection = chartKind === "burnup" ? "Above" : "Below";
   const remainingPhrase =
     chartKind === "burnup"
-      ? `${formatDays(result.remainingEffort)} still to deliver`
-      : `${formatDays(result.remainingEffort)} of work remaining`;
+      ? `${formatEffort(result.remainingEffort, basis)} still to deliver`
+      : `${formatEffort(result.remainingEffort, basis)} of work remaining`;
 
   if (result.status === "overdue") {
-    return `Past deadline with ${formatDays(result.remainingEffort)} of work still remaining. The window ended before the team could deliver everything in scope.`;
+    return `Past deadline with ${formatEffort(result.remainingEffort, basis)} of work still remaining. The window ended before the team could deliver everything in scope.`;
   }
   if (result.progressPercent >= 100) {
     return chartKind === "burnup"
@@ -680,9 +696,9 @@ function buildHealthReason(
     return `Pace matches the ideal ${lineNoun} — within a day of where it should be. ${remainingPhrase} over ${result.daysRemaining} working days.`;
   }
   if (aheadOrBehind < 0) {
-    return `${aheadDirection} the ideal ${lineNoun} line by ${formatDays(-aheadOrBehind)} — ahead of pace. ${remainingPhrase} over ${result.daysRemaining} working days — buffer in hand.`;
+    return `${aheadDirection} the ideal ${lineNoun} line by ${formatEffort(-aheadOrBehind, basis)} — ahead of pace. ${remainingPhrase} over ${result.daysRemaining} working days — buffer in hand.`;
   }
   // aheadOrBehind > 1 → Watch or AtRisk
   const severity = result.status === "atRisk" ? "significantly" : "slightly";
-  return `${behindDirection} the ideal ${lineNoun} line by ${formatDays(aheadOrBehind)} — ${severity} behind pace. ${remainingPhrase} but only ${result.daysRemaining} working days left.`;
+  return `${behindDirection} the ideal ${lineNoun} line by ${formatEffort(aheadOrBehind, basis)} — ${severity} behind pace. ${remainingPhrase} but only ${result.daysRemaining} working days left.`;
 }
