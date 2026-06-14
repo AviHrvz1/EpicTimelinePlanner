@@ -6221,7 +6221,17 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           selectedTeamIds={ganttTeamFilter}
           onClearTeamFilter={() => handlePanelTeamFilterDerivedChange(new Set())}
           heroScope={heroScope}
-          onHeroScopeChange={setHeroScope}
+          onHeroScopeChange={(nextScope) => {
+            setHeroScope(nextScope);
+            // Backlog Workspace: clicking the Initiatives / Epics /
+            // Stories KPI tile narrows the table's Work Item filter to
+            // that kind alone, so the chip-pick and table contents stay
+            // in sync. Fresh array literal so the backlog's sync
+            // useEffect fires every click (identity-based detection).
+            if (topMode === "backlog") {
+              setBacklogIncomingWorkItemFilter([nextScope]);
+            }
+          }}
           onOpenEpicEstimatePanel={handleOpenEstPanel}
           summaryBarRef={setSummaryBarEl}
           onYearChange={async (nextYear) => {
