@@ -1,23 +1,31 @@
 /**
- * Snapshot generator for demo stories — produces a per-workday
- * `StoryDailySnapshot` series that makes burndown / burnup / CFD charts
- * look like real teams have been chipping away at the work.
+ * Snapshot generator for demo stories — produces a `StoryDailySnapshot`
+ * series that makes burndown / burnup / CFD charts look like real teams
+ * have been chipping away at the work across the whole epic timeline,
+ * not just within one sprint window.
  *
- * Design goals (set in the original ask):
- *  - Per-sprint curves should be **smooth and monotonic** (no jagged jitter)
- *  - Across sprints, story-level variance should land at ~70% on-ideal /
- *    ~15% ahead / ~15% behind so charts read as "mostly on plan with some
- *    drift", not "perfectly straight" and not "noise"
- *  - Generation must be deterministic given the same `seed` so the same
- *    reseed produces the same data (helps when comparing screenshots)
+ * Design (Chunk 1): each story has an "ideal completion date" derived
+ * from its position in its parent epic's story list, spread evenly
+ * across the epic's plan window. Snapshots are generated weekly from
+ * the epic start through 7 days before completion, then daily for the
+ * final week, with status transitioning todo → inProgress → done. This
+ * replaces the older "pre-sprint ramp + in-sprint burn" model that
+ * clustered all completions at sprint-end boundaries (which read as
+ * step-function descent on the workspace-level burndown).
+ *
+ * Generation stays deterministic given the same seed inputs so reseeds
+ * produce the same data — important for screenshot diffing in tests.
  */
 import { StoryStatus } from "@/lib/generated/prisma";
-import { workingDaysBetween } from "@/lib/progress";
-import { sprintEndDate, sprintStartDate } from "@/lib/year-sprint";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Adds "watch" + "atRisk" variants used by the seeder to force specific
  *  epics into Watch / At Risk health states for the demo, on top of the
- *  random 70/15/15 onIdeal/ahead/behind mix used for everything else. */
+ *  random 70/15/15 onIdeal/ahead/behind mix used for everything else.
+ *  Chunk 2 will use these to offset each story's actual completion date
+ *  relative to its ideal completion date (ahead = earlier, atRisk =
+ *  much later). Chunk 1 ignores the variance and uses ideal directly. */
 export type DemoStoryCurve = "onIdeal" | "ahead" | "behind" | "watch" | "atRisk";
 
 /**
@@ -40,13 +48,6 @@ export function pickDemoStoryCurve(seed: string): DemoStoryCurve {
  * deliberately push specific epics into At Risk and Watch so the Roadmap
  * Health popover and the Insights chart verdicts show variety instead of
  * "everything On Track / Done".
- *
- * IMPORTANT: the chosen (initIdx / teamIdx) pairs must point at epics
- * whose sprint windows STRADDLE today. The closed-sprint cleanup pass in
- * the seeder force-promotes any non-done story from a closed sprint to
- * `review`, which would wipe out the slow-burn remaining work and silently
- * push the override epic back into On Track. Today ≈ end-of-May 2026, so
- * the picks below all land on epics whose plan window contains May.
  *
  * Distribution (most On Track · 3 At Risk · 3 Watch · 2 Overdue):
  *   - At Risk:
@@ -72,20 +73,6 @@ export function pickDemoEpicHealthOverride(
   teamIdx: number,
 ): DemoEpicVerdictOverride | null {
   const key = `${initIdx}/${teamIdx}`;
-  // Today is June 2026 — picks must reference epics whose planEnd is
-  // chosen accordingly:
-  //   - atRisk / watch → window must STRADDLE today (or be in the future)
-  //     so the deltaDays comparison vs the ideal line decides the verdict
-  //   - overdue → window must END before today so the (now > end &&
-  //     progress < 100) short-circuit in progress.ts fires
-  //
-  // Layout reference (start + epicLayout span per team idx 0..4):
-  //   Init 0 "Onboarding revamp"      start=1 → months 1, 2-3, 4, 5, 6
-  //   Init 1 "Payments platform v2"   start=2 → months 2, 3, 4-5, 6, 7
-  //   Init 2 "Mobile app redesign"    start=3 → months 3, 4, 5, 6-8, 9
-  //   Init 3 "Analytics data warehouse" start=4 → months 4, 5, 6, 7, 8
-  //   Init 4 "Growth experiments Q2"  start=5 → months 5, 6-7, 8, 9, 10
-  //   Init 5 "Search & discovery"    start=4 → months 4-5, 6, 7, 8, 9-12
   if (key === "0/4" || key === "2/3" || key === "4/1") return "atRisk";
   if (key === "1/3" || key === "3/2" || key === "5/1") return "watch";
   if (key === "0/0" || key === "1/1") return "overdue";
@@ -94,14 +81,33 @@ export function pickDemoEpicHealthOverride(
 
 export type DemoSnapshotInput = {
   storyId: string;
+  /** Sprint number recorded on each snapshot (lets sprint-scoped filters
+   *  on snapshots — e.g. closed-sprint cleanup — still find the right
+   *  rows). The sprint no longer drives the trajectory itself. */
   sprint: number;
   estimatedDays: number;
-  /** "Today" (or any cutoff) — snapshots are generated for every workday
-   *  from the sprint's start up to and including `min(today, sprintEnd)`. */
+  /** Wall-clock "today" for `final` derivation (which snapshot drives
+   *  the live `UserStory.status` / `.daysLeft`). Snapshots after today
+   *  are projected progress and don't affect `final`. */
   today: Date;
   planYear: number;
   curve: DemoStoryCurve;
   assignee: string | null;
+  /** Start of the parent epic's plan window. Stories begin their
+   *  trajectory here regardless of sprint number. */
+  epicStartDate: Date;
+  /** End of the parent epic's plan window. Used together with
+   *  `storyPosition` to spread per-story ideal completion dates evenly
+   *  across the epic timeline. */
+  epicEndDate: Date;
+  /** 1-indexed position of this story within its epic's story list.
+   *  Drives the per-story ideal completion date so completions spread
+   *  evenly across the epic window (the aggregate burndown then tracks
+   *  the linear ideal line). */
+  storyPosition: number;
+  /** Total story count in the parent epic. Denominator for the
+   *  position-based completion-date spread. */
+  totalStoriesInEpic: number;
 };
 
 export type DemoSnapshotRecord = {
@@ -115,187 +121,201 @@ export type DemoSnapshotRecord = {
 };
 
 /**
- * Final state the story should be left in *now* based on its curve, so the
- * live row matches what the snapshot series implies. Returned alongside the
- * snapshots so the seeder can `UPDATE` the parent UserStory row in one go.
+ * Final state the story should be left in *now* based on its trajectory,
+ * so the live `UserStory` row matches what the snapshot series implies.
+ * Returned alongside the snapshots so the seeder can `UPDATE` the parent
+ * row in one go.
  */
 export type DemoFinalStoryState = {
   status: StoryStatus;
   daysLeft: number;
 };
 
+/** Normalize a Date to midnight (local time) so per-day uniqueness on
+ *  `(storyId, snapshotDate)` is preserved across weekly + daily walks
+ *  that might otherwise produce slightly different times-of-day. */
+function atMidnight(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+}
+
+function isWeekend(d: Date): boolean {
+  const day = d.getDay();
+  return day === 0 || day === 6;
+}
+
+/** Curve-driven completion-date offset as a fraction of epic duration.
+ *  Applied on top of the position-based ideal completion date so per-
+ *  story variance shifts each story earlier (ahead) or later (behind /
+ *  watch / atRisk). Tuned per the user-approved "moderate spread"
+ *  default — atRisk overshoots by 25% of the epic window, often past
+ *  the plan end, producing the overdue contribution the chart needs. */
+function curveCompletionOffset(curve: DemoStoryCurve): number {
+  switch (curve) {
+    case "ahead":
+      return -0.10;
+    case "behind":
+      return 0.10;
+    case "watch":
+      return 0.15;
+    case "atRisk":
+      return 0.25;
+    case "onIdeal":
+    default:
+      return 0;
+  }
+}
+
+/** Stable per-snapshot pseudo-random in [-1, 1]. Combines a story-level
+ *  seed (hash of storyId) with the day index along the trajectory so
+ *  every snapshot has a distinct jitter, but reseeding the demo
+ *  reproduces the same series byte-for-byte. */
+function snapshotJitter(storyId: string, dayIndex: number): number {
+  let h = 0;
+  for (let i = 0; i < storyId.length; i++) h = (h * 31 + storyId.charCodeAt(i)) | 0;
+  h = (h * 2654435761 + dayIndex * 1597334677) | 0;
+  const u = ((h >>> 0) % 2001) / 1000 - 1; // [-1, 1) at 0.001 resolution
+  return u;
+}
+
+function nextWeekday(d: Date): Date {
+  const next = new Date(d);
+  while (isWeekend(next)) next.setDate(next.getDate() + 1);
+  return next;
+}
+
 export function buildDemoSnapshotSeries(
   input: DemoSnapshotInput,
 ): { snapshots: DemoSnapshotRecord[]; final: DemoFinalStoryState } {
-  const { storyId, sprint, estimatedDays, today, planYear, curve, assignee } = input;
-  const sprintStart = sprintStartDate(planYear, sprint);
-  const sprintEnd = sprintEndDate(planYear, sprint);
-  // Demo intent: every epic should show progress on its burndown / burnup
-  // chart, including epics whose sprints fall in the future relative to
-  // real today. We therefore generate snapshots through the full sprint
-  // window, not capped at `today`. The chart's "Today" indicator still
-  // tracks real time via Date.now() — the actual line may visually extend
-  // past it for forward-looking sprints, reading as "projected progress".
-  const cutoff = sprintEnd;
-  // The LIVE story.status/daysLeft (returned in `final`) should reflect
-  // where we'd "actually" be today, not where we'll be at sprint end. We
-  // track the latest snapshot whose date is ≤ today and return that as
-  // `final` — so:
-  //   - past sprints: final = sprint-end snapshot (review / inProgress-residual)
-  //   - current sprint: final = today's snapshot (mid-sprint state)
-  //   - future sprints: final stays at initial todo / full estimate
+  const {
+    storyId,
+    sprint,
+    estimatedDays,
+    today,
+    planYear,
+    assignee,
+    epicStartDate,
+    epicEndDate,
+    storyPosition,
+    totalStoriesInEpic,
+    curve,
+  } = input;
   const todayMs = today.getTime();
-
-  // Workdays span of the whole sprint (denominator for "ideal" math), and
-  // workdays elapsed up to the cutoff (numerator).
-  const sprintTotalWd = Math.max(1, workingDaysBetween(sprintStart, sprintEnd));
-  const elapsedWd = Math.max(1, workingDaysBetween(sprintStart, cutoff));
-
-  // Curve coefficients — how aggressively `daysLeft` drops relative to the
-  // pure ideal line. >1 means faster burn (ahead), <1 means slower (behind).
-  // Picked to look distinct on the chart without screaming. `watch` and
-  // `atRisk` are slow enough that the epic-level deltaDays = remaining −
-  // ideal lands in the Watch (>1 d) / At Risk (>4 d) bands of progress.ts.
-  const speed =
-    curve === "ahead" ? 1.25
-    : curve === "behind" ? 0.78
-    : curve === "watch" ? 0.55
-    : curve === "atRisk" ? 0.35
-    : 1.0;
-  // Sprint-level finished flag: ahead stories finish ~75% into the sprint;
-  // on-ideal stories finish exactly at sprint end; behind / watch / atRisk
-  // stories *may* not finish even by cutoff (chart shows leftover days).
-  const idealFinishFraction = curve === "ahead" ? 0.75 : 1.0;
 
   const snapshots: DemoSnapshotRecord[] = [];
   let finalStatus: StoryStatus = StoryStatus.todo;
   let finalDaysLeft = estimatedDays;
+  const emittedDateKeys = new Set<number>();
 
-  // ANCHOR snapshot at the start of the plan year showing the story as
-  // `todo` at full estimate. Without this, the burndown chart sums
-  // `daysLeft` across stories with no snapshot before their sprint start
-  // (treating them as 0d), making the blue actual line start near zero
-  // instead of at the epic's total scope.
-  const yearAnchorDate = new Date(planYear, 0, 1, 0, 0, 0, 0);
-  if (yearAnchorDate < sprintStart) {
+  const emit = (date: Date, status: StoryStatus, daysLeft: number) => {
+    const snap = atMidnight(date);
+    const key = snap.getTime();
+    if (emittedDateKeys.has(key)) return;
+    emittedDateKeys.add(key);
     snapshots.push({
       storyId,
-      snapshotDate: yearAnchorDate,
-      status: StoryStatus.todo,
+      snapshotDate: snap,
+      status,
       sprint,
       estimatedDays,
-      daysLeft: estimatedDays,
+      daysLeft,
       assignee,
     });
-    if (yearAnchorDate.getTime() <= todayMs) {
-      // Counts as the current state when nothing else has come in yet.
-      finalStatus = StoryStatus.todo;
-      finalDaysLeft = estimatedDays;
+    if (snap.getTime() <= todayMs) {
+      finalStatus = status;
+      finalDaysLeft = daysLeft;
     }
-  }
+  };
 
-  // PRE-SPRINT RAMP — a sparse series of snapshots between Jan 1 and sprint
-  // start that gradually decreases `daysLeft` from `estimatedDays` toward
-  // `estimatedDays * preSprintFloor`. Status stays `todo` so per-sprint
-  // kanban filters still treat the story as "not yet started" until its
-  // sprint actually begins.
-  //
-  // This exists purely so the epic-scope / quarter-scope / year-scope
-  // burndown chart (which sums per-day open `daysLeft` across all stories
-  // in the epic) shows a gradual descent across the full chart range,
-  // rather than the previous "flat then cliff" shape that only dropped
-  // during the in-sprint window. With 10 stories per epic each contributing
-  // a small per-week decrease, the summed actual line trends toward ideal
-  // throughout the period leading up to each story's sprint.
-  const preSprintFloor = 0.85;
-  const preSprintTargetDaysLeft = Math.max(0, estimatedDays * preSprintFloor);
-  const rampStart = new Date(yearAnchorDate);
-  rampStart.setDate(rampStart.getDate() + 7);
+  // Year-anchor snapshot. Same purpose as the previous generator: gives
+  // the workspace-level burndown a baseline data point at Jan 1 so the
+  // actual line starts at full scope even when an epic begins later in
+  // the year.
+  const yearAnchorDate = atMidnight(new Date(planYear, 0, 1));
   const yearAnchorMs = yearAnchorDate.getTime();
-  const sprintStartMs = sprintStart.getTime();
-  const preSpanMs = sprintStartMs - yearAnchorMs;
-  if (preSpanMs > 0) {
-    const rampCursor = new Date(rampStart);
-    while (rampCursor < sprintStart) {
-      const day = rampCursor.getDay();
-      if (day !== 0 && day !== 6) {
-        const ratio = (rampCursor.getTime() - yearAnchorMs) / preSpanMs;
-        const daysLeft = Number(
-          (estimatedDays - (estimatedDays - preSprintTargetDaysLeft) * ratio).toFixed(1),
-        );
-        const snapshotDate = new Date(rampCursor);
-        snapshots.push({
-          storyId,
-          snapshotDate,
-          status: StoryStatus.todo,
-          sprint,
-          estimatedDays,
-          daysLeft,
-          assignee,
-        });
-        if (snapshotDate.getTime() <= todayMs) {
-          finalStatus = StoryStatus.todo;
-          finalDaysLeft = daysLeft;
-        }
-      }
-      // Emit one ramp snapshot per workweek — sparse is fine, the chart
-      // interpolates between points anyway via the carry-forward in
-      // `latestSnapshotAtDay`.
-      rampCursor.setDate(rampCursor.getDate() + 5);
-    }
+  const epicStartMs = epicStartDate.getTime();
+  if (yearAnchorMs < epicStartMs) {
+    emit(yearAnchorDate, StoryStatus.todo, estimatedDays);
   }
 
-  // Walk one workday at a time so the snapshot series is dense and the
-  // chart can draw a smooth line. Saturday/Sunday skipped via the same
-  // working-days definition used in `lib/progress`.
-  const cursor = new Date(sprintStart.getFullYear(), sprintStart.getMonth(), sprintStart.getDate());
-  const stop = new Date(cutoff.getFullYear(), cutoff.getMonth(), cutoff.getDate());
-  let wdIndex = 0;
-  while (cursor <= stop) {
-    const day = cursor.getDay();
-    if (day !== 0 && day !== 6) {
-      wdIndex += 1;
-      const fractionElapsed = Math.min(1, wdIndex / sprintTotalWd);
-      // Linear burn-down with curve speed multiplier, clamped to [0, est].
-      // `(1 - fractionElapsed * speed)` is the "how much work is left if we
-      // continue at our pace". Tiny per-day jitter (≤ 0.3d) keeps the line
-      // alive without breaking monotonicity (only ever subtracts).
-      const remainingFraction = Math.max(0, 1 - fractionElapsed * speed / idealFinishFraction);
-      const jitter = ((wdIndex * 2654435761) % 7) / 7; // 0..1 deterministic
-      const noise = jitter * 0.3; // up to 0.3d
-      // In-sprint burn starts where the pre-sprint ramp left off
-      // (`preSprintTargetDaysLeft` ≈ 85% of estimate) — picking up from the
-      // last snapshot value keeps the chart line continuous (no jump-up at
-      // sprint start) while still showing the bulk of the burn happening
-      // within the sprint window.
-      const inSprintStart = preSprintTargetDaysLeft;
-      const raw = inSprintStart * remainingFraction - noise;
-      const daysLeft = Math.max(0, Number(raw.toFixed(1)));
+  // Per-story ideal completion date — spread evenly across the epic
+  // window. With `storyPosition` = 1..N, the last story completes at
+  // epic end and the first completes one-Nth of the way in. This makes
+  // the aggregate "open story count" decline linearly toward 0 as the
+  // epic progresses — i.e. the actual line tracks the ideal line.
+  const epicEndMs = epicEndDate.getTime();
+  const epicSpanMs = Math.max(DAY_MS, epicEndMs - epicStartMs);
+  const safeTotal = Math.max(1, totalStoriesInEpic);
+  const positionFraction = Math.max(0, Math.min(1, storyPosition / safeTotal));
+  // Chunk 2: shift the ideal completion date by a curve-dependent
+  // offset (-10% for ahead, +10% behind, +15% watch, +25% atRisk).
+  // The offset is a fraction of epic duration so longer epics get
+  // proportionally larger shifts.
+  const idealCompletionMs = epicStartMs + positionFraction * epicSpanMs;
+  const offsetMs = curveCompletionOffset(curve) * epicSpanMs;
+  const completionMs = idealCompletionMs + offsetMs;
+  const completionDate = atMidnight(new Date(completionMs));
+  const completionDateMs = completionDate.getTime();
+
+  // Trajectory walks from the epic start through completion. If the
+  // epic begins before the year anchor (extreme edge case), fall back
+  // to the anchor + one week so we don't backdate into the prior year.
+  const trajectoryStart = nextWeekday(
+    atMidnight(epicStartMs >= yearAnchorMs ? epicStartDate : new Date(yearAnchorMs + 7 * DAY_MS)),
+  );
+  const trajectoryStartMs = trajectoryStart.getTime();
+  const trajectorySpanMs = Math.max(DAY_MS, completionDateMs - trajectoryStartMs);
+
+  // Status rule: todo until 7 days before completion, inProgress in the
+  // final week, done at completion. `daysLeft` interpolates linearly
+  // from estimatedDays → 0 across the trajectory.
+  const computeProgress = (snapshotMs: number) =>
+    Math.max(0, Math.min(1, (snapshotMs - trajectoryStartMs) / trajectorySpanMs));
+
+  const dailyWindowStartMs = completionDateMs - 7 * DAY_MS;
+
+  // Per-snapshot jitter ceiling: ±5% of estimatedDays, capped at ±1
+  // day. Keeps the trajectory visually alive (slight wiggle) without
+  // crossing zero or breaking monotonicity at the end (the final
+  // completion snapshot still locks to daysLeft = 0).
+  const jitterMagnitude = Math.min(1, estimatedDays * 0.05);
+
+  // Walk: weekly cadence while > 7 days from completion, daily for the
+  // final week. Weekends are skipped via `isWeekend`. When the weekly
+  // step lands on or past the daily window, the loop shifts to single-
+  // day increments naturally because `daysUntilCompletion` falls below
+  // 8 each iteration.
+  let cursor = new Date(trajectoryStart);
+  let dayIndex = 0;
+  while (cursor.getTime() <= completionDateMs) {
+    if (!isWeekend(cursor)) {
+      const snapMs = cursor.getTime();
+      const progress = computeProgress(snapMs);
+      const rawDaysLeft = estimatedDays * (1 - progress);
+      // Apply jitter, but never to the very first or very last
+      // snapshot (start should sit at the full estimate, end at zero
+      // — both pinned to the ideal). Mid-trajectory values wobble.
+      const wobble =
+        progress > 0 && progress < 1 ? snapshotJitter(storyId, dayIndex) * jitterMagnitude : 0;
+      const daysLeft = Math.max(0, Math.min(estimatedDays, Number((rawDaysLeft + wobble).toFixed(1))));
+      const daysUntilCompletion = (completionDateMs - snapMs) / DAY_MS;
       const status: StoryStatus =
-        daysLeft === 0
-          ? StoryStatus.review
-          : wdIndex === 1
+        daysUntilCompletion <= 0
+          ? StoryStatus.done
+          : daysUntilCompletion <= 7
             ? StoryStatus.inProgress
-            : StoryStatus.inProgress;
-      const snapshotDate = new Date(cursor);
-      snapshots.push({
-        storyId,
-        snapshotDate,
-        status,
-        sprint,
-        estimatedDays,
-        daysLeft,
-        assignee,
-      });
-      // Only update `final` for snapshots dated ≤ today; later snapshots
-      // are "future projection" and shouldn't drive the live story state.
-      if (snapshotDate.getTime() <= todayMs) {
-        finalStatus = status;
-        finalDaysLeft = daysLeft;
-      }
+            : StoryStatus.todo;
+      emit(cursor, status, daysLeft);
+      dayIndex += 1;
     }
-    cursor.setDate(cursor.getDate() + 1);
+    const daysUntilCompletion = (completionDateMs - cursor.getTime()) / DAY_MS;
+    const stepDays = cursor.getTime() < dailyWindowStartMs && daysUntilCompletion > 7 ? 7 : 1;
+    cursor = new Date(cursor.getTime() + stepDays * DAY_MS);
   }
+
+  // Always emit the final completion snapshot — the loop above may have
+  // stopped one day shy because of the weekend skip or the inclusive
+  // boundary check. Forces `done` with `daysLeft = 0`.
+  emit(completionDate, StoryStatus.done, 0);
 
   return {
     snapshots,

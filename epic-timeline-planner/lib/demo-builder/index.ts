@@ -417,9 +417,17 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
           status: StoryStatus.todo,
         });
       }
+      // Epic plan window as Date objects — passed into the snapshot
+      // generator so each story can derive its ideal completion date
+      // from its position in the epic's story list (Chunk 1 trajectory
+      // restructure). The window uses the first day of `planStartMonth`
+      // → the last day of `planEndMonth` so a 1-month epic still has a
+      // ~30-day span to spread completions across.
+      const epicStartDate = new Date(planYear, epicStartMonth - 1, 1);
+      const epicEndDate = new Date(planYear, epicEndMonth, 0);
       // Insert one-by-one because we need each story's id to attach
       // snapshots and update its final state to match the curve.
-      for (const story of storiesData) {
+      for (const [storyIndex, story] of storiesData.entries()) {
         const storySeed = totalStories;
         // Hygiene-deficient story picks — populate the "Needs Attention"
         // hero card with realistic counts (Missing estimate / No sprint
@@ -465,6 +473,10 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
           planYear,
           curve: epicHealthCurve ?? pickDemoStoryCurve(created.id),
           assignee: story.assignee,
+          epicStartDate,
+          epicEndDate,
+          storyPosition: storyIndex + 1,
+          totalStoriesInEpic: storiesData.length,
         });
         if (snapshots.length > 0) {
           await db.storyDailySnapshot.createMany({
@@ -779,6 +791,13 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
           },
         });
         backfillStoriesAdded += 1;
+        // Backfill stories belong to the same epic — derive its plan
+        // window so the snapshot trajectory uses the same epic-relative
+        // completion-date spread as the main seed pass.
+        const backfillEpicStartMonth = teamEpic.planStartMonth ?? targetMonth;
+        const backfillEpicEndMonth = teamEpic.planEndMonth ?? targetMonth;
+        const backfillEpicStartDate = new Date(planYear, backfillEpicStartMonth - 1, 1);
+        const backfillEpicEndDate = new Date(planYear, backfillEpicEndMonth, 0);
         const { snapshots, final } = buildDemoSnapshotSeries({
           storyId: created.id,
           sprint: targetSprint,
@@ -787,6 +806,14 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
           planYear,
           curve: pickDemoStoryCurve(created.id),
           assignee,
+          epicStartDate: backfillEpicStartDate,
+          epicEndDate: backfillEpicEndDate,
+          // Backfill picks `i` in [0..4], we treat these as positions
+          // 6..10 in a notional 10-story epic so they land in the
+          // back half of the timeline (they're closing-sprint cleanup
+          // residuals, not the epic's main scope).
+          storyPosition: 6 + i,
+          totalStoriesInEpic: 10,
         });
         if (snapshots.length > 0) {
           await db.storyDailySnapshot.createMany({
@@ -1138,6 +1165,14 @@ export async function refreshDemoSnapshotsToToday(): Promise<RefreshResult> {
       estimatedDays: true,
       assignee: true,
       planYear: true,
+      epicId: true,
+      epic: {
+        select: {
+          planStartMonth: true,
+          planEndMonth: true,
+          userStories: { select: { id: true, createdAt: true }, orderBy: { createdAt: "asc" } },
+        },
+      },
       snapshots: { orderBy: { snapshotDate: "desc" }, take: 1, select: { snapshotDate: true } },
     },
   });
@@ -1147,10 +1182,21 @@ export async function refreshDemoSnapshotsToToday(): Promise<RefreshResult> {
     const planYear = story.planYear ?? currentPlanYear();
     const lastDate = story.snapshots[0]?.snapshotDate ?? null;
     const curve = pickDemoStoryCurve(story.id);
+    // Derive the same epic plan window + position-in-epic the main
+    // seed used so the regenerated trajectory matches what was
+    // originally created. Falls back to month 1..12 when the epic is
+    // unscheduled (which would have been filtered out at seed time).
+    const epicStartMonth = story.epic?.planStartMonth ?? 1;
+    const epicEndMonth = story.epic?.planEndMonth ?? 12;
+    const refreshEpicStartDate = new Date(planYear, epicStartMonth - 1, 1);
+    const refreshEpicEndDate = new Date(planYear, epicEndMonth, 0);
+    const siblingIds = story.epic?.userStories.map((s) => s.id) ?? [story.id];
+    const storyPosition = Math.max(1, siblingIds.indexOf(story.id) + 1);
+    const totalStoriesInEpic = Math.max(1, siblingIds.length);
     // Re-build the full series from scratch (deterministic given the same
-    // story id + estimate + sprint), then only insert dates strictly after
-    // `lastDate`. Simpler than incremental math + impossible to under/over-
-    // shoot when the curve coefficients are constant.
+    // story id + estimate + epic window + position), then only insert dates
+    // strictly after `lastDate`. Simpler than incremental math + impossible
+    // to under/over-shoot when the trajectory math is constant.
     const { snapshots, final } = buildDemoSnapshotSeries({
       storyId: story.id,
       sprint: story.sprint,
@@ -1159,6 +1205,10 @@ export async function refreshDemoSnapshotsToToday(): Promise<RefreshResult> {
       planYear,
       curve,
       assignee: story.assignee ?? null,
+      epicStartDate: refreshEpicStartDate,
+      epicEndDate: refreshEpicEndDate,
+      storyPosition,
+      totalStoriesInEpic,
     });
     const newSnapshots = lastDate
       ? snapshots.filter((s) => s.snapshotDate.getTime() > lastDate.getTime())
