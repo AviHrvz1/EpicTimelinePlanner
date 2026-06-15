@@ -8954,7 +8954,11 @@ export function BacklogPlanningPanel({
               ? key === "Unscheduled work"
                 ? <CalendarOff className="size-4 shrink-0 text-slate-400" aria-hidden />
                 : <QuarterYearProgressIcon quarterLabel={key} className="text-sky-500" />
-              : undefined;
+              : level === "team"
+                ? <TeamAvatar slug={key === "__unassigned__" ? null : key} sizePx={16} />
+                : level === "sprint"
+                  ? <Flag className="size-4 shrink-0 text-amber-500" aria-hidden />
+                  : undefined;
       const trailingAction = level === "quarter" && key === "Unscheduled work" && onJumpToRoadmapPlanning ? (
         <button
           type="button"
@@ -9598,7 +9602,11 @@ export function BacklogPlanningPanel({
                 ? key === "Unscheduled work"
                   ? <CalendarOff className="size-4 shrink-0 text-slate-400" aria-hidden />
                   : <QuarterYearProgressIcon quarterLabel={key} className="text-sky-500" />
-                : undefined,
+                : level === "team"
+                  ? <TeamAvatar slug={key === "__unassigned__" ? null : key} sizePx={16} />
+                  : level === "sprint"
+                    ? <Flag className="size-4 shrink-0 text-amber-500" aria-hidden />
+                    : undefined,
           trailingAction,
           // Empty quarter folders default to collapsed so the always-rendered
           // Q1-Q4 scaffolding doesn't fill the screen with blank rows. The
