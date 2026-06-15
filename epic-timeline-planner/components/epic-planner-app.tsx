@@ -1472,6 +1472,11 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           | "all-story"
           | "all-epic";
         on: boolean;
+        /** Hero scope at click time — drives `workItemFilter` for
+         *  single-category hand-offs whose names are scope-agnostic
+         *  (Unestimated / Unscheduled / No description fire the same
+         *  category whether the donut was the Story or Epic variant). */
+        scope?: "story" | "epic";
       }
     | null
   >(null);
@@ -1517,7 +1522,20 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   // until they leave that mode. We don't persist the override across
   // mode switches because the new mode usually has a different natural
   // unit anyway.
+  /** When a hero chart click pushes us into a new `topMode` AND
+   *  explicitly chooses a `heroScope` (e.g. clicking Needs Attention ·
+   *  Epics jumps to Backlog with scope=epic), the mode-change effect
+   *  below would race in and override the scope to its default for
+   *  that mode. Setting this flag right before `setTopMode + setHeroScope`
+   *  makes the effect skip its next auto-sync, so the explicit pick
+   *  wins. The ref is single-shot: it self-resets the next time the
+   *  effect runs. */
+  const skipNextHeroScopeAutoSyncRef = useRef(false);
   useEffect(() => {
+    if (skipNextHeroScopeAutoSyncRef.current) {
+      skipNextHeroScopeAutoSyncRef.current = false;
+      return;
+    }
     if (topMode === "backlog") setHeroScope("story");
     else if (topMode === "dashboard") setHeroScope("initiative");
     else if (topMode === "roadmap") setHeroScope("epic");
@@ -1559,6 +1577,9 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         | "hasUnestimatedChildren"
         | null,
     ) => {
+      // Make the topMode-change auto-sync below skip its run so our
+      // explicit scope pick survives the mode flip.
+      skipNextHeroScopeAutoSyncRef.current = true;
       setTopMode("backlog");
       setHeroScope(scope);
       // Single-category slice clicks: map to the corresponding
@@ -1586,11 +1607,12 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                         ? "missingEstimate"
                         : null;
       if (targetCategory) {
-        setBacklogIncomingHygieneToggle({ category: targetCategory, on: true });
+        setBacklogIncomingHygieneToggle({ category: targetCategory, on: true, scope });
       } else {
         setBacklogIncomingHygieneToggle({
           category: scope === "story" ? "all-story" : "all-epic",
           on: true,
+          scope,
         });
       }
       // Mutually-exclusive: a Needs Attention click clears any

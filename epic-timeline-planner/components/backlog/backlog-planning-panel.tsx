@@ -295,9 +295,20 @@ type BacklogPlanningPanelProps = {
    *  single hygiene toggle (or all four with `category = "all"`). When
    *  `category` is `"all"`, every other toggle in the SAME scope's set
    *  is enabled together so the user can refine manually. Identity-
-   *  based: fresh object per click fires the sync useEffect. */
+   *  based: fresh object per click fires the sync useEffect.
+   *
+   *  `scope` carries the hero card's scope at the moment of click so
+   *  the backlog can set `workItemFilter` correctly even when an Epic-
+   *  named category (Unestimated / Unscheduled / No description) was
+   *  routed through the shared "missing*" category names. Defaults to
+   *  `"story"` when omitted, preserving the older single-category
+   *  semantics. */
   externalHygieneToggle?:
-    | { category: "missingDescription" | "missingEstimate" | "unscheduled" | "stalled" | "all-story" | "all-epic"; on: boolean }
+    | {
+        category: "missingDescription" | "missingEstimate" | "unscheduled" | "stalled" | "all-story" | "all-epic";
+        on: boolean;
+        scope?: "story" | "epic";
+      }
     | null;
 };
 
@@ -5633,14 +5644,24 @@ export function BacklogPlanningPanel({
   // items immediately without an extra click.
   useEffect(() => {
     if (externalHygieneToggle == null) return;
-    const { category, on } = externalHygieneToggle;
-    const storyCategories = new Set(["missingDescription", "missingEstimate", "unscheduled", "stalled"]);
+    const { category, on, scope: incomingScope } = externalHygieneToggle;
+    // Single-category hand-offs use shared category names ("missingDescription"
+    // etc.) regardless of whether the source was the Story-scope or
+    // Epic-scope donut. The hero passes `scope` so we can set
+    // `workItemFilter` to the right level. Default to "story" to keep
+    // legacy callers (no scope field) at their original behavior.
+    const singleScope: "story" | "epic" = incomingScope ?? "story";
     if (category === "all-story") {
       setHygieneMissingDescription(on);
       setHygieneMissingEstimate(on);
       setHygieneUnscheduled(on);
       setHygieneStalled(on);
-      setWorkItemFilter(on ? ["story"] : []);
+      // `on: false` arrives from the cross-chart mutual-exclusion
+      // pathway (clicking Work Progress / Health Distribution clears
+      // hygiene). Don't touch `workItemFilter` in that case — the
+      // clicked chart's handler has already set it to the new scope
+      // and clobbering it here would race-clobber back to [].
+      if (on) setWorkItemFilter(["story"]);
       return;
     }
     if (category === "all-epic") {
@@ -5648,7 +5669,7 @@ export function BacklogPlanningPanel({
       setHygieneMissingEstimate(on);
       setHygieneUnscheduled(on);
       // Stalled is story-only; leave it untouched for the epic-all path.
-      setWorkItemFilter(on ? ["epic"] : []);
+      if (on) setWorkItemFilter(["epic"]);
       return;
     }
     // Radio behaviour: turning a single category ON via the hero
@@ -5665,13 +5686,11 @@ export function BacklogPlanningPanel({
       else if (category === "unscheduled") setHygieneUnscheduled(false);
       else if (category === "stalled") setHygieneStalled(false);
     }
-    if (storyCategories.has(category)) {
-      setWorkItemFilter(on ? ["story"] : []);
-    } else if (on) {
-      // Non-story categories (epic-scope categories collapsed to the
-      // 3 shared toggles): align Work Item with the epic scope so
-      // the table reads at the right level.
-      setWorkItemFilter(["epic"]);
+    if (on) {
+      // Align Work Item with the click's scope. Stalled forces story
+      // (it has no epic-level equivalent); everything else honors the
+      // `scope` field that came with the hand-off.
+      setWorkItemFilter([category === "stalled" ? "story" : singleScope]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalHygieneToggle]);
