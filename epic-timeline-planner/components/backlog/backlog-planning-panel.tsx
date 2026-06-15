@@ -6539,6 +6539,24 @@ export function BacklogPlanningPanel({
       .filter(Boolean) as typeof filteredWithHealth;
   }), [filteredWithHealth, roadmapFilter, yearFilter, quarterFilter, teamFilter, assigneeFilter, parentFilter]);
 
+  /** initiativeId → set of quarter labels its child epics span, derived
+   *  from the pre-strip data. The Work Item = Initiative filter wipes
+   *  `epics = []` (so the tree renders childless folders), which would
+   *  otherwise dump every initiative into "Unscheduled work" during the
+   *  quarter fan-out. Consulting this map lets the fan-out still place
+   *  the initiative in each quarter its (now-hidden) epics live in. */
+  const initiativeIdToEpicQuarters = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const initiative of backlogFilteredBeforeWorkItem) {
+      const quarters = new Set<string>();
+      for (const epic of initiative.epics ?? []) {
+        quarters.add(quarterLabelOrUnscheduled(quarterFromMonth(epic.planStartMonth)));
+      }
+      map.set(initiative.id, quarters);
+    }
+    return map;
+  }, [backlogFilteredBeforeWorkItem]);
+
   const fullyFiltered = useMemo(() => timePhase("fullyFiltered", () => {
     const base = applyWorkItemKindFilter(backlogFilteredBeforeWorkItem, workItemFilter);
     // When the user clicks a column header, columnSort takes priority over the
@@ -8627,7 +8645,7 @@ export function BacklogPlanningPanel({
     if (levelIndex >= effectiveGroupLevels.length) {
       walkLeafRowsIntoDescriptors(out, rows, levelIndex * 14, path);
       if (standaloneRows.length > 0) {
-        walkStandaloneInitiativeRowsIntoDescriptors(out, standaloneRows, levelIndex * 14);
+        walkStandaloneInitiativeRowsIntoDescriptors(out, standaloneRows, levelIndex * 14, path);
       }
       return;
     }
@@ -8674,6 +8692,19 @@ export function BacklogPlanningPanel({
         for (const epic of init.epics) {
           const q = quarterLabelOrUnscheduled(epic.epicQuarterLabelValue);
           if (quarterFilter.length === 0 || quarterFilter.includes(q)) epicQuarters.add(q);
+        }
+        // Work Item = Initiative strips `init.epics` to [] for the tree
+        // (see `applyWorkItemKindFilter`), so the loop above contributes
+        // nothing. Fall back to the pre-strip map so the initiative still
+        // appears in each quarter its (now-hidden) epics live in —
+        // mirrors the epic-spans-sprints behavior at the level above.
+        if (epicQuarters.size === 0) {
+          const preStripQuarters = initiativeIdToEpicQuarters.get(init.initiativeId);
+          if (preStripQuarters) {
+            for (const q of preStripQuarters) {
+              if (quarterFilter.length === 0 || quarterFilter.includes(q)) epicQuarters.add(q);
+            }
+          }
         }
         if (epicQuarters.size === 0) {
           // No epics → land under Unscheduled work.
@@ -8985,6 +9016,12 @@ export function BacklogPlanningPanel({
     out: RowDescriptor[],
     rows: typeof groupedStandaloneInitiatives,
     indentPx: number,
+    /** Path of group-level keys leading to this rows list (e.g.
+     *  `"roadmap:rm-123/year:2026/quarter:Q1/"`). Folded into the
+     *  descriptor key so the same initiative can appear under multiple
+     *  quarter buckets (Work Item = Initiative fan-out) without
+     *  duplicate-key collisions. Empty string at the root. */
+    path = "",
   ): void {
     // Mirror `renderStandaloneInitiativeRows` shape.
     //
@@ -9007,7 +9044,7 @@ export function BacklogPlanningPanel({
         for (const epic of init.epics) {
           const epicSnapshot = epic;
           out.push({
-            key: `standalone-epic-${init.initiativeId}-${epic.epicId}`,
+            key: `standalone-epic-${path}${init.initiativeId}-${epic.epicId}`,
             kind: "standaloneEpic",
             estimatedHeight: ROW_ESTIMATED_HEIGHTS.standaloneEpic,
             render: () => renderStandaloneInitiativeRows(
@@ -9026,7 +9063,7 @@ export function BacklogPlanningPanel({
           ROW_ESTIMATED_HEIGHTS.standaloneInit +
           (isInitOpen ? init.epics.length * ROW_ESTIMATED_HEIGHTS.standaloneEpic : 0);
         out.push({
-          key: `standalone-init-${init.initiativeId}`,
+          key: `standalone-init-${path}${init.initiativeId}`,
           kind: "standaloneInit",
           estimatedHeight,
           render: () => renderStandaloneInitiativeRows([initSnapshot], indentPx),
