@@ -373,6 +373,17 @@ export function RoadmapHealthHero({
   useEffect(() => {
     setActiveNeedsAttentionLabel(null);
   }, [heroScope]);
+  // Mutually-exclusive across the three legend-driven hero charts:
+  // when Work Progress or Health Distribution have an active
+  // selection, clear the local Needs Attention highlight so only one
+  // of the three reads as "on". The reverse direction (Needs
+  // Attention click clearing the other two) is wired in
+  // `handleNeedsAttentionClick` over in epic-planner-app.
+  useEffect(() => {
+    if ((statusFilter?.size ?? 0) > 0 || (healthFilter?.size ?? 0) > 0) {
+      setActiveNeedsAttentionLabel(null);
+    }
+  }, [statusFilter, healthFilter]);
   const drilldownStories = useMemo(() => {
     if (!drilldownTeam) return [];
     const out: Array<{

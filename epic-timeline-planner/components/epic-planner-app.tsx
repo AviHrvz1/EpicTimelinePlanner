@@ -1593,6 +1593,14 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           on: true,
         });
       }
+      // Mutually-exclusive: a Needs Attention click clears any
+      // existing Work Progress / Health Distribution selections so
+      // only one of the three legends stays lit at a time.
+      setHealthFilter(new Set<HealthStatus>());
+      setBacklogIncomingHealthFilter([]);
+      setShowRoadmapProgress(false);
+      setGanttStatusFilter(new Set());
+      setBacklogIncomingStatusFilter([]);
     },
     [],
   );
@@ -1645,6 +1653,27 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
    *     toast confirms the navigation so the mode switch isn't a
    *     surprise on first interaction.
    */
+  /** Mutually-exclusive hero charts: Work Progress, Health Distribution,
+   *  and Needs Attention each maintain their own selection, but the
+   *  user has opted to treat them as one-of-three. Activating a
+   *  selection on any chart clears the other two so the table never
+   *  filters on conflicting axes. Team Progress is independent. */
+  const clearHealthFilterEverywhere = useCallback(() => {
+    setHealthFilter(new Set<HealthStatus>());
+    setBacklogIncomingHealthFilter([]);
+    setShowRoadmapProgress(false);
+  }, []);
+  const clearStatusFilterEverywhere = useCallback(() => {
+    setGanttStatusFilter(new Set());
+    setBacklogIncomingStatusFilter([]);
+  }, []);
+  const clearBacklogHygieneEverywhere = useCallback(() => {
+    setBacklogIncomingHygieneToggle({
+      category: heroScope === "story" ? "all-story" : "all-epic",
+      on: false,
+    });
+  }, [heroScope]);
+
   const handleWorkProgressSliceClick = useCallback(
     (status: "backlogEpic" | "todo" | "inProgress" | "review" | "done", label: string) => {
       // Backlog mode: every click sets BOTH `workItemFilter=[heroScope]`
@@ -1665,6 +1694,13 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         setBacklogIncomingWorkItemFilter(
           isToggleOff && next.size === 0 ? [] : [heroScope],
         );
+        // Mutually-exclusive: clear the other two charts when ADDING
+        // a selection. Toggle-off (size hits 0) leaves them alone so
+        // the planner doesn't lose unrelated filters via accident.
+        if (next.size > 0) {
+          clearHealthFilterEverywhere();
+          clearBacklogHygieneEverywhere();
+        }
         return;
       }
       // Roadmap Planning + scope=initiative/epic: stay in-mode, filter
@@ -1692,10 +1728,13 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       // pass null through so the backlog stays workspace-wide.
       setBacklogIncomingRoadmapFilter(selectedRoadmap ? [selectedRoadmap.id] : null);
       setTopMode("backlog");
+      // Mutually-exclusive cross-clear (cross-mode hand-off).
+      clearHealthFilterEverywhere();
+      clearBacklogHygieneEverywhere();
       const scopePlural = heroScope === "initiative" ? "initiatives" : heroScope === "epic" ? "epics" : "stories";
       toast.success(`Filtered Backlog to "${label}" ${scopePlural}`);
     },
-    [topMode, heroScope, ganttStatusFilter, handlePanelStatusFilterDerivedChange, selectedRoadmap],
+    [topMode, heroScope, ganttStatusFilter, handlePanelStatusFilterDerivedChange, selectedRoadmap, clearHealthFilterEverywhere, clearBacklogHygieneEverywhere],
   );
   // (`handleHealthDistributionSliceClick` and `handleTeamProgressRowClick`
   // are declared further below — they depend on `handleHealthFilterChange`
@@ -1807,6 +1846,10 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         setBacklogIncomingWorkItemFilter(
           isToggleOff && next.size === 0 ? [] : [heroScope],
         );
+        if (next.size > 0) {
+          clearStatusFilterEverywhere();
+          clearBacklogHygieneEverywhere();
+        }
         return;
       }
       if (topMode === "roadmap" && heroScope !== "story") {
@@ -1814,6 +1857,10 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         if (next.has(verdict)) next.delete(verdict);
         else next.add(verdict);
         handleHealthFilterChange(next);
+        if (next.size > 0) {
+          clearStatusFilterEverywhere();
+          clearBacklogHygieneEverywhere();
+        }
         return;
       }
       // Cross-mode hand-off.
@@ -1825,10 +1872,12 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       // selected roadmap on chart-click navigation.
       setBacklogIncomingRoadmapFilter(selectedRoadmap ? [selectedRoadmap.id] : null);
       setTopMode("backlog");
+      clearStatusFilterEverywhere();
+      clearBacklogHygieneEverywhere();
       const scopePlural = heroScope === "initiative" ? "initiatives" : heroScope === "epic" ? "epics" : "stories";
       toast.success(`Filtered Backlog to "${label}" ${scopePlural}`);
     },
-    [topMode, heroScope, healthFilter, handleHealthFilterChange, selectedRoadmap],
+    [topMode, heroScope, healthFilter, handleHealthFilterChange, selectedRoadmap, clearStatusFilterEverywhere, clearBacklogHygieneEverywhere],
   );
   /**
    * Team Progress row click — same mode × scope routing as the donut
