@@ -275,6 +275,20 @@ type BacklogPlanningPanelProps = {
    *  picks a different scope manually. Identity-based sync, same
    *  pattern as the other external filters. */
   externalRoadmapFilter?: readonly string[] | null;
+  /** Hand-off that toggles a single GroupLevel in/out of the panel's
+   *  group-by chain. Driven by the hero's Teams / Sprints KPI tiles
+   *  when topMode === "backlog" — clicking the Teams tile adds (or
+   *  removes) "team" from the chain. Identity-based: a fresh object
+   *  per hero click fires the sync effect; `null` means no pending
+   *  hand-off. `on: true` adds and pulls any missing parent levels
+   *  in too (so the strict hierarchy still holds); `on: false`
+   *  removes the level and its descendants. */
+  externalGroupLevelToggle?: { level: GroupLevel; on: boolean } | null;
+  /** Mirror callback so the parent (`epic-planner-app`) can show the
+   *  Teams / Sprints hero tiles in their active state when those
+   *  levels are present in the chain. Fires on every groupLevels
+   *  change — both picker toggles and hand-off toggles. */
+  onGroupLevelsChange?: (levels: GroupLevel[]) => void;
 };
 
 type OptionItem = { id: string; label: string };
@@ -300,7 +314,7 @@ type BacklogColumnKey =
   | "epicOriginalEst"
   | "daysLeft"
   | "progress";
-type GroupLevel = "roadmap" | "year" | "quarter" | "month" | "sprint";
+export type GroupLevel = "roadmap" | "year" | "quarter" | "team" | "month" | "sprint";
 type WorkflowStatus = "todo" | "inProgress" | "review" | "done";
 type InlineEditableStoryField = "status" | "sprint" | "assignee" | "team" | "priority" | "labels" | "estimatedDays" | "daysLeft";
 type WorkItemKindFilter = "initiative" | "epic" | "story";
@@ -922,15 +936,16 @@ function SortableBacklogColumnHeader({
 // Month and Sprint were removed as group options because backlog grouping is
 // about planning horizon, not execution granularity — sprint-scoped views
 // belong in the Sprint Kanban. Quarter is the deepest meaningful bucket here.
-// The `month`/`sprint` enum values stay in the `GroupLevel` type so any
-// renderLeafRows branches that switched on them keep compiling, but no UI
-// surface offers them anymore and `isGroupLevelValue` filters them out on
-// state restore.
-const GROUP_LEVEL_ORDER: GroupLevel[] = ["roadmap", "year", "quarter"];
+// The `month` enum value stays in the `GroupLevel` type so any
+// renderLeafRows branches that switched on it keep compiling, but no UI
+// surface offers it anymore and `isGroupLevelValue` filters it out on
+// state restore. `team` and `sprint` are now first-class picker options.
+const GROUP_LEVEL_ORDER: GroupLevel[] = ["roadmap", "year", "quarter", "team", "sprint"];
 const GROUP_LEVEL_LABELS: Record<GroupLevel, string> = {
   roadmap: "Roadmap",
   year: "Year",
   quarter: "Quarter",
+  team: "Team",
   month: "Month",
   sprint: "Sprint",
 };
@@ -2369,8 +2384,17 @@ function isWorkItemKindFilterValue(v: unknown): v is WorkItemKindFilter {
 
 function isGroupLevelValue(v: unknown): v is GroupLevel {
   // Filters restored localStorage state against the currently-allowed
-  // levels. Month/Sprint values from older saves get dropped silently.
-  return v === "roadmap" || v === "year" || v === "quarter";
+  // levels. `month` values from older saves get dropped silently —
+  // the picker no longer surfaces month, and we want stale chains to
+  // load with month stripped rather than silently keeping a buried
+  // level the user can't see. `team` and `sprint` are first-class.
+  return (
+    v === "roadmap" ||
+    v === "year" ||
+    v === "quarter" ||
+    v === "team" ||
+    v === "sprint"
+  );
 }
 
 function isBacklogSortByValue(v: unknown): v is BacklogSortBy {
@@ -5077,6 +5101,8 @@ export function BacklogPlanningPanel({
   externalWorkItemFilter,
   externalTeamFilter,
   externalRoadmapFilter,
+  externalGroupLevelToggle,
+  onGroupLevelsChange,
 }: BacklogPlanningPanelProps) {
   // Render-time diagnostic: count + time every commit to help spot whether
   // slowness is the mount itself, re-renders from a parent, or some heavy
@@ -5211,6 +5237,48 @@ export function BacklogPlanningPanel({
   const [submittingKey, setSubmittingKey] = useState<string | null>(null);
   const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
   const [groupLevels, setGroupLevels] = useState<GroupLevel[]>(["roadmap", "year", "quarter"]);
+  // Sprint + Initiative-only conflict resolution: Sprint grouping is a
+  // story/epic concept (story rows bucket by sprint, epic headers fan
+  // out across sprints), so showing initiatives under sprint folders
+  // would be noise. When the conflict materializes — either because the
+  // user added Sprint while Work Item = Initiative, or set Work Item =
+  // Initiative while Sprint was already in the chain — flip Work Item
+  // to Story with a non-destructive toast. Picker UI also disables the
+  // Sprint checkbox in this state; this effect catches state changes
+  // routed through hero-tile hand-offs (which bypass the picker).
+  useEffect(() => {
+    if (!groupLevels.includes("sprint")) return;
+    if (workItemFilter.length !== 1 || workItemFilter[0] !== "initiative") return;
+    setWorkItemFilter(["story"]);
+    toast.info("Switched to Stories — sprints don't show initiatives");
+  }, [groupLevels, workItemFilter]);
+  // Identity-based hand-off from the hero KPI tiles in Backlog mode.
+  // Clicking the Teams / Sprints tile fires a fresh `{ level, on }`
+  // object that we use to toggle the level in/out of the chain. When
+  // adding, we also pull in every parent level so the strict
+  // hierarchy (Team needs Quarter, Sprint needs Team) holds; when
+  // removing, we drop the level and every descendant.
+  useEffect(() => {
+    if (externalGroupLevelToggle == null) return;
+    const { level, on } = externalGroupLevelToggle;
+    setGroupLevels((prev) => {
+      const has = prev.includes(level);
+      if (on && has) return prev;
+      if (!on && !has) return prev;
+      const idx = GROUP_LEVEL_ORDER.indexOf(level);
+      if (idx < 0) return prev;
+      if (on) {
+        return GROUP_LEVEL_ORDER.slice(0, idx + 1);
+      }
+      return prev.filter((l) => GROUP_LEVEL_ORDER.indexOf(l) < idx);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalGroupLevelToggle]);
+  // Notify the parent on every groupLevels change so the hero's
+  // Teams / Sprints tiles can mirror the active state.
+  useEffect(() => {
+    onGroupLevelsChange?.(groupLevels);
+  }, [groupLevels, onGroupLevelsChange]);
   // Local mirror of `groupLevels` for instant-feedback checkbox display in
   // the Group By popover. Same pattern as `MultiCheckboxFilter.localSelected`
   // — the checkbox `checked` flips this frame on click, while the heavy
@@ -6557,6 +6625,59 @@ export function BacklogPlanningPanel({
     return map;
   }, [backlogFilteredBeforeWorkItem]);
 
+  /** initiativeId → set of team ids/slugs its child epics span. Same
+   *  pre-strip pattern as `initiativeIdToEpicQuarters`: when Work Item =
+   *  Initiative wipes `epics = []`, the Team-level fan-out still places
+   *  the initiative in each team its (now-hidden) epics live in. */
+  const initiativeIdToEpicTeams = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const initiative of backlogFilteredBeforeWorkItem) {
+      const teams = new Set<string>();
+      for (const epic of initiative.epics ?? []) {
+        teams.add(epic.team ?? "__unassigned__");
+      }
+      map.set(initiative.id, teams);
+    }
+    return map;
+  }, [backlogFilteredBeforeWorkItem]);
+
+  /** initiativeId → set of sprint numbers any of its child stories are
+   *  scheduled into. Drives the Sprint-level fan-out for the
+   *  `Work Item = Initiative` edge case (which is auto-flipped to Story
+   *  by the picker — but kept for symmetry). A sprint of `null` (story
+   *  not scheduled) is recorded as -1 so the fallback bucket has a key. */
+  const initiativeIdToStorySprints = useMemo(() => {
+    const map = new Map<string, Set<number>>();
+    for (const initiative of backlogFilteredBeforeWorkItem) {
+      const sprints = new Set<number>();
+      for (const epic of initiative.epics ?? []) {
+        for (const story of epic.userStories ?? []) {
+          sprints.add(story.sprint ?? -1);
+        }
+      }
+      map.set(initiative.id, sprints);
+    }
+    return map;
+  }, [backlogFilteredBeforeWorkItem]);
+
+  /** epicId → set of sprint numbers its child stories span. Needed for
+   *  the Work Item = Epic + group-by-Sprint case, so an epic's header
+   *  row appears under each sprint its stories live in (the Quarter
+   *  equivalent fans out naturally via per-story bucketing). */
+  const epicIdToStorySprints = useMemo(() => {
+    const map = new Map<string, Set<number>>();
+    for (const initiative of backlogFilteredBeforeWorkItem) {
+      for (const epic of initiative.epics ?? []) {
+        const sprints = new Set<number>();
+        for (const story of epic.userStories ?? []) {
+          sprints.add(story.sprint ?? -1);
+        }
+        map.set(epic.id, sprints);
+      }
+    }
+    return map;
+  }, [backlogFilteredBeforeWorkItem]);
+
   const fullyFiltered = useMemo(() => timePhase("fullyFiltered", () => {
     const base = applyWorkItemKindFilter(backlogFilteredBeforeWorkItem, workItemFilter);
     // When the user clicks a column header, columnSort takes priority over the
@@ -7572,6 +7693,16 @@ export function BacklogPlanningPanel({
       const m = row.initiativeMonthNum ?? 0;
       return { key: String(m), label: row.initiativeMonthLabelValue, sort: String(m).padStart(2, "0") };
     }
+    if (level === "team") {
+      // Bucket each STORY by the epic's team (stories inherit their
+      // epic's team unless explicitly overridden — `row.epicTeamSlug`
+      // is the epic-level field, matching how the team column reads).
+      // Unassigned epics land in an "Unassigned" bucket sorted last.
+      const teamId = row.epicTeamSlug;
+      if (!teamId) return { key: "__unassigned__", label: "Unassigned", sort: "zzzz" };
+      const label = monthTeamLabelForId(teamId) ?? teamLabelForWorkspaceUser(teamId) ?? teamId;
+      return { key: teamId, label, sort: label.toLowerCase() };
+    }
     const n = row.storySprintNum;
     const sprint = row.storySprintLabel;
     const order = n == null ? "99" : String(n).padStart(2, "0");
@@ -7595,6 +7726,16 @@ export function BacklogPlanningPanel({
     if (level === "month") {
       const m = row.initiativeMonthNum ?? 0;
       return { key: String(m), label: row.initiativeMonthLabelValue, sort: String(m).padStart(2, "0") };
+    }
+    if (level === "team") {
+      // Standalone initiative's aggregate team (single team if all epics
+      // agree, null when mixed). Mixed initiatives are handled by the
+      // fan-out at the renderer level — this key is only used when the
+      // initiative happens to have a single team.
+      const teamId = row.initiativeTeamId;
+      if (!teamId) return { key: "__unassigned__", label: "Unassigned", sort: "zzzz" };
+      const label = monthTeamLabelForId(teamId) ?? teamLabelForWorkspaceUser(teamId) ?? teamId;
+      return { key: teamId, label, sort: label.toLowerCase() };
     }
     return { key: "none", label: "No sprint", sort: "99" };
   }
@@ -8721,6 +8862,65 @@ export function BacklogPlanningPanel({
           groups.get(q)!.standaloneRows.push(init);
         }
       }
+    } else if (level === "team") {
+      // Team-level fan-out: an initiative whose epics span N teams
+      // appears under each of those N teams. Mirrors the quarter
+      // fan-out — same pre-strip fallback for Work Item = Initiative.
+      for (const init of standaloneRows) {
+        const teamKeys = new Set<string>();
+        for (const epic of init.epics) {
+          teamKeys.add(epic.epicTeamId ?? "__unassigned__");
+        }
+        if (teamKeys.size === 0) {
+          const preStripTeams = initiativeIdToEpicTeams.get(init.initiativeId);
+          if (preStripTeams) {
+            for (const t of preStripTeams) teamKeys.add(t);
+          }
+        }
+        if (teamKeys.size === 0) teamKeys.add("__unassigned__");
+        for (const teamKey of teamKeys) {
+          if (!groups.has(teamKey)) {
+            const label =
+              teamKey === "__unassigned__"
+                ? "Unassigned"
+                : monthTeamLabelForId(teamKey) ?? teamLabelForWorkspaceUser(teamKey) ?? teamKey;
+            const sort = teamKey === "__unassigned__" ? "zzzz" : label.toLowerCase();
+            groups.set(teamKey, { label, sort, rows: [], standaloneRows: [] });
+          }
+          groups.get(teamKey)!.standaloneRows.push(init);
+        }
+      }
+    } else if (level === "sprint") {
+      // Sprint-level fan-out (walker variant). Standalone initiatives
+      // by definition have no stories under their epics in the shape
+      // we receive, so the sprint span comes from the pre-strip maps:
+      //  - Work Item = Initiative: `initiativeIdToStorySprints` covers
+      //    the wiped-epics case (the picker auto-flips to Story but we
+      //    keep this branch defensive).
+      //  - Work Item = Epic: epics survive, story sprints come from
+      //    `epicIdToStorySprints` per epic.
+      for (const init of standaloneRows) {
+        const sprintKeys = new Set<number>();
+        if (init.epics.length === 0) {
+          const preStripSprints = initiativeIdToStorySprints.get(init.initiativeId);
+          if (preStripSprints) for (const s of preStripSprints) sprintKeys.add(s);
+        } else {
+          for (const epic of init.epics) {
+            const epicSprints = epicIdToStorySprints.get(epic.epicId);
+            if (epicSprints) for (const s of epicSprints) sprintKeys.add(s);
+          }
+        }
+        if (sprintKeys.size === 0) sprintKeys.add(-1);
+        for (const sprintNum of sprintKeys) {
+          const label = sprintNum < 0 ? "Unscheduled" : sprintLabel(sprintNum);
+          const sort = sprintNum < 0 ? "99" : String(sprintNum).padStart(2, "0");
+          const key = label;
+          if (!groups.has(key)) {
+            groups.set(key, { label, sort, rows: [], standaloneRows: [] });
+          }
+          groups.get(key)!.standaloneRows.push(init);
+        }
+      }
     } else {
       for (const init of standaloneRows) {
         const { key, label, sort } = keyForStandaloneLevel(init, level);
@@ -9173,6 +9373,90 @@ export function BacklogPlanningPanel({
           // The renderer maps over row.epics directly, so this naturally
           // limits which epics appear under each quarter folder.
           groups.get(q)!.standaloneRows.push({ ...row, epics });
+        }
+      }
+    } else if (level === "team") {
+      // Team-level fan-out (renderer variant): each team bucket gets a
+      // row variant containing only the epics owned by that team. Falls
+      // back to a single "Unassigned" bucket via the pre-strip map when
+      // the initiative's epics were wiped by Work Item = Initiative.
+      for (const row of standaloneRows) {
+        if (row.epics.length === 0) {
+          const preStripTeams = initiativeIdToEpicTeams.get(row.initiativeId);
+          const teams = preStripTeams && preStripTeams.size > 0 ? preStripTeams : new Set(["__unassigned__"]);
+          for (const teamKey of teams) {
+            if (!groups.has(teamKey)) {
+              const label =
+                teamKey === "__unassigned__"
+                  ? "Unassigned"
+                  : monthTeamLabelForId(teamKey) ?? teamLabelForWorkspaceUser(teamKey) ?? teamKey;
+              const sort = teamKey === "__unassigned__" ? "zzzz" : label.toLowerCase();
+              groups.set(teamKey, { label, sort, rows: [], standaloneRows: [] });
+            }
+            groups.get(teamKey)!.standaloneRows.push(row);
+          }
+          continue;
+        }
+        const byTeam = new Map<string, typeof row.epics>();
+        for (const epic of row.epics) {
+          const teamKey = epic.epicTeamId ?? "__unassigned__";
+          if (!byTeam.has(teamKey)) byTeam.set(teamKey, []);
+          byTeam.get(teamKey)!.push(epic);
+        }
+        for (const [teamKey, epics] of byTeam.entries()) {
+          if (!groups.has(teamKey)) {
+            const label =
+              teamKey === "__unassigned__"
+                ? "Unassigned"
+                : monthTeamLabelForId(teamKey) ?? teamLabelForWorkspaceUser(teamKey) ?? teamKey;
+            const sort = teamKey === "__unassigned__" ? "zzzz" : label.toLowerCase();
+            groups.set(teamKey, { label, sort, rows: [], standaloneRows: [] });
+          }
+          groups.get(teamKey)!.standaloneRows.push({ ...row, epics });
+        }
+      }
+    } else if (level === "sprint") {
+      // Sprint-level fan-out (renderer variant). Two flavors:
+      //  - Work Item = Epic-only: stories stripped, so initiatives land
+      //    in standalone with epics intact. We fan out each EPIC into
+      //    the sprints its stories touch (via `epicIdToStorySprints`).
+      //  - Work Item = Initiative-only: epics stripped too — we fall
+      //    back to `initiativeIdToStorySprints` and land the whole
+      //    initiative under each pre-strip sprint.
+      for (const row of standaloneRows) {
+        if (row.epics.length === 0) {
+          const sprintKeys = initiativeIdToStorySprints.get(row.initiativeId);
+          const keys = sprintKeys && sprintKeys.size > 0 ? sprintKeys : new Set([-1]);
+          for (const sprintNum of keys) {
+            const label = sprintNum < 0 ? "Unscheduled" : sprintLabel(sprintNum);
+            const sort = sprintNum < 0 ? "99" : String(sprintNum).padStart(2, "0");
+            if (!groups.has(label)) {
+              groups.set(label, { label, sort, rows: [], standaloneRows: [] });
+            }
+            groups.get(label)!.standaloneRows.push(row);
+          }
+          continue;
+        }
+        const bySprint = new Map<number, typeof row.epics>();
+        for (const epic of row.epics) {
+          const epicSprints = epicIdToStorySprints.get(epic.epicId);
+          if (epicSprints && epicSprints.size > 0) {
+            for (const sprintNum of epicSprints) {
+              if (!bySprint.has(sprintNum)) bySprint.set(sprintNum, []);
+              bySprint.get(sprintNum)!.push(epic);
+            }
+          } else {
+            if (!bySprint.has(-1)) bySprint.set(-1, []);
+            bySprint.get(-1)!.push(epic);
+          }
+        }
+        for (const [sprintNum, epics] of bySprint.entries()) {
+          const label = sprintNum < 0 ? "Unscheduled" : sprintLabel(sprintNum);
+          const sort = sprintNum < 0 ? "99" : String(sprintNum).padStart(2, "0");
+          if (!groups.has(label)) {
+            groups.set(label, { label, sort, rows: [], standaloneRows: [] });
+          }
+          groups.get(label)!.standaloneRows.push({ ...row, epics });
         }
       }
     } else {
@@ -10551,9 +10835,24 @@ export function BacklogPlanningPanel({
               <div className="absolute left-0 z-20 mt-1 w-56 rounded-lg bg-white p-2 shadow-lg">
                 {GROUP_LEVEL_ORDER.map((level, idx) => {
                   const checked = localGroupLevels.includes(level);
-                  const disabled = idx > 0 && !localGroupLevels.includes(GROUP_LEVEL_ORDER[idx - 1]);
+                  const parentDisabled = idx > 0 && !localGroupLevels.includes(GROUP_LEVEL_ORDER[idx - 1]);
+                  // Sprint grouping is a story/epic concept — block it
+                  // when the user has narrowed to Initiative only (the
+                  // tree wouldn't have anything story-shaped to bucket).
+                  const sprintInitiativeConflict =
+                    level === "sprint" &&
+                    workItemFilter.length === 1 &&
+                    workItemFilter[0] === "initiative";
+                  const disabled = parentDisabled || sprintInitiativeConflict;
+                  const conflictTitle = sprintInitiativeConflict
+                    ? "Sprint grouping needs Epic or Story work items"
+                    : undefined;
                   return (
-                    <label key={level} className={cn("mb-1 flex items-center gap-2 rounded px-1.5 py-1 text-[14px] text-slate-700", disabled && "opacity-50")}>
+                    <label
+                      key={level}
+                      title={conflictTitle}
+                      className={cn("mb-1 flex items-center gap-2 rounded px-1.5 py-1 text-[14px] text-slate-700", disabled && "opacity-50")}
+                    >
                       <input
                         type="checkbox"
                         checked={checked}

@@ -13,7 +13,7 @@ import { fireApprovalConfetti } from "@/lib/approval-confetti";
 import { UserChip } from "@/components/auth/user-chip";
 import { RoadmapHealthHero } from "@/components/dashboard/roadmap-health-hero";
 import { EpicFormDialog } from "@/components/epics/epic-form-dialog";
-import { BacklogPlanningPanel } from "@/components/backlog/backlog-planning-panel";
+import { BacklogPlanningPanel, type GroupLevel as BacklogGroupLevel } from "@/components/backlog/backlog-planning-panel";
 import { UsersWorkspacePanel } from "@/components/users/users-workspace-panel";
 import { DemoBuilderPanel } from "@/components/demo-builder/demo-builder-panel";
 import { TimeDebuggerPanel } from "@/components/time-debugger/time-debugger-panel";
@@ -1443,6 +1443,20 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
    *  sync, same pattern as the other backlog hand-offs. */
   const [backlogIncomingRoadmapFilter, setBacklogIncomingRoadmapFilter] =
     useState<readonly string[] | null>(null);
+  /** Hand-off from the hero Teams / Sprints KPI tiles when topMode ===
+   *  "backlog" — clicking a tile toggles the matching GroupLevel in
+   *  the backlog's group-by chain. Identity-based: fresh object per
+   *  click fires the panel's sync useEffect. `null` means no pending
+   *  toggle. */
+  const [backlogIncomingGroupLevelToggle, setBacklogIncomingGroupLevelToggle] =
+    useState<{ level: BacklogGroupLevel; on: boolean } | null>(null);
+  /** Mirror of the backlog panel's current `groupLevels` — populated
+   *  via `onGroupLevelsChange` from the panel. Used to drive the
+   *  `active` state on the hero's Teams / Sprints tiles when in
+   *  Backlog mode (so the tile lights up when the level is in the
+   *  chain, dims when it's not). */
+  const [backlogGroupLevelsMirror, setBacklogGroupLevelsMirror] =
+    useState<readonly BacklogGroupLevel[]>([]);
   /** Same lift pattern as the status filter — emitted by the panel,
    *  passed to TimelineGrid so the Gantt only renders epics whose
    *  plan-start quarter is in the set. Empty Set = no filter. */
@@ -6207,10 +6221,30 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           onExpandedChange={setHeroExpanded}
           barMode={roadmapBarModeCtrl}
           onBarModeChange={setRoadmapBarModeCtrl}
-          showTeamChips={showGanttTeamChipsCtrl}
-          onShowTeamChipsChange={handleShowGanttTeamChipsChange}
-          showSprintChips={showYearSprintChipsCtrl}
-          onShowSprintChipsChange={setShowYearSprintChipsCtrl}
+          showTeamChips={topMode === "backlog" ? backlogGroupLevelsMirror.includes("team") : showGanttTeamChipsCtrl}
+          onShowTeamChipsChange={(next) => {
+            // Backlog Workspace: the Teams KPI tile toggles "team" in
+            // the group-by chain. Fresh object identity so the panel's
+            // sync useEffect fires every click. Roadmap Planning /
+            // Dashboard keep the original behavior (Gantt overlay).
+            if (topMode === "backlog") {
+              setBacklogIncomingGroupLevelToggle({ level: "team", on: next });
+              return;
+            }
+            handleShowGanttTeamChipsChange(next);
+          }}
+          showSprintChips={topMode === "backlog" ? backlogGroupLevelsMirror.includes("sprint") : showYearSprintChipsCtrl}
+          onShowSprintChipsChange={(next) => {
+            // Same mode-aware split as Teams above. Sprint+Initiative
+            // conflict is resolved inside the panel — adding Sprint
+            // here while Work Item = Initiative is OK; the panel's
+            // existing effect auto-flips to Story with a toast.
+            if (topMode === "backlog") {
+              setBacklogIncomingGroupLevelToggle({ level: "sprint", on: next });
+              return;
+            }
+            setShowYearSprintChipsCtrl(next);
+          }}
           healthFilter={healthFilter}
           onHealthFilterChange={handleHealthFilterChange}
           statusFilter={ganttStatusFilter}
@@ -7179,6 +7213,8 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 externalWorkItemFilter={backlogIncomingWorkItemFilter}
                 externalTeamFilter={backlogIncomingTeamFilter}
                 externalRoadmapFilter={backlogIncomingRoadmapFilter}
+                externalGroupLevelToggle={backlogIncomingGroupLevelToggle}
+                onGroupLevelsChange={setBacklogGroupLevelsMirror}
                 onOpenSprint={navigateToSprint}
                 onOpenInitiative={backlogOpenInitiative}
                 onOpenEpic={backlogOpenEpic}
