@@ -977,11 +977,15 @@ function HygieneToggle({
   tooltip,
   active,
   onToggle,
+  count,
 }: {
   label: string;
   tooltip: string;
   active: boolean;
   onToggle: () => void;
+  /** Scope-aware item count for this category — drives the badge
+   *  number next to the label. Undefined hides the badge. */
+  count?: number;
 }) {
   return (
     <span className="group/hygiene relative inline-flex items-center">
@@ -997,6 +1001,20 @@ function HygieneToggle({
         aria-pressed={active}
       >
         {label}
+        {count != null ? (
+          <span
+            className={cn(
+              "ml-0.5 inline-flex h-4 min-w-[1.1rem] items-center justify-center rounded-full px-1.5 text-[10.5px] font-semibold tabular-nums leading-none ring-1",
+              active
+                ? "bg-amber-100 text-amber-900 ring-amber-200"
+                : count > 0
+                  ? "bg-slate-100 text-slate-700 ring-slate-200"
+                  : "bg-slate-50 text-slate-400 ring-slate-200",
+            )}
+          >
+            {count}
+          </span>
+        ) : null}
         <Info className="size-3 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
       </button>
       <span
@@ -1017,6 +1035,7 @@ function StalledToggle({
   onToggle,
   settings,
   onSettingsChange,
+  count,
 }: {
   active: boolean;
   onToggle: () => void;
@@ -1025,6 +1044,9 @@ function StalledToggle({
     statuses: ReadonlyArray<"todo" | "inProgress" | "review" | "done">;
   };
   onSettingsChange: (next: { thresholdDays: number; statuses: ReadonlyArray<"todo" | "inProgress" | "review" | "done"> }) => void;
+  /** Stalled is story-only by definition — count is always the
+   *  story-level count regardless of which scope is selected. */
+  count?: number;
 }) {
   const [open, setOpen] = useState(false);
   const popRef = useRef<HTMLDivElement | null>(null);
@@ -1064,6 +1086,20 @@ function StalledToggle({
         aria-pressed={active}
       >
         Stalled
+        {count != null ? (
+          <span
+            className={cn(
+              "ml-0.5 inline-flex h-4 min-w-[1.1rem] items-center justify-center rounded-full px-1.5 text-[10.5px] font-semibold tabular-nums leading-none ring-1",
+              active
+                ? "bg-amber-100 text-amber-900 ring-amber-200"
+                : count > 0
+                  ? "bg-slate-100 text-slate-700 ring-slate-200"
+                  : "bg-slate-50 text-slate-400 ring-slate-200",
+            )}
+          >
+            {count}
+          </span>
+        ) : null}
         <Info className="size-3 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
       </button>
       <button
@@ -7008,14 +7044,31 @@ export function BacklogPlanningPanel({
    *  "last change touching this story" — imperfect (any edit resets the
    *  clock) but useful as a baseline. The set is empty when the Stalled
    *  toggle is off. */
-  const stalledStoryIds = useMemo(() => {
-    const set = new Set<string>();
-    if (!hygieneStalled) return set;
+  /** Per-category candidate sets + counts for the "Needs attention"
+   *  toggles. Always computed (not gated on the toggle's on/off state)
+   *  so the badge counts on the toggles stay visible regardless of
+   *  selection. `stalledStoryIds` is the set used by `applyHygieneFilters`
+   *  when the Stalled toggle is on; the rest are just counts. */
+  const hygieneCandidates = useMemo(() => {
+    const stalledStoryIds = new Set<string>();
+    let storyMissingDescription = 0;
+    let storyMissingEstimate = 0;
+    let storyMissingSprint = 0;
+    let storyStalled = 0;
+    let epicMissingDescription = 0;
+    let epicMissingEstimate = 0;
+    let epicUnscheduled = 0;
     const allowedStatuses = new Set(stalledSettings.statuses);
     const cutoffMs = Date.now() - stalledSettings.thresholdDays * 24 * 60 * 60 * 1000;
     for (const initiative of backlogFilteredBeforeWorkItem) {
       for (const epic of initiative.epics ?? []) {
+        if (hasEmptyText(epic.description)) epicMissingDescription += 1;
+        if (epic.originalEstimateDays == null) epicMissingEstimate += 1;
+        if (epic.planStartMonth == null) epicUnscheduled += 1;
         for (const story of epic.userStories ?? []) {
+          if (hasEmptyText(story.description)) storyMissingDescription += 1;
+          if (story.estimatedDays == null) storyMissingEstimate += 1;
+          if (story.sprint == null) storyMissingSprint += 1;
           if (!allowedStatuses.has(story.status)) continue;
           // Prefer snapshot-derived "last status change" when available:
           // walk back from today to find the earliest consecutive same-
@@ -7024,7 +7077,6 @@ export function BacklogPlanningPanel({
           const snapshots = (story as { snapshots?: Array<{ snapshotDate: string | Date; status: string }> }).snapshots;
           let lastChangeMs: number | null = null;
           if (snapshots && snapshots.length > 0) {
-            // Snapshots are stored ascending; iterate backwards.
             for (let i = snapshots.length - 1; i >= 0; i--) {
               const snap = snapshots[i];
               if (snap.status !== story.status) {
@@ -7037,19 +7089,39 @@ export function BacklogPlanningPanel({
               }
             }
           }
-          // Fall back to `updatedAt` when no snapshots are loaded
-          // (slim payload). Imperfect proxy but better than no signal.
           if (lastChangeMs == null) {
             lastChangeMs = new Date(story.updatedAt).getTime();
           }
           if (Number.isFinite(lastChangeMs) && lastChangeMs <= cutoffMs) {
-            set.add(story.id);
+            stalledStoryIds.add(story.id);
+            storyStalled += 1;
           }
         }
       }
     }
-    return set;
-  }, [hygieneStalled, stalledSettings, backlogFilteredBeforeWorkItem]);
+    return {
+      stalledStoryIds,
+      story: {
+        missingDescription: storyMissingDescription,
+        missingEstimate: storyMissingEstimate,
+        unscheduled: storyMissingSprint,
+        stalled: storyStalled,
+      },
+      epic: {
+        missingDescription: epicMissingDescription,
+        missingEstimate: epicMissingEstimate,
+        unscheduled: epicUnscheduled,
+      },
+    };
+  }, [stalledSettings, backlogFilteredBeforeWorkItem]);
+  const stalledStoryIds = hygieneCandidates.stalledStoryIds;
+  /** Scope the badge counts read from. Mirrors the hero card's
+   *  scope-aware behaviour: Story scope shows story-level counts;
+   *  any other workItem filter (initiative, epic, or no filter)
+   *  falls back to epic-level counts. Stalled is story-only by
+   *  definition, so its badge always reads the story count. */
+  const hygieneScope: "story" | "epic" =
+    workItemFilter.length === 1 && workItemFilter[0] === "story" ? "story" : "epic";
 
   const backlogFilteredWithHygiene = useMemo(() =>
     applyHygieneFilters(
@@ -7472,7 +7544,7 @@ export function BacklogPlanningPanel({
             // target is the whole row; a pencil makes the "click to edit"
             // affordance obvious. All other editable cells still rely on
             // the cell content itself being a click target.
-            (key === "status" || key === "team" || key === "priority" || key === "sprint" || key === "startDate" || key === "endDate") ? (
+            (key === "status" || key === "team" || key === "priority" || key === "sprint" || key === "startDate" || key === "endDate" || key === "assignee") ? (
               // Same SquarePen used by `EditRowIconButton` everywhere
               // else in the app, so the affordance reads identically
               // across surfaces. We can't reuse the component itself
@@ -10186,9 +10258,44 @@ export function BacklogPlanningPanel({
                 health: renderBacklogHealthCell(null),
                 sprint: <span className="text-center text-[14px] text-slate-500">-</span>,
                 assignee: (
-                  <span className="inline-flex items-center justify-center gap-1.5 text-center text-[14px] text-slate-700">
-                    <BacklogRowAvatar name={initiative.initiativeAssignee} directoryUsers={workspaceDirectoryUsers} />
-                    {initiative.initiativeAssignee}
+                  <span className="text-center text-[14px] text-slate-700">
+                    {editingParentAssignee?.kind === "initiative" && editingParentAssignee.id === initiative.initiativeId ? (
+                      <span className="inline-flex items-center gap-1">
+                        <AssigneeCombobox
+                          value={editingParentAssignee.value}
+                          onChange={(v) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: v } : prev))}
+                          suggestions={assigneeNameSuggestions}
+                          directoryUsers={workspaceDirectoryUsers}
+                          showLeadingAvatar
+                          placeholder="Unassigned"
+                          className="h-7 w-full min-w-[104px] rounded-md bg-white pl-7 pr-2 text-[14px] ring-1 ring-slate-200 outline-none"
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") {
+                              e.preventDefault();
+                              setEditingParentAssignee(null);
+                            }
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              void confirmParentAssigneeEdit("initiative", initiative.initiativeId, initiative.initiativeAssignee);
+                            }
+                          }}
+                        />
+                        <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                        <button type="button" onClick={() => void confirmParentAssigneeEdit("initiative", initiative.initiativeId, initiative.initiativeAssignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          setEditingParentAssignee({ kind: "initiative", id: initiative.initiativeId, value: initiative.initiativeAssignee === "Unassigned" ? "" : initiative.initiativeAssignee });
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
+                      >
+                        <BacklogRowAvatar name={initiative.initiativeAssignee} directoryUsers={workspaceDirectoryUsers} />
+                        {initiative.initiativeAssignee}
+                      </button>
+                    )}
                   </span>
                 ),
                 parent: <span className="text-[14px] text-slate-400">-</span>,
@@ -10246,7 +10353,7 @@ export function BacklogPlanningPanel({
                 status: { kind: "lock" },
                 health: { kind: "lock" },
                 sprint: { kind: "lock" },
-                assignee: { kind: "lock" },
+                assignee: { kind: "edit", onEdit: () => setEditingParentAssignee({ kind: "initiative", id: initiative.initiativeId, value: initiative.initiativeAssignee === "Unassigned" ? "" : initiative.initiativeAssignee }) },
                 labels: { kind: "edit", onEdit: () => beginInitiativeLabelsEdit({ id: initiative.initiativeId, labels: standInitModel?.labels ?? null }) },
                 estDays: { kind: "lock" },
                 epicOriginalEst: { kind: "lock" },
@@ -10412,9 +10519,44 @@ export function BacklogPlanningPanel({
                         ),
                         sprint: <span className="text-center text-[14px] text-slate-500">-</span>,
                         assignee: (
-                          <span className="inline-flex items-center justify-center gap-1.5 text-center text-[14px] text-slate-700">
-                            <BacklogRowAvatar name={epic.epicAssignee} directoryUsers={workspaceDirectoryUsers} />
-                            {epic.epicAssignee}
+                          <span className="text-center text-[14px] text-slate-700">
+                            {editingParentAssignee?.kind === "epic" && editingParentAssignee.id === epic.epicId ? (
+                              <span className="inline-flex items-center gap-1">
+                                <AssigneeCombobox
+                                  value={editingParentAssignee.value}
+                                  onChange={(v) => setEditingParentAssignee((prev) => (prev ? { ...prev, value: v } : prev))}
+                                  suggestions={assigneeNameSuggestions}
+                                  directoryUsers={workspaceDirectoryUsers}
+                                  showLeadingAvatar
+                                  placeholder="Unassigned"
+                                  className="h-7 w-full min-w-[104px] rounded-md bg-white pl-7 pr-2 text-[14px] ring-1 ring-slate-200 outline-none"
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Escape") {
+                                      e.preventDefault();
+                                      setEditingParentAssignee(null);
+                                    }
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      void confirmParentAssigneeEdit("epic", epic.epicId, epic.epicAssignee);
+                                    }
+                                  }}
+                                />
+                                <button type="button" onClick={() => setEditingParentAssignee(null)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><X className="size-3.5" /></button>
+                                <button type="button" onClick={() => void confirmParentAssigneeEdit("epic", epic.epicId, epic.epicAssignee)} className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100"><Check className="size-3.5" /></button>
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  setEditingParentAssignee({ kind: "epic", id: epic.epicId, value: epic.epicAssignee === "Unassigned" ? "" : epic.epicAssignee });
+                                }}
+                                className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-slate-100"
+                              >
+                                <BacklogRowAvatar name={epic.epicAssignee} directoryUsers={workspaceDirectoryUsers} />
+                                {epic.epicAssignee}
+                              </button>
+                            )}
                           </span>
                         ),
                         parent: renderParentCell({
@@ -10507,7 +10649,7 @@ export function BacklogPlanningPanel({
                         status: { kind: "lock" },
                         health: { kind: "lock" },
                         sprint: { kind: "lock" },
-                        assignee: { kind: "lock" },
+                        assignee: { kind: "edit", onEdit: () => setEditingParentAssignee({ kind: "epic", id: epic.epicId, value: epic.epicAssignee === "Unassigned" ? "" : epic.epicAssignee }) },
                         labels: { kind: "edit", onEdit: () => beginEpicLabelsEdit({ id: epic.epicId, labels: standEpicModel?.labels ?? null }) },
                         estDays: { kind: "lock" },
                         epicOriginalEst: { kind: "edit", onEdit: () => beginEpicEstimateEdit({ id: epic.epicId, originalEstimateDays: epic.epicOriginalEstimateDays }) },
@@ -11040,10 +11182,48 @@ export function BacklogPlanningPanel({
           to the Clear-all button). */}
       {summaryBarPortalElement ? createPortal(summaryChipsJsx, summaryBarPortalElement) : null}
 
+      {/* Hygiene toggle row — sits in the white space ABOVE the
+          gradient toolbar so the "Needs attention" toggles read as
+          their own concern rather than crowding the filter chips.
+          Right-aligned to mirror the toolbar's action cluster. */}
+      <div className="mt-2 flex w-full flex-wrap items-center justify-end gap-1.5 px-5">
+        <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          Needs attention ({hygieneScope === "story" ? "Stories" : "Epics"})
+        </span>
+        <HygieneToggle
+          label="Missing desc"
+          tooltip="Items where description is empty or missing."
+          active={hygieneMissingDescription}
+          onToggle={() => setHygieneMissingDescription((v) => !v)}
+          count={hygieneCandidates[hygieneScope].missingDescription}
+        />
+        <HygieneToggle
+          label="Missing est"
+          tooltip="Stories with no day estimate; epics with no original estimate."
+          active={hygieneMissingEstimate}
+          onToggle={() => setHygieneMissingEstimate((v) => !v)}
+          count={hygieneCandidates[hygieneScope].missingEstimate}
+        />
+        <HygieneToggle
+          label="Unscheduled"
+          tooltip="Stories with no sprint; epics with no planned start month."
+          active={hygieneUnscheduled}
+          onToggle={() => setHygieneUnscheduled((v) => !v)}
+          count={hygieneCandidates[hygieneScope].unscheduled}
+        />
+        <StalledToggle
+          active={hygieneStalled}
+          onToggle={() => setHygieneStalled((v) => !v)}
+          settings={stalledSettings}
+          onSettingsChange={setStalledSettings}
+          count={hygieneCandidates.story.stalled}
+        />
+      </div>
+
       {/* Slim global toolbar — only the controls that don't belong to a
           specific column. Search, Status/Sprint/Team/Assignee/Parent/Labels/
           Year/Quarter filters now live INSIDE each column's header. */}
-      <div className="relative z-20 mt-6 flex flex-wrap items-center gap-3 max-w-full shrink-0 rounded-t-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-5 py-8 [contain:inline-size] shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
+      <div className="relative z-20 mt-2 flex flex-wrap items-center gap-3 max-w-full shrink-0 rounded-t-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-5 py-8 [contain:inline-size] shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
         {/* Free-text search — always-visible global search input. Same `query`
          *  state as the Work Item column popover (so they stay in sync). */}
         <div className="relative min-w-[16rem] flex-1">
@@ -11347,37 +11527,6 @@ export function BacklogPlanningPanel({
                 Erases all filters: search, group-by, and every filter selection.
               </span>
             </span>
-          </div>
-          {/* Hygiene toggle row — sits below the main toolbar row,
-              right-aligned. Each toggle narrows the table to items
-              missing the corresponding data; Stalled also carries a
-              ⚙ settings popover for tuning days + monitored statuses. */}
-          <div className="flex w-full basis-full flex-wrap items-center justify-end gap-1.5 -mt-1">
-            <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Needs attention</span>
-            <HygieneToggle
-              label="Missing desc"
-              tooltip="Items where description is empty or missing."
-              active={hygieneMissingDescription}
-              onToggle={() => setHygieneMissingDescription((v) => !v)}
-            />
-            <HygieneToggle
-              label="Missing est"
-              tooltip="Stories with no day estimate; epics with no original estimate."
-              active={hygieneMissingEstimate}
-              onToggle={() => setHygieneMissingEstimate((v) => !v)}
-            />
-            <HygieneToggle
-              label="Unscheduled"
-              tooltip="Stories with no sprint; epics with no planned start month."
-              active={hygieneUnscheduled}
-              onToggle={() => setHygieneUnscheduled((v) => !v)}
-            />
-            <StalledToggle
-              active={hygieneStalled}
-              onToggle={() => setHygieneStalled((v) => !v)}
-              settings={stalledSettings}
-              onSettingsChange={setStalledSettings}
-            />
           </div>
       </div>
       {createSelection?.anchorKey === "group-toolbar:add-initiative" ? (
