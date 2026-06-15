@@ -421,6 +421,15 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
       // snapshots and update its final state to match the curve.
       for (const story of storiesData) {
         const storySeed = totalStories;
+        // Hygiene-deficient story picks — populate the "Needs Attention"
+        // hero card with realistic counts (Missing estimate / No sprint
+        // / Stalled). Deterministic via modulo so the same seed
+        // produces the same demo state every reset. Done stories
+        // are exempt because closing a story without a sprint or
+        // estimate is a data-entry anomaly the planner already
+        // wouldn't see in real workflows.
+        const missingEstimate = storySeed % 11 === 7; // ~9%
+        const missingSprint = storySeed % 13 === 4; // ~7.5%
         const created = await db.userStory.create({
           data: {
             title: story.title,
@@ -430,10 +439,10 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
               ? DEMO_STORY_DESCRIPTIONS[storySeed % DEMO_STORY_DESCRIPTIONS.length]!
               : null,
             assignee: story.assignee,
-            sprint: story.sprint,
-            estimatedDays: story.estimatedDays,
-            daysLeft: story.daysLeft,
-            status: story.status,
+            sprint: missingSprint ? null : story.sprint,
+            estimatedDays: missingEstimate ? null : story.estimatedDays,
+            daysLeft: missingEstimate ? null : story.daysLeft,
+            status: missingSprint || missingEstimate ? "todo" : story.status,
             epicId: epic.id,
             roadmapId: DEMO_DEFAULT_ROADMAP_ID,
             planYear,
@@ -443,6 +452,10 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
           },
         });
         totalStories += 1;
+
+        // Stories missing estimate or sprint skip snapshot generation —
+        // the burndown math has nothing to draw from them anyway.
+        if (missingEstimate || missingSprint) continue;
 
         const { snapshots, final } = buildDemoSnapshotSeries({
           storyId: created.id,
@@ -488,11 +501,73 @@ export async function resetAndSeedDemo(): Promise<ResetSeedResult> {
       const ESTIMATE_DIVERGENCE_FACTORS = [0.92, 0.96, 1.0, 1.04, 1.08];
       const divergenceIdx = (initIdx * 7 + teamIdx * 13) % ESTIMATE_DIVERGENCE_FACTORS.length;
       const epicOriginalEstimate = Math.max(1, Math.round(sumOriginal * ESTIMATE_DIVERGENCE_FACTORS[divergenceIdx]!));
-      await db.epic.update({
-        where: { id: epic.id },
-        data: { originalEstimateDays: epicOriginalEstimate },
-      });
+      // ~9% of epics stay unestimated (no top-down estimate) so the
+      // Epic "Unestimated" Needs Attention category populates beyond
+      // the brand-new placeholder shells. Deterministic via the same
+      // (initIdx, teamIdx) seed.
+      const keepUnestimated = (initIdx * 5 + teamIdx * 11) % 11 === 4;
+      if (!keepUnestimated) {
+        await db.epic.update({
+          where: { id: epic.id },
+          data: { originalEstimateDays: epicOriginalEstimate },
+        });
+      }
     }
+  }
+
+  // Hygiene seeding: a handful of "empty shell" epics across the
+  // workspace (no child stories) so the Epic-level Needs Attention
+  // card's "No stories" category and its dependent
+  // "Has unestimated children" inversion both have realistic counts
+  // to surface. Attached to a sampling of initiatives so they
+  // appear in different roadmap rows / quarters.
+  const emptyShellInitiatives = await db.initiative.findMany({
+    where: { year: planYear },
+    select: { id: true, startMonth: true },
+    take: 3,
+  });
+  for (let i = 0; i < emptyShellInitiatives.length; i++) {
+    const init = emptyShellInitiatives[i]!;
+    const teamSlug = DEMO_TEAM_SLUGS[i % DEMO_TEAM_SLUGS.length]!;
+    const startM = init.startMonth ?? 1;
+    await db.epic.create({
+      data: {
+        title: `Discovery placeholder · ${teamSlug}`,
+        icon: "📁",
+        description: null,
+        initiativeId: init.id,
+        roadmapId: DEMO_DEFAULT_ROADMAP_ID,
+        planYear,
+        planQuarter: Math.ceil(startM / 3),
+        planSprint: 1,
+        planStartMonth: startM,
+        planEndMonth: Math.min(12, startM + 1),
+        planEndSprint: 2,
+        timelineRow: 0,
+        team: teamSlug,
+        originalEstimateDays: null,
+        color: INITIATIVE_COLORS[(i + 3) % INITIATIVE_COLORS.length]!,
+      },
+    });
+    totalEpics += 1;
+  }
+  // ~2 unscheduled epics: existing epics with planStartMonth wiped.
+  // Drives the Epic "Unscheduled" Needs Attention category. Picked
+  // by created-at ordering for determinism; epics with non-null
+  // start months are safe to null out — no downstream snapshots
+  // depend on the field.
+  const unscheduledTargets = await db.epic.findMany({
+    where: { planYear, planStartMonth: { not: null } },
+    select: { id: true },
+    orderBy: { createdAt: "asc" },
+    skip: 7,
+    take: 2,
+  });
+  for (const ep of unscheduledTargets) {
+    await db.epic.update({
+      where: { id: ep.id },
+      data: { planStartMonth: null, planEndMonth: null, planQuarter: null, planSprint: null, planEndSprint: null },
+    });
   }
 
   // Closed-sprint cleanup: 100% done.
