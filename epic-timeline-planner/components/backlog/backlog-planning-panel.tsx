@@ -8374,7 +8374,7 @@ export function BacklogPlanningPanel({
         {isOpen ? (
           renderChildrenOverride ? renderChildrenOverride() : (
             <div>
-              {renderStoryDataRows(epicRows, epicIndentPx + 34, `${folderId}/stories`)}
+              {renderStoryDataRows(epicRows, epicIndentPx + 52, `${folderId}/stories`)}
             </div>
           )
         ) : null}
@@ -8683,16 +8683,21 @@ export function BacklogPlanningPanel({
 
   function renderLeafRows(rows: typeof groupedStoryRows, indentPx: number, path: string): React.ReactNode {
     if (groupLevels.includes("sprint")) {
-      return renderStoryDataRows(rows, indentPx, `${path}/stories`);
+      // Stories sit directly under the Sprint folder — bump past the
+      // folder's chevron + icon width so they read as nested children
+      // rather than siblings. Same +38 reasoning used at the
+      // epic-to-story boundary, scaled for the leaf renderer.
+      return renderStoryDataRows(rows, indentPx + 38, `${path}/stories`);
     }
     // Work Item filter set to "Story" only — flatten the tree: skip the
     // initiative + epic folder layers and render story rows directly so
     // the user sees a flat list of stories matching the rest of their
-    // filters. (Epic-only flattening happens in
-    // `renderStandaloneInitiativeRows` because Epic-only strips stories,
-    // so all initiatives go through the standalone path.)
+    // filters. Apply the same indent bump only when the leaf actually
+    // sits under a group folder (indentPx > 0 means at least one level
+    // is active); root-level flat lists stay at indent 0.
     if (workItemFilter.length === 1 && workItemFilter[0] === "story") {
-      return renderStoryDataRows(rows, indentPx, `${path}/stories`);
+      const storyBump = indentPx > 0 ? 38 : 0;
+      return renderStoryDataRows(rows, indentPx + storyBump, `${path}/stories`);
     }
 
     if (groupLevels.includes("month")) {
@@ -9073,8 +9078,12 @@ export function BacklogPlanningPanel({
     // default → initiative-bucketed with nested epic & story rows.
     const storyOnly = workItemFilter.length === 1 && workItemFilter[0] === "story";
     if (groupLevels.includes("sprint") || storyOnly) {
+      // Match `renderLeafRows`: bump stories past the parent folder's
+      // chevron + icon so they read as nested. Skip the bump when the
+      // story-only flat list has no parent folder at all.
+      const storyBump = groupLevels.includes("sprint") ? 38 : indentPx > 0 ? 38 : 0;
       for (const row of rows) {
-        pushStoryDescriptor(out, row, indentPx, path);
+        pushStoryDescriptor(out, row, indentPx + storyBump, path);
       }
       return;
     }
@@ -9160,7 +9169,7 @@ export function BacklogPlanningPanel({
       render: () => renderEpicRow(epicId, epicTitle, epicAssignee, epicRows, indentPx, pathPrefix, () => null),
     });
     if (isOpen) {
-      const storyIndent = indentPx + 34;
+      const storyIndent = indentPx + 52;
       const storyPathPrefix = `${folderId}/stories`;
       for (const r of epicRows) {
         pushStoryDescriptor(out, r, storyIndent, storyPathPrefix);
