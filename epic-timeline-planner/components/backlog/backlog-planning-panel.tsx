@@ -814,7 +814,6 @@ const DEFAULT_BACKLOG_COLUMN_VISIBILITY: Record<BacklogColumnKey, boolean> = {
 };
 
 const CENTER_ALIGNED_BACKLOG_COLUMNS = new Set<BacklogColumnKey>([
-  "team",
   "year",
   "quarter",
   "month",
@@ -823,7 +822,6 @@ const CENTER_ALIGNED_BACKLOG_COLUMNS = new Set<BacklogColumnKey>([
   "status",
   "health",
   "sprint",
-  "assignee",
   "labels",
   "estDays",
   "epicOriginalEst",
@@ -2867,29 +2865,55 @@ function applyHygieneFilters(
   rows: InitiativeItem[],
   flags: HygieneFlags,
   stalledStoryIds: ReadonlySet<string>,
+  /** Scope drives which level the qualification runs at — matches the
+   *  hero "Initiative falls back to Epic" rule. `"epic"`: only keep
+   *  epics whose OWN fields qualify (story-level data ignored).
+   *  `"story"`: only keep stories that qualify; epics are kept solely
+   *  as parent folders. `"all"`: loose union — epics survive on their
+   *  own qualification OR if any child story qualifies. */
+  scope: "epic" | "story" | "all" = "all",
 ): InitiativeItem[] {
   const anyFlagOn =
     flags.missingDescription || flags.missingEstimate || flags.unscheduled || flags.stalled;
   if (!anyFlagOn) return rows;
-  const storyQualifies = (story: { description?: string | null; estimatedDays?: number | null; sprint?: number | null; id: string }) => {
+  const storyQualifies = (story: { description?: string | null; estimatedDays?: number | null; sprint?: number | null; id: string; status?: string }) => {
+    // Done stories are exempt from missing-estimate / no-sprint /
+    // stalled (matches the hero count rules): once a story is closed
+    // those fields are no longer planning blockers.
+    const done = story.status === "done";
     if (flags.missingDescription && !hasEmptyText(story.description)) return false;
-    if (flags.missingEstimate && story.estimatedDays != null) return false;
-    if (flags.unscheduled && story.sprint != null) return false;
-    if (flags.stalled && !stalledStoryIds.has(story.id)) return false;
+    if (flags.missingEstimate && (done || story.estimatedDays != null)) return false;
+    if (flags.unscheduled && (done || story.sprint != null)) return false;
+    if (flags.stalled && (done || !stalledStoryIds.has(story.id))) return false;
     return true;
   };
   const epicQualifies = (epic: { description?: string | null; originalEstimateDays?: number | null; planStartMonth?: number | null }) => {
     if (flags.missingDescription && !hasEmptyText(epic.description)) return false;
     if (flags.missingEstimate && epic.originalEstimateDays != null) return false;
     if (flags.unscheduled && epic.planStartMonth != null) return false;
-    // "stalled" doesn't apply at epic level — epics survive on their
-    // own merits or via a qualifying child story.
+    // "stalled" doesn't apply at epic level.
     return true;
   };
   return rows
     .map((initiative) => {
       const epics = (initiative.epics ?? [])
         .map((epic) => {
+          if (scope === "epic") {
+            // Strict epic-level: drop unless the epic ITSELF
+            // qualifies. Stories pass through unchanged — they get
+            // stripped a step later by applyWorkItemKindFilter.
+            if (!epicQualifies(epic)) return null;
+            return { ...epic, userStories: epic.userStories ?? [] };
+          }
+          if (scope === "story") {
+            // Strict story-level: drop unless the epic has ≥1
+            // qualifying story. The epic's own data is ignored.
+            const qualifyingStories = (epic.userStories ?? []).filter(storyQualifies);
+            if (qualifyingStories.length === 0) return null;
+            return { ...epic, userStories: qualifyingStories };
+          }
+          // Loose union ("all"): epic survives on its own data OR
+          // via any qualifying child story.
           const qualifyingStories = (epic.userStories ?? []).filter(storyQualifies);
           if (qualifyingStories.length > 0 || epicQualifies(epic)) {
             return { ...epic, userStories: qualifyingStories };
@@ -5627,12 +5651,27 @@ export function BacklogPlanningPanel({
       setWorkItemFilter(on ? ["epic"] : []);
       return;
     }
-    if (category === "missingDescription") setHygieneMissingDescription(on);
-    else if (category === "missingEstimate") setHygieneMissingEstimate(on);
-    else if (category === "unscheduled") setHygieneUnscheduled(on);
-    else if (category === "stalled") setHygieneStalled(on);
+    // Radio behaviour: turning a single category ON via the hero
+    // hand-off clears the other three so the toolbar reads the
+    // same as if the user had clicked the toolbar toggle directly.
+    if (on) {
+      setHygieneMissingDescription(category === "missingDescription");
+      setHygieneMissingEstimate(category === "missingEstimate");
+      setHygieneUnscheduled(category === "unscheduled");
+      setHygieneStalled(category === "stalled");
+    } else {
+      if (category === "missingDescription") setHygieneMissingDescription(false);
+      else if (category === "missingEstimate") setHygieneMissingEstimate(false);
+      else if (category === "unscheduled") setHygieneUnscheduled(false);
+      else if (category === "stalled") setHygieneStalled(false);
+    }
     if (storyCategories.has(category)) {
       setWorkItemFilter(on ? ["story"] : []);
+    } else if (on) {
+      // Non-story categories (epic-scope categories collapsed to the
+      // 3 shared toggles): align Work Item with the epic scope so
+      // the table reads at the right level.
+      setWorkItemFilter(["epic"]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalHygieneToggle]);
@@ -7066,10 +7105,16 @@ export function BacklogPlanningPanel({
         if (epic.originalEstimateDays == null) epicMissingEstimate += 1;
         if (epic.planStartMonth == null) epicUnscheduled += 1;
         for (const story of epic.userStories ?? []) {
+          // Done stories are exempt from missing-estimate / no-sprint /
+          // stalled (matches the hero card + the strict filter rule):
+          // once a story is closed, those fields are no longer
+          // planning blockers. Missing description still counts
+          // because docs matter retroactively.
+          const storyDone = story.status === "done";
           if (hasEmptyText(story.description)) storyMissingDescription += 1;
-          if (story.estimatedDays == null) storyMissingEstimate += 1;
-          if (story.sprint == null) storyMissingSprint += 1;
-          if (!allowedStatuses.has(story.status)) continue;
+          if (!storyDone && story.estimatedDays == null) storyMissingEstimate += 1;
+          if (!storyDone && story.sprint == null) storyMissingSprint += 1;
+          if (storyDone || !allowedStatuses.has(story.status)) continue;
           // Prefer snapshot-derived "last status change" when available:
           // walk back from today to find the earliest consecutive same-
           // status snapshot. Its `snapshotDate` ≈ when the story entered
@@ -7123,6 +7168,18 @@ export function BacklogPlanningPanel({
   const hygieneScope: "story" | "epic" =
     workItemFilter.length === 1 && workItemFilter[0] === "story" ? "story" : "epic";
 
+  /** Scope the hygiene qualification runs at. Matches the count-badge
+   *  scope: Story when Work Item is narrowed to Story; Epic when
+   *  narrowed to Epic; loose union otherwise (so e.g. Work Item =
+   *  Initiative still surfaces initiatives whose stories or epics
+   *  have hygiene problems, instead of dropping them entirely). */
+  const hygieneFilterScope: "epic" | "story" | "all" =
+    workItemFilter.length === 1 && workItemFilter[0] === "story"
+      ? "story"
+      : workItemFilter.length === 1 && workItemFilter[0] === "epic"
+        ? "epic"
+        : "all";
+
   const backlogFilteredWithHygiene = useMemo(() =>
     applyHygieneFilters(
       backlogFilteredBeforeWorkItem,
@@ -7133,8 +7190,9 @@ export function BacklogPlanningPanel({
         stalled: hygieneStalled,
       },
       stalledStoryIds,
+      hygieneFilterScope,
     ),
-  [backlogFilteredBeforeWorkItem, hygieneMissingDescription, hygieneMissingEstimate, hygieneUnscheduled, hygieneStalled, stalledStoryIds]);
+  [backlogFilteredBeforeWorkItem, hygieneMissingDescription, hygieneMissingEstimate, hygieneUnscheduled, hygieneStalled, stalledStoryIds, hygieneFilterScope]);
 
   const fullyFiltered = useMemo(() => timePhase("fullyFiltered", () => {
     const base = applyWorkItemKindFilter(backlogFilteredWithHygiene, workItemFilter);
@@ -7144,6 +7202,22 @@ export function BacklogPlanningPanel({
     if (columnSort) return [...base].sort((a, b) => compareByColumn(a, b, columnSort));
     return base;
   }), [backlogFilteredWithHygiene, workItemFilter, columnSort]);
+  /** Counts of items actually present in the post-filter tree —
+   *  drives the small summary line under the Search input. Rows
+   *  with a zero count are hidden so the line stays compact when
+   *  the user has narrowed the table to a single work-item kind. */
+  const tableSummaryCounts = useMemo(() => {
+    let initiatives = fullyFiltered.length;
+    let epics = 0;
+    let stories = 0;
+    for (const init of fullyFiltered) {
+      for (const epic of init.epics ?? []) {
+        epics += 1;
+        stories += (epic.userStories ?? []).length;
+      }
+    }
+    return { initiatives, epics, stories };
+  }, [fullyFiltered]);
   // O(1) lookups by id — replaces `fullyFiltered.find(...)` calls that fired once per rendered
   // row (= O(N²) total) and made changing Group by feel slow on large backlogs.
   const initiativeById = useMemo(() => {
@@ -8631,7 +8705,7 @@ export function BacklogPlanningPanel({
                       event.stopPropagation();
                       onJumpToRoadmapPlanning(epicTitle);
                     }}
-                    className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-sky-50 px-2 text-[14px] font-normal text-sky-700 ring-1 ring-sky-200/80 transition hover:bg-sky-100 hover:ring-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+                    className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-sky-50 px-2 text-[11px] font-semibold text-sky-700 ring-1 ring-sky-200/80 transition hover:bg-sky-100 hover:ring-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
                     aria-label={`Schedule epic "${epicTitle}" in Roadmap Planning`}
                   >
                     <ExternalLink className="size-3 text-sky-600" />
@@ -10459,7 +10533,7 @@ export function BacklogPlanningPanel({
                                   event.stopPropagation();
                                   onJumpToRoadmapPlanning(epic.epicTitle);
                                 }}
-                                className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-sky-50 px-2 text-[14px] font-normal text-sky-700 ring-1 ring-sky-200/80 transition hover:bg-sky-100 hover:ring-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+                                className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-sky-50 px-2 text-[11px] font-semibold text-sky-700 ring-1 ring-sky-200/80 transition hover:bg-sky-100 hover:ring-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
                                 title={`Open Roadmap Planning and search "${epic.epicTitle}" to schedule`}
                                 aria-label={`Schedule epic "${epic.epicTitle}" in Roadmap Planning`}
                               >
@@ -11186,7 +11260,7 @@ export function BacklogPlanningPanel({
           gradient toolbar so the "Needs attention" toggles read as
           their own concern rather than crowding the filter chips.
           Right-aligned to mirror the toolbar's action cluster. */}
-      <div className="mt-2 flex w-full flex-wrap items-center justify-end gap-1.5 px-5">
+      <div className="-mt-1 flex w-full flex-wrap items-center justify-end gap-1.5 pl-5 pr-2">
         <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
           Needs attention ({hygieneScope === "story" ? "Stories" : "Epics"})
         </span>
@@ -11194,26 +11268,70 @@ export function BacklogPlanningPanel({
           label="Missing desc"
           tooltip="Items where description is empty or missing."
           active={hygieneMissingDescription}
-          onToggle={() => setHygieneMissingDescription((v) => !v)}
+          onToggle={() => {
+            // Radio behaviour: activating any "Needs attention" toggle
+            // deactivates the other three so the table is always
+            // narrowed by ONE hygiene category at a time. Also
+            // narrows the Work Item filter to the current scope so
+            // the table reads the right level immediately.
+            const next = !hygieneMissingDescription;
+            setHygieneMissingDescription(next);
+            if (next) {
+              setHygieneMissingEstimate(false);
+              setHygieneUnscheduled(false);
+              setHygieneStalled(false);
+              setWorkItemFilter([hygieneScope]);
+            }
+          }}
           count={hygieneCandidates[hygieneScope].missingDescription}
         />
         <HygieneToggle
           label="Missing est"
           tooltip="Stories with no day estimate; epics with no original estimate."
           active={hygieneMissingEstimate}
-          onToggle={() => setHygieneMissingEstimate((v) => !v)}
+          onToggle={() => {
+            const next = !hygieneMissingEstimate;
+            setHygieneMissingEstimate(next);
+            if (next) {
+              setHygieneMissingDescription(false);
+              setHygieneUnscheduled(false);
+              setHygieneStalled(false);
+              setWorkItemFilter([hygieneScope]);
+            }
+          }}
           count={hygieneCandidates[hygieneScope].missingEstimate}
         />
         <HygieneToggle
           label="Unscheduled"
           tooltip="Stories with no sprint; epics with no planned start month."
           active={hygieneUnscheduled}
-          onToggle={() => setHygieneUnscheduled((v) => !v)}
+          onToggle={() => {
+            const next = !hygieneUnscheduled;
+            setHygieneUnscheduled(next);
+            if (next) {
+              setHygieneMissingDescription(false);
+              setHygieneMissingEstimate(false);
+              setHygieneStalled(false);
+              setWorkItemFilter([hygieneScope]);
+            }
+          }}
           count={hygieneCandidates[hygieneScope].unscheduled}
         />
         <StalledToggle
           active={hygieneStalled}
-          onToggle={() => setHygieneStalled((v) => !v)}
+          onToggle={() => {
+            // Stalled is story-only by definition — always pull the
+            // table to Story scope so the count badge and the
+            // visible rows agree.
+            const next = !hygieneStalled;
+            setHygieneStalled(next);
+            if (next) {
+              setHygieneMissingDescription(false);
+              setHygieneMissingEstimate(false);
+              setHygieneUnscheduled(false);
+              setWorkItemFilter(["story"]);
+            }
+          }}
           settings={stalledSettings}
           onSettingsChange={setStalledSettings}
           count={hygieneCandidates.story.stalled}
@@ -11223,35 +11341,70 @@ export function BacklogPlanningPanel({
       {/* Slim global toolbar — only the controls that don't belong to a
           specific column. Search, Status/Sprint/Team/Assignee/Parent/Labels/
           Year/Quarter filters now live INSIDE each column's header. */}
-      <div className="relative z-20 mt-2 flex flex-wrap items-center gap-3 max-w-full shrink-0 rounded-t-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-5 py-8 [contain:inline-size] shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
+      <div className="relative z-20 mt-2 flex flex-wrap items-start gap-3 max-w-full shrink-0 rounded-t-xl bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 px-5 py-8 [contain:inline-size] shadow-[inset_0_2px_6px_-2px_rgba(15,23,42,0.18),inset_0_-1px_3px_-1px_rgba(15,23,42,0.10),0_1px_3px_0_rgba(148,163,184,0.20)]">
         {/* Free-text search — always-visible global search input. Same `query`
-         *  state as the Work Item column popover (so they stay in sync). */}
-        <div className="relative min-w-[16rem] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search work items…"
-            autoComplete="off"
-            className={cn(
-              "h-9 w-full min-w-0 rounded-lg border border-slate-300 bg-white pl-9 text-[13.5px] text-slate-900 outline-none placeholder:text-slate-400 shadow-sm transition hover:border-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80",
-              query ? "pr-9" : "pr-3",
-            )}
-          />
-          {query ? (
-            <button
-              type="button"
-              aria-label="Clear search"
-              onMouseDown={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                startTransition(() => setQuery(""));
-              }}
-              className="absolute right-2 top-1/2 z-10 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-            >
-              <X className="size-3" />
-            </button>
-          ) : null}
+         *  state as the Work Item column popover (so they stay in sync).
+         *  A small "Showing …" summary line sits directly beneath the
+         *  input so the user can glance at how many initiatives / epics /
+         *  stories the table is currently rendering. */}
+        <div className="flex min-w-[16rem] flex-1 flex-col gap-1">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-slate-500" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search work items…"
+              autoComplete="off"
+              className={cn(
+                "h-9 w-full min-w-0 rounded-lg border border-slate-300 bg-white pl-9 text-[13.5px] text-slate-900 outline-none placeholder:text-slate-400 shadow-sm transition hover:border-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-200/80",
+                query ? "pr-9" : "pr-3",
+              )}
+            />
+            {query ? (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  startTransition(() => setQuery(""));
+                }}
+                className="absolute right-2 top-1/2 z-10 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="size-3" />
+              </button>
+            ) : null}
+          </div>
+          <div className="mt-1.5 flex items-center gap-2 pl-1 text-[11.5px] font-medium leading-none text-slate-600">
+            <span className="text-slate-500">Showing</span>
+            {tableSummaryCounts.initiatives > 0 ? (
+              <span className="inline-flex items-center gap-1">
+                <span className="font-semibold tabular-nums text-slate-800">{tableSummaryCounts.initiatives}</span>
+                <span className="text-slate-500">{tableSummaryCounts.initiatives === 1 ? "initiative" : "initiatives"}</span>
+              </span>
+            ) : null}
+            {tableSummaryCounts.initiatives > 0 && tableSummaryCounts.epics > 0 ? (
+              <span className="text-slate-300">·</span>
+            ) : null}
+            {tableSummaryCounts.epics > 0 ? (
+              <span className="inline-flex items-center gap-1">
+                <span className="font-semibold tabular-nums text-slate-800">{tableSummaryCounts.epics}</span>
+                <span className="text-slate-500">{tableSummaryCounts.epics === 1 ? "epic" : "epics"}</span>
+              </span>
+            ) : null}
+            {tableSummaryCounts.epics > 0 && tableSummaryCounts.stories > 0 ? (
+              <span className="text-slate-300">·</span>
+            ) : null}
+            {tableSummaryCounts.stories > 0 ? (
+              <span className="inline-flex items-center gap-1">
+                <span className="font-semibold tabular-nums text-slate-800">{tableSummaryCounts.stories}</span>
+                <span className="text-slate-500">{tableSummaryCounts.stories === 1 ? "story" : "stories"}</span>
+              </span>
+            ) : null}
+            {tableSummaryCounts.initiatives === 0 && tableSummaryCounts.epics === 0 && tableSummaryCounts.stories === 0 ? (
+              <span className="text-slate-400 italic">no items match the current filters</span>
+            ) : null}
+          </div>
         </div>
         <div
           className="relative min-w-[10rem]"

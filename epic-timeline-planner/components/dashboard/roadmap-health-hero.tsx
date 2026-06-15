@@ -359,6 +359,20 @@ export function RoadmapHealthHero({
     teamId: string;
     label: string;
   } | null>(null);
+  /** Last-clicked slice/legend label on the "Needs Attention" donut.
+   *  Drives the `activeLabels` prop so the picked category renders
+   *  with the pressed visual. Cleared when the user clicks the same
+   *  label twice (mirrors how the Work Progress donut handles its
+   *  status filter). Independent per scope — flipping the hero
+   *  between Story and Epic resets the highlight. */
+  const [activeNeedsAttentionLabel, setActiveNeedsAttentionLabel] =
+    useState<string | null>(null);
+  // Reset the Needs Attention highlight when the scope flips — the
+  // labels themselves change (Story vs Epic categories), so keeping a
+  // stale label would just produce a dead highlight no slice matches.
+  useEffect(() => {
+    setActiveNeedsAttentionLabel(null);
+  }, [heroScope]);
   const drilldownStories = useMemo(() => {
     if (!drilldownTeam) return [];
     const out: Array<{
@@ -721,6 +735,9 @@ export function RoadmapHealthHero({
                   )
                 : undefined
             }
+            onClearSelection={
+              onStatusFilterChange ? () => onStatusFilterChange(new Set()) : undefined
+            }
           />
             );
           })()}
@@ -803,6 +820,9 @@ export function RoadmapHealthHero({
                   )
                 : undefined
             }
+            onClearSelection={
+              onHealthFilterChange ? () => onHealthFilterChange(new Set()) : undefined
+            }
           />
             );
           })()}
@@ -858,11 +878,17 @@ export function RoadmapHealthHero({
                 centerCount={(naData as { total: number }).total}
                 centerLabel={naScope === "story" ? "Stories" : "Epics"}
                 slices={slices}
-                onSliceClick={
-                  onNeedsAttentionClick
-                    ? (label) => onNeedsAttentionClick(naScope, labelToCategory[label] ?? null)
-                    : undefined
-                }
+                activeLabels={activeNeedsAttentionLabel ? new Set([activeNeedsAttentionLabel]) : undefined}
+                onSliceClick={(label) => {
+                  // Toggle the highlight: click the same slice again
+                  // to clear, click a different one to switch. Fire
+                  // the parent callback so the backlog hand-off
+                  // still runs on every click.
+                  const next = activeNeedsAttentionLabel === label ? null : label;
+                  setActiveNeedsAttentionLabel(next);
+                  onNeedsAttentionClick?.(naScope, labelToCategory[label] ?? null);
+                }}
+                onClearSelection={() => setActiveNeedsAttentionLabel(null)}
               />
             );
           })()}
@@ -1452,6 +1478,7 @@ function DonutCard({
   extraLegendRows,
   panelClassName,
   cornerChip,
+  onClearSelection,
 }: {
   title: string;
   /** Optional icon rendered next to the card title — same family of
@@ -1498,6 +1525,11 @@ function DonutCard({
    *  team-scope chip ("[avatar] Mobile" / "3 teams") so the planner
    *  has a per-card lock-on showing the data is team-narrowed. */
   cornerChip?: React.ReactNode;
+  /** Optional click handler for an "X" icon shown at the top-right
+   *  of the card whenever `activeLabels` is non-empty. Lets the
+   *  planner clear every selection from this chart in one click.
+   *  When omitted, no clear button renders (chart is fire-and-forget). */
+  onClearSelection?: () => void;
 }) {
   const total = slices.reduce((sum, s) => sum + s.value, 0);
   // Slice the mouse is currently hovering — used to mirror the legend
@@ -1510,8 +1542,21 @@ function DonutCard({
         panelClassName ?? "bg-white ring-slate-200/70",
       )}
     >
-      {cornerChip ? (
-        <div className="absolute right-2 top-2 z-10">{cornerChip}</div>
+      {cornerChip || (onClearSelection && (activeLabels?.size ?? 0) > 0) ? (
+        <div className="absolute right-2 top-2 z-10 flex items-center gap-1.5">
+          {cornerChip ?? null}
+          {onClearSelection && (activeLabels?.size ?? 0) > 0 ? (
+            <button
+              type="button"
+              onClick={onClearSelection}
+              title="Clear selection on this chart"
+              aria-label="Clear selection on this chart"
+              className="inline-flex size-6 items-center justify-center rounded-md bg-white/85 text-slate-500 ring-1 ring-slate-200/80 transition hover:bg-rose-50 hover:text-rose-600 hover:ring-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+            >
+              <X className="size-3.5" strokeWidth={2.4} />
+            </button>
+          ) : null}
+        </div>
       ) : null}
       <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500">
         {titleIcon ? <span className="inline-flex shrink-0 text-slate-500" aria-hidden>{titleIcon}</span> : null}
@@ -2025,26 +2070,30 @@ function computeRoadmapStats(
         }
         if (!(epic.description ?? "").trim()) epicsWithoutDescCount += 1;
       }
-      // "Needs Attention" — epic-level hygiene categories. Scope-wide
-      // (no `epicPasses` gate so team-filter narrowing of the hero
-      // doesn't quietly hide hygiene blockers). Done epics count too;
-      // a done epic with missing data is still a planning issue.
+      // "Needs Attention" — epic-level hygiene categories. Honors
+      // the team filter (epicPasses): when the planner clicks a Team
+      // Progress row, the hygiene counts narrow to that team's epics
+      // so the card stays consistent with the rest of the hero.
+      // Done epics still count; a done epic with missing data is
+      // still a planning issue worth flagging.
       const epicStoriesAll = epic.userStories ?? [];
-      if (epic.originalEstimateDays == null) {
-        needsAttentionEpicSets.unestimated.add(epic.id);
-        needsAttentionEpicSets.any.add(epic.id);
-      }
-      if (epic.planStartMonth == null) {
-        needsAttentionEpicSets.unscheduled.add(epic.id);
-        needsAttentionEpicSets.any.add(epic.id);
-      }
-      if (epicStoriesAll.length === 0) {
-        needsAttentionEpicSets.noStories.add(epic.id);
-        needsAttentionEpicSets.any.add(epic.id);
-      }
-      if (epicStoriesAll.some((s) => s.estimatedDays == null)) {
-        needsAttentionEpicSets.hasUnestimatedChildren.add(epic.id);
-        needsAttentionEpicSets.any.add(epic.id);
+      if (epicPasses) {
+        if (epic.originalEstimateDays == null) {
+          needsAttentionEpicSets.unestimated.add(epic.id);
+          needsAttentionEpicSets.any.add(epic.id);
+        }
+        if (epic.planStartMonth == null) {
+          needsAttentionEpicSets.unscheduled.add(epic.id);
+          needsAttentionEpicSets.any.add(epic.id);
+        }
+        if (epicStoriesAll.length === 0) {
+          needsAttentionEpicSets.noStories.add(epic.id);
+          needsAttentionEpicSets.any.add(epic.id);
+        }
+        if (epicStoriesAll.some((s) => s.estimatedDays == null)) {
+          needsAttentionEpicSets.hasUnestimatedChildren.add(epic.id);
+          needsAttentionEpicSets.any.add(epic.id);
+        }
       }
       const team = (epic.team ?? "").trim();
       // `teamIds` feeds the KPI strip "Teams" count and the Team
@@ -2113,27 +2162,32 @@ function computeRoadmapStats(
           storiesCountInScope += 1;
           if (!(story.description ?? "").trim()) storiesWithoutDescCount += 1;
         }
-        // "Needs Attention" — story-level hygiene categories. Scope-wide.
-        // Done stories are exempt from missing-estimate / missing-sprint /
-        // stalled (they're effectively closed work); only missing-description
-        // still counts because docs matter retroactively.
+        // "Needs Attention" — story-level hygiene categories. Honors
+        // the team filter (epicPasses): when the planner clicks a
+        // Team Progress row, the hygiene counts narrow to that
+        // team's stories. Done stories are exempt from missing-
+        // estimate / missing-sprint / stalled (they're effectively
+        // closed work); only missing-description still counts
+        // because docs matter retroactively.
         const storyDone = story.status === "done";
-        if (!(story.description ?? "").trim()) {
-          needsAttentionStorySets.missingDescription.add(story.id);
-          needsAttentionStorySets.any.add(story.id);
-        }
-        if (!storyDone) {
-          if (story.estimatedDays == null) {
-            needsAttentionStorySets.missingEstimate.add(story.id);
+        if (epicPasses) {
+          if (!(story.description ?? "").trim()) {
+            needsAttentionStorySets.missingDescription.add(story.id);
             needsAttentionStorySets.any.add(story.id);
           }
-          if (story.sprint == null) {
-            needsAttentionStorySets.missingSprint.add(story.id);
-            needsAttentionStorySets.any.add(story.id);
-          }
-          if (stalledStoryIds && stalledStoryIds.has(story.id)) {
-            needsAttentionStorySets.stalled.add(story.id);
-            needsAttentionStorySets.any.add(story.id);
+          if (!storyDone) {
+            if (story.estimatedDays == null) {
+              needsAttentionStorySets.missingEstimate.add(story.id);
+              needsAttentionStorySets.any.add(story.id);
+            }
+            if (story.sprint == null) {
+              needsAttentionStorySets.missingSprint.add(story.id);
+              needsAttentionStorySets.any.add(story.id);
+            }
+            if (stalledStoryIds && stalledStoryIds.has(story.id)) {
+              needsAttentionStorySets.stalled.add(story.id);
+              needsAttentionStorySets.any.add(story.id);
+            }
           }
         }
         // `sprintIds` feeds the KPI strip "Sprints" count — workspace-wide.

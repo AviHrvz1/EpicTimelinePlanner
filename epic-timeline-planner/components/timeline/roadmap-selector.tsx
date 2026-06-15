@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   AlertTriangle,
+  CalendarDays,
   Check,
   ChevronDown,
   Map as MapIcon,
@@ -273,7 +274,7 @@ export function RoadmapSelector({
   /* ----- Styling derived from appearance ----- */
 
   const outerClass = isSubtitle
-    ? "relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap text-[13px] font-normal leading-none text-slate-500 outline-none select-none"
+    ? "relative inline-flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 text-[14px] font-medium leading-none text-slate-700 outline-none shadow-sm transition select-none hover:border-slate-300"
     : "relative inline-flex h-[28px] shrink-0 cursor-pointer items-stretch box-border whitespace-nowrap rounded-full bg-gradient-to-r from-sky-100 via-indigo-100 to-violet-100 text-[12px] font-semibold text-indigo-900 ring-1 ring-indigo-200/80 outline-none transition hover:from-sky-200/80 hover:via-indigo-200/80 hover:to-violet-200/80 select-none [&_svg]:opacity-60";
 
   return (
@@ -289,19 +290,12 @@ export function RoadmapSelector({
         <div
           className={cn(
             "relative flex items-center",
-            isSubtitle
-              ? cn(
-                  "gap-1 rounded-md border bg-gradient-to-r from-sky-50 via-indigo-50 to-violet-50 px-2 py-1 shadow-sm transition",
-                  dropdownOpen
-                    ? "border-indigo-400 ring-2 ring-indigo-200/60"
-                    : "border-indigo-200/70 hover:border-indigo-300 hover:from-sky-100/70 hover:via-indigo-100/70 hover:to-violet-100/70",
-                )
-              : null,
+            isSubtitle ? "gap-1.5 cursor-pointer" : null,
           )}
           onClick={isSubtitle ? () => { setDropdownOpen(true); inputRef.current?.focus(); } : undefined}
         >
           {isSubtitle ? (
-            <MapIcon className="size-3.5 shrink-0 text-indigo-500" strokeWidth={2.1} aria-hidden />
+            <MapIcon className="size-4 shrink-0 text-indigo-600" strokeWidth={2} aria-hidden />
           ) : null}
           {(() => {
             const visibleText = dropdownOpen ? query : (selectedRoadmap?.name ?? "");
@@ -316,7 +310,7 @@ export function RoadmapSelector({
                   aria-hidden
                   className={cn(
                     "invisible pointer-events-none absolute whitespace-pre",
-                    isSubtitle ? "text-[13px] font-medium" : "text-[12px] font-semibold",
+                    isSubtitle ? "text-[14px] font-semibold" : "text-[12px] font-semibold",
                   )}
                   style={{ left: -9999, top: 0 }}
                 >
@@ -334,7 +328,7 @@ export function RoadmapSelector({
                   className={cn(
                     "cursor-pointer bg-transparent py-0 outline-none",
                     isSubtitle
-                      ? "h-5 pl-0 pr-0 text-[13px] font-semibold text-indigo-900 placeholder:text-indigo-400 hover:text-indigo-700"
+                      ? "h-6 pl-0 pr-0 text-[14px] font-semibold text-slate-800 placeholder:text-slate-400 hover:text-slate-900"
                       : "h-[28px] pl-1.5 pr-4 text-[12px] font-semibold text-indigo-900 placeholder:text-indigo-900/55",
                   )}
                   style={{ width: `${width}px` }}
@@ -347,7 +341,7 @@ export function RoadmapSelector({
             className={cn(
               "pointer-events-none transition",
               isSubtitle
-                ? cn("size-3 shrink-0", dropdownOpen ? "rotate-180 text-indigo-600" : "text-slate-500")
+                ? cn("size-3.5 shrink-0", dropdownOpen ? "rotate-180 text-slate-700" : "text-slate-400")
                 : cn("absolute right-0.5 top-1/2 size-3 -translate-y-1/2 text-indigo-950", dropdownOpen && "rotate-180"),
             )}
             aria-hidden
@@ -644,19 +638,21 @@ export function RoadmapSelector({
       {years.length > 0 && (
         isSubtitle ? (
           <>
-            <div className="relative inline-flex items-center gap-1 rounded-md border border-indigo-200/70 bg-gradient-to-r from-sky-50 via-indigo-50 to-violet-50 px-2 py-1 shadow-sm transition hover:border-indigo-300 hover:from-sky-100/70 hover:via-indigo-100/70 hover:to-violet-100/70 focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-200/60">
+            <span className="mx-1 h-6 w-px shrink-0 bg-slate-200" aria-hidden />
+            <div className="relative inline-flex items-center gap-1.5">
+              <CalendarDays className="size-4 shrink-0 text-indigo-600" strokeWidth={2} aria-hidden />
               <select
                 value={year}
                 onChange={(e) => void onYearChange(Number(e.target.value))}
                 title="Switch year"
                 aria-label="Switch year"
-                className="appearance-none h-5 cursor-pointer bg-transparent py-0 pl-0 pr-3.5 text-[13px] font-semibold tabular-nums text-indigo-900 outline-none transition hover:text-indigo-700"
+                className="appearance-none h-6 cursor-pointer bg-transparent py-0 pl-0 pr-4 text-[14px] font-semibold tabular-nums text-slate-800 outline-none transition hover:text-slate-900"
               >
                 {years.map((y) => (
                   <option key={y} value={y} className="text-slate-900">{y}</option>
                 ))}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-1 top-1/2 size-3 -translate-y-1/2 text-indigo-500" aria-hidden />
+              <ChevronDown className="pointer-events-none absolute right-0 top-1/2 size-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
             </div>
           </>
         ) : (
