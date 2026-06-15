@@ -129,6 +129,7 @@ export function RoadmapHealthHero({
   statusFilter,
   onStatusFilterChange,
   onOpenEpicEstimatePanel,
+  onNeedsAttentionClick,
   onSelectLaggards,
   onWorkProgressSliceClick,
   onHealthDistributionSliceClick,
@@ -185,6 +186,25 @@ export function RoadmapHealthHero({
    *  popover the Gantt "Epic Est." chip opens, pre-scoped to the picked tab. */
   onOpenEpicEstimatePanel?: (
     tab: "estimated" | "partiallyEstimated" | "unestimated" | "epicsNoDesc" | "storiesNoDesc",
+  ) => void;
+  /** Click handler for the "Needs Attention" donut. The parent decides
+   *  what to do based on `topMode`: in Backlog Workspace, route through
+   *  the hygiene-toggle hand-off; otherwise open a popup with the 2×2
+   *  category breakdown. Receives the scope being viewed (epic /
+   *  story — initiative falls back to epic) and the category clicked
+   *  (or `null` for a card-level click with no category preselected). */
+  onNeedsAttentionClick?: (
+    scope: "epic" | "story",
+    category:
+      | "missingEstimate"
+      | "missingDescription"
+      | "missingSprint"
+      | "stalled"
+      | "unestimated"
+      | "unscheduled"
+      | "noStories"
+      | "hasUnestimatedChildren"
+      | null,
   ) => void;
   /** Cross-mode laggard filter emit — the new Portfolio Burndown card
    *  (which replaced the Work Progress donut here) fires this when the
@@ -786,88 +806,66 @@ export function RoadmapHealthHero({
           />
             );
           })()}
-          <DonutCard
-            panelClassName="bg-violet-50/60 ring-violet-100"
-            cornerChip={teamScopeChip}
-            title={
-              progressBasis === "epicEst"
-                ? `Epic Estimates · Epics · ${basisLabel}`
-                : `Story Estimates · Stories · ${basisLabel}`
-            }
-            titleIcon={<Sigma className="size-3.5 text-indigo-500" strokeWidth={2.1} aria-hidden />}
-            centerCount={
-              progressBasis === "epicEst"
-                ? stats.epicEstimates.daysSum
-                : stats.epicEstimates.estimated + stats.epicEstimates.unestimated
-            }
-            centerLabel={progressBasis === "epicEst" ? "Total Days" : "Stories"}
-            slices={(() => {
-              const unitSuffix = progressBasis === "epicEst" ? "epics" : "stories";
-              // The 3-tier split (Estimated / Partially / Unestimated)
-              // is only meaningful for the epicEst basis — Days /
-              // Stories bases split at the STORY level where a story
-              // is either sized or it isn't. For epicEst, the
-              // Partially row always renders (even when the count is
-              // 0) so the legend doubles as a permanent shortcut into
-              // the Partially Estimated tab.
-              const slices = [
-                { label: "Estimated", value: stats.epicEstimates.estimated, color: "#6366f1", icon: <Ruler className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
-              ];
-              if (progressBasis === "epicEst") {
-                slices.push({
-                  label: "Partially estimated",
-                  value: stats.epicEstimates.partiallyEstimated,
-                  color: "#f59e0b",
-                  icon: <CircleDotDashed className="size-3.5" strokeWidth={2} />,
-                  valueSuffix: unitSuffix,
-                });
-              }
-              slices.push({ label: "Unestimated", value: stats.epicEstimates.unestimated, color: "#94a3b8", icon: <CircleDashed className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix });
-              return slices;
-            })()}
-            onSliceClick={
-              onOpenEpicEstimatePanel
-                ? (label) =>
-                    onOpenEpicEstimatePanel(
-                      label === "Estimated"
-                        ? "estimated"
-                        : label === "Partially estimated"
-                          ? "partiallyEstimated"
-                          : "unestimated",
-                    )
-                : undefined
-            }
-            extraLegendRows={
-              onOpenEpicEstimatePanel
+          {/* "Needs Attention" card — scope-aware donut showing
+              hygiene-category counts (items missing data the planner
+              needs for forecasting). Initiative scope silently falls
+              back to Epic data; subtitle/labels follow the
+              fall-back so the user always sees a populated card. */}
+          {(() => {
+            const naScope: "epic" | "story" = heroScope === "story" ? "story" : "epic";
+            const naData = stats.needsAttention?.[naScope] ?? {
+              missingEstimate: 0,
+              missingSprint: 0,
+              missingDescription: 0,
+              stalled: 0,
+              unestimated: 0,
+              unscheduled: 0,
+              noStories: 0,
+              hasUnestimatedChildren: 0,
+              total: 0,
+            };
+            const unitSuffix = naScope === "story" ? "stories" : "epics";
+            const slices =
+              naScope === "story"
                 ? [
-                    {
-                      label: "Stories w/o description",
-                      value: stats.storiesWithoutDescCount,
-                      pct: stats.storiesCountInScope > 0
-                        ? Math.round((stats.storiesWithoutDescCount / stats.storiesCountInScope) * 100)
-                        : 0,
-                      color: "#f59e0b",
-                      icon: <UserStoryIcon className="size-3.5 text-current" />,
-                      onClick: () => onOpenEpicEstimatePanel("storiesNoDesc"),
-                      title: "Open the Estimate Coverage panel · Stories without description tab",
-                      valueSuffix: "stories",
-                    },
-                    {
-                      label: "Epics w/o description",
-                      value: stats.epicsWithoutDescCount,
-                      pct: stats.epicsCountInScope > 0
-                        ? Math.round((stats.epicsWithoutDescCount / stats.epicsCountInScope) * 100)
-                        : 0,
-                      color: "#ec4899",
-                      icon: <FileWarning className="size-3.5" strokeWidth={2} />,
-                      onClick: () => onOpenEpicEstimatePanel("epicsNoDesc"),
-                      title: "Open the Estimate Coverage panel · Epics without description tab",
-                      valueSuffix: "epics",
-                    },
+                    { label: "Missing estimate", value: (naData as { missingEstimate: number }).missingEstimate, color: "#ef4444", icon: <Ruler className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
+                    { label: "No sprint", value: (naData as { missingSprint: number }).missingSprint, color: "#f59e0b", icon: <CircleDashed className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
+                    { label: "No description", value: (naData as { missingDescription: number }).missingDescription, color: "#ec4899", icon: <FileWarning className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
+                    { label: "Stalled", value: (naData as { stalled: number }).stalled, color: "#a855f7", icon: <AlertOctagon className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
                   ]
-                : undefined
-            }
-          />
+                : [
+                    { label: "Unestimated", value: (naData as { unestimated: number }).unestimated, color: "#ef4444", icon: <Ruler className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
+                    { label: "Unscheduled", value: (naData as { unscheduled: number }).unscheduled, color: "#f59e0b", icon: <CircleDashed className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
+                    { label: "No stories", value: (naData as { noStories: number }).noStories, color: "#94a3b8", icon: <CircleDotDashed className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
+                    { label: "Has unestimated children", value: (naData as { hasUnestimatedChildren: number }).hasUnestimatedChildren, color: "#ec4899", icon: <FileWarning className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
+                  ];
+            const labelToCategory: Record<string, Parameters<NonNullable<typeof onNeedsAttentionClick>>[1]> = {
+              "Missing estimate": "missingEstimate",
+              "No sprint": "missingSprint",
+              "No description": "missingDescription",
+              "Stalled": "stalled",
+              "Unestimated": "unestimated",
+              "Unscheduled": "unscheduled",
+              "No stories": "noStories",
+              "Has unestimated children": "hasUnestimatedChildren",
+            };
+            return (
+              <DonutCard
+                panelClassName="bg-amber-50/40 ring-amber-100"
+                cornerChip={teamScopeChip}
+                title={`Needs Attention · ${naScope === "story" ? "Stories" : "Epics"}`}
+                titleIcon={<AlertOctagon className="size-3.5 text-amber-500" strokeWidth={2.1} aria-hidden />}
+                centerCount={(naData as { total: number }).total}
+                centerLabel={naScope === "story" ? "Stories" : "Epics"}
+                slices={slices}
+                onSliceClick={
+                  onNeedsAttentionClick
+                    ? (label) => onNeedsAttentionClick(naScope, labelToCategory[label] ?? null)
+                    : undefined
+                }
+              />
+            );
+          })()}
           </div>
         </div>
       </div>
@@ -1833,6 +1831,11 @@ function computeRoadmapStats(
   selectedYear: number,
   progressBasis: "days" | "stories" | "epicEst",
   teamFilter?: ReadonlySet<string> | null,
+  /** Optional set of story ids the server has marked "stalled" (status
+   *  unchanged > threshold). When omitted, the "stalled" hygiene bucket
+   *  is 0. The set is workspace-wide; the hero counts include only the
+   *  stories actually encountered in the iteration below. */
+  stalledStoryIds?: ReadonlySet<string> | null,
 ) {
   // Workspace-wide pre-pass — these counters drive the KPI strip
   // (Initiatives / Epics / Stories tiles) which intentionally STAYS
@@ -1905,6 +1908,25 @@ function computeRoadmapStats(
    *  `daysSum` is the total estimated days across estimated epics —
    *  rendered in the donut center as total estimated effort. */
   const epicEstimates = { estimated: 0, partiallyEstimated: 0, unestimated: 0, daysSum: 0 };
+  /** "Needs Attention" hygiene counts at story + epic scope. Each
+   *  category tracks ids in a Set so the per-scope `total` is the
+   *  unique union (one story flagged for both missing-estimate and
+   *  no-sprint counts as 1 toward the total). The `total` field is
+   *  what the hero card big-number reads. */
+  const needsAttentionStorySets = {
+    missingEstimate: new Set<string>(),
+    missingSprint: new Set<string>(),
+    missingDescription: new Set<string>(),
+    stalled: new Set<string>(),
+    any: new Set<string>(),
+  };
+  const needsAttentionEpicSets = {
+    unestimated: new Set<string>(),
+    unscheduled: new Set<string>(),
+    noStories: new Set<string>(),
+    hasUnestimatedChildren: new Set<string>(),
+    any: new Set<string>(),
+  };
   /** Description coverage — counts of epics / stories that don't have any
    *  description text. Surfaces as click-throughs on the Epic Estimates
    *  card legend. */
@@ -2003,6 +2025,27 @@ function computeRoadmapStats(
         }
         if (!(epic.description ?? "").trim()) epicsWithoutDescCount += 1;
       }
+      // "Needs Attention" — epic-level hygiene categories. Scope-wide
+      // (no `epicPasses` gate so team-filter narrowing of the hero
+      // doesn't quietly hide hygiene blockers). Done epics count too;
+      // a done epic with missing data is still a planning issue.
+      const epicStoriesAll = epic.userStories ?? [];
+      if (epic.originalEstimateDays == null) {
+        needsAttentionEpicSets.unestimated.add(epic.id);
+        needsAttentionEpicSets.any.add(epic.id);
+      }
+      if (epic.planStartMonth == null) {
+        needsAttentionEpicSets.unscheduled.add(epic.id);
+        needsAttentionEpicSets.any.add(epic.id);
+      }
+      if (epicStoriesAll.length === 0) {
+        needsAttentionEpicSets.noStories.add(epic.id);
+        needsAttentionEpicSets.any.add(epic.id);
+      }
+      if (epicStoriesAll.some((s) => s.estimatedDays == null)) {
+        needsAttentionEpicSets.hasUnestimatedChildren.add(epic.id);
+        needsAttentionEpicSets.any.add(epic.id);
+      }
       const team = (epic.team ?? "").trim();
       // `teamIds` feeds the KPI strip "Teams" count and the Team
       // Progress accumulator — both intentionally workspace-wide.
@@ -2069,6 +2112,29 @@ function computeRoadmapStats(
         if (epicPasses) {
           storiesCountInScope += 1;
           if (!(story.description ?? "").trim()) storiesWithoutDescCount += 1;
+        }
+        // "Needs Attention" — story-level hygiene categories. Scope-wide.
+        // Done stories are exempt from missing-estimate / missing-sprint /
+        // stalled (they're effectively closed work); only missing-description
+        // still counts because docs matter retroactively.
+        const storyDone = story.status === "done";
+        if (!(story.description ?? "").trim()) {
+          needsAttentionStorySets.missingDescription.add(story.id);
+          needsAttentionStorySets.any.add(story.id);
+        }
+        if (!storyDone) {
+          if (story.estimatedDays == null) {
+            needsAttentionStorySets.missingEstimate.add(story.id);
+            needsAttentionStorySets.any.add(story.id);
+          }
+          if (story.sprint == null) {
+            needsAttentionStorySets.missingSprint.add(story.id);
+            needsAttentionStorySets.any.add(story.id);
+          }
+          if (stalledStoryIds && stalledStoryIds.has(story.id)) {
+            needsAttentionStorySets.stalled.add(story.id);
+            needsAttentionStorySets.any.add(story.id);
+          }
         }
         // `sprintIds` feeds the KPI strip "Sprints" count — workspace-wide.
         if (story.sprint != null) sprintIds.add(story.sprint);
@@ -2250,6 +2316,22 @@ function computeRoadmapStats(
     epicsWithoutDescCount,
     storiesWithoutDescCount,
     teamProgress,
+    needsAttention: {
+      story: {
+        missingEstimate: needsAttentionStorySets.missingEstimate.size,
+        missingSprint: needsAttentionStorySets.missingSprint.size,
+        missingDescription: needsAttentionStorySets.missingDescription.size,
+        stalled: needsAttentionStorySets.stalled.size,
+        total: needsAttentionStorySets.any.size,
+      },
+      epic: {
+        unestimated: needsAttentionEpicSets.unestimated.size,
+        unscheduled: needsAttentionEpicSets.unscheduled.size,
+        noStories: needsAttentionEpicSets.noStories.size,
+        hasUnestimatedChildren: needsAttentionEpicSets.hasUnestimatedChildren.size,
+        total: needsAttentionEpicSets.any.size,
+      },
+    },
   };
 }
 

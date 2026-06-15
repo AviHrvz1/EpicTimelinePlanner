@@ -1457,6 +1457,24 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
    *  chain, dims when it's not). */
   const [backlogGroupLevelsMirror, setBacklogGroupLevelsMirror] =
     useState<readonly BacklogGroupLevel[]>([]);
+  /** Hand-off from the "Needs Attention" hero card to the backlog
+   *  panel's hygiene toggles. Identity-based: each click constructs
+   *  a fresh object so the panel's sync useEffect fires. `null` =
+   *  no pending hand-off. See `BacklogPlanningPanelProps.externalHygieneToggle`
+   *  for category values. */
+  const [backlogIncomingHygieneToggle, setBacklogIncomingHygieneToggle] = useState<
+    | {
+        category:
+          | "missingDescription"
+          | "missingEstimate"
+          | "unscheduled"
+          | "stalled"
+          | "all-story"
+          | "all-epic";
+        on: boolean;
+      }
+    | null
+  >(null);
   /** Same lift pattern as the status filter — emitted by the panel,
    *  passed to TimelineGrid so the Gantt only renders epics whose
    *  plan-start quarter is in the set. Empty Set = no filter. */
@@ -1520,6 +1538,64 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   const handleOpenEstPanel = useCallback((tab: EstHeroTab) => {
     setOpenEstPanelCmd((prev) => ({ tab, key: (prev?.key ?? 0) + 1 }));
   }, []);
+  /** Click handler on the "Needs Attention" hero donut. Switches into
+   *  Backlog Workspace and applies the matching hygiene toggle (and
+   *  the matching Work Item filter, since story categories make no
+   *  sense at Epic scope and vice versa). When a specific category
+   *  was picked from a slice, enable only that toggle; when the
+   *  donut center was clicked (no category), enable ALL of the
+   *  scope's toggles so the user can refine manually. */
+  const handleNeedsAttentionClick = useCallback(
+    (
+      scope: "epic" | "story",
+      category:
+        | "missingEstimate"
+        | "missingDescription"
+        | "missingSprint"
+        | "stalled"
+        | "unestimated"
+        | "unscheduled"
+        | "noStories"
+        | "hasUnestimatedChildren"
+        | null,
+    ) => {
+      setTopMode("backlog");
+      setHeroScope(scope);
+      // Single-category slice clicks: map to the corresponding
+      // hygiene toggle. Epic-specific categories all collapse onto
+      // the same 4 toggles (no team / no description / no estimate
+      // / etc. don't have their own toggle yet — they map to the
+      // closest existing one, and "all-epic" enables every toggle
+      // so the table surfaces them all together).
+      const targetCategory: NonNullable<typeof backlogIncomingHygieneToggle>["category"] | null =
+        category === "missingDescription"
+          ? "missingDescription"
+          : category === "missingEstimate"
+            ? "missingEstimate"
+            : category === "missingSprint"
+              ? "unscheduled"
+              : category === "stalled"
+                ? "stalled"
+                : category === "unestimated"
+                  ? "missingEstimate"
+                  : category === "unscheduled"
+                    ? "unscheduled"
+                    : category === "noStories"
+                      ? null
+                      : category === "hasUnestimatedChildren"
+                        ? "missingEstimate"
+                        : null;
+      if (targetCategory) {
+        setBacklogIncomingHygieneToggle({ category: targetCategory, on: true });
+      } else {
+        setBacklogIncomingHygieneToggle({
+          category: scope === "story" ? "all-story" : "all-epic",
+          on: true,
+        });
+      }
+    },
+    [],
+  );
   /**
    * Tracks which filter lane the planner most recently activated — team,
    * health verdict, or execution status. Year-view (all-quarters) Gantt
@@ -6267,6 +6343,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
             }
           }}
           onOpenEpicEstimatePanel={handleOpenEstPanel}
+          onNeedsAttentionClick={handleNeedsAttentionClick}
           summaryBarRef={setSummaryBarEl}
           onYearChange={async (nextYear) => {
             // Mirror the TimelineGrid onYearChange below — keep in sync.
@@ -7215,6 +7292,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 externalRoadmapFilter={backlogIncomingRoadmapFilter}
                 externalGroupLevelToggle={backlogIncomingGroupLevelToggle}
                 onGroupLevelsChange={setBacklogGroupLevelsMirror}
+                externalHygieneToggle={backlogIncomingHygieneToggle}
                 onOpenSprint={navigateToSprint}
                 onOpenInitiative={backlogOpenInitiative}
                 onOpenEpic={backlogOpenEpic}

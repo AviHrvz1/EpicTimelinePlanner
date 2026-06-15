@@ -36,6 +36,8 @@ import {
   Plus,
   Save,
   Search,
+  Settings2,
+  Info,
   SquarePen,
   TableProperties,
   Tag,
@@ -289,6 +291,14 @@ type BacklogPlanningPanelProps = {
    *  levels are present in the chain. Fires on every groupLevels
    *  change — both picker toggles and hand-off toggles. */
   onGroupLevelsChange?: (levels: GroupLevel[]) => void;
+  /** Hand-off from the "Needs Attention" hero card. Each click sets a
+   *  single hygiene toggle (or all four with `category = "all"`). When
+   *  `category` is `"all"`, every other toggle in the SAME scope's set
+   *  is enabled together so the user can refine manually. Identity-
+   *  based: fresh object per click fires the sync useEffect. */
+  externalHygieneToggle?:
+    | { category: "missingDescription" | "missingEstimate" | "unscheduled" | "stalled" | "all-story" | "all-epic"; on: boolean }
+    | null;
 };
 
 type OptionItem = { id: string; label: string };
@@ -414,6 +424,15 @@ type BacklogFilterSnapshot = {
   roadmapFilter: string[];
   workItemFilter: WorkItemKindFilter[];
   groupLevels: GroupLevel[];
+  /** Hygiene filter toggles from the "Needs attention" toolbar row.
+   *  Optional in the type so legacy persisted snapshots (without these
+   *  fields) keep loading; default to `false` when missing. The
+   *  `stalledSettings` threshold itself is workspace-wide localStorage,
+   *  not per-snapshot — only the boolean toggle is persisted. */
+  hygieneMissingDescription?: boolean;
+  hygieneMissingEstimate?: boolean;
+  hygieneUnscheduled?: boolean;
+  hygieneStalled?: boolean;
 };
 
 /** Table sort, column order, visibility, header row, and column widths. */
@@ -949,6 +968,168 @@ const GROUP_LEVEL_LABELS: Record<GroupLevel, string> = {
   month: "Month",
   sprint: "Sprint",
 };
+
+/** Pill-shaped boolean toggle for the "Needs attention" toolbar row.
+ *  Renders a tooltip on the trailing ⓘ icon disclosing what the
+ *  toggle catches. */
+function HygieneToggle({
+  label,
+  tooltip,
+  active,
+  onToggle,
+}: {
+  label: string;
+  tooltip: string;
+  active: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <span className="group/hygiene relative inline-flex items-center">
+      <button
+        type="button"
+        onClick={onToggle}
+        className={cn(
+          "inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-[12px] font-medium transition",
+          active
+            ? "border-amber-400 bg-amber-50 text-amber-800 shadow-sm"
+            : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-50",
+        )}
+        aria-pressed={active}
+      >
+        {label}
+        <Info className="size-3 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute right-0 top-full z-30 mt-1 w-60 max-w-[80vw] rounded-lg border border-slate-200/90 bg-white/95 px-3 py-2 text-left text-[12px] font-medium leading-snug text-slate-700 opacity-0 shadow-lg ring-1 ring-slate-200/80 transition-opacity duration-150 group-hover/hygiene:opacity-100"
+      >
+        {tooltip}
+      </span>
+    </span>
+  );
+}
+
+/** Stalled toggle — like `HygieneToggle` but with a trailing ⚙ that
+ *  opens a small popover for tuning the threshold (days + monitored
+ *  statuses). Tooltip text reflects the current settings. */
+function StalledToggle({
+  active,
+  onToggle,
+  settings,
+  onSettingsChange,
+}: {
+  active: boolean;
+  onToggle: () => void;
+  settings: {
+    thresholdDays: number;
+    statuses: ReadonlyArray<"todo" | "inProgress" | "review" | "done">;
+  };
+  onSettingsChange: (next: { thresholdDays: number; statuses: ReadonlyArray<"todo" | "inProgress" | "review" | "done"> }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const popRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const handler = (event: globalThis.MouseEvent) => {
+      if (popRef.current && !popRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", handler);
+    return () => window.removeEventListener("mousedown", handler);
+  }, [open]);
+  const statusLabels: Record<"todo" | "inProgress" | "review" | "done", string> = {
+    todo: "Todo",
+    inProgress: "In Progress",
+    review: "Review",
+    done: "Done",
+  };
+  const tooltip = `No status change in ${settings.thresholdDays} day${settings.thresholdDays === 1 ? "" : "s"} for ${settings.statuses.map((s) => statusLabels[s]).join(", ") || "any status"}.`;
+  const toggleStatus = (status: "todo" | "inProgress" | "review" | "done") => {
+    const has = settings.statuses.includes(status);
+    const next = has ? settings.statuses.filter((s) => s !== status) : [...settings.statuses, status];
+    onSettingsChange({ ...settings, statuses: next });
+  };
+  return (
+    <span className="group/hygiene relative inline-flex items-center" ref={popRef}>
+      <button
+        type="button"
+        onClick={onToggle}
+        className={cn(
+          "inline-flex h-7 items-center gap-1 rounded-l-full border-y border-l px-2.5 text-[12px] font-medium transition",
+          active
+            ? "border-amber-400 bg-amber-50 text-amber-800 shadow-sm"
+            : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-50",
+        )}
+        aria-pressed={active}
+      >
+        Stalled
+        <Info className="size-3 shrink-0 text-slate-400" strokeWidth={2} aria-hidden />
+      </button>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "inline-flex h-7 items-center justify-center rounded-r-full border-y border-r px-1.5 text-slate-500 transition hover:bg-slate-50",
+          active ? "border-amber-400 bg-amber-50" : "border-slate-300 bg-white",
+        )}
+        aria-label="Stalled settings"
+        title="Stalled settings"
+      >
+        <Settings2 className="size-3.5" strokeWidth={2} aria-hidden />
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute right-0 top-full z-30 mt-1 w-64 max-w-[80vw] rounded-lg border border-slate-200/90 bg-white/95 px-3 py-2 text-left text-[12px] font-medium leading-snug text-slate-700 opacity-0 shadow-lg ring-1 ring-slate-200/80 transition-opacity duration-150 group-hover/hygiene:opacity-100"
+      >
+        {tooltip}
+      </span>
+      {open ? (
+        <div className="absolute right-0 top-full z-40 mt-1 w-64 rounded-lg border border-slate-200 bg-white p-3 shadow-xl ring-1 ring-slate-200/60">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Days since last status change</div>
+          <input
+            type="number"
+            min={1}
+            value={settings.thresholdDays}
+            onChange={(event) => {
+              const n = Number(event.target.value);
+              if (Number.isFinite(n) && n > 0) onSettingsChange({ ...settings, thresholdDays: Math.floor(n) });
+            }}
+            className="mb-3 h-8 w-20 rounded-md border border-slate-300 px-2 text-[13px] outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200/60"
+          />
+          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Monitor statuses</div>
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {(["todo", "inProgress", "review", "done"] as const).map((status) => {
+              const picked = settings.statuses.includes(status);
+              return (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => toggleStatus(status)}
+                  className={cn(
+                    "inline-flex h-6 items-center rounded-full border px-2 text-[11.5px] font-medium transition",
+                    picked
+                      ? "border-amber-400 bg-amber-50 text-amber-800"
+                      : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50",
+                  )}
+                >
+                  {statusLabels[status]}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={() => onSettingsChange({ thresholdDays: 14, statuses: ["inProgress", "review"] })}
+            className="text-[11.5px] font-medium text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline"
+          >
+            Reset to default
+          </button>
+        </div>
+      ) : null}
+    </span>
+  );
+}
 
 function statusChip(status: string) {
   if (status === "done") return "border border-emerald-200/70 bg-emerald-50 text-emerald-700";
@@ -2455,6 +2636,10 @@ function backlogFilterSnapshotFromUnknown(raw: unknown): BacklogFilterSnapshot |
     roadmapFilter: Array.isArray(s.roadmapFilter) ? s.roadmapFilter.filter((x): x is string => typeof x === "string") : [],
     workItemFilter,
     groupLevels,
+    hygieneMissingDescription: s.hygieneMissingDescription === true,
+    hygieneMissingEstimate: s.hygieneMissingEstimate === true,
+    hygieneUnscheduled: s.hygieneUnscheduled === true,
+    hygieneStalled: s.hygieneStalled === true,
   };
 }
 
@@ -2569,6 +2754,14 @@ function backlogFilterSnapshotSummaryLines(snapshot: BacklogFilterSnapshot): str
   if (snapshot.labelFilter.length > 0) {
     lines.push(`Labels: ${snapshot.labelFilter.join(", ")}`);
   }
+  const hygiene: string[] = [];
+  if (snapshot.hygieneMissingDescription) hygiene.push("Missing description");
+  if (snapshot.hygieneMissingEstimate) hygiene.push("Missing estimate");
+  if (snapshot.hygieneUnscheduled) hygiene.push("Unscheduled");
+  if (snapshot.hygieneStalled) hygiene.push("Stalled");
+  if (hygiene.length > 0) {
+    lines.push(`Needs attention: ${hygiene.join(", ")}`);
+  }
 
   return lines;
 }
@@ -2614,6 +2807,61 @@ function applyWorkItemKindFilter(rows: InitiativeItem[], workItemFilter: WorkIte
       if (allowInitiative && !allowEpic && !allowStory) {
         return { ...initiative, epics: [] };
       }
+      return { ...initiative, epics };
+    })
+    .filter(Boolean) as InitiativeItem[];
+}
+
+/** Hygiene flags from the toolbar's second row. Each true value
+ *  narrows the table to items missing the corresponding data. Stories
+ *  AND epics are checked at their respective levels; "stalled" is
+ *  story-only. */
+type HygieneFlags = {
+  missingDescription: boolean;
+  missingEstimate: boolean;
+  unscheduled: boolean;
+  stalled: boolean;
+};
+
+function hasEmptyText(value: string | null | undefined): boolean {
+  return value == null || value.trim() === "";
+}
+
+function applyHygieneFilters(
+  rows: InitiativeItem[],
+  flags: HygieneFlags,
+  stalledStoryIds: ReadonlySet<string>,
+): InitiativeItem[] {
+  const anyFlagOn =
+    flags.missingDescription || flags.missingEstimate || flags.unscheduled || flags.stalled;
+  if (!anyFlagOn) return rows;
+  const storyQualifies = (story: { description?: string | null; estimatedDays?: number | null; sprint?: number | null; id: string }) => {
+    if (flags.missingDescription && !hasEmptyText(story.description)) return false;
+    if (flags.missingEstimate && story.estimatedDays != null) return false;
+    if (flags.unscheduled && story.sprint != null) return false;
+    if (flags.stalled && !stalledStoryIds.has(story.id)) return false;
+    return true;
+  };
+  const epicQualifies = (epic: { description?: string | null; originalEstimateDays?: number | null; planStartMonth?: number | null }) => {
+    if (flags.missingDescription && !hasEmptyText(epic.description)) return false;
+    if (flags.missingEstimate && epic.originalEstimateDays != null) return false;
+    if (flags.unscheduled && epic.planStartMonth != null) return false;
+    // "stalled" doesn't apply at epic level — epics survive on their
+    // own merits or via a qualifying child story.
+    return true;
+  };
+  return rows
+    .map((initiative) => {
+      const epics = (initiative.epics ?? [])
+        .map((epic) => {
+          const qualifyingStories = (epic.userStories ?? []).filter(storyQualifies);
+          if (qualifyingStories.length > 0 || epicQualifies(epic)) {
+            return { ...epic, userStories: qualifyingStories };
+          }
+          return null;
+        })
+        .filter(Boolean) as NonNullable<InitiativeItem["epics"]>;
+      if (epics.length === 0) return null;
       return { ...initiative, epics };
     })
     .filter(Boolean) as InitiativeItem[];
@@ -5103,6 +5351,7 @@ export function BacklogPlanningPanel({
   externalRoadmapFilter,
   externalGroupLevelToggle,
   onGroupLevelsChange,
+  externalHygieneToggle,
 }: BacklogPlanningPanelProps) {
   // Render-time diagnostic: count + time every commit to help spot whether
   // slowness is the mount itself, re-renders from a parent, or some heavy
@@ -5164,6 +5413,41 @@ export function BacklogPlanningPanel({
    *  Empty array = no filter. Stories with `null` priority are
    *  excluded the moment any priority is picked. */
   const [priorityFilter, setPriorityFilter] = useState<string[]>([]);
+  /** Hygiene filters — boolean toggles in the second toolbar row. Each
+   *  narrows the table to items missing the corresponding data. Stories
+   *  AND epics qualify for description / estimate / unscheduled (epics
+   *  read their own field); "Stalled" applies at story level only. */
+  const [hygieneMissingDescription, setHygieneMissingDescription] = useState(false);
+  const [hygieneMissingEstimate, setHygieneMissingEstimate] = useState(false);
+  const [hygieneUnscheduled, setHygieneUnscheduled] = useState(false);
+  const [hygieneStalled, setHygieneStalled] = useState(false);
+  /** Stalled-detection settings — workspace-wide via localStorage. The
+   *  threshold (days + statuses) parameterizes what the toggle catches.
+   *  Default: 14 days for `inProgress` or `review`. */
+  const [stalledSettings, setStalledSettings] = useState<{
+    thresholdDays: number;
+    statuses: ReadonlyArray<"todo" | "inProgress" | "review" | "done">;
+  }>(() => {
+    if (typeof window === "undefined") return { thresholdDays: 14, statuses: ["inProgress", "review"] as const };
+    try {
+      const raw = window.localStorage.getItem("epic-planner.hygiene.stalled-settings");
+      if (!raw) return { thresholdDays: 14, statuses: ["inProgress", "review"] as const };
+      const parsed = JSON.parse(raw);
+      const days = typeof parsed?.thresholdDays === "number" && parsed.thresholdDays > 0 ? parsed.thresholdDays : 14;
+      const validStatuses = ["todo", "inProgress", "review", "done"] as const;
+      const statuses = Array.isArray(parsed?.statuses)
+        ? (parsed.statuses.filter((s: unknown): s is "todo" | "inProgress" | "review" | "done" =>
+            typeof s === "string" && (validStatuses as readonly string[]).includes(s)) as Array<"todo" | "inProgress" | "review" | "done">)
+        : ["inProgress" as const, "review" as const];
+      return { thresholdDays: days, statuses: statuses.length ? statuses : ["inProgress" as const, "review" as const] };
+    } catch {
+      return { thresholdDays: 14, statuses: ["inProgress", "review"] as const };
+    }
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("epic-planner.hygiene.stalled-settings", JSON.stringify(stalledSettings));
+  }, [stalledSettings]);
   /** Date range filters for the Start / End columns. Each is a pair of
    *  ISO date strings (`yyyy-MM-dd`) or null. The filter accepts a row
    *  when its `workPlanStart` / `workPlanEnd` is on-or-after `from`
@@ -5279,6 +5563,43 @@ export function BacklogPlanningPanel({
   useEffect(() => {
     onGroupLevelsChange?.(groupLevels);
   }, [groupLevels, onGroupLevelsChange]);
+  // Identity-based hand-off from the "Needs Attention" hero card.
+  // Single-category clicks toggle one hygiene flag; "all-story" /
+  // "all-epic" toggles every story-set / epic-set toggle together
+  // (matches the "click the card with no specific category" UX).
+  // Workspace also auto-aligns: when a story-bucket category fires,
+  // Work Item flips to ["story"]; when an epic-bucket one fires, Work
+  // Item flips to ["epic"]. This way the table shows the matching
+  // items immediately without an extra click.
+  useEffect(() => {
+    if (externalHygieneToggle == null) return;
+    const { category, on } = externalHygieneToggle;
+    const storyCategories = new Set(["missingDescription", "missingEstimate", "unscheduled", "stalled"]);
+    if (category === "all-story") {
+      setHygieneMissingDescription(on);
+      setHygieneMissingEstimate(on);
+      setHygieneUnscheduled(on);
+      setHygieneStalled(on);
+      setWorkItemFilter(on ? ["story"] : []);
+      return;
+    }
+    if (category === "all-epic") {
+      setHygieneMissingDescription(on);
+      setHygieneMissingEstimate(on);
+      setHygieneUnscheduled(on);
+      // Stalled is story-only; leave it untouched for the epic-all path.
+      setWorkItemFilter(on ? ["epic"] : []);
+      return;
+    }
+    if (category === "missingDescription") setHygieneMissingDescription(on);
+    else if (category === "missingEstimate") setHygieneMissingEstimate(on);
+    else if (category === "unscheduled") setHygieneUnscheduled(on);
+    else if (category === "stalled") setHygieneStalled(on);
+    if (storyCategories.has(category)) {
+      setWorkItemFilter(on ? ["story"] : []);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalHygieneToggle]);
   // Local mirror of `groupLevels` for instant-feedback checkbox display in
   // the Group By popover. Same pattern as `MultiCheckboxFilter.localSelected`
   // — the checkbox `checked` flips this frame on click, while the heavy
@@ -6678,14 +6999,79 @@ export function BacklogPlanningPanel({
     return map;
   }, [backlogFilteredBeforeWorkItem]);
 
+  /** Derived set of story ids that count as "stalled" per the current
+   *  `stalledSettings`. Source of truth depends on what the server gave
+   *  us: when story.snapshots are present (full-data loads), we walk
+   *  backwards from today to find the earliest consecutive snapshot with
+   *  the same status. When snapshots are absent (slim Backlog payload),
+   *  we fall back to `story.updatedAt` as an approximate timestamp for
+   *  "last change touching this story" — imperfect (any edit resets the
+   *  clock) but useful as a baseline. The set is empty when the Stalled
+   *  toggle is off. */
+  const stalledStoryIds = useMemo(() => {
+    const set = new Set<string>();
+    if (!hygieneStalled) return set;
+    const allowedStatuses = new Set(stalledSettings.statuses);
+    const cutoffMs = Date.now() - stalledSettings.thresholdDays * 24 * 60 * 60 * 1000;
+    for (const initiative of backlogFilteredBeforeWorkItem) {
+      for (const epic of initiative.epics ?? []) {
+        for (const story of epic.userStories ?? []) {
+          if (!allowedStatuses.has(story.status)) continue;
+          // Prefer snapshot-derived "last status change" when available:
+          // walk back from today to find the earliest consecutive same-
+          // status snapshot. Its `snapshotDate` ≈ when the story entered
+          // its current status.
+          const snapshots = (story as { snapshots?: Array<{ snapshotDate: string | Date; status: string }> }).snapshots;
+          let lastChangeMs: number | null = null;
+          if (snapshots && snapshots.length > 0) {
+            // Snapshots are stored ascending; iterate backwards.
+            for (let i = snapshots.length - 1; i >= 0; i--) {
+              const snap = snapshots[i];
+              if (snap.status !== story.status) {
+                const next = snapshots[i + 1];
+                if (next) lastChangeMs = new Date(next.snapshotDate).getTime();
+                break;
+              }
+              if (i === 0) {
+                lastChangeMs = new Date(snap.snapshotDate).getTime();
+              }
+            }
+          }
+          // Fall back to `updatedAt` when no snapshots are loaded
+          // (slim payload). Imperfect proxy but better than no signal.
+          if (lastChangeMs == null) {
+            lastChangeMs = new Date(story.updatedAt).getTime();
+          }
+          if (Number.isFinite(lastChangeMs) && lastChangeMs <= cutoffMs) {
+            set.add(story.id);
+          }
+        }
+      }
+    }
+    return set;
+  }, [hygieneStalled, stalledSettings, backlogFilteredBeforeWorkItem]);
+
+  const backlogFilteredWithHygiene = useMemo(() =>
+    applyHygieneFilters(
+      backlogFilteredBeforeWorkItem,
+      {
+        missingDescription: hygieneMissingDescription,
+        missingEstimate: hygieneMissingEstimate,
+        unscheduled: hygieneUnscheduled,
+        stalled: hygieneStalled,
+      },
+      stalledStoryIds,
+    ),
+  [backlogFilteredBeforeWorkItem, hygieneMissingDescription, hygieneMissingEstimate, hygieneUnscheduled, hygieneStalled, stalledStoryIds]);
+
   const fullyFiltered = useMemo(() => timePhase("fullyFiltered", () => {
-    const base = applyWorkItemKindFilter(backlogFilteredBeforeWorkItem, workItemFilter);
+    const base = applyWorkItemKindFilter(backlogFilteredWithHygiene, workItemFilter);
     // When the user clicks a column header, columnSort takes priority over the
     // saved-view sortBy (which still governs per-epic story ordering inside
     // `filteredWithControls`). Cleared (null) → fall back to the upstream order.
     if (columnSort) return [...base].sort((a, b) => compareByColumn(a, b, columnSort));
     return base;
-  }), [backlogFilteredBeforeWorkItem, workItemFilter, columnSort]);
+  }), [backlogFilteredWithHygiene, workItemFilter, columnSort]);
   // O(1) lookups by id — replaces `fullyFiltered.find(...)` calls that fired once per rendered
   // row (= O(N²) total) and made changing Group by feel slow on large backlogs.
   const initiativeById = useMemo(() => {
@@ -7468,6 +7854,10 @@ export function BacklogPlanningPanel({
     parentFilter.length > 0 ||
     workItemFilter.length > 0 ||
     groupLevels.length > 0 ||
+    hygieneMissingDescription ||
+    hygieneMissingEstimate ||
+    hygieneUnscheduled ||
+    hygieneStalled ||
     query.trim().length > 0 ||
     presetSearch.trim().length > 0;
 
@@ -7501,6 +7891,10 @@ export function BacklogPlanningPanel({
     setParentFilter([]);
     setWorkItemFilter([]);
     setGroupLevels([]);
+    setHygieneMissingDescription(false);
+    setHygieneMissingEstimate(false);
+    setHygieneUnscheduled(false);
+    setHygieneStalled(false);
     setGroupMenuOpen(false);
     setPresetSearch("");
     setPresetMenuOpen(false);
@@ -7519,6 +7913,10 @@ export function BacklogPlanningPanel({
       roadmapFilter,
       workItemFilter,
       groupLevels,
+      hygieneMissingDescription,
+      hygieneMissingEstimate,
+      hygieneUnscheduled,
+      hygieneStalled,
     };
   }, [
     query,
@@ -7532,6 +7930,10 @@ export function BacklogPlanningPanel({
     roadmapFilter,
     workItemFilter,
     groupLevels,
+    hygieneMissingDescription,
+    hygieneMissingEstimate,
+    hygieneUnscheduled,
+    hygieneStalled,
   ]);
 
   const buildBacklogViewSnapshot = useCallback((): BacklogViewSnapshot => {
@@ -7556,6 +7958,10 @@ export function BacklogPlanningPanel({
     setRoadmapFilter([...(snapshot.roadmapFilter ?? [])]);
     setWorkItemFilter([...snapshot.workItemFilter]);
     setGroupLevels([...snapshot.groupLevels]);
+    setHygieneMissingDescription(Boolean(snapshot.hygieneMissingDescription));
+    setHygieneMissingEstimate(Boolean(snapshot.hygieneMissingEstimate));
+    setHygieneUnscheduled(Boolean(snapshot.hygieneUnscheduled));
+    setHygieneStalled(Boolean(snapshot.hygieneStalled));
     setGroupMenuOpen(false);
   }, []);
 
@@ -10941,6 +11347,37 @@ export function BacklogPlanningPanel({
                 Erases all filters: search, group-by, and every filter selection.
               </span>
             </span>
+          </div>
+          {/* Hygiene toggle row — sits below the main toolbar row,
+              right-aligned. Each toggle narrows the table to items
+              missing the corresponding data; Stalled also carries a
+              ⚙ settings popover for tuning days + monitored statuses. */}
+          <div className="flex w-full basis-full flex-wrap items-center justify-end gap-1.5 -mt-1">
+            <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Needs attention</span>
+            <HygieneToggle
+              label="Missing desc"
+              tooltip="Items where description is empty or missing."
+              active={hygieneMissingDescription}
+              onToggle={() => setHygieneMissingDescription((v) => !v)}
+            />
+            <HygieneToggle
+              label="Missing est"
+              tooltip="Stories with no day estimate; epics with no original estimate."
+              active={hygieneMissingEstimate}
+              onToggle={() => setHygieneMissingEstimate((v) => !v)}
+            />
+            <HygieneToggle
+              label="Unscheduled"
+              tooltip="Stories with no sprint; epics with no planned start month."
+              active={hygieneUnscheduled}
+              onToggle={() => setHygieneUnscheduled((v) => !v)}
+            />
+            <StalledToggle
+              active={hygieneStalled}
+              onToggle={() => setHygieneStalled((v) => !v)}
+              settings={stalledSettings}
+              onSettingsChange={setStalledSettings}
+            />
           </div>
       </div>
       {createSelection?.anchorKey === "group-toolbar:add-initiative" ? (
