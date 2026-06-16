@@ -9904,11 +9904,20 @@ export function TimelineGrid({
                               <div
                                 className="pointer-events-none absolute inset-y-0 z-10 flex items-center"
                                 style={{ left: roadmapLaneTodayLeft, transform: "translate(-50%, 14px)" }}
-                                aria-hidden
                               >
-                                <span className="pointer-events-auto inline-flex items-center justify-center rounded bg-emerald-50/35 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 shadow-sm ring-1 ring-emerald-200/70">
+                                <button
+                                  type="button"
+                                  title="Jump to today's sprint kanban"
+                                  onClick={() => {
+                                    const todaySprint = currentWorkYearSprintForPlan(currentYear);
+                                    if (todaySprint == null) return;
+                                    setFocusedMonth(todayMonth);
+                                    onEnterSprintStoryBoard?.(todaySprint, null);
+                                  }}
+                                  className="pointer-events-auto inline-flex items-center justify-center rounded bg-emerald-50/35 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 shadow-sm ring-1 ring-emerald-200/70 transition hover:bg-emerald-100 hover:shadow"
+                                >
                                   Today
-                                </span>
+                                </button>
                               </div>
                             ) : null}
                           </div>
@@ -10592,11 +10601,20 @@ export function TimelineGrid({
                             <div
                               className="pointer-events-none absolute inset-y-0 z-10 flex items-center"
                               style={{ left: roadmapLaneTodayLeft, transform: "translate(-50%, 10px)" }}
-                              aria-hidden
                             >
-                              <span className="pointer-events-auto inline-flex items-center justify-center rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 shadow-sm ring-1 ring-emerald-200/70">
+                              <button
+                                type="button"
+                                title="Jump to today's sprint kanban"
+                                onClick={() => {
+                                  const todaySprint = currentWorkYearSprintForPlan(currentYear);
+                                  if (todaySprint == null) return;
+                                  setFocusedMonth(todayMonth);
+                                  onEnterSprintStoryBoard?.(todaySprint, null);
+                                }}
+                                className="pointer-events-auto inline-flex items-center justify-center rounded bg-emerald-50/35 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 shadow-sm ring-1 ring-emerald-200/70 transition hover:bg-emerald-100 hover:shadow"
+                              >
                                 Today
-                              </span>
+                              </button>
                             </div>
                           ) : null}
                         </div>
@@ -10648,11 +10666,20 @@ export function TimelineGrid({
                               <div
                                 className="pointer-events-none absolute inset-y-0 z-10 flex items-center"
                                 style={{ left: roadmapLaneTodayLeft, transform: "translate(-50%, -2px)" }}
-                                aria-hidden
                               >
-                                <span className="pointer-events-auto inline-flex items-center justify-center rounded bg-emerald-50/95 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 shadow-sm ring-1 ring-emerald-200/70">
+                                <button
+                                  type="button"
+                                  title="Jump to today's sprint kanban"
+                                  onClick={() => {
+                                    const todaySprint = currentWorkYearSprintForPlan(currentYear);
+                                    if (todaySprint == null) return;
+                                    setFocusedMonth(todayMonth);
+                                    onEnterSprintStoryBoard?.(todaySprint, null);
+                                  }}
+                                  className="pointer-events-auto inline-flex items-center justify-center rounded bg-emerald-50/35 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 shadow-sm ring-1 ring-emerald-200/70 transition hover:bg-emerald-100 hover:shadow"
+                                >
                                   Today
-                                </span>
+                                </button>
                               </div>
                             ) : null}
                           </div>
