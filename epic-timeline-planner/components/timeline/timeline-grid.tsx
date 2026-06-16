@@ -2994,6 +2994,11 @@ export function TimelineGrid({
    *  Distribution donut + backlog Health column use. Defaults to off
    *  so cards stay compact when health isn't the focus. */
   const [sprintKanbanShowHealth, setSprintKanbanShowHealth] = useState(false);
+  /** Sprint Kanban only — toggles a team chip on each story card so
+   *  the delivery team is visible at a glance. Off by default since
+   *  the per-column team filter chips already convey team identity
+   *  for the most common workflows. */
+  const [sprintKanbanShowTeams, setSprintKanbanShowTeams] = useState(false);
   const [sprintKanbanSearch, setSprintKanbanSearch] = useState("");
   const [sprintKanbanSearchOpen, setSprintKanbanSearchOpen] = useState(false);
   const sprintKanbanSearchRef = useRef<HTMLDivElement>(null);
@@ -7873,6 +7878,21 @@ export function TimelineGrid({
         <HeartPulse className="size-3 shrink-0" strokeWidth={2.2} aria-hidden />
         Health
       </button>
+      <button
+        type="button"
+        onClick={() => setSprintKanbanShowTeams((v) => !v)}
+        aria-pressed={sprintKanbanShowTeams}
+        title={sprintKanbanShowTeams ? "Hide team chips on cards" : "Show team chips on cards"}
+        className={cn(
+          summaryChipBaseClass,
+          sprintKanbanShowTeams
+            ? "bg-gradient-to-br from-sky-100 via-sky-200 to-sky-200 text-sky-950 ring-1 ring-sky-300/75 shadow-sm"
+            : "bg-gradient-to-br from-sky-50 via-sky-100 to-sky-100 text-sky-950 ring-1 ring-sky-200/75 hover:from-sky-100 hover:via-sky-200 hover:to-sky-200",
+        )}
+      >
+        <Users className="size-3 shrink-0" strokeWidth={2.2} aria-hidden />
+        Teams
+      </button>
       {/* Carried-over toolbar chip — only renders when the current sprint
        *  actually has stories that rolled over from a prior sprint. Clicking
        *  opens the audit modal listing exactly which stories carried over. */}
@@ -7925,40 +7945,11 @@ export function TimelineGrid({
         <span className="hidden sm:inline">User Stories</span>
         <span className="sm:hidden">Stories</span>
       </button>
-      <button
-        type="button"
-        onClick={() => openEstEpicsPanel()}
-        className={summaryChipEstimatedClass}
-      >
-        <svg viewBox="0 0 16 16" className={summaryChipProgressCircleClass} aria-hidden>
-          <circle cx="8" cy="8" r="6" fill="none" stroke="#cbd5e1" strokeWidth="2.5" />
-          <circle
-            cx="8"
-            cy="8"
-            r="6"
-            fill="none"
-            stroke="#9f1239"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            transform="rotate(-90 8 8)"
-            strokeDasharray={`${2 * Math.PI * 6}`}
-            strokeDashoffset={`${(2 * Math.PI * 6) * (1 - estimatedEpicsPercentClamped / 100)}`}
-          />
-        </svg>
-        <span className="truncate">{estimatedEpicsPercentForScope}%</span>
-        <span className="hidden sm:inline">Epic Estimated</span>
-        <span className="sm:hidden">Estimated</span>
-      </button>
-      <button
-        type="button"
-        onClick={() => openEstEpicsPanel("unscheduledStories")}
-        className={summaryChipUnscheduledClass}
-        title="Open unscheduled stories panel"
-      >
-        <span className="truncate">{sprintKanbanSummaryStats.storyUnscheduled}</span>
-        <span className="hidden sm:inline">User Stories Unscheduled</span>
-        <span className="sm:hidden">US Unsch.</span>
-      </button>
+      {/* "Epic Estimated" + "User Stories Unscheduled" summary chips
+       *  removed per planner request — both surfaced workspace-wide
+       *  numbers next to per-sprint chips, which read as misleading.
+       *  The epic-estimate coverage popover is still reachable from
+       *  the dashboard hero's "Needs Attention" card. */}
     </>
   ) : null;
 
@@ -9480,6 +9471,7 @@ export function TimelineGrid({
                   yearSprint={resolvedActiveYearSprint ?? 1}
                   progressBasis={progressBasis}
                   showHealthBadges={sprintKanbanShowHealth}
+                  showTeamBadges={sprintKanbanShowTeams}
                   filterEpicTeamIds={sprintFilterTeamIds.length ? sprintFilterTeamIds : null}
                   workspaceDirectoryUsers={workspaceDirectoryUsers}
                   epicAccordionEmphasis={sprintEpicAccordionEmphasis}

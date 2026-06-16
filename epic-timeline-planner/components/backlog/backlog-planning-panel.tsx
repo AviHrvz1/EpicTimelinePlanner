@@ -97,7 +97,6 @@ import { monthLaneFromGlobalSprint, resolveStoryYearSprint, sprintEndDate, YEAR_
 import { sprintCalendarDaysRemaining, sprintDayDates } from "@/lib/sprint-analytics";
 import { sprintStoryVerdict, type SprintLoadStoryProjection } from "@/components/timeline/sprint-analytics";
 import { computeStoryHealthVerdict } from "@/lib/story-health";
-import { HealthBadge } from "@/components/timeline/health-badge";
 import { computeEpicHealthVerdict, computeInitiativeHealthVerdict } from "@/lib/epic-health";
 import type { HealthStatus, ProgressBasis } from "@/lib/progress";
 
@@ -147,14 +146,37 @@ const computeStoryHealthForBacklog = computeStoryHealthVerdict;
  * Tiny shared renderer so every row variant — story / epic /
  * initiative / folder — paints the Health cell the same way. Passing
  * `null` shows the same em-dash every other "no data" cell uses.
+ *
+ * Backlog table renders the verdict as a bare icon + label (no chip
+ * background or ring) so the column reads as data, not as a button.
+ * The full chip styling is still used everywhere else `HealthBadge`
+ * lives (Gantt, scope panel, etc.).
  */
+const BACKLOG_HEALTH_META: Record<
+  HealthStatus,
+  { label: string; icon: typeof Check; iconClass: string }
+> = {
+  done:    { label: "Done",     icon: CheckCheck,    iconClass: "text-emerald-600" },
+  onTrack: { label: "On Track", icon: Check,         iconClass: "text-emerald-600" },
+  watch:   { label: "Watch",    icon: AlertTriangle, iconClass: "text-amber-600" },
+  atRisk:  { label: "At Risk",  icon: AlertTriangle, iconClass: "text-rose-600" },
+  overdue: { label: "Overdue",  icon: AlertOctagon,  iconClass: "text-rose-700" },
+};
+
 function renderBacklogHealthCell(verdict: { status: HealthStatus } | null): ReactNode {
   if (verdict == null) {
     return <span className="text-[16px] text-slate-400">—</span>;
   }
+  const meta = BACKLOG_HEALTH_META[verdict.status];
+  const Icon = meta.icon;
   return (
-    <span className="inline-flex items-center justify-center">
-      <HealthBadge status={verdict.status} size="sm" />
+    <span
+      className="inline-flex items-center justify-center gap-1.5 text-[16px] text-slate-900"
+      aria-label={meta.label}
+      title={meta.label}
+    >
+      <Icon className={cn("size-4 shrink-0", meta.iconClass)} aria-hidden />
+      <span>{meta.label}</span>
     </span>
   );
 }
@@ -305,11 +327,43 @@ type BacklogPlanningPanelProps = {
    *  semantics. */
   externalHygieneToggle?:
     | {
-        category: "missingDescription" | "missingEstimate" | "unscheduled" | "stalled" | "all-story" | "all-epic";
+        /** Donut category names — story-scope uses `missingDescription`,
+         *  `missingEstimate`, `missingSprint`, `stalled`; epic-scope uses
+         *  `unestimated`, `unscheduled`, `noStories`, `hasUnestimatedChildren`.
+         *  `all-story` / `all-epic` toggle every category in that scope. */
+        category:
+          | "missingDescription"
+          | "missingEstimate"
+          | "missingSprint"
+          | "stalled"
+          | "unestimated"
+          | "unscheduled"
+          | "noStories"
+          | "hasUnestimatedChildren"
+          | "all-story"
+          | "all-epic";
         on: boolean;
         scope?: "story" | "epic";
       }
     | null;
+  /** Reverse direction of `externalHygieneToggle` — fires whenever a
+   *  user clicks a backlog hygiene toggle so the parent can sync the
+   *  hero's "Needs Attention" donut highlight back. `category` uses the
+   *  hero's donut vocabulary (per-scope names), so the parent does no
+   *  translation. */
+  onHygieneToggleClick?: (state: {
+    scope: "story" | "epic";
+    category:
+      | "missingDescription"
+      | "missingEstimate"
+      | "missingSprint"
+      | "stalled"
+      | "unestimated"
+      | "unscheduled"
+      | "noStories"
+      | "hasUnestimatedChildren";
+    on: boolean;
+  }) => void;
 };
 
 type OptionItem = { id: string; label: string };
@@ -557,18 +611,25 @@ function BacklogLabelsChipPanel({
       )}
     >
       <span className="flex min-w-0 flex-1 flex-nowrap items-center justify-start gap-1 overflow-hidden whitespace-nowrap">
-        {tokens.map((lab, i) => (
+        {tokens.length === 1 ? (
           <span
-            key={`${lab}-${i}`}
             className={cn(
               "inline-flex max-w-[min(100%,10rem)] shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-[10.5px] font-semibold leading-tight",
-              labelChipClasses(lab),
+              labelChipClasses(tokens[0]),
             )}
           >
             <Tag className="size-2.5 shrink-0 opacity-70" aria-hidden />
-            <span className="truncate">{lab}</span>
+            <span className="truncate">{tokens[0]}</span>
           </span>
-        ))}
+        ) : (
+          // 2+ labels: collapse to a count so the cell stays readable
+          // at the table's 16px baseline. Full list is in the title
+          // tooltip + opens on click via the same edit affordance.
+          <span className="inline-flex items-center gap-1 truncate text-[16px] text-slate-700">
+            <Tag className="size-3.5 shrink-0 text-slate-400" aria-hidden />
+            <span className="truncate">{tokens.length} labels</span>
+          </span>
+        )}
       </span>
     </button>
   );
@@ -632,7 +693,7 @@ function BacklogSumChip({ value, unit = "d" }: { value: number | string; unit?: 
 }
 
 const backlogReadonlyInitiativeDateButtonClass =
-  "w-full min-w-0 rounded-md px-1 py-0.5 text-center text-[14px] tabular-nums text-slate-700 transition hover:bg-slate-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/80";
+  "w-full min-w-0 rounded-md px-1 py-0.5 text-center text-[16px] tabular-nums text-slate-700 transition hover:bg-slate-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/80";
 
 const backlogReadonlyProgressButtonClass =
   "w-full min-w-0 space-y-0.5 rounded-md px-0.5 py-0.5 text-left transition hover:bg-slate-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/80";
@@ -1013,7 +1074,7 @@ function HygieneToggle({
         {count != null ? (
           <span
             className={cn(
-              "ml-0.5 inline-flex h-4 min-w-[1.1rem] items-center justify-center rounded-full px-1.5 text-[10.5px] font-semibold tabular-nums leading-none ring-1",
+              "ml-0.5 inline-flex h-4 min-w-[1.1rem] items-center justify-center rounded-full px-1.5 text-[10.5px] font-semibold tabular-nums leading-[16px] ring-1",
               active
                 ? "bg-amber-100 text-amber-900 ring-amber-200"
                 : count > 0
@@ -1098,7 +1159,7 @@ function StalledToggle({
         {count != null ? (
           <span
             className={cn(
-              "ml-0.5 inline-flex h-4 min-w-[1.1rem] items-center justify-center rounded-full px-1.5 text-[10.5px] font-semibold tabular-nums leading-none ring-1",
+              "ml-0.5 inline-flex h-4 min-w-[1.1rem] items-center justify-center rounded-full px-1.5 text-[10.5px] font-semibold tabular-nums leading-[16px] ring-1",
               active
                 ? "bg-amber-100 text-amber-900 ring-amber-200"
                 : count > 0
@@ -1323,7 +1384,7 @@ function CellOptionPopover<T extends string>({
             aria-selected={selected}
             onClick={() => onSelect(opt.value)}
             className={cn(
-              "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[14px] outline-none transition-colors",
+              "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[16px] outline-none transition-colors",
               selected ? "bg-indigo-50 text-indigo-700" : "text-slate-700 hover:bg-slate-50",
             )}
           >
@@ -2299,25 +2360,22 @@ function BacklogLabelsPickEditor({
         <span className="inline-flex min-w-0 items-center gap-1">
           {activeLabels.length === 0 ? (
             <span className="truncate text-slate-400">Pick labels…</span>
+          ) : activeLabels.length === 1 ? (
+            <span
+              className={cn(
+                "inline-flex max-w-[6rem] items-center truncate rounded border px-1.5 py-0.5 text-[11px] leading-none",
+                LABEL_CHIP_CLASS,
+              )}
+            >
+              {activeLabels[0]}
+            </span>
           ) : (
-            <>
-              {activeLabels.slice(0, 2).map((l) => (
-                <span
-                  key={l}
-                  className={cn(
-                    "inline-flex max-w-[6rem] items-center truncate rounded border px-1.5 py-0.5 text-[11px] leading-none",
-                    LABEL_CHIP_CLASS,
-                  )}
-                >
-                  {l}
-                </span>
-              ))}
-              {activeLabels.length > 2 ? (
-                <span className="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[11px] leading-none text-slate-600">
-                  +{activeLabels.length - 2}
-                </span>
-              ) : null}
-            </>
+            // 2+ labels: collapse to a count so the trigger keeps a
+            // stable width and the surrounding ✓ / ✕ controls stay
+            // visible. Matches the read-only cell summary.
+            <span className="inline-flex items-center gap-1 truncate text-slate-700">
+              {activeLabels.length} labels
+            </span>
           )}
         </span>
         <ChevronDown className="size-3 shrink-0 text-slate-400" aria-hidden />
@@ -2383,7 +2441,7 @@ function BacklogLabelsPickEditor({
                           <Check className="size-2.5" />
                         </span>
                         <span className={cn(
-                          "inline-flex max-w-full truncate rounded border px-1.5 py-0.5 text-[11px] leading-none",
+                          "inline-flex max-w-full truncate rounded border px-1.5 py-0.5 text-[16px] leading-tight",
                           LABEL_CHIP_CLASS,
                         )}>
                           {s}
@@ -2866,6 +2924,13 @@ type HygieneFlags = {
   missingEstimate: boolean;
   unscheduled: boolean;
   stalled: boolean;
+  /** Epic-only: epic has no child stories. Mirrors the donut's
+   *  "No stories" slice at epic scope. */
+  noStories: boolean;
+  /** Epic-only: epic has at least one child story missing a day
+   *  estimate. Mirrors the donut's "Unestimated stories" slice at
+   *  epic scope. */
+  unestimatedStories: boolean;
 };
 
 function hasEmptyText(value: string | null | undefined): boolean {
@@ -2885,7 +2950,8 @@ function applyHygieneFilters(
   scope: "epic" | "story" | "all" = "all",
 ): InitiativeItem[] {
   const anyFlagOn =
-    flags.missingDescription || flags.missingEstimate || flags.unscheduled || flags.stalled;
+    flags.missingDescription || flags.missingEstimate || flags.unscheduled || flags.stalled ||
+    flags.noStories || flags.unestimatedStories;
   if (!anyFlagOn) return rows;
   const storyQualifies = (story: { description?: string | null; estimatedDays?: number | null; sprint?: number | null; id: string; status?: string }) => {
     // Done stories are exempt from missing-estimate / no-sprint /
@@ -2896,12 +2962,19 @@ function applyHygieneFilters(
     if (flags.missingEstimate && (done || story.estimatedDays != null)) return false;
     if (flags.unscheduled && (done || story.sprint != null)) return false;
     if (flags.stalled && (done || !stalledStoryIds.has(story.id))) return false;
+    // Epic-only flags don't filter stories on their own — they survive
+    // here so an epic that qualifies still shows ITS children.
     return true;
   };
-  const epicQualifies = (epic: { description?: string | null; originalEstimateDays?: number | null; planStartMonth?: number | null }) => {
+  const epicQualifies = (epic: { description?: string | null; originalEstimateDays?: number | null; planStartMonth?: number | null; userStories?: { estimatedDays?: number | null }[] }) => {
     if (flags.missingDescription && !hasEmptyText(epic.description)) return false;
     if (flags.missingEstimate && epic.originalEstimateDays != null) return false;
     if (flags.unscheduled && epic.planStartMonth != null) return false;
+    if (flags.noStories && (epic.userStories?.length ?? 0) > 0) return false;
+    if (
+      flags.unestimatedStories &&
+      !(epic.userStories ?? []).some((s) => s.estimatedDays == null)
+    ) return false;
     // "stalled" doesn't apply at epic level.
     return true;
   };
@@ -3122,7 +3195,7 @@ function BacklogTeamFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-7 min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[14px] text-slate-900 outline-none transition",
+          "flex h-7 min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[16px] text-slate-900 outline-none transition",
           // Active (has selection) → tinted indigo so user sees at a glance
           // which filters are narrowing the table. Inactive stays neutral.
           !allSelected
@@ -3153,7 +3226,7 @@ function BacklogTeamFilterControl({
       ) : null}
       {isOpen ? (
         <div className="absolute z-30 mt-1 w-64 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
-          <label className="mb-2 flex items-center gap-2 text-[14px] text-slate-700">
+          <label className="mb-2 flex items-center gap-2 text-[16px] text-slate-700">
             <input
               type="checkbox"
               checked={allSelected}
@@ -3170,7 +3243,7 @@ function BacklogTeamFilterControl({
             onChange={setDraft}
             suggestions={teamAutocompleteLabels}
             placeholder="Type to search teams…"
-            className="h-9 w-full rounded-md border border-indigo-200/90 bg-white px-2 text-[14px] text-slate-800 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200/80"
+            className="h-9 w-full rounded-md border border-indigo-200/90 bg-white px-2 text-[16px] text-slate-800 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200/80"
             aria-label="Add team to filter"
             onSuggestionPick={pickTeam}
           />
@@ -3269,7 +3342,7 @@ function BacklogAssigneeFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-7 min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[14px] text-slate-900 outline-none transition",
+          "flex h-7 min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[16px] text-slate-900 outline-none transition",
           // Active (has selection) → tinted indigo so user sees at a glance
           // which filters are narrowing the table. Inactive stays neutral.
           !allSelected
@@ -3300,7 +3373,7 @@ function BacklogAssigneeFilterControl({
       ) : null}
       {isOpen ? (
         <div className="absolute z-30 mt-1 w-64 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
-          <label className="mb-2 flex items-center gap-2 text-[14px] text-slate-700">
+          <label className="mb-2 flex items-center gap-2 text-[16px] text-slate-700">
             <input
               type="checkbox"
               checked={allSelected}
@@ -3318,7 +3391,7 @@ function BacklogAssigneeFilterControl({
             suggestions={suggestions}
             directoryUsers={directoryUsers}
             placeholder="Type to search…"
-            className="h-9 w-full rounded-md border border-indigo-200/90 bg-white px-2 text-[14px] text-slate-800 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200/80"
+            className="h-9 w-full rounded-md border border-indigo-200/90 bg-white px-2 text-[16px] text-slate-800 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200/80"
             aria-label="Add assignee to filter"
             onSuggestionPick={pickAssignee}
           />
@@ -3411,7 +3484,7 @@ function BacklogLabelsFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-7 min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[14px] text-slate-900 outline-none transition",
+          "flex h-7 min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[16px] text-slate-900 outline-none transition",
           // Active (has selection) → tinted indigo so user sees at a glance
           // which filters are narrowing the table. Inactive stays neutral.
           !allSelected
@@ -3447,7 +3520,7 @@ function BacklogLabelsFilterControl({
         // panel's right edge. Same pattern applies to other rightmost
         // filters if their popovers ever overflow.
         <div className="absolute right-0 z-30 mt-1 w-72 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
-          <label className="mb-2 flex items-center gap-2 text-[14px] text-slate-700">
+          <label className="mb-2 flex items-center gap-2 text-[16px] text-slate-700">
             <input
               type="checkbox"
               checked={allSelected}
@@ -3464,7 +3537,7 @@ function BacklogLabelsFilterControl({
             onChange={setDraft}
             suggestions={suggestions}
             placeholder="Type to add a label…"
-            className="h-9 w-full rounded-md border border-indigo-200/90 bg-white px-2 text-[14px] text-slate-800 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200/80"
+            className="h-9 w-full rounded-md border border-indigo-200/90 bg-white px-2 text-[16px] text-slate-800 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200/80"
             aria-label="Add label to filter"
             onSuggestionPick={pickLabel}
             // Labels aren't people — render a Tag icon next to each
@@ -3841,7 +3914,7 @@ function MultiCheckboxFilter({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-7 min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[14px] text-slate-900 outline-none transition",
+          "flex h-7 min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[16px] text-slate-900 outline-none transition",
           // Active (has selection) → tinted indigo so user sees at a glance
           // which filters are narrowing the table. Inactive stays neutral.
           !allSelected
@@ -3878,7 +3951,7 @@ function MultiCheckboxFilter({
       ) : null}
       {isOpen ? (
         <div className="absolute z-30 mt-1 w-56 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
-        <label className="mb-1 flex items-center gap-2 text-[14px] text-slate-700">
+        <label className="mb-1 flex items-center gap-2 text-[16px] text-slate-700">
           <input
             type="checkbox"
             checked={allSelected}
@@ -3889,7 +3962,7 @@ function MultiCheckboxFilter({
         </label>
         <div className="max-h-44 space-y-1 overflow-auto pr-1">
           {options.map((option) => (
-            <label key={option.id} className="flex items-center gap-2 text-[14px] text-slate-700">
+            <label key={option.id} className="flex items-center gap-2 text-[16px] text-slate-700">
               <input
                 type="checkbox"
                 checked={allSelected || localSelected.includes(option.id)}
@@ -4009,7 +4082,7 @@ function BacklogParentFilterControl({
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className={cn(
-          "flex h-7 min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[14px] text-slate-900 outline-none transition",
+          "flex h-7 min-w-[11rem] cursor-pointer items-center justify-between rounded-lg border px-2.5 text-[16px] text-slate-900 outline-none transition",
           // Active (has selection) → tinted indigo so user sees at a glance
           // which filters are narrowing the table. Inactive stays neutral.
           !allSelected
@@ -4044,7 +4117,7 @@ function BacklogParentFilterControl({
          * truncation at w-72 hid most of the labels. w-96 keeps both
          * levels readable. */
         <div className="absolute z-30 mt-1 w-96 rounded-lg bg-gradient-to-b from-indigo-50 to-violet-50 p-2 shadow-lg shadow-indigo-900/5 backdrop-blur-sm">
-          <label className="mb-1 flex items-center gap-2 text-[14px] text-slate-700">
+          <label className="mb-1 flex items-center gap-2 text-[16px] text-slate-700">
             <input
               type="checkbox"
               checked={allSelected}
@@ -4069,7 +4142,7 @@ function BacklogParentFilterControl({
               const epicIds = init.epics.map((e) => e.epicId);
               return (
                 <div key={init.initiativeId} className="rounded">
-                  <label className="flex items-center gap-2 text-[14px] font-medium text-slate-800">
+                  <label className="flex items-center gap-2 text-[16px] font-medium text-slate-800">
                     <input
                       type="checkbox"
                       checked={initChecked}
@@ -4182,7 +4255,7 @@ function IsolatedTextInput({
         placeholder={placeholder}
         autoFocus
         aria-label={ariaLabel}
-        className={inputClassName ?? "h-7 min-w-0 flex-1 rounded-md bg-white px-2 text-[14px] ring-1 ring-slate-200 outline-none"}
+        className={inputClassName ?? "h-7 min-w-0 flex-1 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"}
         onBlur={
           saveOnBlur
             ? () => {
@@ -4471,7 +4544,7 @@ function QuarterInitiativeCreateForm({
             onChange={(event) => setTitle(event.target.value)}
             placeholder={placeholder}
             className={cn(
-              "h-full w-full bg-transparent pr-2.5 text-[14px] outline-none",
+              "h-full w-full bg-transparent pr-2.5 text-[16px] outline-none",
               leadingIcon ? "pl-0" : "pl-2.5",
             )}
             autoFocus
@@ -4556,7 +4629,7 @@ function IsolatedRoadmapCreateForm({
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="New roadmap name…"
-            className="h-full w-full bg-transparent pl-0 pr-2.5 text-[14px] outline-none"
+            className="h-full w-full bg-transparent pl-0 pr-2.5 text-[16px] outline-none"
             autoFocus
             onKeyDown={(event) => {
               if (event.key === "Escape") {
@@ -4857,7 +4930,7 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
               {isEditingTitle ? (
                 <IsolatedTextInput
                   initial={editingTitleValue}
-                  inputClassName="h-7 min-w-[180px] rounded-md bg-white px-2 text-[14px] ring-1 ring-slate-200 outline-none"
+                  inputClassName="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                   onCancel={() => ctx.setEditingStoryTitle(null)}
                   onSave={async (value) => {
                     const next = value.trim();
@@ -4869,7 +4942,7 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
                   }}
                 />
               ) : (
-                <span className="inline-flex w-full min-w-0 items-center gap-1 text-left text-[14px]">
+                <span className="inline-flex w-full min-w-0 items-center gap-1 text-left text-[16px]">
                   <button
                     type="button"
                     className="min-w-0 truncate text-left hover:underline hover:decoration-slate-400 hover:underline-offset-2"
@@ -4912,21 +4985,21 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
             {ctx.renderBacklogTeamCell(row.teamId)}
           </button>
         ),
-        year: <span className="text-center text-[14px] text-slate-700">{row.initiativeYear}</span>,
+        year: <span className="text-center text-[16px] text-slate-700">{row.initiativeYear}</span>,
         quarter: row.storyQuarterLabelValue ? (
           ctx.renderQuarterChipsCell([row.storyQuarterLabelValue])
         ) : (
-          <span className="text-center text-[14px] text-slate-400">—</span>
+          <span className="text-center text-[16px] text-slate-400">—</span>
         ),
-        month: <span className="text-center text-[14px] text-slate-700">{row.monthLabelValue}</span>,
+        month: <span className="text-center text-[16px] text-slate-700">{row.monthLabelValue}</span>,
         startDate: (
-          <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
+          <span className="inline-flex items-center justify-center gap-1.5 text-[16px] tabular-nums text-slate-700">
             {row.storyStartDateLabel && row.storyStartDateLabel !== "—" ? <CalendarDays className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
             {row.storyStartDateLabel}
           </span>
         ),
         endDate: (
-          <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
+          <span className="inline-flex items-center justify-center gap-1.5 text-[16px] tabular-nums text-slate-700">
             {row.storyEndDateLabel && row.storyEndDateLabel !== "—" ? <CalendarRange className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
             {row.storyEndDateLabel}
           </span>
@@ -4963,7 +5036,7 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
             </button>
           </span>
         ) : (
-          <span className={cn("relative inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[14px] font-normal tracking-wide", statusChip(row.storyStatus))}>
+          <span className={cn("relative inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[16px] font-normal tracking-wide", statusChip(row.storyStatus))}>
             <button
               type="button"
               onMouseDown={(event) => {
@@ -4980,7 +5053,7 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
         ),
         health: renderBacklogHealthCell(row.storyHealth),
         sprint: (
-          <span className="text-center text-[14px] text-slate-700">
+          <span className="text-center text-[16px] text-slate-700">
             {isEditingCell && editingCellField === "sprint" ? (
               <span className="relative z-40 inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
                 <BacklogSprintPickEditor
@@ -5047,7 +5120,7 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
           </span>
         ),
         assignee: (
-          <span className="text-center text-[14px] text-slate-700">
+          <span className="text-center text-[16px] text-slate-700">
             {isEditingCell && editingCellField === "assignee" ? (
               // Same overlay polish as the epic-popup editors: a
               // rounded white pill with a subtle ring + shadow + nowrap
@@ -5174,12 +5247,12 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
           </div>
         ),
         estDays: (
-          <span className="text-center text-[14px] text-slate-700">
+          <span className="text-center text-[16px] text-slate-700">
             {isEditingCell && editingCellField === "estimatedDays" ? (
               <IsolatedStoryCellTextEditor
                 initial={editingCellValue}
                 inputType="number"
-                className="h-7 w-20 rounded-md bg-white px-2 text-[14px] ring-1 ring-slate-200 outline-none"
+                className="h-7 w-20 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                 onCancel={ctx.cancelStoryCellEdit}
                 onSave={(value) =>
                   ctx.confirmStoryCellEdit(row.storyId, "estimatedDays", storyEditSnapshotFromGroupedRow(row), value)
@@ -5199,14 +5272,14 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
             )}
           </span>
         ),
-        epicOriginalEst: <span className="text-center text-[14px] text-slate-400">-</span>,
+        epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
         daysLeft: (
-          <span className="text-center text-[14px] text-slate-700">
+          <span className="text-center text-[16px] text-slate-700">
             {isEditingCell && editingCellField === "daysLeft" ? (
               <IsolatedStoryCellTextEditor
                 initial={editingCellValue}
                 inputType="number"
-                className="h-7 w-20 rounded-md bg-white px-2 text-[14px] ring-1 ring-slate-200 outline-none"
+                className="h-7 w-20 rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
                 onCancel={ctx.cancelStoryCellEdit}
                 onSave={(value) =>
                   ctx.confirmStoryCellEdit(row.storyId, "daysLeft", storyEditSnapshotFromGroupedRow(row), value)
@@ -5232,7 +5305,7 @@ const BacklogStoryRowImpl = function BacklogStoryRow({
             onClick={() => {}}
             className={backlogReadonlyProgressButtonClass}
           >
-            <div className="text-right text-[14px] tabular-nums text-slate-600">
+            <div className="text-right text-[16px] tabular-nums text-slate-600">
               <span>{progress.percent}%</span>
             </div>
             <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
@@ -5423,6 +5496,7 @@ export function BacklogPlanningPanel({
   externalGroupLevelToggle,
   onGroupLevelsChange,
   externalHygieneToggle,
+  onHygieneToggleClick,
 }: BacklogPlanningPanelProps) {
   // Render-time diagnostic: count + time every commit to help spot whether
   // slowness is the mount itself, re-renders from a parent, or some heavy
@@ -5492,6 +5566,13 @@ export function BacklogPlanningPanel({
   const [hygieneMissingEstimate, setHygieneMissingEstimate] = useState(false);
   const [hygieneUnscheduled, setHygieneUnscheduled] = useState(false);
   const [hygieneStalled, setHygieneStalled] = useState(false);
+  /** Epic-only: filters epics that have zero child stories. Mirrors
+   *  the donut's "No stories" slice. Always toggles to Epic scope. */
+  const [hygieneNoStories, setHygieneNoStories] = useState(false);
+  /** Epic-only: filters epics with ≥1 child story missing a day
+   *  estimate. Mirrors the donut's "Unestimated stories" slice.
+   *  Always toggles to Epic scope. */
+  const [hygieneUnestimatedStories, setHygieneUnestimatedStories] = useState(false);
   /** Stalled-detection settings — workspace-wide via localStorage. The
    *  threshold (days + statuses) parameterizes what the toggle catches.
    *  Default: 14 days for `inProgress` or `review`. */
@@ -5656,6 +5737,8 @@ export function BacklogPlanningPanel({
       setHygieneMissingEstimate(on);
       setHygieneUnscheduled(on);
       setHygieneStalled(on);
+      setHygieneNoStories(false);
+      setHygieneUnestimatedStories(false);
       // `on: false` arrives from the cross-chart mutual-exclusion
       // pathway (clicking Work Progress / Health Distribution clears
       // hygiene). Don't touch `workItemFilter` in that case — the
@@ -5668,29 +5751,59 @@ export function BacklogPlanningPanel({
       setHygieneMissingDescription(on);
       setHygieneMissingEstimate(on);
       setHygieneUnscheduled(on);
+      setHygieneNoStories(on);
+      setHygieneUnestimatedStories(on);
       // Stalled is story-only; leave it untouched for the epic-all path.
       if (on) setWorkItemFilter(["epic"]);
       return;
     }
+    // Map the hero's category names — which differ by scope ("No sprint"
+    // donut slice emits "missingSprint", "Unscheduled" emits
+    // "unscheduled", "Unestimated" emits "unestimated") — to the
+    // toolbar's scope-agnostic toggle keys.
+    const toggleKey:
+      | "missingDescription"
+      | "missingEstimate"
+      | "unscheduled"
+      | "stalled"
+      | "noStories"
+      | "unestimatedStories"
+      | null =
+      category === "missingDescription" ? "missingDescription"
+      : category === "missingEstimate" || category === "unestimated" ? "missingEstimate"
+      : category === "missingSprint" || category === "unscheduled" ? "unscheduled"
+      : category === "stalled" ? "stalled"
+      : category === "noStories" ? "noStories"
+      : category === "hasUnestimatedChildren" ? "unestimatedStories"
+      : null;
+    if (toggleKey == null) return;
     // Radio behaviour: turning a single category ON via the hero
-    // hand-off clears the other three so the toolbar reads the
-    // same as if the user had clicked the toolbar toggle directly.
+    // hand-off clears the others so the toolbar reads the same as
+    // if the user had clicked the toolbar toggle directly.
     if (on) {
-      setHygieneMissingDescription(category === "missingDescription");
-      setHygieneMissingEstimate(category === "missingEstimate");
-      setHygieneUnscheduled(category === "unscheduled");
-      setHygieneStalled(category === "stalled");
+      setHygieneMissingDescription(toggleKey === "missingDescription");
+      setHygieneMissingEstimate(toggleKey === "missingEstimate");
+      setHygieneUnscheduled(toggleKey === "unscheduled");
+      setHygieneStalled(toggleKey === "stalled");
+      setHygieneNoStories(toggleKey === "noStories");
+      setHygieneUnestimatedStories(toggleKey === "unestimatedStories");
     } else {
-      if (category === "missingDescription") setHygieneMissingDescription(false);
-      else if (category === "missingEstimate") setHygieneMissingEstimate(false);
-      else if (category === "unscheduled") setHygieneUnscheduled(false);
-      else if (category === "stalled") setHygieneStalled(false);
+      if (toggleKey === "missingDescription") setHygieneMissingDescription(false);
+      else if (toggleKey === "missingEstimate") setHygieneMissingEstimate(false);
+      else if (toggleKey === "unscheduled") setHygieneUnscheduled(false);
+      else if (toggleKey === "stalled") setHygieneStalled(false);
+      else if (toggleKey === "noStories") setHygieneNoStories(false);
+      else if (toggleKey === "unestimatedStories") setHygieneUnestimatedStories(false);
     }
     if (on) {
-      // Align Work Item with the click's scope. Stalled forces story
-      // (it has no epic-level equivalent); everything else honors the
-      // `scope` field that came with the hand-off.
-      setWorkItemFilter([category === "stalled" ? "story" : singleScope]);
+      // Align Work Item with the click's scope. Stalled and the two
+      // epic-only categories pin the scope explicitly; everything else
+      // honors the `scope` field that came with the hand-off.
+      const forcedScope: "story" | "epic" =
+        toggleKey === "stalled" ? "story"
+        : toggleKey === "noStories" || toggleKey === "unestimatedStories" ? "epic"
+        : singleScope;
+      setWorkItemFilter([forcedScope]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalHygieneToggle]);
@@ -6465,7 +6578,7 @@ export function BacklogPlanningPanel({
           ariaLabel="Epic estimate in days"
           minLength={0}
           saveOnBlur
-          inputClassName="h-7 w-16 rounded-md bg-white px-2 text-center text-[14px] tabular-nums ring-1 ring-slate-200 outline-none"
+          inputClassName="h-7 w-16 rounded-md bg-white px-2 text-center text-[16px] tabular-nums ring-1 ring-slate-200 outline-none"
           onCancel={() => setEditingEpicEstimate(null)}
           onSave={async (value) => {
             const raw = value.trim();
@@ -6875,7 +6988,7 @@ export function BacklogPlanningPanel({
     if (!initiativeId) return <span className="text-slate-400">-</span>;
     const name = roadmapNameByInitiativeId.get(initiativeId);
     if (!name) return <span className="text-slate-400">-</span>;
-    return <span className="truncate text-[14px] text-slate-700">{name}</span>;
+    return <span className="truncate text-[16px] text-slate-700">{name}</span>;
   }
 
   const assigneeNameSuggestions = useMemo(
@@ -7116,6 +7229,8 @@ export function BacklogPlanningPanel({
     let epicMissingDescription = 0;
     let epicMissingEstimate = 0;
     let epicUnscheduled = 0;
+    let epicNoStories = 0;
+    let epicUnestimatedStories = 0;
     const allowedStatuses = new Set(stalledSettings.statuses);
     const cutoffMs = Date.now() - stalledSettings.thresholdDays * 24 * 60 * 60 * 1000;
     for (const initiative of backlogFilteredBeforeWorkItem) {
@@ -7123,6 +7238,10 @@ export function BacklogPlanningPanel({
         if (hasEmptyText(epic.description)) epicMissingDescription += 1;
         if (epic.originalEstimateDays == null) epicMissingEstimate += 1;
         if (epic.planStartMonth == null) epicUnscheduled += 1;
+        if ((epic.userStories?.length ?? 0) === 0) epicNoStories += 1;
+        else if ((epic.userStories ?? []).some((s) => s.estimatedDays == null)) {
+          epicUnestimatedStories += 1;
+        }
         for (const story of epic.userStories ?? []) {
           // Done stories are exempt from missing-estimate / no-sprint /
           // stalled (matches the hero card + the strict filter rule):
@@ -7175,6 +7294,8 @@ export function BacklogPlanningPanel({
         missingDescription: epicMissingDescription,
         missingEstimate: epicMissingEstimate,
         unscheduled: epicUnscheduled,
+        noStories: epicNoStories,
+        unestimatedStories: epicUnestimatedStories,
       },
     };
   }, [stalledSettings, backlogFilteredBeforeWorkItem]);
@@ -7207,11 +7328,13 @@ export function BacklogPlanningPanel({
         missingEstimate: hygieneMissingEstimate,
         unscheduled: hygieneUnscheduled,
         stalled: hygieneStalled,
+        noStories: hygieneNoStories,
+        unestimatedStories: hygieneUnestimatedStories,
       },
       stalledStoryIds,
       hygieneFilterScope,
     ),
-  [backlogFilteredBeforeWorkItem, hygieneMissingDescription, hygieneMissingEstimate, hygieneUnscheduled, hygieneStalled, stalledStoryIds, hygieneFilterScope]);
+  [backlogFilteredBeforeWorkItem, hygieneMissingDescription, hygieneMissingEstimate, hygieneUnscheduled, hygieneStalled, hygieneNoStories, hygieneUnestimatedStories, stalledStoryIds, hygieneFilterScope]);
 
   const fullyFiltered = useMemo(() => timePhase("fullyFiltered", () => {
     const base = applyWorkItemKindFilter(backlogFilteredWithHygiene, workItemFilter);
@@ -7393,7 +7516,7 @@ export function BacklogPlanningPanel({
   type CellIconHint = { kind: "edit"; onEdit: () => void } | { kind: "lock" };
 
   function renderBacklogTeamCell(teamId: string | null | undefined): ReactNode {
-    if (!teamId) return <span className="text-[14px] text-slate-400">—</span>;
+    if (!teamId) return <span className="text-[16px] text-slate-400">—</span>;
     const color = TEAM_DOT_COLOR[teamId] ?? "bg-slate-400";
     const label = monthTeamLabelForId(teamId) ?? teamLabelForWorkspaceUser(teamId) ?? teamId;
     return (
@@ -7430,7 +7553,7 @@ export function BacklogPlanningPanel({
    *  falls back to "Unscheduled work" so the cell never looks blank. */
   function renderQuarterChipsCell(quarters: string[]): ReactNode {
     if (quarters.length === 0) {
-      return <span className="text-center text-[13px] text-slate-400">Unscheduled work</span>;
+      return <span className="text-center text-[16px] text-slate-400">Unscheduled work</span>;
     }
     return (
       <span className="flex flex-wrap items-center justify-center gap-1">
@@ -7533,10 +7656,10 @@ export function BacklogPlanningPanel({
           key="init"
           type="button"
           onClick={(e) => { e.stopPropagation(); onOpenInitiative(args.initiativeId!); }}
-          className="inline-flex min-w-0 items-center gap-1 truncate rounded px-1 text-left text-[14px] text-slate-700 hover:bg-indigo-50 hover:underline hover:decoration-slate-400 hover:underline-offset-2"
+          className="inline-flex min-w-0 items-center gap-1 truncate rounded px-1 text-left text-[16px] text-slate-700 hover:bg-indigo-50 hover:underline hover:decoration-slate-400 hover:underline-offset-2"
           title={args.initiativeTitle ?? undefined}
         >
-          <Zap className="size-3 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
+          <Zap className="size-3.5 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
           <span className="truncate">{args.initiativeTitle}</span>
         </button>,
       );
@@ -7550,10 +7673,10 @@ export function BacklogPlanningPanel({
           key="epic"
           type="button"
           onClick={(e) => { e.stopPropagation(); onOpenEpic(args.epicId!); }}
-          className="inline-flex min-w-0 items-center gap-1 truncate rounded px-1 text-left text-[14px] text-slate-700 hover:bg-indigo-50 hover:underline hover:decoration-slate-400 hover:underline-offset-2"
+          className="inline-flex min-w-0 items-center gap-1 truncate rounded px-1 text-left text-[16px] text-slate-700 hover:bg-indigo-50 hover:underline hover:decoration-slate-400 hover:underline-offset-2"
           title={args.epicTitle ?? undefined}
         >
-          <Folder className="size-3 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
+          <Folder className="size-3.5 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
           <span className="truncate">{args.epicTitle}</span>
         </button>,
       );
@@ -8023,6 +8146,8 @@ export function BacklogPlanningPanel({
     hygieneMissingEstimate ||
     hygieneUnscheduled ||
     hygieneStalled ||
+    hygieneNoStories ||
+    hygieneUnestimatedStories ||
     query.trim().length > 0 ||
     presetSearch.trim().length > 0;
 
@@ -8060,6 +8185,8 @@ export function BacklogPlanningPanel({
     setHygieneMissingEstimate(false);
     setHygieneUnscheduled(false);
     setHygieneStalled(false);
+    setHygieneNoStories(false);
+    setHygieneUnestimatedStories(false);
     setGroupMenuOpen(false);
     setPresetSearch("");
     setPresetMenuOpen(false);
@@ -8473,7 +8600,7 @@ export function BacklogPlanningPanel({
                  *  click-to-toggle button so existing click targets stay big. */}
                 {labelOverride ? (
                   <div
-                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[14px] font-normal text-slate-700"
+                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[16px] font-normal text-slate-700"
                     style={{ paddingLeft: indentPx }}
                   >
                     {count > 0 ? (
@@ -8494,13 +8621,13 @@ export function BacklogPlanningPanel({
                     )}
                     {leadingIcon}
                     {labelOverride}
-                    <span className="shrink-0 text-[14px] font-normal tabular-nums text-slate-500">({count})</span>
+                    <span className="shrink-0 text-[16px] font-normal tabular-nums text-slate-500">({count})</span>
                   </div>
                 ) : count > 0 ? (
                   <button
                     type="button"
                     onClick={() => setOpenGroupFolders((prev) => ({ ...prev, [folderId]: !(prev[folderId] ?? (defaultOpenOverride ?? defaultGroupExpanded)) }))}
-                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[14px] font-normal text-slate-700"
+                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[16px] font-normal text-slate-700"
                     style={{ paddingLeft: indentPx }}
                   >
                     <span className="inline-flex size-4 shrink-0 items-center justify-center">
@@ -8512,38 +8639,38 @@ export function BacklogPlanningPanel({
                     </span>
                     {leadingIcon}
                     <span className="truncate">{label}</span>
-                    <span className="shrink-0 text-[14px] font-normal tabular-nums text-slate-500">({count})</span>
+                    <span className="shrink-0 text-[16px] font-normal tabular-nums text-slate-500">({count})</span>
                   </button>
                 ) : (
                   <div
-                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[14px] font-normal text-slate-700"
+                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[16px] font-normal text-slate-700"
                     style={{ paddingLeft: indentPx }}
                   >
                     <span className="inline-flex size-4 shrink-0" aria-hidden />
                     {leadingIcon}
                     <span className="truncate">{label}</span>
-                    <span className="shrink-0 text-[14px] font-normal tabular-nums text-slate-500">({count})</span>
+                    <span className="shrink-0 text-[16px] font-normal tabular-nums text-slate-500">({count})</span>
                   </div>
                 )}
                 {trailingAction}
               </div>
             ),
             team: renderBacklogTeamCell(null),
-            year: <span className="text-center text-[14px] text-slate-400">-</span>,
-            quarter: <span className="text-center text-[14px] text-slate-400">-</span>,
-            month: <span className="text-center text-[14px] text-slate-400">-</span>,
-            startDate: <span className="text-center text-[14px] text-slate-400">-</span>,
-            endDate: <span className="text-center text-[14px] text-slate-400">-</span>,
-            status: <span className="text-center text-[14px] text-slate-400">-</span>,
+            year: <span className="text-center text-[16px] text-slate-400">-</span>,
+            quarter: <span className="text-center text-[16px] text-slate-400">-</span>,
+            month: <span className="text-center text-[16px] text-slate-400">-</span>,
+            startDate: <span className="text-center text-[16px] text-slate-400">-</span>,
+            endDate: <span className="text-center text-[16px] text-slate-400">-</span>,
+            status: <span className="text-center text-[16px] text-slate-400">-</span>,
             health: renderBacklogHealthCell(null),
-            sprint: <span className="text-center text-[14px] text-slate-400">-</span>,
-            assignee: <span className="text-center text-[14px] text-slate-400">-</span>,
-            parent: <span className="text-[14px] text-slate-400">-</span>,
+            sprint: <span className="text-center text-[16px] text-slate-400">-</span>,
+            assignee: <span className="text-center text-[16px] text-slate-400">-</span>,
+            parent: <span className="text-[16px] text-slate-400">-</span>,
             labels: <BacklogLabelsEmptyRowSlot />,
-            estDays: <span className="text-center text-[14px] text-slate-400">-</span>,
-            epicOriginalEst: <span className="text-center text-[14px] text-slate-400">-</span>,
-            daysLeft: <span className="text-center text-[14px] text-slate-400">-</span>,
-            progress: <span className="text-center text-[14px] text-slate-400">-</span>,
+            estDays: <span className="text-center text-[16px] text-slate-400">-</span>,
+            epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
+            daysLeft: <span className="text-center text-[16px] text-slate-400">-</span>,
+            progress: <span className="text-center text-[16px] text-slate-400">-</span>,
           }, {
             team: { kind: "lock" },
             year: { kind: "lock" },
@@ -8582,7 +8709,7 @@ export function BacklogPlanningPanel({
         onClick={() => {}}
         className={backlogReadonlyProgressButtonClass}
       >
-        <div className="flex items-center justify-between text-[14px] tabular-nums text-slate-600">
+        <div className="flex items-center justify-between text-[16px] tabular-nums text-slate-600">
           <span>{total === 0 ? "No stories" : null}</span>
           <span>
             {finished}/{total} · {percent}%
@@ -8675,7 +8802,7 @@ export function BacklogPlanningPanel({
                   {editingParentTitle?.kind === "epic" && editingParentTitle.id === epicId ? (
                     renderParentTitleEditor("epic", epicId, epicTitle)
                   ) : (
-                    <span className="inline-flex w-full min-w-0 items-center gap-1 text-[14px] font-normal text-slate-900">
+                    <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-normal text-slate-900">
                       <span className="truncate">{highlightQueryInText(epicTitle, q)}</span>
                       <span
                         className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100"
@@ -8738,16 +8865,16 @@ export function BacklogPlanningPanel({
             ) : (
               renderBacklogTeamCell(epicModelForRow?.team ?? epicRows[0]?.teamId ?? null)
             ),
-            year: <span className="text-center text-[14px] text-slate-700">{epicRows[0]?.initiativeYear ?? "-"}</span>,
+            year: <span className="text-center text-[16px] text-slate-700">{epicRows[0]?.initiativeYear ?? "-"}</span>,
             quarter: renderQuarterChipsCell(
               quartersForMonthRange(
                 epicModelForRow?.planStartMonth ?? null,
                 epicModelForRow?.planEndMonth ?? null,
               ),
             ),
-            month: <span className="text-center text-[14px] text-slate-700">{epicRows[0]?.monthLabelValue ?? "-"}</span>,
+            month: <span className="text-center text-[16px] text-slate-700">{epicRows[0]?.monthLabelValue ?? "-"}</span>,
             startDate: (
-              <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
+              <span className="inline-flex items-center justify-center gap-1.5 text-[16px] tabular-nums text-slate-700">
                 {isEditingParentDate("epic", epicId, "start") ? (
                   renderParentDateEditor({ kind: "epic", id: epicId, field: "start" })
                 ) : (
@@ -8759,7 +8886,7 @@ export function BacklogPlanningPanel({
               </span>
             ),
             endDate: (
-              <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
+              <span className="inline-flex items-center justify-center gap-1.5 text-[16px] tabular-nums text-slate-700">
                 {isEditingParentDate("epic", epicId, "end") ? (
                   renderParentDateEditor({ kind: "epic", id: epicId, field: "end" })
                 ) : (
@@ -8773,9 +8900,9 @@ export function BacklogPlanningPanel({
             status: epicRows.length === 0 ? (
               // Epic with no surviving stories — show a neutral dash
               // instead of the misleading default "To Do" rollup.
-              <span className="inline-flex min-w-[104px] items-center justify-center text-[14px] text-slate-400">—</span>
+              <span className="inline-flex min-w-[104px] items-center justify-center text-[16px] text-slate-400">—</span>
             ) : (
-              <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[14px] font-normal tracking-wide", statusChip(rollupWorkflowStatusFromGroupedRows(epicRows)))}>
+              <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[16px] font-normal tracking-wide", statusChip(rollupWorkflowStatusFromGroupedRows(epicRows)))}>
                 {statusIcon(rollupWorkflowStatusFromGroupedRows(epicRows))}
                 {workflowStatusLabel(rollupWorkflowStatusFromGroupedRows(epicRows))}
               </span>
@@ -8785,9 +8912,9 @@ export function BacklogPlanningPanel({
                 ? computeEpicHealthVerdict(epicModelForRow, planYearForEpic, progressBasis)
                 : null,
             ),
-            sprint: <span className="text-center text-[14px] text-slate-500">-</span>,
+            sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
             assignee: (
-              <span className="text-center text-[14px] text-slate-700">
+              <span className="text-center text-[16px] text-slate-700">
                 {editingParentAssignee?.kind === "epic" && editingParentAssignee.id === epicId ? (
                   <span className="relative z-40 inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
                     <BacklogAssigneePickEditor
@@ -8875,7 +9002,7 @@ export function BacklogPlanningPanel({
                   event.preventDefault();
                   beginEpicEstimateEdit({ id: epicId, originalEstimateDays: originalEstimate });
                 }}
-                className="w-full text-center text-[14px] font-normal text-slate-600 hover:text-indigo-600"
+                className="w-full text-center text-[16px] font-normal text-slate-600 hover:text-indigo-600"
                 title="Click to edit estimate"
               >
                 {originalEstimate}d
@@ -9021,7 +9148,7 @@ export function BacklogPlanningPanel({
                   {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiativeId ? (
                     renderParentTitleEditor("initiative", initiativeId, initiativeTitle)
                   ) : (
-                    <span className="inline-flex w-full min-w-0 items-center gap-1 text-[14px] font-normal text-slate-900">
+                    <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-normal text-slate-900">
                       <span className="truncate">{highlightQueryInText(initiativeTitle, q)}</span>
                       <span
                         className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100"
@@ -9066,9 +9193,9 @@ export function BacklogPlanningPanel({
             ) : (
               renderBacklogTeamCell(initModelForRow?.team ?? (initModelForRow ? aggregateInitiativeTeamId(initModelForRow) : null))
             ),
-            year: <span className="text-center text-[14px] text-slate-700">{initiativeYear}</span>,
+            year: <span className="text-center text-[16px] text-slate-700">{initiativeYear}</span>,
             quarter: renderQuarterChipsCell(quartersForInitiative(initModelForRow)),
-            month: <span className="text-center text-[14px] text-slate-700">{initiativeMonthLabel}</span>,
+            month: <span className="text-center text-[16px] text-slate-700">{initiativeMonthLabel}</span>,
             startDate: isEditingParentDate("initiative", initiativeId, "start") ? (
               renderParentDateEditor({ kind: "initiative", id: initiativeId, field: "start" })
             ) : (
@@ -9094,9 +9221,9 @@ export function BacklogPlanningPanel({
               </button>
             ),
             status: initiativeRows.length === 0 ? (
-              <span className="inline-flex min-w-[104px] items-center justify-center text-[14px] text-slate-400">—</span>
+              <span className="inline-flex min-w-[104px] items-center justify-center text-[16px] text-slate-400">—</span>
             ) : (
-              <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[14px] font-normal tracking-wide", statusChip(initiativeStatus))}>
+              <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[16px] font-normal tracking-wide", statusChip(initiativeStatus))}>
                 {statusIcon(initiativeStatus)}
                 {workflowStatusLabel(initiativeStatus)}
               </span>
@@ -9106,9 +9233,9 @@ export function BacklogPlanningPanel({
                 ? computeInitiativeHealthVerdict(initModelForRow, Number(initiativeYear), progressBasis)
                 : null,
             ),
-            sprint: <span className="text-center text-[14px] text-slate-500">-</span>,
+            sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
             assignee: (
-              <span className="text-center text-[14px] text-slate-700">
+              <span className="text-center text-[16px] text-slate-700">
                 {editingParentAssignee?.kind === "initiative" && editingParentAssignee.id === initiativeId ? (
                   <span className="relative z-40 inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-white py-1 pl-1 pr-1 shadow-sm ring-1 ring-slate-200">
                     <BacklogAssigneePickEditor
@@ -9139,7 +9266,7 @@ export function BacklogPlanningPanel({
                 )}
               </span>
             ),
-            parent: <span className="text-[14px] text-slate-400">-</span>,
+            parent: <span className="text-[16px] text-slate-400">-</span>,
             labels: isEditingParentLabels("initiative", initiativeId) ? (
               renderParentLabelsEditor({ kind: "initiative", id: initiativeId })
             ) : (
@@ -9160,7 +9287,7 @@ export function BacklogPlanningPanel({
                 <BacklogSumChip value={estimated} />
               </button>
             ),
-            epicOriginalEst: <span className="text-center text-[14px] text-slate-400">-</span>,
+            epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
             daysLeft: (
               <button
                 type="button"
@@ -9205,7 +9332,7 @@ export function BacklogPlanningPanel({
               <select
                 value={storyTargetEpicId}
                 onChange={(event) => setStoryTargetEpicId(event.target.value)}
-                className="h-8 min-w-[180px] rounded-md bg-white px-2 text-[14px] ring-1 ring-slate-200 outline-none"
+                className="h-8 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
               >
                 {Array.from(new Map(initiativeRows.map((r) => [r.epicId, r.epicTitle])).entries()).map(([epicId, title]) => (
                   <option key={epicId} value={epicId}>{title}</option>
@@ -9582,7 +9709,7 @@ export function BacklogPlanningPanel({
           <IsolatedTextInput
             initial={group.label}
             ariaLabel="Rename roadmap"
-            inputClassName="h-7 min-w-[180px] rounded-md bg-white px-2 text-[14px] ring-1 ring-slate-200 outline-none"
+            inputClassName="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
             onCancel={() => setEditingRoadmapId(null)}
             onSave={async (value) => {
               const next = value.trim();
@@ -10123,7 +10250,7 @@ export function BacklogPlanningPanel({
             <IsolatedTextInput
               initial={group.label}
               ariaLabel="Rename roadmap"
-              inputClassName="h-7 min-w-[180px] rounded-md bg-white px-2 text-[14px] ring-1 ring-slate-200 outline-none"
+              inputClassName="h-7 min-w-[180px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none"
               onCancel={() => setEditingRoadmapId(null)}
               onSave={async (value) => {
                 const next = value.trim();
@@ -10268,7 +10395,7 @@ export function BacklogPlanningPanel({
                       {editingParentTitle?.kind === "initiative" && editingParentTitle.id === initiative.initiativeId ? (
                         renderParentTitleEditor("initiative", initiative.initiativeId, initiative.initiativeTitle)
                       ) : (
-                        <span className="inline-flex w-full min-w-0 items-center gap-1 text-[14px] font-normal text-slate-900">
+                        <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-normal text-slate-900">
                           <span className="truncate">{initiative.initiativeTitle}</span>
                           <span
                             className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100"
@@ -10314,9 +10441,9 @@ export function BacklogPlanningPanel({
                 ) : (
                   renderBacklogTeamCell(standInitModel?.team ?? initiative.initiativeTeamId)
                 ),
-                year: <span className="text-center text-[14px] text-slate-700">{initiative.initiativeYear}</span>,
+                year: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeYear}</span>,
                 quarter: renderQuarterChipsCell(quartersForInitiative(standInitModel)),
-                month: <span className="text-center text-[14px] text-slate-700">{initiative.initiativeMonthLabelValue}</span>,
+                month: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeMonthLabelValue}</span>,
                 startDate: isEditingParentDate("initiative", initiative.initiativeId, "start") ? (
                   renderParentDateEditor({ kind: "initiative", id: initiative.initiativeId, field: "start" })
                 ) : (
@@ -10346,12 +10473,12 @@ export function BacklogPlanningPanel({
                   // stories under them, so the rollup is always the
                   // misleading default "todo". Render a neutral dash
                   // instead — no stories = no status to report.
-                  <span className="inline-flex min-w-[104px] items-center justify-center text-[14px] text-slate-400">—</span>
+                  <span className="inline-flex min-w-[104px] items-center justify-center text-[16px] text-slate-400">—</span>
                 ),
                 health: renderBacklogHealthCell(null),
-                sprint: <span className="text-center text-[14px] text-slate-500">-</span>,
+                sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
                 assignee: (
-                  <span className="text-center text-[14px] text-slate-700">
+                  <span className="text-center text-[16px] text-slate-700">
                     {editingParentAssignee?.kind === "initiative" && editingParentAssignee.id === initiative.initiativeId ? (
                       <span className="inline-flex items-center gap-1">
                         <AssigneeCombobox
@@ -10361,7 +10488,7 @@ export function BacklogPlanningPanel({
                           directoryUsers={workspaceDirectoryUsers}
                           showLeadingAvatar
                           placeholder="Unassigned"
-                          className="h-7 w-full min-w-[104px] rounded-md bg-white pl-7 pr-2 text-[14px] ring-1 ring-slate-200 outline-none"
+                          className="h-7 w-full min-w-[104px] rounded-md bg-white pl-7 pr-2 text-[16px] ring-1 ring-slate-200 outline-none"
                           onKeyDown={(e) => {
                             if (e.key === "Escape") {
                               e.preventDefault();
@@ -10391,7 +10518,7 @@ export function BacklogPlanningPanel({
                     )}
                   </span>
                 ),
-                parent: <span className="text-[14px] text-slate-400">-</span>,
+                parent: <span className="text-[16px] text-slate-400">-</span>,
                 labels: isEditingParentLabels("initiative", initiative.initiativeId) ? (
                   renderParentLabelsEditor({ kind: "initiative", id: initiative.initiativeId })
                 ) : (
@@ -10412,7 +10539,7 @@ export function BacklogPlanningPanel({
                     <BacklogSumChip value={0} />
                   </button>
                 ),
-                epicOriginalEst: <span className="text-center text-[14px] text-slate-400">-</span>,
+                epicOriginalEst: <span className="text-center text-[16px] text-slate-400">-</span>,
                 daysLeft: (
                   <button
                     type="button"
@@ -10428,7 +10555,7 @@ export function BacklogPlanningPanel({
                     onClick={() => {}}
                     className={backlogReadonlyProgressButtonClass}
                   >
-                    <div className="flex items-center justify-between text-[14px] tabular-nums text-slate-600">
+                    <div className="flex items-center justify-between text-[16px] tabular-nums text-slate-600">
                       <span>No stories</span>
                       <span>0/0 · 0%</span>
                     </div>
@@ -10510,7 +10637,7 @@ export function BacklogPlanningPanel({
                               {editingParentTitle?.kind === "epic" && editingParentTitle.id === epic.epicId ? (
                                 renderParentTitleEditor("epic", epic.epicId, epic.epicTitle)
                               ) : (
-                                <span className="inline-flex w-full min-w-0 items-center gap-1 text-[14px] font-normal text-slate-900">
+                                <span className="inline-flex w-full min-w-0 items-center gap-1 text-[16px] font-normal text-slate-900">
                                   <span className="truncate">{epic.epicTitle}</span>
                                   <span
                                     className="ml-auto opacity-0 transition group-hover/workitem:opacity-100 focus-within:opacity-100"
@@ -10567,16 +10694,16 @@ export function BacklogPlanningPanel({
                         ) : (
                           renderBacklogTeamCell(standEpicModel?.team ?? epic.epicTeamId)
                         ),
-                        year: <span className="text-center text-[14px] text-slate-700">{initiative.initiativeYear}</span>,
+                        year: <span className="text-center text-[16px] text-slate-700">{initiative.initiativeYear}</span>,
                         quarter: renderQuarterChipsCell(
                           quartersForMonthRange(
                             standEpicModel?.planStartMonth ?? null,
                             standEpicModel?.planEndMonth ?? null,
                           ),
                         ),
-                        month: <span className="text-center text-[14px] text-slate-700">{epic.epicMonthLabelValue}</span>,
+                        month: <span className="text-center text-[16px] text-slate-700">{epic.epicMonthLabelValue}</span>,
                         startDate: (
-                          <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
+                          <span className="inline-flex items-center justify-center gap-1.5 text-[16px] tabular-nums text-slate-700">
                             {isEditingParentDate("epic", epic.epicId, "start") ? (
                               renderParentDateEditor({ kind: "epic", id: epic.epicId, field: "start" })
                             ) : (
@@ -10588,7 +10715,7 @@ export function BacklogPlanningPanel({
                           </span>
                         ),
                         endDate: (
-                          <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
+                          <span className="inline-flex items-center justify-center gap-1.5 text-[16px] tabular-nums text-slate-700">
                             {isEditingParentDate("epic", epic.epicId, "end") ? (
                               renderParentDateEditor({ kind: "epic", id: epic.epicId, field: "end" })
                             ) : (
@@ -10600,7 +10727,7 @@ export function BacklogPlanningPanel({
                           </span>
                         ),
                         status: (
-                          <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[14px] font-normal tracking-wide", statusChip("todo"))}>
+                          <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[16px] font-normal tracking-wide", statusChip("todo"))}>
                             {statusIcon("todo")}
                             To do
                           </span>
@@ -10610,9 +10737,9 @@ export function BacklogPlanningPanel({
                             ? computeEpicHealthVerdict(standEpicModel, Number(initiative.initiativeYear), progressBasis)
                             : null,
                         ),
-                        sprint: <span className="text-center text-[14px] text-slate-500">-</span>,
+                        sprint: <span className="text-center text-[16px] text-slate-500">-</span>,
                         assignee: (
-                          <span className="text-center text-[14px] text-slate-700">
+                          <span className="text-center text-[16px] text-slate-700">
                             {editingParentAssignee?.kind === "epic" && editingParentAssignee.id === epic.epicId ? (
                               <span className="inline-flex items-center gap-1">
                                 <AssigneeCombobox
@@ -10622,7 +10749,7 @@ export function BacklogPlanningPanel({
                                   directoryUsers={workspaceDirectoryUsers}
                                   showLeadingAvatar
                                   placeholder="Unassigned"
-                                  className="h-7 w-full min-w-[104px] rounded-md bg-white pl-7 pr-2 text-[14px] ring-1 ring-slate-200 outline-none"
+                                  className="h-7 w-full min-w-[104px] rounded-md bg-white pl-7 pr-2 text-[16px] ring-1 ring-slate-200 outline-none"
                                   onKeyDown={(e) => {
                                     if (e.key === "Escape") {
                                       e.preventDefault();
@@ -10664,7 +10791,7 @@ export function BacklogPlanningPanel({
                         labels: isEditingParentLabels("epic", epic.epicId) ? (
                           renderParentLabelsEditor({ kind: "epic", id: epic.epicId })
                         ) : (
-                          <span className="truncate text-[14px] text-slate-700">{standEpicModel?.labels ?? ""}</span>
+                          <span className="truncate text-[16px] text-slate-700">{standEpicModel?.labels ?? ""}</span>
                         ),
                         estDays: (
                           <button
@@ -10684,7 +10811,7 @@ export function BacklogPlanningPanel({
                               event.preventDefault();
                               beginEpicEstimateEdit({ id: epic.epicId, originalEstimateDays: epic.epicOriginalEstimateDays });
                             }}
-                            className="w-full text-center text-[14px] font-normal text-slate-600 hover:text-indigo-600"
+                            className="w-full text-center text-[16px] font-normal text-slate-600 hover:text-indigo-600"
                             title="Click to edit estimate"
                           >
                             {epic.epicOriginalEstimateDays}d
@@ -10705,7 +10832,7 @@ export function BacklogPlanningPanel({
                             onClick={() => {}}
                             className={backlogReadonlyProgressButtonClass}
                           >
-                            <div className="flex items-center justify-between text-[14px] tabular-nums text-slate-600">
+                            <div className="flex items-center justify-between text-[16px] tabular-nums text-slate-600">
                               <span>No stories</span>
                               <span>0/0 · 0%</span>
                             </div>
@@ -11283,78 +11410,172 @@ export function BacklogPlanningPanel({
         <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
           Needs attention ({hygieneScope === "story" ? "Stories" : "Epics"})
         </span>
-        <HygieneToggle
-          label="Missing desc"
-          tooltip="Items where description is empty or missing."
-          active={hygieneMissingDescription}
-          onToggle={() => {
-            // Radio behaviour: activating any "Needs attention" toggle
-            // deactivates the other three so the table is always
-            // narrowed by ONE hygiene category at a time. Also
-            // narrows the Work Item filter to the current scope so
-            // the table reads the right level immediately.
-            const next = !hygieneMissingDescription;
-            setHygieneMissingDescription(next);
-            if (next) {
-              setHygieneMissingEstimate(false);
-              setHygieneUnscheduled(false);
-              setHygieneStalled(false);
-              setWorkItemFilter([hygieneScope]);
-            }
-          }}
-          count={hygieneCandidates[hygieneScope].missingDescription}
-        />
-        <HygieneToggle
-          label="Missing est"
-          tooltip="Stories with no day estimate; epics with no original estimate."
-          active={hygieneMissingEstimate}
-          onToggle={() => {
-            const next = !hygieneMissingEstimate;
-            setHygieneMissingEstimate(next);
-            if (next) {
-              setHygieneMissingDescription(false);
-              setHygieneUnscheduled(false);
-              setHygieneStalled(false);
-              setWorkItemFilter([hygieneScope]);
-            }
-          }}
-          count={hygieneCandidates[hygieneScope].missingEstimate}
-        />
-        <HygieneToggle
-          label="Unscheduled"
-          tooltip="Stories with no sprint; epics with no planned start month."
-          active={hygieneUnscheduled}
-          onToggle={() => {
-            const next = !hygieneUnscheduled;
-            setHygieneUnscheduled(next);
-            if (next) {
-              setHygieneMissingDescription(false);
-              setHygieneMissingEstimate(false);
-              setHygieneStalled(false);
-              setWorkItemFilter([hygieneScope]);
-            }
-          }}
-          count={hygieneCandidates[hygieneScope].unscheduled}
-        />
-        <StalledToggle
-          active={hygieneStalled}
-          onToggle={() => {
-            // Stalled is story-only by definition — always pull the
-            // table to Story scope so the count badge and the
-            // visible rows agree.
-            const next = !hygieneStalled;
-            setHygieneStalled(next);
-            if (next) {
-              setHygieneMissingDescription(false);
-              setHygieneMissingEstimate(false);
-              setHygieneUnscheduled(false);
-              setWorkItemFilter(["story"]);
-            }
-          }}
-          settings={stalledSettings}
-          onSettingsChange={setStalledSettings}
-          count={hygieneCandidates.story.stalled}
-        />
+        {hygieneScope === "story" ? (
+          <>
+            {/* Story-scope toolbar mirrors the donut's STORIES legend
+             *  left-to-right ↔ top-to-bottom:
+             *  Missing estimate · No sprint · No description · Stalled. */}
+            <HygieneToggle
+              label="Missing estimate"
+              tooltip="Stories with no day estimate (Done stories are exempt)."
+              active={hygieneMissingEstimate}
+              onToggle={() => {
+                const next = !hygieneMissingEstimate;
+                setHygieneMissingEstimate(next);
+                if (next) {
+                  setHygieneMissingDescription(false);
+                  setHygieneUnscheduled(false);
+                  setHygieneStalled(false);
+                  setHygieneNoStories(false);
+                  setHygieneUnestimatedStories(false);
+                  setWorkItemFilter(["story"]);
+                }
+                onHygieneToggleClick?.({ scope: "story", category: "missingEstimate", on: next });
+              }}
+              count={hygieneCandidates.story.missingEstimate}
+            />
+            <HygieneToggle
+              label="No sprint"
+              tooltip="Stories not yet placed in a sprint (Done stories are exempt)."
+              active={hygieneUnscheduled}
+              onToggle={() => {
+                const next = !hygieneUnscheduled;
+                setHygieneUnscheduled(next);
+                if (next) {
+                  setHygieneMissingDescription(false);
+                  setHygieneMissingEstimate(false);
+                  setHygieneStalled(false);
+                  setHygieneNoStories(false);
+                  setHygieneUnestimatedStories(false);
+                  setWorkItemFilter(["story"]);
+                }
+                onHygieneToggleClick?.({ scope: "story", category: "missingSprint", on: next });
+              }}
+              count={hygieneCandidates.story.unscheduled}
+            />
+            <HygieneToggle
+              label="No description"
+              tooltip="Stories where description is empty or missing."
+              active={hygieneMissingDescription}
+              onToggle={() => {
+                const next = !hygieneMissingDescription;
+                setHygieneMissingDescription(next);
+                if (next) {
+                  setHygieneMissingEstimate(false);
+                  setHygieneUnscheduled(false);
+                  setHygieneStalled(false);
+                  setHygieneNoStories(false);
+                  setHygieneUnestimatedStories(false);
+                  setWorkItemFilter(["story"]);
+                }
+                onHygieneToggleClick?.({ scope: "story", category: "missingDescription", on: next });
+              }}
+              count={hygieneCandidates.story.missingDescription}
+            />
+            <StalledToggle
+              active={hygieneStalled}
+              onToggle={() => {
+                const next = !hygieneStalled;
+                setHygieneStalled(next);
+                if (next) {
+                  setHygieneMissingDescription(false);
+                  setHygieneMissingEstimate(false);
+                  setHygieneUnscheduled(false);
+                  setHygieneNoStories(false);
+                  setHygieneUnestimatedStories(false);
+                  setWorkItemFilter(["story"]);
+                }
+                onHygieneToggleClick?.({ scope: "story", category: "stalled", on: next });
+              }}
+              settings={stalledSettings}
+              onSettingsChange={setStalledSettings}
+              count={hygieneCandidates.story.stalled}
+            />
+          </>
+        ) : (
+          <>
+            {/* Epic-scope toolbar mirrors the donut's EPICS legend:
+             *  Unestimated · Unscheduled · No stories · Unestimated stories.
+             *  "No description" and "Stalled" don't appear here because
+             *  the epic donut doesn't surface them. */}
+            <HygieneToggle
+              label="Unestimated"
+              tooltip="Epics with no original estimate set."
+              active={hygieneMissingEstimate}
+              onToggle={() => {
+                const next = !hygieneMissingEstimate;
+                setHygieneMissingEstimate(next);
+                if (next) {
+                  setHygieneMissingDescription(false);
+                  setHygieneUnscheduled(false);
+                  setHygieneStalled(false);
+                  setHygieneNoStories(false);
+                  setHygieneUnestimatedStories(false);
+                  setWorkItemFilter(["epic"]);
+                }
+                onHygieneToggleClick?.({ scope: "epic", category: "unestimated", on: next });
+              }}
+              count={hygieneCandidates.epic.missingEstimate}
+            />
+            <HygieneToggle
+              label="Unscheduled"
+              tooltip="Epics with no planned start month."
+              active={hygieneUnscheduled}
+              onToggle={() => {
+                const next = !hygieneUnscheduled;
+                setHygieneUnscheduled(next);
+                if (next) {
+                  setHygieneMissingDescription(false);
+                  setHygieneMissingEstimate(false);
+                  setHygieneStalled(false);
+                  setHygieneNoStories(false);
+                  setHygieneUnestimatedStories(false);
+                  setWorkItemFilter(["epic"]);
+                }
+                onHygieneToggleClick?.({ scope: "epic", category: "unscheduled", on: next });
+              }}
+              count={hygieneCandidates.epic.unscheduled}
+            />
+            <HygieneToggle
+              label="No stories"
+              tooltip="Epics with zero child stories."
+              active={hygieneNoStories}
+              onToggle={() => {
+                const next = !hygieneNoStories;
+                setHygieneNoStories(next);
+                if (next) {
+                  setHygieneMissingDescription(false);
+                  setHygieneMissingEstimate(false);
+                  setHygieneUnscheduled(false);
+                  setHygieneStalled(false);
+                  setHygieneUnestimatedStories(false);
+                  setWorkItemFilter(["epic"]);
+                }
+                onHygieneToggleClick?.({ scope: "epic", category: "noStories", on: next });
+              }}
+              count={hygieneCandidates.epic.noStories}
+            />
+            <HygieneToggle
+              label="Unestimated stories"
+              tooltip="Epics with at least one child story missing a day estimate."
+              active={hygieneUnestimatedStories}
+              onToggle={() => {
+                const next = !hygieneUnestimatedStories;
+                setHygieneUnestimatedStories(next);
+                if (next) {
+                  setHygieneMissingDescription(false);
+                  setHygieneMissingEstimate(false);
+                  setHygieneUnscheduled(false);
+                  setHygieneStalled(false);
+                  setHygieneNoStories(false);
+                  setWorkItemFilter(["epic"]);
+                }
+                onHygieneToggleClick?.({ scope: "epic", category: "hasUnestimatedChildren", on: next });
+              }}
+              count={hygieneCandidates.epic.unestimatedStories}
+            />
+          </>
+        )}
       </div>
 
       {/* Slim global toolbar — only the controls that don't belong to a
@@ -11626,7 +11847,7 @@ export function BacklogPlanningPanel({
                     <label
                       key={level}
                       title={conflictTitle}
-                      className={cn("mb-1 flex items-center gap-2 rounded px-1.5 py-1 text-[14px] text-slate-700", disabled && "opacity-50")}
+                      className={cn("mb-1 flex items-center gap-2 rounded px-1.5 py-1 text-[16px] text-slate-700", disabled && "opacity-50")}
                     >
                       <input
                         type="checkbox"
@@ -11741,7 +11962,7 @@ export function BacklogPlanningPanel({
                 strategy={horizontalListSortingStrategy}
               >
                 <div
-                  className="grid min-w-full w-max items-center gap-2 py-2.5 ps-0 text-[14px] font-semibold tracking-[0.01em] text-white"
+                  className="grid min-w-full w-max items-center gap-2 py-2.5 ps-0 text-[16px] font-semibold tracking-[0.01em] text-white"
                   style={{ gridTemplateColumns: tableGridTemplate }}
                 >
                   {visibleColumnKeys.map((key, index) => {
@@ -12329,7 +12550,7 @@ export function BacklogPlanningPanel({
                 <p className="text-[20px] font-extrabold leading-tight tracking-tight text-slate-900">
                   No Data Found
                 </p>
-                <p className="mt-1.5 text-[14px] leading-relaxed text-slate-500">
+                <p className="mt-1.5 text-[16px] leading-relaxed text-slate-500">
                   Try adjusting your search or filter settings, or add an initiative to get started.
                 </p>
               </div>
@@ -12365,7 +12586,7 @@ export function BacklogPlanningPanel({
                         }
                         setInitiativeTargetRoadmapId(next);
                       }}
-                      className="h-8 min-w-[160px] rounded-md bg-white px-2 text-[14px] ring-1 ring-slate-200 outline-none focus:ring-2 focus:ring-ring/40"
+                      className="h-8 min-w-[160px] rounded-md bg-white px-2 text-[16px] ring-1 ring-slate-200 outline-none focus:ring-2 focus:ring-ring/40"
                     >
                       <option value="">Pick roadmap…</option>
                       {(roadmaps ?? []).map((r) => (
@@ -12658,9 +12879,9 @@ export function BacklogPlanningPanel({
                         </button>
                       ),
                       status: initiativeStories.length === 0 ? (
-                        <span className="inline-flex min-w-[104px] items-center justify-center text-[14px] text-slate-400">—</span>
+                        <span className="inline-flex min-w-[104px] items-center justify-center text-[16px] text-slate-400">—</span>
                       ) : (
-                        <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(initiativeWorkflowStatus))}>
+                        <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[16px] font-semibold tracking-wide", statusChip(initiativeWorkflowStatus))}>
                           {statusIcon(initiativeWorkflowStatus)}
                           {workflowStatusLabel(initiativeWorkflowStatus)}
                         </span>
@@ -12747,7 +12968,7 @@ export function BacklogPlanningPanel({
                           onClick={() => {}}
                           className={backlogReadonlyProgressButtonClass}
                         >
-                          <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
+                          <div className="flex items-center justify-between text-[16px] tabular-nums text-slate-600">
                             <span>{initiativeProgress.total === 0 ? "No stories" : null}</span>
                             <span>
                               {initiativeProgress.finished}/{initiativeProgress.total} · {initiativeProgress.percent}%
@@ -12971,7 +13192,7 @@ export function BacklogPlanningPanel({
                                   </span>
                                 ),
                                 startDate: (
-                                  <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
+                                  <span className="inline-flex items-center justify-center gap-1.5 text-[16px] tabular-nums text-slate-700">
                                     {isEditingParentDate("epic", epic.id, "start") ? (
                                       renderParentDateEditor({ kind: "epic", id: epic.id, field: "start" })
                                     ) : (
@@ -12983,7 +13204,7 @@ export function BacklogPlanningPanel({
                                   </span>
                                 ),
                                 endDate: (
-                                  <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
+                                  <span className="inline-flex items-center justify-center gap-1.5 text-[16px] tabular-nums text-slate-700">
                                     {isEditingParentDate("epic", epic.id, "end") ? (
                                       renderParentDateEditor({ kind: "epic", id: epic.id, field: "end" })
                                     ) : (
@@ -12995,9 +13216,9 @@ export function BacklogPlanningPanel({
                                   </span>
                                 ),
                                 status: (epic.userStories ?? []).length === 0 ? (
-                                  <span className="inline-flex min-w-[104px] items-center justify-center text-[14px] text-slate-400">—</span>
+                                  <span className="inline-flex min-w-[104px] items-center justify-center text-[16px] text-slate-400">—</span>
                                 ) : (
-                                  <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide", statusChip(epicWorkflowStatus))}>
+                                  <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[16px] font-semibold tracking-wide", statusChip(epicWorkflowStatus))}>
                                     {statusIcon(epicWorkflowStatus)}
                                     {workflowStatusLabel(epicWorkflowStatus)}
                                   </span>
@@ -13106,7 +13327,7 @@ export function BacklogPlanningPanel({
                                     onClick={() => {}}
                                     className={backlogReadonlyProgressButtonClass}
                                   >
-                                    <div className="flex items-center justify-between text-[13px] tabular-nums text-slate-600">
+                                    <div className="flex items-center justify-between text-[16px] tabular-nums text-slate-600">
                                       <span>{epicProgress.total === 0 ? "No stories" : null}</span>
                                       <span>
                                         {epicProgress.finished}/{epicProgress.total} · {epicProgress.percent}%
@@ -13306,13 +13527,13 @@ export function BacklogPlanningPanel({
                                     </span>
                                       ),
                                       startDate: (
-                                        <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
+                                        <span className="inline-flex items-center justify-center gap-1.5 text-[16px] tabular-nums text-slate-700">
                                           {flatStoryWork.start ? <CalendarDays className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
                                           {formatBacklogPlanDate(flatStoryWork.start)}
                                         </span>
                                       ),
                                       endDate: (
-                                        <span className="inline-flex items-center justify-center gap-1.5 text-[14px] tabular-nums text-slate-700">
+                                        <span className="inline-flex items-center justify-center gap-1.5 text-[16px] tabular-nums text-slate-700">
                                           {flatStoryWork.end ? <CalendarRange className="size-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
                                           {formatBacklogPlanDate(flatStoryWork.end)}
                                         </span>
@@ -13320,7 +13541,7 @@ export function BacklogPlanningPanel({
                                       status: (
                                     <span
                                       className={cn(
-                                        "relative inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[13px] font-semibold tracking-wide",
+                                        "relative inline-flex min-w-[104px] items-center justify-center justify-self-center rounded-full px-3 py-[3px] text-[16px] font-semibold tracking-wide",
                                         statusChip(story.status),
                                       )}
                                     >
@@ -13445,7 +13666,7 @@ export function BacklogPlanningPanel({
                                               handleStoryCellKeyDown(event, story.id, "labels", storyEditSnapshotFromFlat(story))
                                             }
                                             rows={2}
-                                            className="min-h-[2.5rem] w-full min-w-0 rounded-md border border-slate-200/80 bg-white px-2 py-1.5 text-left text-[14px] leading-snug text-slate-800 outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200/70"
+                                            className="min-h-[2.5rem] w-full min-w-0 rounded-md border border-slate-200/80 bg-white px-2 py-1.5 text-left text-[16px] leading-snug text-slate-800 outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-200/70"
                                             placeholder="Comma-separated labels"
                                           />
                                           <span className="flex items-center justify-center gap-0.5">
@@ -13551,7 +13772,7 @@ export function BacklogPlanningPanel({
                                       onClick={() => {}}
                                       className={backlogReadonlyProgressButtonClass}
                                     >
-                                      <div className="text-right text-[13px] tabular-nums text-slate-600">
+                                      <div className="text-right text-[16px] tabular-nums text-slate-600">
                                         <span>{progress.percent}%</span>
                                       </div>
                                       <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
@@ -13671,7 +13892,7 @@ export function BacklogPlanningPanel({
                   onChange={(event) => setSaveAsFilterName(event.target.value)}
                   placeholder="e.g. Q2 Platform backlog"
                   autoComplete="off"
-                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-800 outline-none ring-slate-200 transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200/70"
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[16px] text-slate-800 outline-none ring-slate-200 transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200/70"
                 />
               </label>
               <div>
@@ -13747,7 +13968,7 @@ export function BacklogPlanningPanel({
                   onChange={(event) => setSaveViewName(event.target.value)}
                   placeholder="e.g. Compact estimates"
                   autoComplete="off"
-                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-800 outline-none ring-slate-200 transition focus:border-violet-400 focus:ring-2 focus:ring-violet-200/70"
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[16px] text-slate-800 outline-none ring-slate-200 transition focus:border-violet-400 focus:ring-2 focus:ring-violet-200/70"
                 />
               </label>
               <div>

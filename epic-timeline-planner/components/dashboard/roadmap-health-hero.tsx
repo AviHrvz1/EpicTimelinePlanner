@@ -130,6 +130,7 @@ export function RoadmapHealthHero({
   onStatusFilterChange,
   onOpenEpicEstimatePanel,
   onNeedsAttentionClick,
+  externalNeedsAttentionHighlight,
   onSelectLaggards,
   onWorkProgressSliceClick,
   onHealthDistributionSliceClick,
@@ -206,6 +207,26 @@ export function RoadmapHealthHero({
       | "hasUnestimatedChildren"
       | null,
   ) => void;
+  /** Reverse hand-off — when a backlog hygiene toggle is clicked, the
+   *  parent forwards the picked category here so this donut's
+   *  highlight stays in sync with the toolbar. `on: false` clears
+   *  the highlight. Identity-based: pass a fresh object per click so
+   *  the sync effect fires; pass `null` (or the same object) to no-op. */
+  externalNeedsAttentionHighlight?:
+    | {
+        scope: "story" | "epic";
+        category:
+          | "missingEstimate"
+          | "missingDescription"
+          | "missingSprint"
+          | "stalled"
+          | "unestimated"
+          | "unscheduled"
+          | "noStories"
+          | "hasUnestimatedChildren";
+        on: boolean;
+      }
+    | null;
   /** Cross-mode laggard filter emit — the new Portfolio Burndown card
    *  (which replaced the Work Progress donut here) fires this when the
    *  planner picks a contributor row or "Highlight on Roadmap". Inert
@@ -373,6 +394,31 @@ export function RoadmapHealthHero({
   useEffect(() => {
     setActiveNeedsAttentionLabel(null);
   }, [heroScope]);
+  // Reverse hand-off — when the backlog's hygiene toolbar fires, the
+  // parent forwards the picked category here so this donut's highlight
+  // mirrors the toolbar. Maps the category to the matching slice label
+  // per scope (story vs epic vocabularies differ). `on: false` clears.
+  useEffect(() => {
+    if (!externalNeedsAttentionHighlight) return;
+    if (!externalNeedsAttentionHighlight.on) {
+      setActiveNeedsAttentionLabel(null);
+      return;
+    }
+    const { scope, category } = externalNeedsAttentionHighlight;
+    const label =
+      scope === "story"
+        ? category === "missingEstimate" ? "Missing estimate"
+        : category === "missingSprint" ? "No sprint"
+        : category === "missingDescription" ? "No description"
+        : category === "stalled" ? "Stalled"
+        : null
+        : category === "unestimated" ? "Unestimated"
+        : category === "unscheduled" ? "Unscheduled"
+        : category === "noStories" ? "No stories"
+        : category === "hasUnestimatedChildren" ? "Unestimated stories"
+        : null;
+    if (label) setActiveNeedsAttentionLabel(label);
+  }, [externalNeedsAttentionHighlight]);
   // Mutually-exclusive across the three legend-driven hero charts:
   // when Work Progress or Health Distribution have an active
   // selection, clear the local Needs Attention highlight so only one
@@ -868,7 +914,7 @@ export function RoadmapHealthHero({
                     { label: "Unestimated", value: (naData as { unestimated: number }).unestimated, color: "#ef4444", icon: <Ruler className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
                     { label: "Unscheduled", value: (naData as { unscheduled: number }).unscheduled, color: "#f59e0b", icon: <CircleDashed className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
                     { label: "No stories", value: (naData as { noStories: number }).noStories, color: "#94a3b8", icon: <CircleDotDashed className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
-                    { label: "Has unestimated children", value: (naData as { hasUnestimatedChildren: number }).hasUnestimatedChildren, color: "#ec4899", icon: <FileWarning className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
+                    { label: "Unestimated stories", value: (naData as { hasUnestimatedChildren: number }).hasUnestimatedChildren, color: "#ec4899", icon: <FileWarning className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
                   ];
             const labelToCategory: Record<string, Parameters<NonNullable<typeof onNeedsAttentionClick>>[1]> = {
               "Missing estimate": "missingEstimate",
@@ -878,7 +924,7 @@ export function RoadmapHealthHero({
               "Unestimated": "unestimated",
               "Unscheduled": "unscheduled",
               "No stories": "noStories",
-              "Has unestimated children": "hasUnestimatedChildren",
+              "Unestimated stories": "hasUnestimatedChildren",
             };
             return (
               <DonutCard

@@ -7,10 +7,12 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-
 import { CSS } from "@dnd-kit/utilities";
 import type { LucideIcon } from "lucide-react";
 import {
+  Check,
   CheckCheck,
   CheckCircle2,
   Folder,
   ListTodo,
+  Pencil,
   Pin,
   PinOff,
   PlayCircle,
@@ -144,6 +146,7 @@ function KanbanStoryCard({
   row,
   planYear,
   showHealthBadge = false,
+  showTeamBadge = false,
   boardStoryAssigneeNames,
   workspaceDirectoryUsers,
   dragDisabled = false,
@@ -159,6 +162,7 @@ function KanbanStoryCard({
   row: BoardStoryRow;
   planYear: number;
   showHealthBadge?: boolean;
+  showTeamBadge?: boolean;
   boardStoryAssigneeNames: ReadonlySet<string>;
   workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[];
   dragDisabled?: boolean;
@@ -388,6 +392,20 @@ function KanbanStoryCard({
             const tip = formatStoryHealthTooltip(row.story, epic, planYear, v.status);
             return <HealthBadge status={v.status} size="xs" tooltip={tip ?? undefined} />;
           })() : null}
+          {showTeamBadge ? (() => {
+            const teamId = (row.story.team ?? epic.team) ?? null;
+            if (!teamId) return null;
+            const chip = epicDeliveryTeamAssignmentChip(teamId);
+            return (
+              <span
+                className={cn("inline-flex h-[24px] min-w-0 max-w-[9rem] items-center gap-1", chipBase, chip.className)}
+                title={chip.label}
+              >
+                <TeamAvatar slug={teamId} sizePx={12} fallback={<Users className="size-3 shrink-0" aria-hidden />} />
+                <span className="min-w-0 truncate">{chip.label}</span>
+              </span>
+            );
+          })() : null}
           {editing === "assignee" && editable ? (
             <div ref={assigneeInputWrapRef} className="min-w-[7.5rem] max-w-[14rem] flex-1">
               <AssigneeCombobox
@@ -416,7 +434,7 @@ function KanbanStoryCard({
               title={editable ? "Edit assignee" : undefined}
               onClick={() => editable && setEditing("assignee")}
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-1.5 py-0.5 text-left text-[12px] font-medium text-slate-700",
+                "inline-flex h-[24px] items-center gap-1.5 rounded-md bg-slate-100 px-1.5 text-left text-[12px] font-medium leading-none text-slate-700",
                 editable && "cursor-pointer hover:bg-slate-200/90",
                 !editable && "cursor-default",
               )}
@@ -431,23 +449,50 @@ function KanbanStoryCard({
             </button>
           )}
           {editing === "estimatedDays" && editable ? (
-            <input
-              ref={estInputRef}
-              type="number"
-              min={0}
-              value={draftEst}
-              onChange={(e) => setDraftEst(e.target.value)}
-              onBlur={commitEst}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                if (e.key === "Escape") {
+            <span className="inline-flex h-[24px] items-center gap-1 rounded-md bg-blue-50 px-1 ring-1 ring-blue-200">
+              <input
+                ref={estInputRef}
+                type="number"
+                min={0}
+                value={draftEst}
+                onChange={(e) => setDraftEst(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitEst();
+                  }
+                  if (e.key === "Escape") {
+                    setDraftEst(String(story.estimatedDays ?? 0));
+                    setEditing(null);
+                  }
+                }}
+                className="w-[3rem] bg-transparent text-center text-[12px] font-medium leading-none text-blue-800 tabular-nums outline-none"
+                aria-label="Estimated days"
+              />
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={commitEst}
+                className="inline-flex size-5 items-center justify-center rounded text-emerald-600 hover:bg-emerald-100"
+                aria-label="Save estimate"
+                title="Save"
+              >
+                <Check className="size-3.5" strokeWidth={2.5} aria-hidden />
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
                   setDraftEst(String(story.estimatedDays ?? 0));
                   setEditing(null);
-                }
-              }}
-              className="w-[4.5rem] rounded-md border border-blue-200 bg-white px-2 py-1 text-center text-[12px] font-medium text-blue-800 tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60"
-              aria-label="Estimated days"
-            />
+                }}
+                className="inline-flex size-5 items-center justify-center rounded text-rose-600 hover:bg-rose-100"
+                aria-label="Cancel estimate edit"
+                title="Cancel"
+              >
+                <X className="size-3.5" strokeWidth={2.5} aria-hidden />
+              </button>
+            </span>
           ) : (
             <button
               type="button"
@@ -455,32 +500,66 @@ function KanbanStoryCard({
               title={editable ? "Edit estimate" : undefined}
               onClick={() => editable && setEditing("estimatedDays")}
               className={cn(
-                "rounded-md bg-blue-100 px-2 py-1 text-[12px] font-medium text-blue-700",
+                "group/edit-est inline-flex h-[24px] items-center gap-1 rounded-md bg-blue-100 px-2 text-[12px] font-medium leading-none text-blue-700",
                 editable && "cursor-pointer hover:bg-blue-200/80",
                 !editable && "cursor-default",
               )}
             >
-              Est: {story.estimatedDays ?? 0}d
+              <span>Est: {story.estimatedDays ?? 0}d</span>
+              {editable ? (
+                <Pencil
+                  className="size-2.5 shrink-0 text-blue-500 opacity-0 transition-opacity group-hover/edit-est:opacity-100"
+                  strokeWidth={2.25}
+                  aria-hidden
+                />
+              ) : null}
             </button>
           )}
           {editing === "daysLeft" && editable ? (
-            <input
-              ref={leftInputRef}
-              type="number"
-              min={0}
-              value={draftLeft}
-              onChange={(e) => setDraftLeft(e.target.value)}
-              onBlur={commitLeft}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                if (e.key === "Escape") {
+            <span className="inline-flex h-[24px] items-center gap-1 rounded-md bg-amber-50 px-1 ring-1 ring-amber-200">
+              <input
+                ref={leftInputRef}
+                type="number"
+                min={0}
+                value={draftLeft}
+                onChange={(e) => setDraftLeft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitLeft();
+                  }
+                  if (e.key === "Escape") {
+                    setDraftLeft(String(story.daysLeft ?? 0));
+                    setEditing(null);
+                  }
+                }}
+                className="w-[3rem] bg-transparent text-center text-[12px] font-medium leading-none text-amber-800 tabular-nums outline-none"
+                aria-label="Days left"
+              />
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={commitLeft}
+                className="inline-flex size-5 items-center justify-center rounded text-emerald-600 hover:bg-emerald-100"
+                aria-label="Save days left"
+                title="Save"
+              >
+                <Check className="size-3.5" strokeWidth={2.5} aria-hidden />
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
                   setDraftLeft(String(story.daysLeft ?? 0));
                   setEditing(null);
-                }
-              }}
-              className="w-[4.5rem] rounded-md border border-amber-200 bg-white px-2 py-1 text-center text-[12px] font-medium text-amber-800 tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60"
-              aria-label="Days left"
-            />
+                }}
+                className="inline-flex size-5 items-center justify-center rounded text-rose-600 hover:bg-rose-100"
+                aria-label="Cancel days left edit"
+                title="Cancel"
+              >
+                <X className="size-3.5" strokeWidth={2.5} aria-hidden />
+              </button>
+            </span>
           ) : (
             <button
               type="button"
@@ -488,12 +567,19 @@ function KanbanStoryCard({
               title={editable ? "Edit days left" : undefined}
               onClick={() => editable && setEditing("daysLeft")}
               className={cn(
-                "rounded-md bg-amber-100 px-2 py-1 text-[12px] font-medium text-amber-700",
+                "group/edit-left inline-flex h-[24px] items-center gap-1 rounded-md bg-amber-100 px-2 text-[12px] font-medium leading-none text-amber-700",
                 editable && "cursor-pointer hover:bg-amber-200/80",
                 !editable && "cursor-default",
               )}
             >
-              Left: {story.daysLeft ?? 0}d
+              <span>Left: {story.daysLeft ?? 0}d</span>
+              {editable ? (
+                <Pencil
+                  className="size-2.5 shrink-0 text-amber-600 opacity-0 transition-opacity group-hover/edit-left:opacity-100"
+                  strokeWidth={2.25}
+                  aria-hidden
+                />
+              ) : null}
             </button>
           )}
         </div>
@@ -775,6 +861,12 @@ type SprintKanbanProps = {
    *  kanban chip toolbar. Off by default — cards stay compact when
    *  health isn't the focus. */
   showHealthBadges?: boolean;
+  /** When true, each story card renders a team chip with the
+   *  delivery team's avatar + label. Toggled via the "Teams" button
+   *  on the sprint kanban chip toolbar. Off by default — the per-
+   *  column team filter chips already convey team identity for the
+   *  most common workflows. */
+  showTeamBadges?: boolean;
 };
 
 export function SprintKanbanBoard({
@@ -784,6 +876,7 @@ export function SprintKanbanBoard({
   yearSprint,
   progressBasis = "days",
   showHealthBadges = false,
+  showTeamBadges = false,
   filterEpicTeamIds = null,
   epicAccordionEmphasis = null,
   scheduledStoriesEmphasis = null,
@@ -1145,6 +1238,7 @@ export function SprintKanbanBoard({
                   row={row}
                   planYear={planYear}
                   showHealthBadge={showHealthBadges}
+                  showTeamBadge={showTeamBadges}
                   boardStoryAssigneeNames={boardStoryAssigneeNames}
                   workspaceDirectoryUsers={workspaceDirectoryUsers}
                   dragDisabled={sprintClosed}

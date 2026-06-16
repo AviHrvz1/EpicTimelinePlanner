@@ -1480,6 +1480,26 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       }
     | null
   >(null);
+  /** Reverse hand-off: identity-based push from the backlog hygiene
+   *  toolbar back up to the hero's "Needs Attention" donut so the
+   *  matching legend slice lights up when the planner clicks a
+   *  toolbar toggle. `null` = no pending highlight push. */
+  const [heroIncomingNeedsAttentionHighlight, setHeroIncomingNeedsAttentionHighlight] = useState<
+    | {
+        scope: "story" | "epic";
+        category:
+          | "missingEstimate"
+          | "missingDescription"
+          | "missingSprint"
+          | "stalled"
+          | "unestimated"
+          | "unscheduled"
+          | "noStories"
+          | "hasUnestimatedChildren";
+        on: boolean;
+      }
+    | null
+  >(null);
   /** Same lift pattern as the status filter — emitted by the panel,
    *  passed to TimelineGrid so the Gantt only renders epics whose
    *  plan-start quarter is in the set. Empty Set = no filter. */
@@ -1530,20 +1550,11 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
    *  makes the effect skip its next auto-sync, so the explicit pick
    *  wins. The ref is single-shot: it self-resets the next time the
    *  effect runs. */
-  const skipNextHeroScopeAutoSyncRef = useRef(false);
-  useEffect(() => {
-    if (skipNextHeroScopeAutoSyncRef.current) {
-      skipNextHeroScopeAutoSyncRef.current = false;
-      return;
-    }
-    if (topMode === "backlog") setHeroScope("story");
-    else if (topMode === "dashboard") setHeroScope("initiative");
-    else if (topMode === "roadmap") setHeroScope("epic");
-    // Other modes (users / demoBuilder / timeDebugger) don't render
-    // the hero in the same shape — leave the scope alone so re-entering
-    // backlog/roadmap/dashboard later doesn't trigger an unnecessary
-    // re-sync.
-  }, [topMode]);
+  // `heroScope` is fully sticky across mode switches — whatever the
+  // planner last picked (or the initial useState default) survives
+  // navigation. Per-mode defaults no longer auto-apply on every
+  // `topMode` change, so a planner who set Epics on Roadmap still
+  // sees Epics after switching to Backlog.
   /** Same mirror for the calendar header's sprint-chip row. */
   const [showYearSprintChipsCtrl, setShowYearSprintChipsCtrl] = useState(false);
   /** Command bus: when the hero's Epic Estimates donut legend is clicked
@@ -1563,6 +1574,41 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
    *  was picked from a slice, enable only that toggle; when the
    *  donut center was clicked (no category), enable ALL of the
    *  scope's toggles so the user can refine manually. */
+  /** Reverse hand-off: a backlog hygiene toggle was clicked. Flip the
+   *  hero scope to match (so the right donut is on screen) and push a
+   *  fresh highlight object so the legend slice lights up. */
+  const handleBacklogHygieneToggleClick = useCallback(
+    (state: {
+      scope: "story" | "epic";
+      category:
+        | "missingDescription"
+        | "missingEstimate"
+        | "missingSprint"
+        | "stalled"
+        | "unestimated"
+        | "unscheduled"
+        | "noStories"
+        | "hasUnestimatedChildren";
+      on: boolean;
+    }) => {
+      // Match hero scope to the clicked button's scope so the donut
+      // shows the matching legend before the highlight applies.
+      setHeroScope(state.scope);
+      setHeroIncomingNeedsAttentionHighlight({ ...state });
+      // Mirror the cross-chart mutual exclusion the hero→backlog
+      // handler applies: only one of Work Progress / Health Distribution
+      // / Needs Attention stays lit at a time. Clear the others so the
+      // highlight we just pushed isn't reset by stale filters.
+      if (state.on) {
+        setHealthFilter(new Set<HealthStatus>());
+        setBacklogIncomingHealthFilter([]);
+        setShowRoadmapProgress(false);
+        setGanttStatusFilter(new Set());
+        setBacklogIncomingStatusFilter([]);
+      }
+    },
+    [],
+  );
   const handleNeedsAttentionClick = useCallback(
     (
       scope: "epic" | "story",
@@ -1577,9 +1623,6 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         | "hasUnestimatedChildren"
         | null,
     ) => {
-      // Make the topMode-change auto-sync below skip its run so our
-      // explicit scope pick survives the mode flip.
-      skipNextHeroScopeAutoSyncRef.current = true;
       setTopMode("backlog");
       setHeroScope(scope);
       // Single-category slice clicks: map to the corresponding
@@ -6415,6 +6458,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           }}
           onOpenEpicEstimatePanel={handleOpenEstPanel}
           onNeedsAttentionClick={handleNeedsAttentionClick}
+          externalNeedsAttentionHighlight={heroIncomingNeedsAttentionHighlight}
           summaryBarRef={setSummaryBarEl}
           onYearChange={async (nextYear) => {
             // Mirror the TimelineGrid onYearChange below — keep in sync.
@@ -7364,6 +7408,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                 externalGroupLevelToggle={backlogIncomingGroupLevelToggle}
                 onGroupLevelsChange={setBacklogGroupLevelsMirror}
                 externalHygieneToggle={backlogIncomingHygieneToggle}
+                onHygieneToggleClick={handleBacklogHygieneToggleClick}
                 onOpenSprint={navigateToSprint}
                 onOpenInitiative={backlogOpenInitiative}
                 onOpenEpic={backlogOpenEpic}
