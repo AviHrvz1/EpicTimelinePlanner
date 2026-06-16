@@ -8813,6 +8813,134 @@ export function TimelineGrid({
     );
   })() : null;
 
+  // Single-quarter calendar header (Q title banner + Month labels +
+  // Sprint cards). Same hoisting strategy as the all-quarters header
+  // so CSS sticky can pin it to the outer scroller alongside the rail.
+  const singleQuarterCalendarHeaderJsx = isQuarterGanttLayout && focusedQuarter ? (() => {
+    const realNow = new Date(clockNowMs());
+    const todayMonth =
+      realNow.getFullYear() === currentYear ? realNow.getMonth() + 1 : null;
+    const fq = focusedQuarter;
+    const sprintBgTints: string[] = [
+      "bg-sky-50",
+      "bg-violet-50",
+      "bg-emerald-50",
+      "bg-amber-50",
+      "bg-rose-50",
+      "bg-indigo-50",
+    ];
+    return (
+      <div className="relative z-[1] overflow-hidden rounded-md border border-slate-200 bg-white shadow-[0_4px_18px_-6px_rgba(15,23,42,0.10),0_2px_6px_-3px_rgba(15,23,42,0.06)]">
+        <button
+          type="button"
+          onClick={() => {
+            setFocusedMonth(null);
+            onFocusedQuarterChange(null);
+          }}
+          className="relative flex w-full min-w-0 items-center justify-center gap-1.5 overflow-hidden bg-gradient-to-r from-blue-50/80 via-indigo-50/70 to-blue-50/80 py-2 text-center transition hover:from-blue-100/80 hover:via-indigo-100/70 hover:to-blue-100/80"
+        >
+          <BarChart3 className="size-[16px] text-indigo-700" strokeWidth={2.2} aria-hidden />
+          <span className="text-[16px] font-semibold tracking-tight text-slate-800">
+            Quarter {fq.label.slice(1)}
+          </span>
+        </button>
+        <div
+          className="relative grid min-w-0 border-t border-slate-200/80"
+          style={{ gridTemplateColumns: `repeat(${visibleMonths.length}, minmax(0, 1fr))` }}
+        >
+          {visibleMonths.map((month, mIdx) => {
+            const isLastMonthOverall = mIdx === visibleMonths.length - 1;
+            return (
+              <div
+                key={`q-month-${month}`}
+                ref={mIdx === visibleMonths.length - 1 ? setLastMonthPanelRef : undefined}
+                className={cn(
+                  "relative flex w-full min-w-0 items-center justify-center px-1.5 py-1.5 text-center text-[15px] font-semibold tracking-tight text-slate-800",
+                  !isLastMonthOverall && "border-r border-slate-200/60",
+                )}
+              >
+                {FULL_MONTHS[month - 1]}
+              </div>
+            );
+          })}
+        </div>
+        <div
+          className="relative grid min-w-0 gap-3 border-t border-slate-200/80 bg-white px-3 pb-3 pt-2"
+          style={{ gridTemplateColumns: `repeat(${visibleMonths.length}, minmax(0, 1fr))` }}
+        >
+          {visibleMonths.map((month, mIdx) => {
+            return (
+              <div
+                key={`q-sprint-month-${month}`}
+                className="grid grid-cols-2 gap-3"
+              >
+                {([1, 2] as const).map((lane) => {
+                  const lastDay = new Date(currentYear, month, 0).getDate();
+                  const startDay = lane === 1 ? 1 : 16;
+                  const endDay = lane === 1 ? 15 : lastDay;
+                  const sprintPosInQuarter = mIdx * 2 + (lane - 1);
+                  const sprintBg = sprintBgTints[sprintPosInQuarter % sprintBgTints.length];
+                  return (
+                    <SprintPlanDropButton
+                      key={`q-s-${month}-${lane}`}
+                      month={month}
+                      lane={lane}
+                      title={`${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, lane))} (${sprintDateWeekdayRangeText(currentYear, month, lane)})`}
+                      onClick={() => {
+                        if (isPostDragClickSuppressed()) return;
+                        setFocusedMonth(month);
+                        onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, lane), null);
+                      }}
+                      className={cn(
+                        "flex w-full flex-col items-center justify-center gap-0 rounded-md px-3 py-0 text-center ring-1 ring-slate-200/60 transition hover:-translate-y-px hover:shadow-[0_6px_14px_-6px_rgba(15,23,42,0.18)]",
+                        sprintBg,
+                      )}
+                    >
+                      <span className="inline-flex items-center gap-1.5 leading-none">
+                        <span
+                          className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-slate-100"
+                          aria-hidden
+                        >
+                          <Flag className="size-[11px] text-slate-600" strokeWidth={2.2} />
+                        </span>
+                        <span className="text-[13.5px] font-semibold tracking-tight text-slate-700">
+                          Sprint {globalSprintFromMonthLane(month, lane)}
+                        </span>
+                      </span>
+                      <span className="text-[11px] font-medium leading-none tabular-nums text-slate-500">
+                        {startDay}–{endDay} {MONTHS[month - 1]}
+                      </span>
+                    </SprintPlanDropButton>
+                  );
+                })}
+              </div>
+            );
+          })}
+          {roadmapLaneTodayLeft != null && todayMonth != null && visibleMonths.includes(todayMonth) ? (
+            <div
+              className="pointer-events-none absolute inset-y-0 z-10 flex items-center"
+              style={{ left: roadmapLaneTodayLeft, transform: "translate(-50%, 14px)" }}
+            >
+              <button
+                type="button"
+                title="Jump to today's sprint kanban"
+                onClick={() => {
+                  const todaySprint = currentWorkYearSprintForPlan(currentYear);
+                  if (todaySprint == null) return;
+                  setFocusedMonth(todayMonth);
+                  onEnterSprintStoryBoard?.(todaySprint, null);
+                }}
+                className="pointer-events-auto inline-flex items-center justify-center rounded bg-emerald-50/35 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 shadow-sm ring-1 ring-emerald-200/70 transition hover:bg-emerald-100 hover:shadow"
+              >
+                Today
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  })() : null;
+
   const planningSurface = (
       <div
         key={isInsightsSurfaceRender ? `insights-${activeMonth ?? "year"}-${focusedQuarterLabel ?? "all"}` : "planning-surface"}
@@ -8879,7 +9007,7 @@ export function TimelineGrid({
                   title="Sprint Board"
                   onMouseEnter={() => setIsRailExpanded(true)}
                   className={cn(
-                    "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+                    "group relative inline-flex h-9 w-full items-center overflow-visible transition",
               isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                     monthPlanTab === "sprint-kanban"
                       ? planRailTabActiveClass
@@ -8907,7 +9035,7 @@ export function TimelineGrid({
                   title={sprintInsightsLabel}
                   onMouseEnter={() => setIsRailExpanded(true)}
                   className={cn(
-                    "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+                    "group relative inline-flex h-9 w-full items-center overflow-visible transition",
               isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                     monthPlanTab === "sprint-status"
                       ? planRailTabActiveClass
@@ -8934,7 +9062,7 @@ export function TimelineGrid({
                   title="Capacity Planning"
                   onMouseEnter={() => setIsRailExpanded(true)}
                   className={cn(
-                    "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+                    "group relative inline-flex h-9 w-full items-center overflow-visible transition",
               isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                     monthPlanTab === "sprint-capacity"
                       ? planRailTabActiveClass
@@ -8961,7 +9089,7 @@ export function TimelineGrid({
                   title="Sprint Retrospective"
                   onMouseEnter={() => setIsRailExpanded(true)}
                   className={cn(
-                    "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+                    "group relative inline-flex h-9 w-full items-center overflow-visible transition",
               isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                     monthPlanTab === "sprint-retrospective"
                       ? planRailTabActiveClass
@@ -8989,7 +9117,7 @@ export function TimelineGrid({
                   title="Epic Plan"
                   onMouseEnter={() => setIsRailExpanded(true)}
                   className={cn(
-                    "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+                    "group relative inline-flex h-9 w-full items-center overflow-visible transition",
               isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                     monthPlanTab === "epic-gantt"
                       ? planRailTabActiveClass
@@ -9019,7 +9147,7 @@ export function TimelineGrid({
                     title="Team Capacity"
                     onMouseEnter={() => setIsRailExpanded(true)}
                     className={cn(
-                      "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+                      "group relative inline-flex h-9 w-full items-center overflow-visible transition",
                       isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                       monthPlanTab === "month-capacity"
                         ? planRailTabActiveClass
@@ -9045,7 +9173,7 @@ export function TimelineGrid({
                   title={monthInsightsLabel}
                   onMouseEnter={() => setIsRailExpanded(true)}
                   className={cn(
-                    "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+                    "group relative inline-flex h-9 w-full items-center overflow-visible transition",
               isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                     monthPlanTab === "month-status"
                       ? planRailTabActiveClass
@@ -9069,12 +9197,12 @@ export function TimelineGrid({
           </div>
         </div>
       ) : focusedQuarter ? (
-        <div className="relative z-30 h-0">
+        <div className="sticky top-0 z-40 h-0">
           <div
             className={cn(
               // Single-quarter rail height matches the Q + 3 months + 6
               // sprints panel above. Nudged a touch up.
-              "absolute left-0 top-0 inline-flex h-[131px] flex-col justify-between gap-1 overflow-visible rounded-lg border border-slate-200/90 bg-white p-0.5 ring-1 ring-black/5 transition-[width] duration-200",
+              "absolute left-[-5px] top-0 inline-flex h-[131px] flex-col justify-between gap-1 overflow-visible rounded-lg rounded-r-none border border-r-0 border-slate-200/90 bg-white p-0.5 shadow-[-1px_0_0_rgba(0,0,0,0.05),0_-1px_0_rgba(0,0,0,0.05),0_1px_0_rgba(0,0,0,0.05),4px_0_8px_-2px_rgba(15,23,42,0.12)] transition-[width] duration-200",
               isRailExpanded ? "w-56" : "w-[38px]",
             )}
             onMouseLeave={() => {
@@ -9092,7 +9220,7 @@ export function TimelineGrid({
               title="Gantt"
               onMouseEnter={() => setIsRailExpanded(true)}
               className={cn(
-                "group relative inline-flex h-10 w-full items-center overflow-visible rounded-lg transition",
+                "group relative inline-flex h-10 w-full items-center overflow-visible transition",
               isRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
                 quarterViewTab === "gantt"
                   ? planRailTabActiveClass
@@ -9117,7 +9245,7 @@ export function TimelineGrid({
               title={quarterInsightsLabel}
               onMouseEnter={() => setIsRailExpanded(true)}
               className={cn(
-                "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+                "group relative inline-flex h-9 w-full items-center overflow-visible transition",
               isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                 quarterViewTab === "insights"
                   ? planRailTabActiveClass
@@ -9142,7 +9270,7 @@ export function TimelineGrid({
               title={quarterCapacityLabel}
               onMouseEnter={() => setIsRailExpanded(true)}
               className={cn(
-                "group relative inline-flex h-9 w-full items-center overflow-visible rounded-md transition",
+                "group relative inline-flex h-9 w-full items-center overflow-visible transition",
               isRailExpanded ? "justify-start gap-2 px-2" : "justify-center px-0",
                 quarterViewTab === "capacity"
                   ? planRailTabActiveClass
@@ -9181,7 +9309,7 @@ export function TimelineGrid({
               title="Gantt"
               onMouseEnter={() => setIsRailExpanded(true)}
               className={cn(
-                "group relative inline-flex h-[42px] w-full items-center overflow-visible rounded-lg transition",
+                "group relative inline-flex h-[42px] w-full items-center overflow-visible transition",
               isRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
                 quarterViewTab === "gantt"
                   ? planRailTabActiveClass
@@ -9206,7 +9334,7 @@ export function TimelineGrid({
               title="Portfolio Insights"
               onMouseEnter={() => setIsRailExpanded(true)}
               className={cn(
-                "group relative inline-flex h-[42px] w-full items-center overflow-visible rounded-lg transition",
+                "group relative inline-flex h-[42px] w-full items-center overflow-visible transition",
               isRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
                 quarterViewTab === "insights"
                   ? planRailTabActiveClass
@@ -9231,10 +9359,22 @@ export function TimelineGrid({
       {/* Sticky all-quarters calendar header — hoisted out of the
        *  hscroll wrapper so CSS `position: sticky` can resolve to the
        *  outer scroll container (same anchor the rail uses). Lives at
-       *  the rail's level so both pin to the top together. */}
+       *  the rail's level so both pin to the top together. `pl-11`
+       *  clears the rail strip so Jan / Q1 aren't covered by the
+       *  menu icons. */}
       {allQuartersCalendarHeaderJsx ? (
-        <div className="sticky top-0 z-30">
+        <div className="sticky top-0 z-30 pl-11">
           {allQuartersCalendarHeaderJsx}
+        </div>
+      ) : null}
+      {/* Sticky single-quarter calendar header — same hoist strategy
+       *  as the all-quarters variant. Pins alongside the focused-
+       *  quarter rail while the gantt body scrolls. `pl-10` pushes
+       *  the header's content past the rail strip so the leftmost
+       *  sprint card isn't covered by the menu icons. */}
+      {singleQuarterCalendarHeaderJsx ? (
+        <div className="sticky top-0 z-30 pl-10">
+          {singleQuarterCalendarHeaderJsx}
         </div>
       ) : null}
       {activeMonth ? (
@@ -9942,146 +10082,6 @@ export function TimelineGrid({
                       : undefined
                   }
                 >
-                  {/* Calendar-style header for single-quarter view — mirrors
-                      the full-year (all-quarters) calendar: Q row + month row
-                      (+ optional sprint row) inside one rounded card with a
-                      drop shadow below it. */}
-                  {(() => {
-                    const realNow = new Date(clockNowMs());
-                    const todayMonth =
-                      realNow.getFullYear() === currentYear ? realNow.getMonth() + 1 : null;
-                    const fq = focusedQuarter!;
-                    const startMonth = fq.months[0];
-                    const endMonth = fq.months[fq.months.length - 1];
-                    // Single-quarter view: each sprint gets a light pastel
-                    // background. Border + text stay neutral so the tile
-                    // reads quietly while the color signals "which sprint".
-                    const sprintBgTints: string[] = [
-                      "bg-sky-50",
-                      "bg-violet-50",
-                      "bg-emerald-50",
-                      "bg-amber-50",
-                      "bg-rose-50",
-                      "bg-indigo-50",
-                    ];
-                    return (
-                      <div className="relative z-[1] overflow-hidden rounded-md border border-slate-200 bg-white shadow-[0_4px_18px_-6px_rgba(15,23,42,0.10),0_2px_6px_-3px_rgba(15,23,42,0.06)]">
-                        {/* Row 1: Quarter title — soft blue/indigo gradient banner. */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFocusedMonth(null);
-                            onFocusedQuarterChange(null);
-                          }}
-                          className="relative flex w-full min-w-0 items-center justify-center gap-1.5 overflow-hidden bg-gradient-to-r from-blue-50/80 via-indigo-50/70 to-blue-50/80 py-2 text-center transition hover:from-blue-100/80 hover:via-indigo-100/70 hover:to-blue-100/80"
-                        >
-                          <BarChart3 className="size-[16px] text-indigo-700" strokeWidth={2.2} aria-hidden />
-                          <span className="text-[16px] font-semibold tracking-tight text-slate-800">
-                            Quarter {fq.label.slice(1)}
-                          </span>
-                        </button>
-                        {/* Row 2: Month labels — plain centered headers. */}
-                        <div
-                          className="relative grid min-w-0 border-t border-slate-200/80"
-                          style={{ gridTemplateColumns: `repeat(${visibleMonths.length}, minmax(0, 1fr))` }}
-                        >
-                          {visibleMonths.map((month, mIdx) => {
-                            const isLastMonthOverall = mIdx === visibleMonths.length - 1;
-                            // Month drill-down from the single-quarter view
-                            // is parked — month labels are header-only.
-                            return (
-                              <div
-                                key={`q-month-${month}`}
-                                ref={mIdx === visibleMonths.length - 1 ? setLastMonthPanelRef : undefined}
-                                className={cn(
-                                  "relative flex w-full min-w-0 items-center justify-center px-1.5 py-1.5 text-center text-[15px] font-semibold tracking-tight text-slate-800",
-                                  !isLastMonthOverall && "border-r border-slate-200/60",
-                                )}
-                              >
-                                {FULL_MONTHS[month - 1]}
-                              </div>
-                            );
-                          })}
-                        </div>
-                        {/* Row 3: Sprint tile cards — one per sprint. */}
-                        <div
-                          className="relative grid min-w-0 gap-3 border-t border-slate-200/80 bg-white px-3 pb-3 pt-2"
-                          style={{ gridTemplateColumns: `repeat(${visibleMonths.length}, minmax(0, 1fr))` }}
-                        >
-                          {visibleMonths.map((month, mIdx) => {
-                            return (
-                              <div
-                                key={`q-sprint-month-${month}`}
-                                className="grid grid-cols-2 gap-3"
-                              >
-                                {([1, 2] as const).map((lane) => {
-                                  const lastDay = new Date(currentYear, month, 0).getDate();
-                                  const startDay = lane === 1 ? 1 : 16;
-                                  const endDay = lane === 1 ? 15 : lastDay;
-                                  const sprintPosInQuarter = mIdx * 2 + (lane - 1);
-                                  const sprintBg = sprintBgTints[sprintPosInQuarter % sprintBgTints.length];
-                                  return (
-                                    <SprintPlanDropButton
-                                      key={`q-s-${month}-${lane}`}
-                                      month={month}
-                                      lane={lane}
-                                      title={`${sprintLabelQuarterOrMonth(globalSprintFromMonthLane(month, lane))} (${sprintDateWeekdayRangeText(currentYear, month, lane)})`}
-                                      onClick={() => {
-                                        if (isPostDragClickSuppressed()) return;
-                                        setFocusedMonth(month);
-                                        onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, lane), null);
-                                      }}
-                                      className={cn(
-                                        // Light tinted sprint tile — border + font
-                                        // stay neutral so the tint is the only color cue.
-                                        "flex w-full flex-col items-center justify-center gap-0 rounded-md px-3 py-0 text-center ring-1 ring-slate-200/60 transition hover:-translate-y-px hover:shadow-[0_6px_14px_-6px_rgba(15,23,42,0.18)]",
-                                        sprintBg,
-                                      )}
-                                    >
-                                      <span className="inline-flex items-center gap-1.5 leading-none">
-                                        <span
-                                          className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-slate-100"
-                                          aria-hidden
-                                        >
-                                          <Flag className="size-[11px] text-slate-600" strokeWidth={2.2} />
-                                        </span>
-                                        <span className="text-[13.5px] font-semibold tracking-tight text-slate-700">
-                                          Sprint {globalSprintFromMonthLane(month, lane)}
-                                        </span>
-                                      </span>
-                                      <span className="text-[11px] font-medium leading-none tabular-nums text-slate-500">
-                                        {startDay}–{endDay} {MONTHS[month - 1]}
-                                      </span>
-                                    </SprintPlanDropButton>
-                                  );
-                                })}
-                              </div>
-                            );
-                          })}
-                            {roadmapLaneTodayLeft != null && todayMonth != null && visibleMonths.includes(todayMonth) ? (
-                              <div
-                                className="pointer-events-none absolute inset-y-0 z-10 flex items-center"
-                                style={{ left: roadmapLaneTodayLeft, transform: "translate(-50%, 14px)" }}
-                              >
-                                <button
-                                  type="button"
-                                  title="Jump to today's sprint kanban"
-                                  onClick={() => {
-                                    const todaySprint = currentWorkYearSprintForPlan(currentYear);
-                                    if (todaySprint == null) return;
-                                    setFocusedMonth(todayMonth);
-                                    onEnterSprintStoryBoard?.(todaySprint, null);
-                                  }}
-                                  className="pointer-events-auto inline-flex items-center justify-center rounded bg-emerald-50/35 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 shadow-sm ring-1 ring-emerald-200/70 transition hover:bg-emerald-100 hover:shadow"
-                                >
-                                  Today
-                                </button>
-                              </div>
-                            ) : null}
-                          </div>
-                      </div>
-                    );
-                  })()}
                   {/* Invisible per-sprint drop targets — 6 cols matching the bar grid. */}
                   <div className="relative z-[1] grid min-w-0 gap-2" style={ganttLaneGridStyle}>
                     {visibleMonths.flatMap((month) =>
