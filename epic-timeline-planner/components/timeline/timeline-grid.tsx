@@ -8952,23 +8952,21 @@ export function TimelineGrid({
           // that scrolls inside this element with a visible blue
           // scrollbar. Replaces the old flex-1 + `planning-surface-
           // scroll` (which hid the bar).
-          // Overscroll behavior is view-aware:
-          //  - Gantt views (all-quarters, focused-quarter, month
-          //    epic-gantt): `overscroll-y-contain` so the wheel stops
-          //    at the panel boundary instead of pulling the page
-          //    (and the sticky calendar header) up.
-          //  - Everything else (Insights, Capacity, Kanban, Retro,
-          //    Status, etc.): `overscroll-y-auto` chains the wheel
-          //    up to the page once the inner area tops / bottoms
-          //    out, so the reader keeps scrolling naturally past the
-          //    panel edge into the rest of the page.
+          // `overscroll-y-auto` lets the wheel scroll chain up to the
+          // page once this inner area hits its top / bottom boundary —
+          // the planner reaches the bottom of the gantt panel and the
+          // page scroll bar takes over without an awkward stop. Same
+          // in reverse at the top. (Trade-off: the sticky calendar
+          // header on gantt views may follow the page scroll once
+          // the inner panel has bottomed out — restored at the user's
+          // request after we briefly switched to `contain` for the
+          // header pin.)
           // `pl-2 pr-4` is on this surface (moved off the panel root
           // so the breadcrumb row can span full panel width). Left
           // padding dropped from `pl-5` → `pl-2` so the now-narrower
           // 36px rail sits closer to the panel edge — the old 20px
           // pre-rail gap read as wasted space.
-          "flex min-h-0 flex-1 flex-col max-h-[calc(100dvh-18rem)] overflow-y-auto pl-2 pr-4",
-          showGanttSearch ? "overscroll-y-contain" : "overscroll-y-auto",
+          "flex min-h-0 flex-1 flex-col max-h-[calc(100dvh-18rem)] overflow-y-auto overscroll-y-auto pl-2 pr-4",
           // Pastel scrollbar matching the initiative panel's rail.
           "[scrollbar-gutter:stable] [scrollbar-width:thin] [scrollbar-color:theme(colors.indigo.100)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gradient-to-b [&::-webkit-scrollbar-thumb]:from-sky-100 [&::-webkit-scrollbar-thumb]:via-indigo-100 [&::-webkit-scrollbar-thumb]:to-violet-100 hover:[&::-webkit-scrollbar-thumb]:from-sky-200 hover:[&::-webkit-scrollbar-thumb]:via-indigo-200 hover:[&::-webkit-scrollbar-thumb]:to-violet-200",
           showCapacityPlanningScrollbar && "min-w-0",
