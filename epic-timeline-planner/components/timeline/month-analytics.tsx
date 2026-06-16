@@ -1677,6 +1677,11 @@ export function MonthAnalytics({
    */
   const [burndownBasis, setBurndownBasis] = useState<"days" | "stories" | "epicEst">(progressBasis);
   const [burnupBasis, setBurnupBasis] = useState<"days" | "stories" | "epicEst">(progressBasis);
+  /** Per-session dismiss for the "Epic scheduled DD/MM" marker on the
+   *  burndown. Click the ✕ next to the label to hide it; resets to
+   *  visible on every focused-epic change so a new epic shows the
+   *  marker by default. */
+  const [epicScheduledMarkerDismissed, setEpicScheduledMarkerDismissed] = useState(false);
   /**
    * The chart's Y-axis units derive from the basis (no separate metric toggle):
    *   - `epicEst` or `days` → Y-axis in days
@@ -2227,7 +2232,17 @@ export function MonthAnalytics({
   const analytics = useMemo(() => {
     const scopeStories =
       selectedEpicOption != null ? (selectedEpicOption.epic.userStories ?? []) : monthStories;
-    const scheduledStories = scopeStories.filter((story) => story.sprint != null);
+    // When an epic is focused in a multi-period view (Portfolio /
+    // all-quarters insights), the "Stories Progress" donut represents
+    // the WHOLE epic's work, so unscheduled stories must count — they
+    // belong to the epic regardless of which sprint they slot into.
+    // Otherwise the donut understates the to-do bucket and disagrees
+    // with the Epic Scope Burndown's Total scope value. The
+    // `sprint != null` filter still applies in single-quarter / sprint
+    // scope, where unscheduled stories aren't part of the period.
+    const scheduledStories = selectedEpicOption != null && isMultiPeriodInsights
+      ? scopeStories
+      : scopeStories.filter((story) => story.sprint != null);
     // Month burndown/flow scope: stories that are open at month start.
     const openAtMonthStartStories = scheduledStories.filter(
       (story) => story.status === "todo" || story.status === "inProgress",
@@ -3128,6 +3143,25 @@ export function MonthAnalytics({
     const dueDay = dueSprint === 1 ? 15 : new Date(dueYear, dueMonth, 0).getDate();
     return new Date(dueYear, dueMonth - 1, dueDay);
   }, [burndownFocusedEpicOption, scopeEndMonth, planYear]);
+  // Reset the dismiss on focused-epic change so a new epic shows its
+  // own "Epic scheduled" marker again. Without this, dismissing for
+  // one epic would silently hide the marker for every subsequent one.
+  useEffect(() => {
+    setEpicScheduledMarkerDismissed(false);
+  }, [burndownFocusedEpicOption?.epic.id]);
+  /** Resolved plan-start date for the focused epic — drives the "Epic
+   *  scheduled" marker at the ideal line's left edge. Mirror of
+   *  `selectedEpicDueDate` for the start side. Uses the same convention
+   *  as `epicPlanStartDate` in lib/burn-series.ts: explicit
+   *  `planStartDay` wins, else sprint 2 → day 16, else day 1. */
+  const selectedEpicPlanStartDate = useMemo(() => {
+    if (!burndownFocusedEpicOption) return null;
+    const epic = burndownFocusedEpicOption.epic;
+    const startMonth = epic.planStartMonth ?? scopeStartMonth;
+    const startYear = epic.planYear ?? planYear;
+    const startDay = epic.planStartDay ?? (epic.planSprint === 2 ? 16 : 1);
+    return new Date(startYear, startMonth - 1, startDay);
+  }, [burndownFocusedEpicOption, scopeStartMonth, planYear]);
 
   /** True when the focused epic's actual line hits 0 anywhere in the
    *  rendered window — drives the "Done ✓" marker on the due date.
@@ -3152,15 +3186,19 @@ export function MonthAnalytics({
   const monthBurndownWithDueTarget = useMemo(() => {
     if (!burndownFocusedEpicOption || selectedEpicDueDate == null) return monthBurndownTruncated;
     const focusedId = burndownFocusedEpicOption.epic.id;
-    const roundFn = (v: number) => metric === "storyCount" ? Math.round(v) : Number(v.toFixed(1));
     return monthBurndownTruncated.map((row, idx) => {
       const epicIdeal = burnDownSeries.perDay[idx]?.perEpic[focusedId]?.idealDaysLeft ?? null;
+      // Ideal is a theoretical target line — keep it smooth (don't
+      // snap to integers). Matches the convention Jira / Atlassian use:
+      // a straight diagonal from total scope at plan-start down to
+      // zero at the due date, not a stair-step. The actual blue line
+      // stays on integers (it's observed work, can't be fractional).
       return {
         ...row,
-        epicIdeal: epicIdeal == null ? null : roundFn(Math.max(0, epicIdeal)),
+        epicIdeal: epicIdeal == null ? null : Number(Math.max(0, epicIdeal).toFixed(1)),
       };
     });
-  }, [monthBurndownTruncated, burnDownSeries.perDay, burndownFocusedEpicOption, selectedEpicDueDate, metric]);
+  }, [monthBurndownTruncated, burnDownSeries.perDay, burndownFocusedEpicOption, selectedEpicDueDate]);
   /** Verdict displayed alongside the burndown chart. Sourced directly from
    *  `buildBurnSeries`'s headline — the SAME function call that drives the
    *  chart line, so the chip and the line are guaranteed to agree. The
@@ -3173,6 +3211,30 @@ export function MonthAnalytics({
         tooltip: undefined as string | undefined,
       }
     : null;
+  /** Marker at the ideal line's left edge (epic plan-start). Anchors a
+   *  "Epic scheduled DD/MM" label above the chart with a thin vertical
+   *  connector dropping down to the ideal line's start point — explains
+   *  WHY the orange line takes off from a specific day instead of from
+   *  the chart's left edge. */
+  const selectedEpicScheduledMarker = useMemo(() => {
+    if (!selectedEpicPlanStartDate || !burndownFocusedEpicOption) return null;
+    if (monthBurndownWithDueTarget.length === 0) return null;
+    const monthStart = new Date(planYear, scopeStartMonth - 1, 1);
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const startDayIndex = Math.floor((selectedEpicPlanStartDate.getTime() - monthStart.getTime()) / msPerDay) + 1;
+    if (startDayIndex < 1 || startDayIndex > monthBurndownWithDueTarget.length) return null;
+    const rowIndex = startDayIndex - 1;
+    const point = monthBurndownWithDueTarget[rowIndex] as
+      | (Record<string, number | string | boolean | null | undefined> & { axisLabel?: string })
+      | undefined;
+    if (!point?.axisLabel) return null;
+    const y = point.epicIdeal;
+    return {
+      axisLabel: String(point.axisLabel),
+      y: typeof y === "number" ? y : 0,
+      label: `Epic scheduled ${selectedEpicPlanStartDate.getDate()}/${selectedEpicPlanStartDate.getMonth() + 1}`,
+    };
+  }, [selectedEpicPlanStartDate, burndownFocusedEpicOption, monthBurndownWithDueTarget, planYear, scopeStartMonth]);
   const selectedEpicDueMarker = useMemo(() => {
     if (!selectedEpicDueDate || !burndownFocusedEpicOption) return null;
     if (monthBurndownWithDueTarget.length === 0) return null;
@@ -3327,7 +3389,15 @@ export function MonthAnalytics({
     // counting 7 Done stories. By tracking every story, the per-day
     // loop now plots stories that were always review as a flat Done
     // band, matching the Workload Balance current-state view.
-    const storiesToTrack = sourceStories.filter((story) => story.sprint != null);
+    // Match the donut's scope rule: in a multi-period focused-epic
+    // view, the CFD covers the WHOLE epic (unscheduled included) so
+    // it reconciles with the burndown / burnup / donut totals. In
+    // single-quarter / sprint scope, unscheduled stories aren't part
+    // of the period in question and stay filtered out.
+    const includeUnscheduled = selectedEpicOption != null && isMultiPeriodInsights;
+    const storiesToTrack = includeUnscheduled
+      ? sourceStories
+      : sourceStories.filter((story) => story.sprint != null);
     const now = new Date();
     const periodStartMs3 = new Date(planYear, scopeStartMonth - 1, 1).getTime();
     const nowDayMs3 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -3738,6 +3808,23 @@ export function MonthAnalytics({
     if (t < periodStart.getTime() || t > periodEnd.getTime()) return null;
     return flowChartDayLabel(burnUpDueDate);
   }, [burnUpDueDate, planYear, scopeStartMonth, scopeEndMonth]);
+  /** Burnup mirror of `selectedEpicScheduledMarker`: tick label + Y
+   *  value (always 0 — ideal starts at zero on burnup) for the focused
+   *  epic's plan-start point. Anchors the "Epic scheduled" annotation
+   *  on the burnup chart at the same date the burndown variant points
+   *  to. Returns null when the date falls outside the visible window
+   *  so the label isn't pinned to a misleading edge. */
+  const burnUpScheduledMarker = useMemo(() => {
+    if (!selectedEpicPlanStartDate || !burndownFocusedEpicOption) return null;
+    const periodStart = new Date(planYear, scopeStartMonth - 1, 1);
+    const periodEnd = new Date(planYear, scopeEndMonth, 0);
+    const t = selectedEpicPlanStartDate.getTime();
+    if (t < periodStart.getTime() || t > periodEnd.getTime()) return null;
+    return {
+      axisLabel: flowChartDayLabel(selectedEpicPlanStartDate),
+      label: `Epic scheduled ${selectedEpicPlanStartDate.getDate()}/${selectedEpicPlanStartDate.getMonth() + 1}`,
+    };
+  }, [selectedEpicPlanStartDate, burndownFocusedEpicOption, planYear, scopeStartMonth, scopeEndMonth]);
 
   const burnUpLegendScrollRef = useRef<HTMLDivElement | null>(null);
   const [canScrollBurnUpUp, setCanScrollBurnUpUp] = useState(false);
@@ -5439,6 +5526,95 @@ export function MonthAnalytics({
                         }}
                       />
                     ) : null}
+                    {/* "Epic scheduled DD/MM" marker — anchored to the
+                     *  ideal line's left edge so the planner sees WHY
+                     *  the orange ramp starts where it does. Custom
+                     *  shape draws a thin connector going up from the
+                     *  ideal line's start point into the chart's top
+                     *  margin where the label sits — keeps the label
+                     *  above the chart body instead of overlapping the
+                     *  data lines. */}
+                    {burndownFocusedEpicOption && selectedEpicScheduledMarker && !epicScheduledMarkerDismissed ? (
+                      <ReferenceDot
+                        x={selectedEpicScheduledMarker.axisLabel}
+                        y={selectedEpicScheduledMarker.y}
+                        r={0}
+                        isFront
+                        ifOverflow="visible"
+                        shape={(shapeProps: { cx?: number; cy?: number }) => {
+                          const cx = shapeProps.cx ?? 0;
+                          const cy = shapeProps.cy ?? 0;
+                          // The LineChart's `top: 38` margin gives us
+                          // ~30px of breathing room above the plot. We
+                          // place the label inside that margin so it
+                          // doesn't sit on top of the data lines.
+                          const labelY = 12;
+                          const connectorTop = labelY + 6;
+                          const arrowTipY = cy - 3;
+                          // Approximate label width so we can place the
+                          // ✕ icon flush with its right edge. The label
+                          // is centered around `cx` so we offset the
+                          // icon by roughly half the label's pixel
+                          // width plus a small gap.
+                          const approxLabelWidth = selectedEpicScheduledMarker.label.length * 6.2;
+                          const dismissCx = cx + approxLabelWidth / 2 + 8;
+                          const dismissCy = labelY - 4;
+                          return (
+                            <g>
+                              <line
+                                x1={cx}
+                                y1={connectorTop}
+                                x2={cx}
+                                y2={arrowTipY - 4}
+                                stroke="#f97316"
+                                strokeWidth={1.2}
+                                strokeDasharray="3 2"
+                              />
+                              {/* Arrowhead — small triangle pointing
+                               *  down to the plan-start date on the
+                               *  ideal line. */}
+                              <polygon
+                                points={`${cx - 3.5},${arrowTipY - 4} ${cx + 3.5},${arrowTipY - 4} ${cx},${arrowTipY + 1}`}
+                                fill="#f97316"
+                              />
+                              <text
+                                x={cx}
+                                y={labelY}
+                                textAnchor="middle"
+                                fill="#c2410c"
+                                fontSize={11}
+                                fontWeight={600}
+                              >
+                                {selectedEpicScheduledMarker.label}
+                              </text>
+                              {/* Hide control — eye-with-slash icon so it
+                               *  clearly reads as "hide this annotation"
+                               *  rather than "delete the epic" (the
+                               *  earlier ✕ glyph was ambiguous). Resets
+                               *  to visible on every focused-epic change
+                               *  via the `epicScheduledMarkerDismissed`
+                               *  reset effect. The transparent circle
+                               *  enlarges the hit-target so the small
+                               *  glyph is comfortable to click. */}
+                              <g
+                                style={{ cursor: "pointer" }}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setEpicScheduledMarkerDismissed(true);
+                                }}
+                              >
+                                <title>Hide this marker</title>
+                                <circle cx={dismissCx} cy={dismissCy} r={8} fill="transparent" />
+                                <circle cx={dismissCx} cy={dismissCy} r={6.5} fill="#fff7ed" stroke="#fdba74" strokeWidth={1} />
+                                <ellipse cx={dismissCx} cy={dismissCy} rx={3} ry={1.9} fill="none" stroke="#c2410c" strokeWidth={1.1} />
+                                <circle cx={dismissCx} cy={dismissCy} r={0.9} fill="#c2410c" />
+                                <line x1={dismissCx - 3.6} y1={dismissCy + 3.4} x2={dismissCx + 3.6} y2={dismissCy - 3.4} stroke="#c2410c" strokeWidth={1.3} strokeLinecap="round" />
+                              </g>
+                            </g>
+                          );
+                        }}
+                      />
+                    ) : null}
                     {/* Δ annotation at today — same affordance as the
                      *  burnup chart and as slides 3–7 of the Health
                      *  Explainer. Renders only on the focused epic and
@@ -7021,7 +7197,7 @@ export function MonthAnalytics({
                 ) : (
                 <div className="absolute inset-0">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={burnUpDataTruncated} margin={{ top: 38, right: 24, left: 18, bottom: 0 }}>
+                    <LineChart data={burnUpDataTruncated} margin={{ top: 38, right: 24, left: 18, bottom: 18 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                       <XAxis
                         dataKey="labelShort"
@@ -7183,6 +7359,88 @@ export function MonthAnalytics({
                           );
                         })()
                         : null}
+                      {/* "Epic scheduled DD/MM" marker — mirror of the
+                       *  burndown variant, anchored at the burnup's
+                       *  plan-start point where the ideal line begins
+                       *  (y=0). Label sits in the chart's BOTTOM
+                       *  margin (below the X-axis tick labels) with
+                       *  the arrow pointing UP to the start — flipped
+                       *  vs the burndown because the ideal line on
+                       *  the burnup begins at the BOTTOM of the plot,
+                       *  not the top. The LineChart's `bottom: 36`
+                       *  margin reserves room for it. */}
+                      {burnUpSingleEpicVisible && burnUpScheduledMarker && !epicScheduledMarkerDismissed ? (
+                        <ReferenceDot
+                          x={burnUpScheduledMarker.axisLabel}
+                          y={0}
+                          r={0}
+                          isFront
+                          ifOverflow="visible"
+                          shape={(shapeProps: { cx?: number; cy?: number }) => {
+                            const cx = shapeProps.cx ?? 0;
+                            const cy = shapeProps.cy ?? 0;
+                            // Place label BELOW the X-axis tick labels.
+                            // `cy + 56` lands just past the bottom of
+                            // the X-axis labels — uses overflow:visible
+                            // to render past the SVG bottom, so the
+                            // chart's bottom margin can stay tight
+                            // (chart doesn't get pushed up away from
+                            // the legend below).
+                            const labelY = cy + 66;
+                            const connectorBottom = labelY - 8;
+                            const arrowBaseY = cy + 7;
+                            const arrowTipY = cy + 2;
+                            const approxLabelWidth = burnUpScheduledMarker.label.length * 6.2;
+                            const dismissCx = cx + approxLabelWidth / 2 + 8;
+                            const dismissCy = labelY - 4;
+                            return (
+                              <g>
+                                <line
+                                  x1={cx}
+                                  y1={arrowBaseY}
+                                  x2={cx}
+                                  y2={connectorBottom}
+                                  stroke="#f97316"
+                                  strokeWidth={1.2}
+                                  strokeDasharray="3 2"
+                                />
+                                <polygon
+                                  points={`${cx - 3.5},${arrowBaseY} ${cx + 3.5},${arrowBaseY} ${cx},${arrowTipY}`}
+                                  fill="#f97316"
+                                />
+                                <text
+                                  x={cx}
+                                  y={labelY}
+                                  textAnchor="middle"
+                                  fill="#c2410c"
+                                  fontSize={11}
+                                  fontWeight={600}
+                                >
+                                  {burnUpScheduledMarker.label}
+                                </text>
+                                {/* Hide control — eye-with-slash icon.
+                                 *  Shares the dismiss state with the
+                                 *  burndown marker so toggling one
+                                 *  hides both. */}
+                                <g
+                                  style={{ cursor: "pointer" }}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setEpicScheduledMarkerDismissed(true);
+                                  }}
+                                >
+                                  <title>Hide this marker</title>
+                                  <circle cx={dismissCx} cy={dismissCy} r={8} fill="transparent" />
+                                  <circle cx={dismissCx} cy={dismissCy} r={6.5} fill="#fff7ed" stroke="#fdba74" strokeWidth={1} />
+                                  <ellipse cx={dismissCx} cy={dismissCy} rx={3} ry={1.9} fill="none" stroke="#c2410c" strokeWidth={1.1} />
+                                  <circle cx={dismissCx} cy={dismissCy} r={0.9} fill="#c2410c" />
+                                  <line x1={dismissCx - 3.6} y1={dismissCy + 3.4} x2={dismissCx + 3.6} y2={dismissCy - 3.4} stroke="#c2410c" strokeWidth={1.3} strokeLinecap="round" />
+                                </g>
+                              </g>
+                            );
+                          }}
+                        />
+                      ) : null}
                       {/* Due target marker — same red BurndownTargetIcon
                        *  the burndown chart uses, anchored at the burnup's
                        *  due-date label so the two charts read symmetric.

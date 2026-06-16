@@ -479,12 +479,27 @@ export function buildBurnSeries(args: BuildBurnSeriesArgs): BurnSeries {
       let epicIdealDaysLeft: number | null = null;
       let epicIdealCompleted: number | null = null;
       if (!meta.isFullyOverdue) {
+        // Basis-aware fallback. When the plan window is entirely in the
+        // future, `epicScope` is null for every day in the loop above
+        // (the `!isFuture` branch never runs), so we must derive a
+        // baseline another way. Using `originalEstimateDays` regardless
+        // of basis used to plot day-counts on a story-count axis — the
+        // ideal line then started at ~30 on a "Stories" Y-axis. Match
+        // the chart's basis so the unit matches the axis.
         const baselineScope = epicScope != null && epicScope > 0
           ? epicScope
-          : (epic.originalEstimateDays ?? (epic.userStories ?? []).reduce(
-              (s, st) => s + (st.estimatedDays ?? 0),
-              0,
-            ));
+          : args.basis === "stories"
+            ? (epic.userStories?.length ?? 0)
+            : args.basis === "epicEst"
+              ? (epic.originalEstimateDays
+                  ?? (epic.userStories ?? []).reduce(
+                    (s, st) => s + (st.estimatedDays ?? 0),
+                    0,
+                  ))
+              : (epic.userStories ?? []).reduce(
+                  (s, st) => s + (st.estimatedDays ?? 0),
+                  0,
+                );
         epicIdealDaysLeft = idealDaysLeftFor(
           dayIdx,
           baselineScope,
