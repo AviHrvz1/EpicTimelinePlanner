@@ -791,7 +791,7 @@ export function SprintAnalytics({
       assignee: string;
       team: string;
       sprint: number | null;
-      status: "Unscheduled" | "To do" | "In progress" | "Review / Testing" | "Done";
+      status: "To do" | "In progress" | "Review / Testing" | "Done";
       /** Raw enum (`todo|inProgress|review|done`) preserved alongside the display label so
        *  burndown-style verdict helpers don't have to reverse-map the friendly string. */
       statusKey: UserStoryItem["status"] | null;
@@ -804,8 +804,11 @@ export function SprintAnalytics({
         !filterEpicTeamIds?.length || filterEpicTeamIds.includes(epic.team ?? "");
       for (const story of epic.userStories ?? []) {
         const isInSprint = story.sprint != null && storyMatchesYearSprint(story, month, yearSprint);
-        const isUnscheduled = story.sprint == null;
-        if (!isInSprint && !isUnscheduled) continue;
+        // Workspace-wide `story.sprint == null` rows used to leak into
+        // the Status / Workload / Sprint Load drilldown tables; they
+        // don't belong on a per-sprint surface (same rule the donut
+        // now follows). Skip them outright.
+        if (!isInSprint) continue;
         if (!epicTeamInFilter) {
           if (teamMemberNames.size === 0) continue;
           const a = (story.assignee ?? "").trim().toLowerCase();
@@ -818,16 +821,14 @@ export function SprintAnalytics({
           team: epic.team ?? "",
           sprint: story.sprint ?? null,
           status:
-            story.sprint == null
-              ? "Unscheduled"
-              : story.status === "todo"
-                ? "To do"
-                : story.status === "inProgress"
-                  ? "In progress"
-                  : story.status === "review"
-                    ? "Review / Testing"
-                    : "Done",
-          statusKey: story.sprint == null ? null : story.status,
+            story.status === "todo"
+              ? "To do"
+              : story.status === "inProgress"
+                ? "In progress"
+                : story.status === "review"
+                  ? "Review / Testing"
+                  : "Done",
+          statusKey: story.status,
           estimatedDays: story.estimatedDays ?? null,
           daysLeft: story.daysLeft ?? null,
         });
