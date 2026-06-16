@@ -29,6 +29,7 @@
  *   - `totalStories` recomputed against the projected-and-filtered
  *     set so the headline matches what the donut renders.
  */
+import { StoryStatus } from "@/lib/generated/prisma";
 import type {
   EpicItem,
   InitiativeItem,
@@ -41,7 +42,7 @@ import {
   type SprintAnalyticsData,
 } from "@/lib/sprint-analytics";
 import { storyMatchesYearSprint } from "@/lib/sprint-plan";
-import { sprintEndDate } from "@/lib/year-sprint";
+import { sprintEndDate, sprintStartDate } from "@/lib/year-sprint";
 
 export type SprintRetrospectiveOptions = {
   initiatives: InitiativeItem[];
@@ -67,8 +68,9 @@ export function buildSprintRetrospective(
     planYear,
     filterEpicTeamIds,
   } = args;
+  const startDate = sprintStartDate(planYear, yearSprint);
   const closeDate = sprintEndDate(planYear, yearSprint);
-  const projected = projectInitiativesForRetrospective(initiatives, yearSprint, closeDate);
+  const projected = projectInitiativesForRetrospective(initiatives, yearSprint, startDate, closeDate);
   const analytics = buildSprintAnalytics(
     projected,
     month,
@@ -96,13 +98,20 @@ export function buildSprintRetrospective(
 function projectInitiativesForRetrospective(
   initiatives: InitiativeItem[],
   yearSprint: number,
+  startDate: Date,
   closeDate: Date,
 ): InitiativeItem[] {
-  // Midnight of close day in local time — the snapshot map's per-day
-  // bucketing is keyed on startOfDay, so we strip any existing
-  // snapshot dated on/after close-day midnight before appending the
-  // synthetic one. Otherwise the chart could read a stale freeze
+  // Midnight of start / close day in local time — the snapshot
+  // map's per-day bucketing is keyed on startOfDay, so we anchor
+  // the synthetic rows at midnight and strip any existing snapshot
+  // dated on/after close-day midnight before appending the close
+  // synthetic. Otherwise the chart could read a stale freeze
   // snapshot ahead of our injected live-state row.
+  const startDayMidnightMs = new Date(
+    startDate.getFullYear(),
+    startDate.getMonth(),
+    startDate.getDate(),
+  ).getTime();
   const closeDayMidnightMs = new Date(
     closeDate.getFullYear(),
     closeDate.getMonth(),
@@ -113,7 +122,9 @@ function projectInitiativesForRetrospective(
     epics: (init.epics ?? []).map<EpicItem>((epic) => ({
       ...epic,
       userStories: (epic.userStories ?? [])
-        .map((story) => projectStoryForSprint(story, yearSprint, closeDayMidnightMs))
+        .map((story) =>
+          projectStoryForSprint(story, yearSprint, startDayMidnightMs, closeDayMidnightMs),
+        )
         .filter((s): s is UserStoryItem => s != null),
     })),
   }));
@@ -141,6 +152,7 @@ function projectInitiativesForRetrospective(
 function projectStoryForSprint(
   story: UserStoryItem,
   yearSprint: number,
+  startDayMidnightMs: number,
   closeDayMidnightMs: number,
 ): UserStoryItem | null {
   let resolvedStatus: UserStoryItem["status"];
@@ -157,8 +169,31 @@ function projectStoryForSprint(
     resolvedDaysLeft = lastInSprintSnap.daysLeft ?? story.daysLeft;
     resolvedEstimatedDays = lastInSprintSnap.estimatedDays ?? story.estimatedDays;
   }
-  const syntheticSnap: StoryDailySnapshotItem = {
-    id: `${story.id}-retro-synthetic`,
+  // Synthetic SPRINT-START snapshot: pretend every kept story was
+  // todo at the full estimate on day 0. Resolves the
+  // "burndown starts at 4 instead of 5" surprise — a story that
+  // happened to be already-done at sprint start would otherwise
+  // count as 0 work-remaining at day 0, dropping the actual line
+  // below the ideal start. For a sprint retrospective the
+  // pedagogical reading is "we committed N stories, here's the
+  // descent toward 0", which requires day 0 = N. Per-day burn
+  // shape is reconstructed from the real mid-sprint snapshots.
+  const syntheticStartSnap: StoryDailySnapshotItem = {
+    id: `${story.id}-retro-start`,
+    storyId: story.id,
+    snapshotDate: new Date(startDayMidnightMs).toISOString(),
+    status: StoryStatus.todo,
+    sprint: yearSprint,
+    estimatedDays: resolvedEstimatedDays ?? null,
+    daysLeft: resolvedEstimatedDays ?? resolvedDaysLeft ?? 0,
+    assignee: story.assignee,
+    createdAt: new Date(startDayMidnightMs).toISOString(),
+  };
+  // Synthetic SPRINT-CLOSE snapshot: pin the close-day data point
+  // on the chart to the resolved live (or last-in-sprint) state so
+  // the donut + CFD + burndown agree at the right edge.
+  const syntheticCloseSnap: StoryDailySnapshotItem = {
+    id: `${story.id}-retro-close`,
     storyId: story.id,
     snapshotDate: new Date(closeDayMidnightMs).toISOString(),
     status: resolvedStatus,
@@ -168,16 +203,20 @@ function projectStoryForSprint(
     assignee: story.assignee,
     createdAt: new Date(closeDayMidnightMs).toISOString(),
   };
-  const preCloseSnaps = (story.snapshots ?? []).filter(
-    (s) => new Date(s.snapshotDate).getTime() < closeDayMidnightMs,
-  );
+  // Keep only mid-sprint snapshots (strictly between start and
+  // close-day midnight). The two synthetic rows replace whatever
+  // existed at the bounds.
+  const midSprintSnaps = (story.snapshots ?? []).filter((s) => {
+    const ms = new Date(s.snapshotDate).getTime();
+    return ms > startDayMidnightMs && ms < closeDayMidnightMs;
+  });
   return {
     ...story,
     sprint: yearSprint,
     status: resolvedStatus,
     daysLeft: resolvedDaysLeft,
     estimatedDays: resolvedEstimatedDays,
-    snapshots: [...preCloseSnaps, syntheticSnap],
+    snapshots: [syntheticStartSnap, ...midSprintSnaps, syntheticCloseSnap],
     history: [],
   };
 }
