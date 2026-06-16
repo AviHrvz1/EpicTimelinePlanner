@@ -1861,17 +1861,28 @@ export function MonthAnalytics({
     () => collectPeriodEpics(analyticsInitiatives, scopeMonths, filterEpicTeamIds),
     [analyticsInitiatives, scopeMonths, filterEpicTeamIds],
   );
+  // Picker-only epic pool. Deliberately ignores `filterEpicTeamIds` so
+  // the "Epic / Initiative Scope" dropdown ALWAYS surfaces every epic
+  // in the period — picking an epic auto-sets `insightsTeamIds`
+  // upstream (see `handleInsightsScopeChange` in timeline-grid), and
+  // that team filter was then quietly reducing the picker's own list
+  // on re-open ("hidden epic children" bug). Analytics still use the
+  // team-filtered `monthEpics` below.
+  const pickerEpics = useMemo(
+    () => collectPeriodEpics(analyticsInitiatives, scopeMonths, null),
+    [analyticsInitiatives, scopeMonths],
+  );
   const scopeInitiativeOptions = useMemo(() => {
     const seen = new Set<string>();
     const result: Array<{ id: string; title: string }> = [];
-    for (const { initiative } of allScopeEpics) {
+    for (const { initiative } of pickerEpics) {
       if (!seen.has(initiative.id)) {
         seen.add(initiative.id);
         result.push({ id: initiative.id, title: initiative.title });
       }
     }
     return result;
-  }, [allScopeEpics]);
+  }, [pickerEpics]);
   const initiativeFilterId = selectedInitiativeId === "all" ? null : selectedInitiativeId;
   const monthEpics = useMemo(
     () => collectPeriodEpics(analyticsInitiatives, scopeMonths, filterEpicTeamIds, initiativeFilterId),
@@ -1883,7 +1894,7 @@ export function MonthAnalytics({
   );
   const epicComboOptions = useMemo(
     () =>
-      monthEpics.map(({ epic, initiative }) => {
+      pickerEpics.map(({ epic, initiative }) => {
         // Resolve display label for the epic's lane (e.g. "Mobile", "Platform").
         // Falls back to the raw team id if it isn't in MONTH_TEAM_COLUMNS, and
         // to null when the epic is unassigned — so the dropdown can show a
@@ -1920,7 +1931,7 @@ export function MonthAnalytics({
           healthTooltip,
         };
       }),
-    [monthEpics, planYear, progressBasis],
+    [pickerEpics, planYear, progressBasis],
   );
   const selectedEpicOption = useMemo(
     () => monthEpics.find(({ epic }) => epic.id === selectedEpicId) ?? null,
