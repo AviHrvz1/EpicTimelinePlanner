@@ -38,6 +38,7 @@ import {
   ListTodo,
   PieChart as PieChartIcon,
   PlayCircle,
+  Target,
   UserX,
 } from "lucide-react";
 import { InsightsDrilldownModal } from "@/components/timeline/insights-drilldown-modal";
@@ -1677,11 +1678,6 @@ export function MonthAnalytics({
    */
   const [burndownBasis, setBurndownBasis] = useState<"days" | "stories" | "epicEst">(progressBasis);
   const [burnupBasis, setBurnupBasis] = useState<"days" | "stories" | "epicEst">(progressBasis);
-  /** Per-session dismiss for the "Epic scheduled DD/MM" marker on the
-   *  burndown. Click the ✕ next to the label to hide it; resets to
-   *  visible on every focused-epic change so a new epic shows the
-   *  marker by default. */
-  const [epicScheduledMarkerDismissed, setEpicScheduledMarkerDismissed] = useState(false);
   /**
    * The chart's Y-axis units derive from the basis (no separate metric toggle):
    *   - `epicEst` or `days` → Y-axis in days
@@ -1792,6 +1788,17 @@ export function MonthAnalytics({
    *  it falls past the period end. */
   const [showBurndownForecast, setShowBurndownForecast] = useState(false);
   const [showBurnUpForecast, setShowBurnUpForecast] = useState(false);
+  /** Master toggle for the focused-epic plan overlay shared by the
+   *  Epic Scope Burndown + Burnup charts. Wraps three annotations as
+   *  one switch so the planner can flip the "planned trajectory" on
+   *  or off in one click:
+   *   · Epic ideal line (orange dashed ramp)
+   *   · "Due DD/MM" marker at plan-end
+   *   · "Epic scheduled DD/MM" marker + connector at plan-start
+   *  Defaults to ON so the chart still tells the same story
+   *  out-of-the-box. Replaces the per-marker eye-with-slash hide
+   *  affordance that lived on the "Epic scheduled" label. */
+  const [showEpicPlanMarkers, setShowEpicPlanMarkers] = useState(true);
   const [statusDrilldownFilter, setStatusDrilldownFilter] = useState<string | null>(null);
   const [workloadDrilldownAssignee, setWorkloadDrilldownAssignee] = useState<string | null>(null);
   const [workloadDrilldownIsTeam, setWorkloadDrilldownIsTeam] = useState(false);
@@ -3154,12 +3161,6 @@ export function MonthAnalytics({
     const dueDay = dueSprint === 1 ? 15 : new Date(dueYear, dueMonth, 0).getDate();
     return new Date(dueYear, dueMonth - 1, dueDay);
   }, [burndownFocusedEpicOption, scopeEndMonth, planYear]);
-  // Reset the dismiss on focused-epic change so a new epic shows its
-  // own "Epic scheduled" marker again. Without this, dismissing for
-  // one epic would silently hide the marker for every subsequent one.
-  useEffect(() => {
-    setEpicScheduledMarkerDismissed(false);
-  }, [burndownFocusedEpicOption?.epic.id]);
   /** Resolved plan-start date for the focused epic — drives the "Epic
    *  scheduled" marker at the ideal line's left edge. Mirror of
    *  `selectedEpicDueDate` for the start side. Uses the same convention
@@ -5296,38 +5297,61 @@ export function MonthAnalytics({
             <div className="mt-0.5">{burndownTitleSuffix}</div>
           ) : null}
           </div>
-          {/* Forecast toggle — projects a straight-line trend from
-           *  today's actual point to a zero-crossing date using the
-           *  current burn rate. When the projected date is past the
-           *  plan end, the chart's X-axis extends to include it. */}
-          <button
-            type="button"
-            onClick={() => setShowBurndownForecast((v) => !v)}
-            title={
-              burnDownForecastDate
-                ? showBurndownForecast
-                  ? `Hide forecast (current pace → ${burnDownForecastDate.getDate()}/${burnDownForecastDate.getMonth() + 1})`
-                  : `Show forecast (current pace → ${burnDownForecastDate.getDate()}/${burnDownForecastDate.getMonth() + 1})`
-                : "Forecast unavailable (no burn yet)"
-            }
-            aria-pressed={showBurndownForecast}
-            disabled={!burnDownForecastDate}
-            className={cn(
-              "inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[12px] font-medium transition",
-              "disabled:cursor-not-allowed disabled:opacity-50",
-              showBurndownForecast
-                ? "border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100"
-                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900",
-            )}
-          >
-            <TrendingUp className="size-3.5" aria-hidden />
-            Forecast
-            {showBurndownForecast && burnDownForecastDate ? (
-              <span className="ml-1 tabular-nums text-violet-600/90">
-                {burnDownForecastDate.getDate()}/{burnDownForecastDate.getMonth() + 1}
-              </span>
-            ) : null}
-          </button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {/* Plan toggle — one switch that flips the focused-epic plan
+             *  overlay (ideal line + "Due DD/MM" marker + "Epic scheduled"
+             *  start marker) on or off. Defaults to ON so the chart still
+             *  tells the same story out-of-the-box. Replaces the per-marker
+             *  eye-with-slash hide affordance. Shared with the Burnup chart
+             *  so the two read consistently. */}
+            <button
+              type="button"
+              onClick={() => setShowEpicPlanMarkers((v) => !v)}
+              title={showEpicPlanMarkers ? "Hide epic plan overlay (ideal, due, scheduled)" : "Show epic plan overlay (ideal, due, scheduled)"}
+              aria-pressed={showEpicPlanMarkers}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[12px] font-medium transition",
+                showEpicPlanMarkers
+                  ? "border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100"
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+              )}
+            >
+              <Target className="size-3.5" aria-hidden />
+              Plan
+            </button>
+            {/* Forecast toggle — projects a straight-line trend from
+             *  today's actual point to a zero-crossing date using the
+             *  current burn rate. When the projected date is past the
+             *  plan end, the chart's X-axis extends to include it. */}
+            <button
+              type="button"
+              onClick={() => setShowBurndownForecast((v) => !v)}
+              title={
+                burnDownForecastDate
+                  ? showBurndownForecast
+                    ? `Hide forecast (current pace → ${burnDownForecastDate.getDate()}/${burnDownForecastDate.getMonth() + 1})`
+                    : `Show forecast (current pace → ${burnDownForecastDate.getDate()}/${burnDownForecastDate.getMonth() + 1})`
+                  : "Forecast unavailable (no burn yet)"
+              }
+              aria-pressed={showBurndownForecast}
+              disabled={!burnDownForecastDate}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[12px] font-medium transition",
+                "disabled:cursor-not-allowed disabled:opacity-50",
+                showBurndownForecast
+                  ? "border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100"
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+              )}
+            >
+              <TrendingUp className="size-3.5" aria-hidden />
+              Forecast
+              {showBurndownForecast && burnDownForecastDate ? (
+                <span className="ml-1 tabular-nums text-violet-600/90">
+                  {burnDownForecastDate.getDate()}/{burnDownForecastDate.getMonth() + 1}
+                </span>
+              ) : null}
+            </button>
+          </div>
         </div>
         <div
           className={cn(
@@ -5477,7 +5501,7 @@ export function MonthAnalytics({
                       />
                       ) : null,
                     )}
-                    {burndownFocusedEpicOption ? (
+                    {burndownFocusedEpicOption && showEpicPlanMarkers ? (
                       <Line
                         type="monotone"
                         dataKey="epicIdeal"
@@ -5518,7 +5542,7 @@ export function MonthAnalytics({
                         strokeWidth={1.5}
                       />
                     ) : null}
-                    {burndownFocusedEpicOption && selectedEpicDueMarker ? (
+                    {burndownFocusedEpicOption && selectedEpicDueMarker && showEpicPlanMarkers ? (
                       <ReferenceDot
                         x={selectedEpicDueMarker.axisLabel}
                         y={Math.max(selectedEpicDueMarker.y + (metric === "storyCount" ? 0.35 : 0.25), metric === "storyCount" ? 1 : 0.8)}
@@ -5545,7 +5569,7 @@ export function MonthAnalytics({
                      *  margin where the label sits — keeps the label
                      *  above the chart body instead of overlapping the
                      *  data lines. */}
-                    {burndownFocusedEpicOption && selectedEpicScheduledMarker && !epicScheduledMarkerDismissed ? (
+                    {burndownFocusedEpicOption && selectedEpicScheduledMarker && showEpicPlanMarkers ? (
                       <ReferenceDot
                         x={selectedEpicScheduledMarker.axisLabel}
                         y={selectedEpicScheduledMarker.y}
@@ -5562,14 +5586,6 @@ export function MonthAnalytics({
                           const labelY = 12;
                           const connectorTop = labelY + 6;
                           const arrowTipY = cy - 3;
-                          // Approximate label width so we can place the
-                          // ✕ icon flush with its right edge. The label
-                          // is centered around `cx` so we offset the
-                          // icon by roughly half the label's pixel
-                          // width plus a small gap.
-                          const approxLabelWidth = selectedEpicScheduledMarker.label.length * 6.2;
-                          const dismissCx = cx + approxLabelWidth / 2 + 8;
-                          const dismissCy = labelY - 4;
                           return (
                             <g>
                               <line
@@ -5598,29 +5614,6 @@ export function MonthAnalytics({
                               >
                                 {selectedEpicScheduledMarker.label}
                               </text>
-                              {/* Hide control — eye-with-slash icon so it
-                               *  clearly reads as "hide this annotation"
-                               *  rather than "delete the epic" (the
-                               *  earlier ✕ glyph was ambiguous). Resets
-                               *  to visible on every focused-epic change
-                               *  via the `epicScheduledMarkerDismissed`
-                               *  reset effect. The transparent circle
-                               *  enlarges the hit-target so the small
-                               *  glyph is comfortable to click. */}
-                              <g
-                                style={{ cursor: "pointer" }}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setEpicScheduledMarkerDismissed(true);
-                                }}
-                              >
-                                <title>Hide this marker</title>
-                                <circle cx={dismissCx} cy={dismissCy} r={8} fill="transparent" />
-                                <circle cx={dismissCx} cy={dismissCy} r={6.5} fill="#fff7ed" stroke="#fdba74" strokeWidth={1} />
-                                <ellipse cx={dismissCx} cy={dismissCy} rx={3} ry={1.9} fill="none" stroke="#c2410c" strokeWidth={1.1} />
-                                <circle cx={dismissCx} cy={dismissCy} r={0.9} fill="#c2410c" />
-                                <line x1={dismissCx - 3.6} y1={dismissCy + 3.4} x2={dismissCx + 3.6} y2={dismissCy - 3.4} stroke="#c2410c" strokeWidth={1.3} strokeLinecap="round" />
-                              </g>
                             </g>
                           );
                         }}
@@ -7244,39 +7237,60 @@ export function MonthAnalytics({
                 <div className="mt-0.5">{burnUpTitleSuffix}</div>
               ) : null}
               </div>
-              {/* Forecast toggle — same shape as burndown's, projects a
-               *  straight-line trend from today's `completed` value up to
-               *  the projected `scope` crossing using the current burn
-               *  rate. Extends the X-axis when the projected date is
-               *  past the plan end. */}
-              <button
-                type="button"
-                onClick={() => setShowBurnUpForecast((v) => !v)}
-                title={
-                  burnUpForecastDate
-                    ? showBurnUpForecast
-                      ? `Hide forecast (current pace → ${burnUpForecastDate.getDate()}/${burnUpForecastDate.getMonth() + 1})`
-                      : `Show forecast (current pace → ${burnUpForecastDate.getDate()}/${burnUpForecastDate.getMonth() + 1})`
-                    : "Forecast unavailable (no burn yet)"
-                }
-                aria-pressed={showBurnUpForecast}
-                disabled={!burnUpForecastDate}
-                className={cn(
-                  "inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[12px] font-medium transition",
-                  "disabled:cursor-not-allowed disabled:opacity-50",
-                  showBurnUpForecast
-                    ? "border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100"
-                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900",
-                )}
-              >
-                <TrendingUp className="size-3.5" aria-hidden />
-                Forecast
-                {showBurnUpForecast && burnUpForecastDate ? (
-                  <span className="ml-1 tabular-nums text-violet-600/90">
-                    {burnUpForecastDate.getDate()}/{burnUpForecastDate.getMonth() + 1}
-                  </span>
-                ) : null}
-              </button>
+              <div className="flex shrink-0 items-center gap-1.5">
+                {/* Plan toggle — shared `showEpicPlanMarkers` state with
+                 *  the Burndown chart. Flips the focused-epic plan
+                 *  overlay (ideal line + "Due DD/MM" marker + "Epic
+                 *  scheduled" start marker) on or off in one click. */}
+                <button
+                  type="button"
+                  onClick={() => setShowEpicPlanMarkers((v) => !v)}
+                  title={showEpicPlanMarkers ? "Hide epic plan overlay (ideal, due, scheduled)" : "Show epic plan overlay (ideal, due, scheduled)"}
+                  aria-pressed={showEpicPlanMarkers}
+                  className={cn(
+                    "inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[12px] font-medium transition",
+                    showEpicPlanMarkers
+                      ? "border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+                  )}
+                >
+                  <Target className="size-3.5" aria-hidden />
+                  Plan
+                </button>
+                {/* Forecast toggle — same shape as burndown's, projects a
+                 *  straight-line trend from today's `completed` value up to
+                 *  the projected `scope` crossing using the current burn
+                 *  rate. Extends the X-axis when the projected date is
+                 *  past the plan end. */}
+                <button
+                  type="button"
+                  onClick={() => setShowBurnUpForecast((v) => !v)}
+                  title={
+                    burnUpForecastDate
+                      ? showBurnUpForecast
+                        ? `Hide forecast (current pace → ${burnUpForecastDate.getDate()}/${burnUpForecastDate.getMonth() + 1})`
+                        : `Show forecast (current pace → ${burnUpForecastDate.getDate()}/${burnUpForecastDate.getMonth() + 1})`
+                      : "Forecast unavailable (no burn yet)"
+                  }
+                  aria-pressed={showBurnUpForecast}
+                  disabled={!burnUpForecastDate}
+                  className={cn(
+                    "inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[12px] font-medium transition",
+                    "disabled:cursor-not-allowed disabled:opacity-50",
+                    showBurnUpForecast
+                      ? "border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+                  )}
+                >
+                  <TrendingUp className="size-3.5" aria-hidden />
+                  Forecast
+                  {showBurnUpForecast && burnUpForecastDate ? (
+                    <span className="ml-1 tabular-nums text-violet-600/90">
+                      {burnUpForecastDate.getDate()}/{burnUpForecastDate.getMonth() + 1}
+                    </span>
+                  ) : null}
+                </button>
+              </div>
             </div>
             <div
               className={cn(
@@ -7297,7 +7311,7 @@ export function MonthAnalytics({
                 ) : (
                 <div className="absolute inset-0">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={burnUpDataTruncated} margin={{ top: 38, right: 24, left: 18, bottom: 18 }}>
+                    <LineChart data={burnUpDataTruncated} margin={{ top: 38, right: 24, left: 18, bottom: 32 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                       <XAxis
                         dataKey="labelShort"
@@ -7368,7 +7382,9 @@ export function MonthAnalytics({
                       {burnUpSingleEpicVisible || allBurnUpKeysSelected ? (
                         <>
                           <Line type="monotone" dataKey="scope" name="Total scope" stroke="#94a3b8" strokeWidth={1.5} dot={false} isAnimationActive={false} />
-                          <Line type="monotone" dataKey="ideal" name={burnUpDueDateLabel ? `Ideal (due ${burnUpDueDateLabel})` : "Ideal"} stroke="#f97316" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} isAnimationActive={false} />
+                          {showEpicPlanMarkers ? (
+                            <Line type="monotone" dataKey="ideal" name={burnUpDueDateLabel ? `Ideal (due ${burnUpDueDateLabel})` : "Ideal"} stroke="#f97316" strokeWidth={1.5} strokeDasharray="5 3" dot={false} connectNulls={false} isAnimationActive={false} />
+                          ) : null}
                           <Line type="monotone" dataKey="completed" name="Completed" stroke="#0ea5e9" strokeWidth={2.5} dot={false} connectNulls={false} isAnimationActive={false} />
                         </>
                       ) : null}
@@ -7469,7 +7485,7 @@ export function MonthAnalytics({
                        *  the burnup begins at the BOTTOM of the plot,
                        *  not the top. The LineChart's `bottom: 36`
                        *  margin reserves room for it. */}
-                      {burnUpSingleEpicVisible && burnUpScheduledMarker && !epicScheduledMarkerDismissed ? (
+                      {burnUpSingleEpicVisible && burnUpScheduledMarker && showEpicPlanMarkers ? (
                         <ReferenceDot
                           x={burnUpScheduledMarker.axisLabel}
                           y={0}
@@ -7486,13 +7502,10 @@ export function MonthAnalytics({
                             // chart's bottom margin can stay tight
                             // (chart doesn't get pushed up away from
                             // the legend below).
-                            const labelY = cy + 66;
+                            const labelY = cy + 60;
                             const connectorBottom = labelY - 8;
                             const arrowBaseY = cy + 7;
                             const arrowTipY = cy + 2;
-                            const approxLabelWidth = burnUpScheduledMarker.label.length * 6.2;
-                            const dismissCx = cx + approxLabelWidth / 2 + 8;
-                            const dismissCy = labelY - 4;
                             return (
                               <g>
                                 <line
@@ -7518,24 +7531,6 @@ export function MonthAnalytics({
                                 >
                                   {burnUpScheduledMarker.label}
                                 </text>
-                                {/* Hide control — eye-with-slash icon.
-                                 *  Shares the dismiss state with the
-                                 *  burndown marker so toggling one
-                                 *  hides both. */}
-                                <g
-                                  style={{ cursor: "pointer" }}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    setEpicScheduledMarkerDismissed(true);
-                                  }}
-                                >
-                                  <title>Hide this marker</title>
-                                  <circle cx={dismissCx} cy={dismissCy} r={8} fill="transparent" />
-                                  <circle cx={dismissCx} cy={dismissCy} r={6.5} fill="#fff7ed" stroke="#fdba74" strokeWidth={1} />
-                                  <ellipse cx={dismissCx} cy={dismissCy} rx={3} ry={1.9} fill="none" stroke="#c2410c" strokeWidth={1.1} />
-                                  <circle cx={dismissCx} cy={dismissCy} r={0.9} fill="#c2410c" />
-                                  <line x1={dismissCx - 3.6} y1={dismissCy + 3.4} x2={dismissCx + 3.6} y2={dismissCy - 3.4} stroke="#c2410c" strokeWidth={1.3} strokeLinecap="round" />
-                                </g>
                               </g>
                             );
                           }}
@@ -7546,7 +7541,7 @@ export function MonthAnalytics({
                        *  due-date label so the two charts read symmetric.
                        *  Sits at the scope total (top of the burnup line);
                        *  the Done ✓ above stacks neatly on top. */}
-                      {burnUpSingleEpicVisible && burnUpDueDateTickLabel ? (
+                      {burnUpSingleEpicVisible && burnUpDueDateTickLabel && showEpicPlanMarkers ? (
                         <ReferenceDot
                           x={burnUpDueDateTickLabel}
                           y={burnUpScopeTotal}
