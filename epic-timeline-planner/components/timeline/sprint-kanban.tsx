@@ -113,13 +113,19 @@ function KanbanColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex min-h-[calc(100dvh-10rem)] w-full min-w-0 flex-col rounded-xl border p-2 transition-all duration-150",
+        "flex min-h-[calc(100dvh-10rem)] w-full min-w-0 flex-col overflow-visible rounded-xl border p-2 transition-all duration-150",
         tone,
         hoverTone,
         isOver && "border-primary bg-primary/5 ring-2 ring-primary/20",
       )}
     >
-      <div className="mb-2 flex shrink-0 flex-col gap-0.5 pb-1">
+      {/* Header pinned to the top of the gantt scroll container. The
+       *  negative margins extend it to the column's edges and the
+       *  `bg-white/95 backdrop-blur` makes cards scrolling beneath it
+       *  invisible. `top-0` resolves against the outer page scroller
+       *  (same anchor the rail + calendar header use) so it pins
+       *  alongside them as the planner scrolls down the board. */}
+      <div className="sticky top-0 z-20 -mx-2 -mt-2 mb-2 flex shrink-0 flex-col gap-0.5 rounded-t-[inherit] border-b border-slate-200/50 bg-white/95 px-2 pb-1.5 pt-2 backdrop-blur-sm">
         <div className="flex items-center justify-center gap-1.5 text-slate-600">
           <Icon className="size-4 shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
           <p className="text-center text-[12px] font-bold uppercase tracking-wide">{label}</p>
