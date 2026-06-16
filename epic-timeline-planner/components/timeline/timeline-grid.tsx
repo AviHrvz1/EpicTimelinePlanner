@@ -8967,13 +8967,13 @@ export function TimelineGrid({
         data-gantt-scroll=""
       >
       {activeMonth ? (
-        <div className="relative z-30 h-0">
+        <div className="sticky top-0 z-40 h-0">
           {/* Sprint mode renders 4 rail buttons (Board / Insights / Capacity
               / Retro), the default mode renders 2 (Epic Plan / Insights),
               so size the wrapper accordingly. */}
           <div
             className={cn(
-              "absolute left-0 top-0 inline-flex flex-col justify-between gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-0.5 ring-1 ring-black/5 transition-[width,height] duration-200",
+              "absolute left-[-5px] top-0 inline-flex flex-col justify-between gap-1 overflow-visible rounded-lg rounded-r-none border border-r-0 border-slate-200/90 bg-white p-0.5 shadow-[-1px_0_0_rgba(0,0,0,0.05),0_-1px_0_rgba(0,0,0,0.05),0_1px_0_rgba(0,0,0,0.05),4px_0_8px_-2px_rgba(15,23,42,0.12)] transition-[width,height] duration-200",
               isRailExpanded ? "w-56" : "w-[2.25rem]",
               activeSprint != null && (monthPlanTab === "sprint-kanban" || monthPlanTab === "sprint-status" || monthPlanTab === "sprint-capacity" || monthPlanTab === "sprint-retrospective")
                 ? "h-[180px]"
