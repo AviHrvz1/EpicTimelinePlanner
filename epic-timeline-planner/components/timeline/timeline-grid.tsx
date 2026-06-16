@@ -8665,6 +8665,154 @@ export function TimelineGrid({
       </div>
   );
 
+  // All-quarters calendar header (Quarter banners + Month labels +
+  // Sprint chips). Extracted as a JSX variable so it can be rendered
+  // at the outer scroll container's direct child level inside a
+  // `sticky top-0` wrapper — same DOM level as the all-quarters rail.
+  // Sticky needs to live where the scroll container is the nearest
+  // ancestor with no intermediate `overflow` wrapper blocking
+  // resolution, which the original deep-nested location (inside the
+  // hscroll wrapper) couldn't satisfy.
+  const allQuartersCalendarHeaderJsx = isFullYearGanttLayout ? (() => {
+    const realNow = new Date(clockNowMs());
+    const todayMonth =
+      realNow.getFullYear() === currentYear ? realNow.getMonth() + 1 : null;
+    const quarterBg: Record<string, { idle: string; focused: string }> = {
+      Q1: { idle: "bg-sky-50 hover:bg-sky-100", focused: "bg-sky-100 hover:bg-sky-200/70" },
+      Q2: { idle: "bg-emerald-50 hover:bg-emerald-100", focused: "bg-emerald-100 hover:bg-emerald-200/70" },
+      Q3: { idle: "bg-amber-50 hover:bg-amber-100", focused: "bg-amber-100 hover:bg-amber-200/70" },
+      Q4: { idle: "bg-violet-50 hover:bg-violet-100", focused: "bg-violet-100 hover:bg-violet-200/70" },
+    };
+    return (
+      <div className="relative z-[1] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_4px_18px_-6px_rgba(15,23,42,0.10),0_2px_6px_-3px_rgba(15,23,42,0.06)]">
+        <div className="grid min-w-0" style={yearQuarterHeaderGridStyle}>
+          {QUARTERS.map((quarter, qIdx) => {
+            const isFocused = focusedQuarterLabel === quarter.label;
+            const qBg = quarterBg[quarter.label];
+            return (
+              <button
+                key={quarter.label}
+                ref={quarter.label === "Q4" ? setQuarter4PanelRef : undefined}
+                type="button"
+                onClick={() => {
+                  setFocusedMonth(null);
+                  onFocusedQuarterChange(focusedQuarterLabel === quarter.label ? null : quarter.label);
+                }}
+                className={cn(
+                  "relative flex w-full min-w-0 items-center justify-center gap-1.5 overflow-hidden py-3 text-center transition",
+                  qIdx < QUARTERS.length - 1 && "border-r border-slate-200/80",
+                  isFocused ? qBg.focused : qBg.idle,
+                )}
+                style={{ gridColumn: `span ${quarter.months.length} / span ${quarter.months.length}` }}
+              >
+                <BarChart3 className="size-[15px] text-indigo-700" strokeWidth={2.2} aria-hidden />
+                <span className="text-[14px] font-semibold tracking-tight text-slate-800">
+                  Quarter {quarter.label.slice(1)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="relative grid min-w-0 border-t border-slate-200/80" style={yearQuarterHeaderGridStyle}>
+          {QUARTERS.flatMap((quarter) => {
+            return quarter.months.map((month, mIdxInQ, allMonthsInQ) => {
+              const isLastMonthOverall = quarter.label === "Q4" && mIdxInQ === allMonthsInQ.length - 1;
+              return (
+                <button
+                  type="button"
+                  key={`month-${month}`}
+                  onClick={() => onFocusedQuarterChange(quarter.label)}
+                  title={`Focus ${quarter.label}`}
+                  className={cn(
+                    "relative flex w-full min-w-0 cursor-pointer items-center justify-center px-1.5 py-3.5 text-center text-[12.5px] font-semibold tracking-tight text-slate-700 transition hover:bg-slate-50 hover:text-indigo-700 focus:outline-none focus-visible:bg-slate-50 focus-visible:text-indigo-700",
+                    !isLastMonthOverall && "border-r border-slate-200/60",
+                  )}
+                >
+                  {MONTHS[month - 1]}
+                </button>
+              );
+            });
+          })}
+          {!showYearSprintChips && roadmapLaneTodayLeft != null && todayMonth != null ? (
+            <div
+              className="pointer-events-none absolute inset-y-0 z-10 flex items-center"
+              style={{ left: roadmapLaneTodayLeft, transform: "translate(-50%, 10px)" }}
+            >
+              <button
+                type="button"
+                title="Jump to today's sprint kanban"
+                onClick={() => {
+                  const todaySprint = currentWorkYearSprintForPlan(currentYear);
+                  if (todaySprint == null) return;
+                  setFocusedMonth(todayMonth);
+                  onEnterSprintStoryBoard?.(todaySprint, null);
+                }}
+                className="pointer-events-auto inline-flex items-center justify-center rounded bg-emerald-50/35 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 shadow-sm ring-1 ring-emerald-200/70 transition hover:bg-emerald-100 hover:shadow"
+              >
+                Today
+              </button>
+            </div>
+          ) : null}
+        </div>
+        {showYearSprintChips ? (
+          <div className="relative grid min-w-0 border-t border-slate-200/80 bg-white" style={yearQuarterHeaderGridStyle}>
+            {QUARTERS.flatMap((quarter) => {
+              return quarter.months.map((month) => {
+                return (
+                  <div
+                    key={`sprint-month-${month}`}
+                    className="grid grid-cols-2"
+                  >
+                    {([1, 2] as const).map((lane) => {
+                      return (
+                        <SprintPlanDropButton
+                          key={`s-${month}-${lane}`}
+                          month={month}
+                          lane={lane}
+                          title={sprintLabelYearRoadmap(globalSprintFromMonthLane(month, lane))}
+                          onClick={() => {
+                            if (isPostDragClickSuppressed()) return;
+                            setFocusedMonth(month);
+                            onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, lane), null);
+                          }}
+                          className="flex w-full items-center justify-center border-l-2 border-slate-200/60 px-1 py-1 text-center transition hover:-translate-y-px"
+                        >
+                          <span className="text-[11px] font-semibold leading-none tabular-nums tracking-tight text-slate-700">
+                            S{globalSprintFromMonthLane(month, lane)}
+                          </span>
+                        </SprintPlanDropButton>
+                      );
+                    })}
+                  </div>
+                );
+              });
+            })}
+            {roadmapLaneTodayLeft != null && todayMonth != null ? (
+              <div
+                className="pointer-events-none absolute inset-y-0 z-10 flex items-center"
+                style={{ left: roadmapLaneTodayLeft, transform: "translate(-50%, -2px)" }}
+              >
+                <button
+                  type="button"
+                  title="Jump to today's sprint kanban"
+                  onClick={() => {
+                    const todaySprint = currentWorkYearSprintForPlan(currentYear);
+                    if (todaySprint == null) return;
+                    setFocusedMonth(todayMonth);
+                    onEnterSprintStoryBoard?.(todaySprint, null);
+                  }}
+                  className="pointer-events-auto inline-flex items-center justify-center rounded bg-emerald-50/35 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 shadow-sm ring-1 ring-emerald-200/70 transition hover:bg-emerald-100 hover:shadow"
+                >
+                  Today
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  })() : null;
+
   const planningSurface = (
       <div
         key={isInsightsSurfaceRender ? `insights-${activeMonth ?? "year"}-${focusedQuarterLabel ?? "all"}` : "planning-surface"}
@@ -8683,11 +8831,12 @@ export function TimelineGrid({
           // padding dropped from `pl-5` → `pl-2` so the now-narrower
           // 36px rail sits closer to the panel edge — the old 20px
           // pre-rail gap read as wasted space.
-          "flex min-h-0 flex-1 flex-col max-h-[calc(100dvh-18rem)] overflow-y-auto overscroll-y-auto pl-2 pr-4",
+          "flex min-h-0 flex-1 flex-col max-h-[calc(100dvh-18rem)] overflow-y-auto overscroll-y-contain pl-2 pr-4",
           // Pastel scrollbar matching the initiative panel's rail.
           "[scrollbar-gutter:stable] [scrollbar-width:thin] [scrollbar-color:theme(colors.indigo.100)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gradient-to-b [&::-webkit-scrollbar-thumb]:from-sky-100 [&::-webkit-scrollbar-thumb]:via-indigo-100 [&::-webkit-scrollbar-thumb]:to-violet-100 hover:[&::-webkit-scrollbar-thumb]:from-sky-200 hover:[&::-webkit-scrollbar-thumb]:via-indigo-200 hover:[&::-webkit-scrollbar-thumb]:to-violet-200",
           showCapacityPlanningScrollbar && "min-w-0",
         )}
+        data-gantt-scroll=""
       >
       {activeMonth ? (
         <div className="relative z-30 h-0">
@@ -9015,13 +9164,13 @@ export function TimelineGrid({
           </div>
         </div>
       ) : !activeMonth && !focusedQuarter ? (
-        <div className="relative z-30 h-0">
+        <div className="sticky top-0 z-40 h-0">
           <div
             className={cn(
               // Rail height tracks the Quarter + Months banner above (no
               // fixed pixel lock). 2 × h-10 buttons + p-0.5 + gap-1 lands
               // around the same height as Q+months without sprints.
-              "absolute left-[-5px] top-0 inline-flex flex-col gap-1 overflow-visible rounded-lg border border-slate-200/90 bg-white p-0.5 ring-1 ring-black/5 transition-[width] duration-200",
+              "absolute left-[-5px] top-0 inline-flex flex-col gap-1 overflow-visible rounded-lg rounded-r-none border border-r-0 border-slate-200/90 bg-white p-0.5 shadow-[-1px_0_0_rgba(0,0,0,0.05),0_-1px_0_rgba(0,0,0,0.05),0_1px_0_rgba(0,0,0,0.05),4px_0_8px_-2px_rgba(15,23,42,0.12)] transition-[width] duration-200",
               isRailExpanded ? "w-56" : "w-[2.75rem]",
             )}
             onMouseLeave={() => setIsRailExpanded(false)}
@@ -9077,6 +9226,15 @@ export function TimelineGrid({
               </span>
             </button>
           </div>
+        </div>
+      ) : null}
+      {/* Sticky all-quarters calendar header — hoisted out of the
+       *  hscroll wrapper so CSS `position: sticky` can resolve to the
+       *  outer scroll container (same anchor the rail uses). Lives at
+       *  the rail's level so both pin to the top together. */}
+      {allQuartersCalendarHeaderJsx ? (
+        <div className="sticky top-0 z-30">
+          {allQuartersCalendarHeaderJsx}
         </div>
       ) : null}
       {activeMonth ? (
@@ -10522,171 +10680,6 @@ export function TimelineGrid({
                     yearRoadmapHScroll ? "w-max max-w-full" : "w-full",
                   )}
                 >
-                  {(() => {
-                    const realNow = new Date(clockNowMs());
-                    const todayMonth =
-                      realNow.getFullYear() === currentYear ? realNow.getMonth() + 1 : null;
-                    // All-quarters calendar: per-quarter light tint
-                    // banners, non-clickable month headers, neutral
-                    // sprint tiles.
-                    const quarterBg: Record<string, { idle: string; focused: string }> = {
-                      Q1: { idle: "bg-sky-50 hover:bg-sky-100", focused: "bg-sky-100 hover:bg-sky-200/70" },
-                      Q2: { idle: "bg-emerald-50 hover:bg-emerald-100", focused: "bg-emerald-100 hover:bg-emerald-200/70" },
-                      Q3: { idle: "bg-amber-50 hover:bg-amber-100", focused: "bg-amber-100 hover:bg-amber-200/70" },
-                      Q4: { idle: "bg-violet-50 hover:bg-violet-100", focused: "bg-violet-100 hover:bg-violet-200/70" },
-                    };
-                    return (
-                      <div className="relative z-[1] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_4px_18px_-6px_rgba(15,23,42,0.10),0_2px_6px_-3px_rgba(15,23,42,0.06)]">
-                        {/* Row 1: Quarter banners — 4 cells, each spans its
-                            months. Per-quarter light tint; active darkens. */}
-                        <div className="grid min-w-0" style={yearQuarterHeaderGridStyle}>
-                          {QUARTERS.map((quarter, qIdx) => {
-                            const isFocused = focusedQuarterLabel === quarter.label;
-                            const qBg = quarterBg[quarter.label];
-                            return (
-                              <button
-                                key={quarter.label}
-                                ref={quarter.label === "Q4" ? setQuarter4PanelRef : undefined}
-                                type="button"
-                                onClick={() => {
-                                  setFocusedMonth(null);
-                                  onFocusedQuarterChange(focusedQuarterLabel === quarter.label ? null : quarter.label);
-                                }}
-                                className={cn(
-                                  "relative flex w-full min-w-0 items-center justify-center gap-1.5 overflow-hidden py-3 text-center transition",
-                                  qIdx < QUARTERS.length - 1 && "border-r border-slate-200/80",
-                                  isFocused ? qBg.focused : qBg.idle,
-                                )}
-                                style={{ gridColumn: `span ${quarter.months.length} / span ${quarter.months.length}` }}
-                              >
-                                <BarChart3 className="size-[15px] text-indigo-700" strokeWidth={2.2} aria-hidden />
-                                <span className="text-[14px] font-semibold tracking-tight text-slate-800">
-                                  Quarter {quarter.label.slice(1)}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                        {/* Row 2: Month labels — plain centered headers. The
-                            "Today" pill is rendered once as an absolute overlay
-                            anchored to the same CSS percentage as the
-                            vertical today line below. */}
-                        <div className="relative grid min-w-0 border-t border-slate-200/80" style={yearQuarterHeaderGridStyle}>
-                          {QUARTERS.flatMap((quarter) => {
-                            return quarter.months.map((month, mIdxInQ, allMonthsInQ) => {
-                              const isLastMonthOverall = quarter.label === "Q4" && mIdxInQ === allMonthsInQ.length - 1;
-                              // Month header → click to focus the parent
-                              // quarter. From the full-year Gantt, clicking
-                              // any month (e.g. Jun) jumps to its quarter's
-                              // single-quarter view (e.g. Q2). Each month
-                              // knows its parent via the outer `quarter` from
-                              // the QUARTERS map above.
-                              return (
-                                <button
-                                  type="button"
-                                  key={`month-${month}`}
-                                  onClick={() => onFocusedQuarterChange(quarter.label)}
-                                  title={`Focus ${quarter.label}`}
-                                  className={cn(
-                                    "relative flex w-full min-w-0 cursor-pointer items-center justify-center px-1.5 py-3.5 text-center text-[12.5px] font-semibold tracking-tight text-slate-700 transition hover:bg-slate-50 hover:text-indigo-700 focus:outline-none focus-visible:bg-slate-50 focus-visible:text-indigo-700",
-                                    !isLastMonthOverall && "border-r border-slate-200/60",
-                                  )}
-                                >
-                                  {MONTHS[month - 1]}
-                                </button>
-                              );
-                            });
-                          })}
-                          {!showYearSprintChips && roadmapLaneTodayLeft != null && todayMonth != null ? (
-                            <div
-                              className="pointer-events-none absolute inset-y-0 z-10 flex items-center"
-                              style={{ left: roadmapLaneTodayLeft, transform: "translate(-50%, 10px)" }}
-                            >
-                              <button
-                                type="button"
-                                title="Jump to today's sprint kanban"
-                                onClick={() => {
-                                  const todaySprint = currentWorkYearSprintForPlan(currentYear);
-                                  if (todaySprint == null) return;
-                                  setFocusedMonth(todayMonth);
-                                  onEnterSprintStoryBoard?.(todaySprint, null);
-                                }}
-                                className="pointer-events-auto inline-flex items-center justify-center rounded bg-emerald-50/35 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 shadow-sm ring-1 ring-emerald-200/70 transition hover:bg-emerald-100 hover:shadow"
-                              >
-                                Today
-                              </button>
-                            </div>
-                          ) : null}
-                        </div>
-                        {/* Row 3: Sprint tile cards — same pastel pattern as
-                            single-quarter, scaled down to fit the all-quarters
-                            grid (no flag badge — just a colored dot + Sprint
-                            number; the date range would overflow at this
-                            density). */}
-                        {showYearSprintChips ? (
-                          <div className="relative grid min-w-0 border-t border-slate-200/80 bg-white" style={yearQuarterHeaderGridStyle}>
-                            {QUARTERS.flatMap((quarter) => {
-                              const quarterMonthsCount = quarter.months.length;
-                              const quarterFirstMonthIdx = (quarter.months[0] - 1);
-                              void quarterMonthsCount; void quarterFirstMonthIdx;
-                              return quarter.months.map((month, mIdxInQ) => {
-                                const monthIdxInYear = month - 1;
-                                return (
-                                  <div
-                                    key={`sprint-month-${month}`}
-                                    className="grid grid-cols-2"
-                                  >
-                                    {([1, 2] as const).map((lane) => {
-                                      void mIdxInQ;
-                                      void monthIdxInYear;
-                                      return (
-                                        <SprintPlanDropButton
-                                          key={`s-${month}-${lane}`}
-                                          month={month}
-                                          lane={lane}
-                                          title={sprintLabelYearRoadmap(globalSprintFromMonthLane(month, lane))}
-                                          onClick={() => {
-                                            if (isPostDragClickSuppressed()) return;
-                                            setFocusedMonth(month);
-                                            onEnterSprintStoryBoard?.(globalSprintFromMonthLane(month, lane), null);
-                                          }}
-                                          className="flex w-full items-center justify-center border-l-2 border-slate-200/60 px-1 py-1 text-center transition hover:-translate-y-px"
-                                        >
-                                          <span className="text-[11px] font-semibold leading-none tabular-nums tracking-tight text-slate-700">
-                                            S{globalSprintFromMonthLane(month, lane)}
-                                          </span>
-                                        </SprintPlanDropButton>
-                                      );
-                                    })}
-                                  </div>
-                                );
-                              });
-                            })}
-                            {roadmapLaneTodayLeft != null && todayMonth != null ? (
-                              <div
-                                className="pointer-events-none absolute inset-y-0 z-10 flex items-center"
-                                style={{ left: roadmapLaneTodayLeft, transform: "translate(-50%, -2px)" }}
-                              >
-                                <button
-                                  type="button"
-                                  title="Jump to today's sprint kanban"
-                                  onClick={() => {
-                                    const todaySprint = currentWorkYearSprintForPlan(currentYear);
-                                    if (todaySprint == null) return;
-                                    setFocusedMonth(todayMonth);
-                                    onEnterSprintStoryBoard?.(todaySprint, null);
-                                  }}
-                                  className="pointer-events-auto inline-flex items-center justify-center rounded bg-emerald-50/35 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 shadow-sm ring-1 ring-emerald-200/70 transition hover:bg-emerald-100 hover:shadow"
-                                >
-                                  Today
-                                </button>
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })()}
                   {/* Row 4: invisible per-sprint drop targets — 24 cols matching the bar grid. */}
                   <div className="relative z-[1] grid min-w-0 gap-2 px-0.5" style={ganttLaneGridStyle}>
                     {QUARTERS.flatMap((quarter) =>
