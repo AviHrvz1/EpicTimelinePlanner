@@ -8925,8 +8925,8 @@ export function TimelineGrid({
             className={cn(
               // Single-quarter rail height matches the Q + 3 months + 6
               // sprints panel above. Nudged a touch up.
-              "absolute left-0 top-0 inline-flex h-[132px] flex-col justify-between gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-0.5 ring-1 ring-black/5 transition-[width] duration-200",
-              isRailExpanded ? "w-56" : "w-[2.25rem]",
+              "absolute left-0 top-0 inline-flex h-[131px] flex-col justify-between gap-1 overflow-visible rounded-lg border border-slate-200/90 bg-white p-0.5 ring-1 ring-black/5 transition-[width] duration-200",
+              isRailExpanded ? "w-56" : "w-[38px]",
             )}
             onMouseLeave={() => {
               console.log("[rail-nav] quarter rail mouseleave", {
@@ -9021,8 +9021,8 @@ export function TimelineGrid({
               // Rail height tracks the Quarter + Months banner above (no
               // fixed pixel lock). 2 × h-10 buttons + p-0.5 + gap-1 lands
               // around the same height as Q+months without sprints.
-              "absolute left-0 top-0 inline-flex flex-col gap-1 overflow-visible rounded-xl border border-slate-200/90 bg-white p-0.5 ring-1 ring-black/5 transition-[width] duration-200",
-              isRailExpanded ? "w-56" : "w-[2.25rem]",
+              "absolute left-[-5px] top-0 inline-flex flex-col gap-1 overflow-visible rounded-lg border border-slate-200/90 bg-white p-0.5 ring-1 ring-black/5 transition-[width] duration-200",
+              isRailExpanded ? "w-56" : "w-[2.75rem]",
             )}
             onMouseLeave={() => setIsRailExpanded(false)}
           >
@@ -9032,14 +9032,14 @@ export function TimelineGrid({
               title="Gantt"
               onMouseEnter={() => setIsRailExpanded(true)}
               className={cn(
-                "group relative inline-flex h-10 w-full items-center overflow-visible rounded-lg transition",
+                "group relative inline-flex h-[42px] w-full items-center overflow-visible rounded-lg transition",
               isRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
                 quarterViewTab === "gantt"
                   ? planRailTabActiveClass
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
               )}
             >
-              <MapIcon className="size-[18px]" aria-hidden />
+              <MapIcon className="size-5" aria-hidden />
               <span className="sr-only">Gantt</span>
               <span
                 aria-hidden
@@ -9057,14 +9057,14 @@ export function TimelineGrid({
               title="Portfolio Insights"
               onMouseEnter={() => setIsRailExpanded(true)}
               className={cn(
-                "group relative inline-flex h-10 w-full items-center overflow-visible rounded-lg transition",
+                "group relative inline-flex h-[42px] w-full items-center overflow-visible rounded-lg transition",
               isRailExpanded ? "justify-start gap-2.5 px-2.5" : "justify-center px-0",
                 quarterViewTab === "insights"
                   ? planRailTabActiveClass
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
               )}
             >
-              <Activity className="size-[18px]" aria-hidden />
+              <Activity className="size-5" aria-hidden />
               <span className="sr-only">Portfolio Insights</span>
               <span
                 aria-hidden
