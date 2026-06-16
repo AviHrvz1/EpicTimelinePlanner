@@ -2228,29 +2228,12 @@ export function SprintAnalytics({
                                         <div className={cn("absolute inset-y-0 left-0 rounded-full transition-all", bar)} style={{ width: `${donePct}%` }} />
                                       </div>
                                     </div>
-                                    {/* Health badge — sits between bar
-                                     *  and chip, the bar's natural
-                                     *  outcome (same as Team Progress).
-                                     *  Always rendered, in both metric
-                                     *  modes — the badge popover lists
-                                     *  flagged stories only in daysLeft
-                                     *  mode (storyCount mode passes
-                                     *  empty arrays), but the badge
-                                     *  itself + tone always reflects the
-                                     *  row's verdict. */}
-                                    <span className="inline-flex shrink-0 items-center">
-                                      <SprintLoadHealthBadge
-                                        status={verdict.status}
-                                        rowLabel={row.label}
-                                        atRiskStories={atRiskStories}
-                                        watchStories={watchStories}
-                                        overdueStories={overdueStories}
-                                        buckets={verdictBuckets}
-                                        total={verdictTotal}
-                                        sprintLabel={sprintEnded ? "Sprint ended" : `${sprintDaysLeft}d left`}
-                                        onOpenStory={onOpenStory}
-                                      />
-                                    </span>
+                                    {/* Health distribution chip removed
+                                     *  per planner request — the bar +
+                                     *  done% above already conveys the
+                                     *  row's progress story; the small
+                                     *  56-px verdict pill was visual
+                                     *  noise on every Sprint Load row. */}
                                     {/* Three-segment chip preserving all
                                      *  three numbers inline. Label of
                                      *  the first segment swaps with
