@@ -31,7 +31,8 @@ import {
   YAxis,
 } from "recharts";
 
-import { buildSprintAnalytics, BurndownMetric } from "@/lib/sprint-analytics";
+import { BurndownMetric } from "@/lib/sprint-analytics";
+import { buildSprintRetrospective } from "@/lib/sprint-retrospective";
 import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { UserAvatar, resolveAssigneeAvatar } from "@/components/ui/user-avatar";
 import { type EstimateSource } from "@/lib/epic-estimates";
@@ -645,9 +646,14 @@ export function SprintAnalytics({
    * column filter state for the next open; the next click overwrites it.
    */
   const [sprintTimelinePopupOpen, setSprintTimelinePopupOpen] = useState(false);
+  // Sprint Insights uses the snapshot-aware retrospective helper so
+  // every chart reads the same kanban-matching state across closed
+  // AND active sprints — rolled-out stories project back via
+  // snapshot history, the Unscheduled bucket is dropped, day-0
+  // actual starts at full scope, and close-day actual matches live.
   const analytics = useMemo(
     () =>
-      buildSprintAnalytics(
+      buildSprintRetrospective({
         initiatives,
         month,
         yearSprint,
@@ -657,7 +663,7 @@ export function SprintAnalytics({
         estimateSource,
         sprintCapacityBoard,
         workspaceDirectoryUsers,
-      ),
+      }),
     [
       initiatives,
       month,
@@ -671,7 +677,11 @@ export function SprintAnalytics({
     ],
   );
 
-  const pieData = analytics.statusPie.filter((x) => x.value > 0);
+  // Drop the workspace-wide "Unscheduled" bucket — counting
+  // `story.sprint == null` stories alongside the picked sprint's
+  // status distribution leaks unrelated rows into the donut. Same
+  // rule as the retrospective + dashboard variants of this chart.
+  const pieData = analytics.statusPie.filter((x) => x.value > 0 && x.name !== "Unscheduled");
   const pieTotal = pieData.reduce((sum, item) => sum + item.value, 0);
   const selectedWorkloadStatuses = useMemo<SprintWorkloadStatusKey[]>(
     () =>

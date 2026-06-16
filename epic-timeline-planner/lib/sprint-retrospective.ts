@@ -36,11 +36,13 @@ import type {
   StoryDailySnapshotItem,
   UserStoryItem,
 } from "@/lib/types";
+import type { EstimateSource } from "@/lib/epic-estimates";
 import {
   buildSprintAnalytics,
   type BurndownMetric,
   type SprintAnalyticsData,
 } from "@/lib/sprint-analytics";
+import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import { storyMatchesYearSprint } from "@/lib/sprint-plan";
 import { sprintEndDate, sprintStartDate } from "@/lib/year-sprint";
 
@@ -51,6 +53,12 @@ export type SprintRetrospectiveOptions = {
   metric: BurndownMetric;
   planYear: number;
   filterEpicTeamIds?: string[] | null;
+  /** Pass-through args to `buildSprintAnalytics`. Sprint Insights
+   *  needs these for the workload / capacity sub-views, even
+   *  though Retrospective doesn't render them. */
+  estimateSource?: EstimateSource;
+  sprintCapacityBoard?: { capacities: Record<string, number>; assignments: Record<string, string[]> } | null;
+  workspaceDirectoryUsers?: readonly SprintWorkspaceDirectoryUser[] | null;
 };
 
 /**
@@ -67,6 +75,9 @@ export function buildSprintRetrospective(
     metric,
     planYear,
     filterEpicTeamIds,
+    estimateSource,
+    sprintCapacityBoard,
+    workspaceDirectoryUsers,
   } = args;
   const startDate = sprintStartDate(planYear, yearSprint);
   const closeDate = sprintEndDate(planYear, yearSprint);
@@ -78,6 +89,9 @@ export function buildSprintRetrospective(
     metric,
     planYear,
     filterEpicTeamIds,
+    estimateSource,
+    sprintCapacityBoard,
+    workspaceDirectoryUsers,
   );
   const statusPieFiltered = analytics.statusPie.filter(
     (slice) => slice.name !== "Unscheduled",

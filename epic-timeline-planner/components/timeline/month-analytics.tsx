@@ -2238,14 +2238,17 @@ export function MonthAnalytics({
     );
 
     const statusCounts = {
-      unscheduled: scopeStories.filter((story) => story.sprint == null).length,
       todo: scheduledStories.filter((story) => story.status === "todo").length,
       inProgress: scheduledStories.filter((story) => story.status === "inProgress").length,
       review: scheduledStories.filter((story) => story.status === "review").length,
       done: scheduledStories.filter((story) => story.status === "done").length,
     };
+    // The "Unscheduled" bucket was a workspace-wide
+    // `story.sprint == null` tally that doesn't belong on a
+    // per-sprint donut — it polluted the Sprint Insights donut
+    // with stories that were never part of the picked sprint. The
+    // four real status buckets are the only honest categories.
     const statusPie = [
-      { name: "Unscheduled", value: statusCounts.unscheduled },
       { name: "To do", value: statusCounts.todo },
       { name: "In progress", value: statusCounts.inProgress },
       { name: "Review / Testing", value: statusCounts.review },
