@@ -2,6 +2,7 @@
 
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { buildSprintAnalytics } from "@/lib/sprint-analytics";
+import { buildSprintRetrospective } from "@/lib/sprint-retrospective";
 import type { InitiativeItem } from "@/lib/types";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -20,6 +21,11 @@ type Props = {
   /** When provided, slices + legend rows become clickable and pass the
    *  status label ("To do", "In progress", "Review / Testing", "Done") up. */
   onSliceClick?: (statusLabel: string) => void;
+  /** Retrospective mode — freeze story state to its snapshot at sprint
+   *  close so the donut reads as "what was true at close" rather than
+   *  evolving with post-close edits. Default false keeps live-sprint
+   *  callers on their existing path. */
+  retrospective?: boolean;
 };
 
 type LabelArgs = {
@@ -53,10 +59,22 @@ function PieSliceOutsideLabel(props: LabelArgs) {
   );
 }
 
-export function StoryStatusChart({ initiatives, year, quarter, sprint, team, onSliceClick }: Props) {
+export function StoryStatusChart({ initiatives, year, quarter, sprint, team, onSliceClick, retrospective }: Props) {
   const month = Math.ceil(sprint / 2);
-  const analytics = buildSprintAnalytics(initiatives, month, sprint, "storyCount", year, team ? [team] : null);
-  const data = analytics.statusPie.filter((x) => x.value > 0);
+  const analytics = retrospective
+    ? buildSprintRetrospective({
+        initiatives,
+        month,
+        yearSprint: sprint,
+        metric: "storyCount",
+        planYear: year,
+        filterEpicTeamIds: team ? [team] : null,
+      })
+    : buildSprintAnalytics(initiatives, month, sprint, "storyCount", year, team ? [team] : null);
+  // Retrospective mode already drops "Unscheduled" inside the helper;
+  // live mode filters it here so the donut never renders a workspace-
+  // wide bucket that doesn't belong to the picked sprint.
+  const data = analytics.statusPie.filter((x) => x.value > 0 && x.name !== "Unscheduled");
   const total = data.reduce((s, d) => s + d.value, 0);
 
   if (data.length === 0) {

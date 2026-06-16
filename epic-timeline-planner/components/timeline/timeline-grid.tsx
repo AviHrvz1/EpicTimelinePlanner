@@ -73,7 +73,7 @@ import { SprintCapacityBoard } from "@/components/timeline/sprint-capacity";
 import { SprintEndCountdown } from "@/components/timeline/sprint-end-countdown";
 import { PeriodEndCountdown } from "@/components/timeline/period-end-countdown";
 import { SprintKanbanBoard } from "@/components/timeline/sprint-kanban";
-import { SprintRetrospectiveEditor, type SprintRetrospectiveDoc } from "@/components/timeline/sprint-retrospective";
+import { SprintRetrospectiveEditor, SprintRetrospectiveChartRow, type SprintRetrospectiveDoc } from "@/components/timeline/sprint-retrospective";
 import { QuarterYearProgressIcon } from "@/components/ui/quarter-year-progress-icon";
 import { UserStoryIcon } from "@/components/ui/user-story-icon";
 import { computeSprintKanbanSummaryStats, collectStoriesForSprintBoard, collectEpicsForSprintKanban, storyMatchesYearSprint } from "@/lib/sprint-plan";
@@ -9651,8 +9651,30 @@ export function TimelineGrid({
                   );
                 }
                 // Multi-team: accordion list. Each team is collapsible; first one open by default.
+                // When NO team filter is active ("All Teams"), render a
+                // workspace-wide aggregate chart row at the top so the
+                // planner can see Sprint X's totals across every team
+                // (matches the kanban's All-Teams view). The aggregate
+                // intentionally omits per-team retrospective text notes
+                // (those only exist per team in the data model).
+                const isAllTeams = sprintFilterTeamIds.length === 0;
                 return (
                   <div className="flex min-h-0 flex-1 flex-col divide-y divide-slate-200/70 overflow-y-auto">
+                    {isAllTeams && initiatives && currentYear != null ? (
+                      <section className="bg-white/70 pb-2">
+                        <header className="flex items-center gap-2 px-5 py-3 sm:px-7">
+                          <span className="text-[15px] font-semibold text-slate-800">All Teams</span>
+                          <span className="text-[12px] font-medium text-slate-400">· {sprintLabel}</span>
+                          <span className="ml-auto text-[11px] text-slate-400">Workspace-wide aggregate</span>
+                        </header>
+                        <SprintRetrospectiveChartRow
+                          initiatives={initiatives}
+                          planYear={currentYear}
+                          yearSprint={yearSprint}
+                          team={null}
+                        />
+                      </section>
+                    ) : null}
                     {retroTeamIds.map((teamId) => {
                       const teamOpt = sprintTeamOptions.find((o) => o.value === teamId);
                       const teamLabel = teamOpt?.label ?? teamId;

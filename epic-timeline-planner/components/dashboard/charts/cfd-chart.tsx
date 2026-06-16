@@ -3,6 +3,7 @@
 import { Area, AreaChart, CartesianGrid, Legend, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { buildSprintAnalytics } from "@/lib/sprint-analytics";
+import { buildSprintRetrospective } from "@/lib/sprint-retrospective";
 import { InitiativeItem } from "@/lib/types";
 
 type Props = {
@@ -11,11 +12,22 @@ type Props = {
   quarter: number;
   sprint: number;
   team?: string | null;
+  /** Retrospective mode — see StoryStatusChart for the same flag. */
+  retrospective?: boolean;
 };
 
-export function CfdChart({ initiatives, year, quarter, sprint, team }: Props) {
+export function CfdChart({ initiatives, year, quarter, sprint, team, retrospective }: Props) {
   const month = Math.ceil(sprint / 2);
-  const analytics = buildSprintAnalytics(initiatives, month, sprint, "daysLeft", year, team ? [team] : null);
+  const analytics = retrospective
+    ? buildSprintRetrospective({
+        initiatives,
+        month,
+        yearSprint: sprint,
+        metric: "daysLeft",
+        planYear: year,
+        filterEpicTeamIds: team ? [team] : null,
+      })
+    : buildSprintAnalytics(initiatives, month, sprint, "daysLeft", year, team ? [team] : null);
 
   // Extend flow data to cover the full sprint (same x-axis range as burndown).
   // Past days carry real values; future days get null so areas stop at today.

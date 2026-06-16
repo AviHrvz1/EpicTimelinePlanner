@@ -35,6 +35,8 @@ import { LinkEditorPopover, applyLinkToEditor, readLinkContext } from "@/compone
 import { TeamAvatar } from "@/components/ui/team-avatar";
 import { CfdChart } from "@/components/dashboard/charts/cfd-chart";
 import { StoryStatusChart } from "@/components/dashboard/charts/story-status-chart";
+import { ToggleGroup } from "@/components/timeline/basis-toggle-group";
+import type { BurndownMetric } from "@/lib/sprint-analytics";
 import { StoryStatusDrilldownTable } from "@/components/dashboard/charts/story-status-drilldown-table";
 import { collectMonthStories } from "@/lib/sprint-analytics";
 import { storyMatchesYearSprint } from "@/lib/sprint-plan";
@@ -45,6 +47,103 @@ import type { SprintWorkspaceDirectoryUser } from "@/lib/sprint-capacity";
 import type { InitiativeItem } from "@/lib/types";
 import { normalizeWorkspaceUserTeam } from "@/lib/workspace-users";
 import { cn } from "@/lib/utils";
+
+// ─── Public chart row (workspace-wide aggregate + per-team accordion reuse) ──
+
+/**
+ * The three sprint-recap charts (User Stories Status, Cumulative
+ * Flow, Burndown) extracted as a standalone component so the
+ * "All Teams" aggregate header in the retrospective tab can render
+ * them once at workspace level (`team={null}`) while the per-team
+ * accordions below render them again at team scope. Both call sites
+ * pass `retrospective` so each chart routes through the snapshot-
+ * aware `buildSprintRetrospective` helper.
+ */
+export function SprintRetrospectiveChartRow({
+  initiatives,
+  planYear,
+  yearSprint,
+  team,
+  onSliceClick,
+}: {
+  initiatives: InitiativeItem[];
+  planYear: number;
+  yearSprint: number;
+  team: string | null;
+  onSliceClick?: (statusLabel: string) => void;
+}) {
+  // Y-axis metric on the burndown — mirrors the segmented control
+  // used by Insights so the planner can flip between effort
+  // ("Days left") and story count without leaving the retro tab.
+  const [burndownMetric, setBurndownMetric] = useState<BurndownMetric>("daysLeft");
+  return (
+    <div className="grid gap-5 px-5 pb-6 sm:px-7 lg:grid-cols-3">
+      <article className="flex min-h-[300px] flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm ring-1 ring-slate-100">
+        <h3 className="mb-2 inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+          <PieChartIcon className="size-4 text-slate-600" aria-hidden />
+          User Stories Status
+        </h3>
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <StoryStatusChart
+            initiatives={initiatives}
+            year={planYear}
+            quarter={Math.ceil(yearSprint / 6)}
+            sprint={yearSprint}
+            team={team}
+            onSliceClick={onSliceClick}
+            retrospective
+          />
+        </div>
+      </article>
+      <article className="flex min-h-[300px] flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm ring-1 ring-slate-100">
+        <h3 className="mb-2 inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+          <AreaChartIcon className="size-4 text-slate-600" aria-hidden />
+          Cumulative Flow
+        </h3>
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <CfdChart
+            initiatives={initiatives}
+            year={planYear}
+            quarter={Math.ceil(yearSprint / 6)}
+            sprint={yearSprint}
+            team={team}
+            retrospective
+          />
+        </div>
+      </article>
+      <article className="flex min-h-[300px] flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm ring-1 ring-slate-100">
+        <div className="mb-2 flex items-center gap-2">
+          <h3 className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
+            <Activity className="size-4 text-slate-600" aria-hidden />
+            Burndown
+          </h3>
+          <div className="ml-auto shrink-0 basis-[12rem]">
+            <ToggleGroup
+              label=""
+              options={[
+                { value: "daysLeft", label: "Days left" },
+                { value: "storyCount", label: "Stories" },
+              ]}
+              value={burndownMetric}
+              onChange={(v) => setBurndownMetric(v as BurndownMetric)}
+            />
+          </div>
+        </div>
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <BurndownChart
+            initiatives={initiatives}
+            year={planYear}
+            quarter={Math.ceil(yearSprint / 6)}
+            sprint={yearSprint}
+            team={team}
+            metric={burndownMetric}
+            retrospective
+          />
+        </div>
+      </article>
+    </div>
+  );
+}
 
 // ─── Public types (persistence shape preserved) ──────────────────────────────
 
@@ -603,54 +702,13 @@ export function SprintRetrospectiveEditor({
 
         {/* Sprint recap charts (filtered by current sprint + team) */}
         {initiatives && planYear != null && yearSprint != null ? (
-          <div className="grid gap-5 px-5 pb-6 sm:px-7 lg:grid-cols-3">
-            <article className="flex min-h-[300px] flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm ring-1 ring-slate-100">
-              <h3 className="mb-2 inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
-                <PieChartIcon className="size-4 text-slate-600" aria-hidden />
-                User Stories Status
-              </h3>
-              <div className="min-h-0 flex-1 overflow-hidden">
-                <StoryStatusChart
-                  initiatives={initiatives}
-                  year={planYear}
-                  quarter={Math.ceil(yearSprint / 6)}
-                  sprint={yearSprint}
-                  team={teamId ?? null}
-                  onSliceClick={(statusLabel) => setStoryStatusDrilldown(statusLabel)}
-                />
-              </div>
-            </article>
-            <article className="flex min-h-[300px] flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm ring-1 ring-slate-100">
-              <h3 className="mb-2 inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
-                <AreaChartIcon className="size-4 text-slate-600" aria-hidden />
-                Cumulative Flow
-              </h3>
-              <div className="min-h-0 flex-1 overflow-hidden">
-                <CfdChart
-                  initiatives={initiatives}
-                  year={planYear}
-                  quarter={Math.ceil(yearSprint / 6)}
-                  sprint={yearSprint}
-                  team={teamId ?? null}
-                />
-              </div>
-            </article>
-            <article className="flex min-h-[300px] flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm ring-1 ring-slate-100">
-              <h3 className="mb-2 inline-flex items-center gap-1.5 text-[15px] font-semibold text-slate-800">
-                <Activity className="size-4 text-slate-600" aria-hidden />
-                Burndown
-              </h3>
-              <div className="min-h-0 flex-1 overflow-hidden">
-                <BurndownChart
-                  initiatives={initiatives}
-                  year={planYear}
-                  quarter={Math.ceil(yearSprint / 6)}
-                  sprint={yearSprint}
-                  team={teamId ?? null}
-                />
-              </div>
-            </article>
-          </div>
+          <SprintRetrospectiveChartRow
+            initiatives={initiatives}
+            planYear={planYear}
+            yearSprint={yearSprint}
+            team={teamId ?? null}
+            onSliceClick={(statusLabel) => setStoryStatusDrilldown(statusLabel)}
+          />
         ) : null}
       </div>
 

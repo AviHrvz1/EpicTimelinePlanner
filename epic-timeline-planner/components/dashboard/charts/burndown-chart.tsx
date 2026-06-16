@@ -3,6 +3,7 @@
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { buildSprintAnalytics, type BurndownMetric } from "@/lib/sprint-analytics";
+import { buildSprintRetrospective } from "@/lib/sprint-retrospective";
 import { InitiativeItem } from "@/lib/types";
 
 type Props = {
@@ -12,11 +13,22 @@ type Props = {
   sprint: number;
   metric?: BurndownMetric | null;
   team?: string | null;
+  /** Retrospective mode — see StoryStatusChart for the same flag. */
+  retrospective?: boolean;
 };
 
-export function BurndownChart({ initiatives, year, quarter, sprint, metric, team }: Props) {
+export function BurndownChart({ initiatives, year, quarter, sprint, metric, team, retrospective }: Props) {
   const month = Math.ceil(sprint / 2);
-  const analytics = buildSprintAnalytics(initiatives, month, sprint, metric ?? "daysLeft", year, team ? [team] : null);
+  const analytics = retrospective
+    ? buildSprintRetrospective({
+        initiatives,
+        month,
+        yearSprint: sprint,
+        metric: metric ?? "daysLeft",
+        planYear: year,
+        filterEpicTeamIds: team ? [team] : null,
+      })
+    : buildSprintAnalytics(initiatives, month, sprint, metric ?? "daysLeft", year, team ? [team] : null);
   const data = analytics.burndown;
 
   const yLabel = (metric ?? "daysLeft") === "storyCount" ? "Stories" : "Days left";
