@@ -8,6 +8,7 @@ import {
   BookOpen,
   Check,
   CheckCheck,
+  CheckCircle2,
   ChevronDown,
   Circle,
   CircleDashed,
@@ -1493,19 +1494,72 @@ function TeamProgressCard({
                           />
                         </div>
                       </div>
-                      {/* Single pill chip: neutral background + clock icon.
-                       *  Days-left value reads as the primary content. The
-                       *  verdict-distribution chip we briefly added here
-                       *  was removed at the user's request — the row click
-                       *  still syncs the Gantt + initiative panel filter,
-                       *  which is the planner's primary handle on this row. */}
-                      <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-[10.5px] font-semibold tabular-nums text-slate-700", tone.chipBg)}>
-                        <Clock className={cn("size-3", tone.icon)} strokeWidth={2.2} aria-hidden />
-                        <span>{Math.round(row.daysLeft)}</span>
-                        <span className="text-slate-400">/</span>
-                        <span>{Math.round(row.estTotal)} left</span>
-                        <span className="text-slate-400">({unitLabel})</span>
-                      </span>
+                      {/* Done-vs-left presentation — replaces the
+                       *  prior "Xd / Yd left (days)" pattern that
+                       *  forced subtraction. Four shape variants so
+                       *  each state reads directly:
+                       *    · Done    → "Done ✓ · 10 stories"
+                       *    · Untouched → "5 stories to do"
+                       *    · Over capacity → "5 est · 6 to do" (rose)
+                       *    · Mid-burn → "3 done · 2 stories left"
+                       *                 (done segment tinted emerald)
+                       *  `unitLabel` is "days" or "stories"; for days
+                       *  we keep the inline `d` suffix, for stories we
+                       *  append the noun once at the end of the chip. */}
+                      {(() => {
+                        const daysLeft = Math.round(row.daysLeft);
+                        const estTotal = Math.round(row.estTotal);
+                        const doneVal = Math.round(row.doneDays);
+                        const isStories = unitLabel === "stories";
+                        const unit = isStories ? "" : "d";
+                        const noun = isStories ? "stories" : "days";
+                        const allDone = daysLeft === 0 && estTotal > 0;
+                        const untouched = doneVal === 0 && daysLeft > 0;
+                        const overCapacity = daysLeft > estTotal && estTotal > 0;
+                        const chipBase = cn(
+                          "inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-[10.5px] font-semibold tabular-nums text-slate-700",
+                          tone.chipBg,
+                        );
+                        const titleText = isStories
+                          ? `${estTotal} ${noun} total · ${doneVal} completed · ${daysLeft} open`
+                          : `${estTotal}${unit} estimated total · ${doneVal}${unit} done · ${daysLeft}${unit} left`;
+                        if (allDone) {
+                          return (
+                            <span className={chipBase} title={titleText}>
+                              <CheckCircle2 className="size-3 text-emerald-600" strokeWidth={2.5} aria-hidden />
+                              <span className="text-emerald-700">Done</span>
+                              <span className="text-slate-400">·</span>
+                              <span>{estTotal}{unit}{isStories ? ` ${noun}` : ""}</span>
+                            </span>
+                          );
+                        }
+                        if (overCapacity) {
+                          return (
+                            <span className={chipBase} title={titleText}>
+                              <Clock className={cn("size-3", tone.icon)} strokeWidth={2.2} aria-hidden />
+                              <span>{estTotal}{unit} est</span>
+                              <span className="text-slate-400">·</span>
+                              <span className="text-rose-700">{daysLeft}{unit}{isStories ? ` ${noun}` : ""} to do</span>
+                            </span>
+                          );
+                        }
+                        if (untouched) {
+                          return (
+                            <span className={chipBase} title={titleText}>
+                              <Clock className={cn("size-3", tone.icon)} strokeWidth={2.2} aria-hidden />
+                              <span>{daysLeft}{unit}{isStories ? ` ${noun}` : ""} to do</span>
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className={chipBase} title={titleText}>
+                            <CheckCircle2 className="size-3 text-emerald-600" strokeWidth={2.5} aria-hidden />
+                            <span className="text-emerald-700">{doneVal}{unit} done</span>
+                            <span className="text-slate-400">·</span>
+                            <span>{daysLeft}{unit}{isStories ? ` ${noun}` : ""} left</span>
+                          </span>
+                        );
+                      })()}
                       {/* Circular percent — same number as the inline
                        *  label, but visual; mirrors the donut-card
                        *  visual language elsewhere in the hero. */}

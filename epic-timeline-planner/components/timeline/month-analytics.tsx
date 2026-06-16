@@ -6444,6 +6444,11 @@ export function MonthAnalytics({
                         strokeOpacity={1}
                         strokeWidth={1.5}
                         isAnimationActive={false}
+                        // Click any colored band to open the same
+                        // drilldown table the "Stories Progress" donut
+                        // opens, pre-filtered to that band's status.
+                        style={{ cursor: "pointer" }}
+                        onClick={() => openStatusDrilldown(label)}
                       />
                       ) : null,
                     )}
@@ -6524,6 +6529,15 @@ export function MonthAnalytics({
               ? analytics.workloadByTeam.filter((t) => pinnedTeamSlugs.has(t.teamId ?? "__unassigned__"))
               : analytics.workloadByTeam;
             const monthDaysLeft = analytics.monthDaysLeft;
+            // Auto-sync the User / Team Progress unit with the global
+            // burndown basis toggle. When the planner picks
+            // "Stories Completed (%)", the rows count OPEN stories
+            // (todo + inProgress) vs TOTAL stories instead of
+            // days-left vs estimated-days — same lens the burndown /
+            // burnup pair are already using.
+            const useStoriesBasis = burndownBasis === "stories";
+            const loadUnitSuffix = useStoriesBasis ? "" : "d";
+            const loadUnitWord = useStoriesBasis ? "stories" : "days";
             const loadRows = teamMode
               ? teamsInScope.map((t) => ({
                   key: t.teamLabel,
@@ -6531,8 +6545,15 @@ export function MonthAnalytics({
                   initials: t.teamLabel.slice(0, 2).toUpperCase(),
                   image: null as string | null,
                   teamSlug: t.teamId ?? null,
-                  daysLeft: t.daysLeftTotal,
-                  estTotal: t.estimatedTotal,
+                  daysLeft: useStoriesBasis
+                    ? t.storiesByStatus.todo + t.storiesByStatus.inProgress
+                    : t.daysLeftTotal,
+                  estTotal: useStoriesBasis
+                    ? t.storiesByStatus.todo
+                      + t.storiesByStatus.inProgress
+                      + t.storiesByStatus.review
+                      + t.storiesByStatus.done
+                    : t.estimatedTotal,
                   onRowClick: () => {
                     setMonthLoadDrilldownIsTeam(true);
                     setMonthLoadDrilldownAssignee(t.teamId ?? "");
@@ -6547,8 +6568,15 @@ export function MonthAnalytics({
                   // render the photo instead of initials when available.
                   image: resolveAssigneeAvatar(row.assignee, workspaceDirectoryUsers).image,
                   teamSlug: null as string | null,
-                  daysLeft: row.daysLeftTotal,
-                  estTotal: row.estimatedTotal,
+                  daysLeft: useStoriesBasis
+                    ? row.storiesByStatus.todo + row.storiesByStatus.inProgress
+                    : row.daysLeftTotal,
+                  estTotal: useStoriesBasis
+                    ? row.storiesByStatus.todo
+                      + row.storiesByStatus.inProgress
+                      + row.storiesByStatus.review
+                      + row.storiesByStatus.done
+                    : row.estimatedTotal,
                   onRowClick: () => {
                     setMonthLoadDrilldownIsTeam(false);
                     setMonthLoadDrilldownAssignee(row.assignee);
@@ -7034,15 +7062,76 @@ export function MonthAnalytics({
                                        *  Load drilldown in team mode,
                                        *  epic-accordion popover in
                                        *  user mode). */}
-                                      <span
-                                        className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1", tone.chip)}
-                                        title={`${row.estTotal}d estimated total · ${doneDays}d in review · ${row.daysLeft}d left`}
-                                      >
-                                        <Clock className="size-2.5" strokeWidth={2.2} aria-hidden />
-                                        <span>{row.daysLeft}d</span>
-                                        <span className="opacity-50">/</span>
-                                        <span>{row.estTotal}d left</span>
-                                      </span>
+                                      {(() => {
+                                        // Done-vs-left presentation —
+                                        // the prior "Xd / Yd left"
+                                        // pattern forced subtraction
+                                        // and broke down when scope
+                                        // crept (e.g. "6d / 5d left"
+                                        // read as an error). Now each
+                                        // state has its own shape so
+                                        // the reader doesn't infer:
+                                        //  · Done    → "Done ✓ · 5d"
+                                        //  · Untouched → "5d to do" /
+                                        //               "2 stories to do"
+                                        //  · Over capacity → "5d est ·
+                                        //               6d to do" + ⚠
+                                        //  · Mid-burn → "3d done · 2d
+                                        //               left" with the
+                                        //               done segment
+                                        //               tinted emerald.
+                                        const unit = loadUnitSuffix;
+                                        const noun = useStoriesBasis ? "stories" : "days";
+                                        const allDone = row.daysLeft === 0 && row.estTotal > 0;
+                                        const untouched = doneDays === 0 && row.daysLeft > 0;
+                                        const overCapacity = row.daysLeft > row.estTotal && row.estTotal > 0;
+                                        const formatVal = (n: number) => `${n}${unit}`;
+                                        const titleText = useStoriesBasis
+                                          ? `${row.estTotal} ${noun} total · ${doneDays} completed · ${row.daysLeft} open`
+                                          : `${row.estTotal}${unit} estimated total · ${doneDays}${unit} in review · ${row.daysLeft}${unit} left`;
+                                        const chipBase = cn(
+                                          "inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1",
+                                          tone.chip,
+                                        );
+                                        if (allDone) {
+                                          return (
+                                            <span className={chipBase} title={titleText}>
+                                              <CheckCircle2 className="size-2.5 text-emerald-600" strokeWidth={2.5} aria-hidden />
+                                              <span className="text-emerald-700">Done</span>
+                                              <span className="opacity-50">·</span>
+                                              <span>{formatVal(row.estTotal)}{useStoriesBasis ? ` ${noun}` : ""}</span>
+                                            </span>
+                                          );
+                                        }
+                                        if (overCapacity) {
+                                          return (
+                                            <span className={chipBase} title={titleText}>
+                                              <Clock className="size-2.5" strokeWidth={2.2} aria-hidden />
+                                              <span>{formatVal(row.estTotal)} est</span>
+                                              <span className="opacity-50">·</span>
+                                              <span className="text-rose-700">{formatVal(row.daysLeft)} to do</span>
+                                            </span>
+                                          );
+                                        }
+                                        if (untouched) {
+                                          return (
+                                            <span className={chipBase} title={titleText}>
+                                              <Clock className="size-2.5" strokeWidth={2.2} aria-hidden />
+                                              <span>{formatVal(row.daysLeft)}{useStoriesBasis ? ` ${noun}` : ""} to do</span>
+                                            </span>
+                                          );
+                                        }
+                                        // Mid-burn: two segments,
+                                        // green done + neutral left.
+                                        return (
+                                          <span className={chipBase} title={titleText}>
+                                            <CheckCircle2 className="size-2.5 text-emerald-600" strokeWidth={2.5} aria-hidden />
+                                            <span className="text-emerald-700">{formatVal(doneDays)} done</span>
+                                            <span className="opacity-50">·</span>
+                                            <span>{formatVal(row.daysLeft)}{useStoriesBasis ? ` ${noun}` : ""} left</span>
+                                          </span>
+                                        );
+                                      })()}
                                     </div>
                                   </div>
                                   <div className="mt-1 relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/50">
