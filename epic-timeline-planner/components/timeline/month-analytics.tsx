@@ -1516,7 +1516,35 @@ function statusDrilldownDisplayLabel(status: string | null): string {
  * convention in `components/backlog/backlog-planning-panel.tsx` so the
  * Workload + Month Load drilldown rows read the same as the backlog table.
  */
-function StoryStatusPill({ status }: { status: UserStoryItem["status"] }) {
+function StoryStatusPill({ status, sprint }: { status: UserStoryItem["status"]; sprint?: number | null }) {
+  // When the optional `sprint` prop is explicitly null, the pill
+  // displays as "Unscheduled" — same vocabulary the Status filter
+  // dropdown uses for the synthetic Unscheduled option, so a planner
+  // who narrows to Unscheduled sees rows that literally read
+  // "Unscheduled" in the Status column instead of the underlying
+  // workflow status. The actual `status` value still flows through to
+  // the tooltip so the underlying state isn't lost. Callers that
+  // don't pass `sprint` (epic pills, legacy call-sites) keep the
+  // existing workflow-status rendering.
+  if (sprint === null) {
+    const underlying = (() => {
+      switch (status) {
+        case "done": return "Done";
+        case "review": return "Review / Testing";
+        case "inProgress": return "In progress";
+        default: return "To do";
+      }
+    })();
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 font-semibold"
+        title={`Unscheduled · ${underlying}`}
+      >
+        <UserX className="size-3.5 shrink-0 text-slate-500" aria-hidden />
+        <span className="truncate text-slate-700">Unscheduled</span>
+      </span>
+    );
+  }
   const meta = (() => {
     switch (status) {
       case "done":
@@ -5063,7 +5091,7 @@ export function MonthAnalytics({
                                   <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
                                 </td>
                                 <td className="min-w-0 px-2 py-0.5">
-                                  <StoryStatusPill status={story.status} />
+                                  <StoryStatusPill status={story.status} sprint={story.sprint} />
                                 </td>
                                 <td className="min-w-0 px-2 py-0.5">
                                   {(() => {
@@ -5216,7 +5244,7 @@ export function MonthAnalytics({
                                   <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
                                 </td>
                                 <td className="min-w-0 px-2 py-0.5">
-                                  <StoryStatusPill status={story.status} />
+                                  <StoryStatusPill status={story.status} sprint={story.sprint} />
                                 </td>
                                 <td className="min-w-0 px-2 py-0.5">
                                   {(() => {
@@ -6215,7 +6243,7 @@ export function MonthAnalytics({
                               <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
                             </td>
                             <td className="min-w-0 px-2 py-0.5">
-                              <StoryStatusPill status={story.status} />
+                              <StoryStatusPill status={story.status} sprint={story.sprint} />
                             </td>
                             <td className="min-w-0 px-2 py-0.5">
                               {(() => {
@@ -6985,7 +7013,7 @@ export function MonthAnalytics({
                                         <DrilldownAssigneeCell assignee={story.assignee} workspaceDirectoryUsers={workspaceDirectoryUsers} />
                                       </td>
                                       <td className="min-w-0 px-2 py-0.5">
-                                        <StoryStatusPill status={story.status} />
+                                        <StoryStatusPill status={story.status} sprint={story.sprint} />
                                       </td>
                                       <td className="min-w-0 px-2 py-0.5">
                                         {(() => {
