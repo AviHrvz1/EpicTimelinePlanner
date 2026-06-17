@@ -454,8 +454,13 @@ function applyDrilldownFilterSort<T extends { id: string; title: string; sprint:
   if (teamQ && teamLabel) filtered = filtered.filter((r) => teamLabel(r.id).toLowerCase().includes(teamQ));
   const assigneeQ = filter.assignee?.trim().toLowerCase();
   if (assigneeQ) filtered = filtered.filter((r) => (r.assignee?.trim() || "Unassigned").toLowerCase().includes(assigneeQ));
-  // Status is categorical (no search input) — exact match.
-  if (filter.status != null) filtered = filtered.filter((r) => r.status === filter.status);
+  // Status is categorical (no search input) — exact match. The
+  // synthetic "unscheduled" key isn't a real story status but a
+  // sprint-qualifier; treat it as "rows with no sprint" so the planner
+  // can filter unscheduled work from the same dropdown as the other
+  // statuses (same surface, one mental model).
+  if (filter.status === "unscheduled") filtered = filtered.filter((r) => r.sprint == null);
+  else if (filter.status != null) filtered = filtered.filter((r) => r.status === filter.status);
   if (!sort) return filtered;
   const dir = sort.dir === "asc" ? 1 : -1;
   return [...filtered].sort((a, b) => {
@@ -874,12 +879,15 @@ function renderSprintOption(label: string) {
 function renderStatusOption(key: string) {
   // Same meta lookup StoryStatusPill uses; inlined here so the dropdown
   // option doesn't pull in the full pill chrome (no extra padding).
+  // The "unscheduled" key is a synthetic sprint-qualifier — see the
+  // `filter.status === "unscheduled"` branch in `applyDrilldownFilterSort`.
   const meta = (() => {
     switch (key) {
       case "done": return { label: "Done", Icon: CheckCircle2, color: "text-emerald-600" };
       case "review": return { label: "Review / Testing", Icon: CheckCheck, color: "text-violet-600" };
       case "inProgress": return { label: "In progress", Icon: PlayCircle, color: "text-blue-600" };
       case "todo": return { label: "To do", Icon: ListTodo, color: "text-amber-600" };
+      case "unscheduled": return { label: "Unscheduled", Icon: UserX, color: "text-slate-500" };
       default: return { label: key, Icon: Circle, color: "text-slate-500" };
     }
   })();
@@ -4756,7 +4764,13 @@ export function MonthAnalytics({
         {statusDrilldownFilter ? (() => {
           const uniqueSprints = statusChartShowsEpics ? [] : Array.from(new Set(statusDrilldownStoriesRaw.map((s) => storySprintDisplayLabel(s.sprint, scopeStartMonth)))).filter(Boolean).sort();
           const uniqueAssignees = statusChartShowsEpics ? [] : Array.from(new Set(statusDrilldownStoriesRaw.map((s) => s.assignee?.trim() || "Unassigned"))).filter(Boolean).sort();
-          const uniqueStatuses = statusChartShowsEpics ? [] : Array.from(new Set(statusDrilldownStoriesRaw.map((s) => s.status))).sort();
+          const uniqueStatuses: string[] = statusChartShowsEpics
+            ? []
+            : (() => {
+                const base = Array.from(new Set(statusDrilldownStoriesRaw.map((s) => s.status as string))).sort();
+                const hasUnscheduled = statusDrilldownStoriesRaw.some((s) => s.sprint == null);
+                return hasUnscheduled ? base.concat("unscheduled") : base;
+              })();
           // Epic-variant unique sets — populated only when the table is
           // showing epics (statusChartShowsEpics = true).
           const uniqueEpicAssignees = !statusChartShowsEpics ? [] : Array.from(new Set(statusDrilldownEpicsRaw.map((e) => e.assignee?.trim() || "Unassigned"))).filter(Boolean).sort();
@@ -5911,7 +5925,14 @@ export function MonthAnalytics({
           // RAW (unfiltered) rows so removing a filter restores all options.
           const uniqueSprints = Array.from(new Set(workloadDrilldownStoriesRaw.map((s) => storySprintDisplayLabel(s.sprint, scopeStartMonth)))).filter(Boolean).sort();
           const uniqueAssignees = Array.from(new Set(workloadDrilldownStoriesRaw.map((s) => s.assignee?.trim() || "Unassigned"))).filter(Boolean).sort();
-          const uniqueStatuses = Array.from(new Set(workloadDrilldownStoriesRaw.map((s) => s.status))).sort();
+          // Append a synthetic "unscheduled" entry whenever any row is
+          // missing a sprint — see `applyDrilldownFilterSort` for the
+          // matching filter-side branch.
+          const uniqueStatuses: string[] = (() => {
+            const base = Array.from(new Set(workloadDrilldownStoriesRaw.map((s) => s.status as string))).sort();
+            const hasUnscheduled = workloadDrilldownStoriesRaw.some((s) => s.sprint == null);
+            return hasUnscheduled ? base.concat("unscheduled") : base;
+          })();
           return (
           <InsightsDrilldownModal
             title={`Workload Balance · ${workloadDrilldownAssignee}`}
@@ -6709,7 +6730,11 @@ export function MonthAnalytics({
                 {monthLoadDrilldownAssignee ? (() => {
                   const uniqueSprints = Array.from(new Set(monthLoadDrilldownStoriesRaw.map((s) => storySprintDisplayLabel(s.sprint, scopeStartMonth)))).filter(Boolean).sort();
                   const uniqueAssignees = Array.from(new Set(monthLoadDrilldownStoriesRaw.map((s) => s.assignee?.trim() || "Unassigned"))).filter(Boolean).sort();
-                  const uniqueStatuses = Array.from(new Set(monthLoadDrilldownStoriesRaw.map((s) => s.status))).sort();
+                  const uniqueStatuses: string[] = (() => {
+                    const base = Array.from(new Set(monthLoadDrilldownStoriesRaw.map((s) => s.status as string))).sort();
+                    const hasUnscheduled = monthLoadDrilldownStoriesRaw.some((s) => s.sprint == null);
+                    return hasUnscheduled ? base.concat("unscheduled") : base;
+                  })();
                   return (
                   <InsightsDrilldownModal
                     title={`${teamMode ? "Team Progress" : "User Progress"} · ${monthLoadDrilldownAssignee}`}
