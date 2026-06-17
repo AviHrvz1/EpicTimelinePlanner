@@ -156,6 +156,50 @@ export function monthRangeFromYearSprintRange(
   };
 }
 
+/** Quarter (1–4) that contains the given calendar month (1–12). */
+export function quarterOfMonth(month: number): 1 | 2 | 3 | 4 {
+  if (month <= 3) return 1;
+  if (month <= 6) return 2;
+  if (month <= 9) return 3;
+  return 4;
+}
+
+/**
+ * Smallest quarter (1–4) the epic touches via its scheduled stories.
+ *
+ * Used by per-user / per-team load surfaces (Workload Balance, User
+ * Progress) to pin an epic's *unscheduled* stories to ONE quarter
+ * instead of double-counting them across every quarter the epic spans.
+ * The earliest quarter is chosen so the work surfaces the first moment
+ * it could matter — a planner who sees uncommitted load in Q2 can
+ * either accept it or move it to a later sprint explicitly, rather
+ * than being surprised by a Q3 fire drill.
+ *
+ * Returns `null` if the epic has no scheduled stories. In that case the
+ * caller should treat the epic as truly unscheduled (no quarter
+ * adopts its work; it surfaces only in the All-Quarters view).
+ *
+ * `contextMonth` is forwarded to `resolveStoryYearSprint` for legacy
+ * compatibility; current data is always year-global so the value
+ * doesn't matter, but the signature is preserved for future legacy
+ * revival.
+ */
+export function epicEarliestQuarter(
+  epic: EpicItem,
+  contextMonth: number,
+): 1 | 2 | 3 | 4 | null {
+  let earliest: 1 | 2 | 3 | 4 | null = null;
+  for (const story of epic.userStories ?? []) {
+    if (story.sprint == null) continue;
+    const yearSprint = resolveStoryYearSprint(story, contextMonth);
+    if (yearSprint == null) continue;
+    const { month } = monthLaneFromGlobalSprint(yearSprint);
+    const q = quarterOfMonth(month);
+    if (earliest == null || q < earliest) earliest = q;
+  }
+  return earliest;
+}
+
 /** Sprint bounds for Gantt; falls back to full-month span when sprint fields are unset. */
 export function resolvedInitiativeYearSprintBounds(initiative: {
   startMonth: number | null;

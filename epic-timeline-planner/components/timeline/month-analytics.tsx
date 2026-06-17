@@ -69,7 +69,7 @@ import { buildBurnSeries } from "@/lib/burn-series";
 import { EpicItem, InitiativeItem, StoryDailySnapshotItem, UserStoryItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { MONTH_TEAM_COLUMNS, monthTeamLabelForId } from "@/lib/month-team-board";
-import { clampYearSprint, globalSprintFromMonthLane, monthLaneFromGlobalSprint, sprintStartDate, sprintEndDate } from "@/lib/year-sprint";
+import { clampYearSprint, epicEarliestQuarter, globalSprintFromMonthLane, monthLaneFromGlobalSprint, quarterOfMonth, sprintStartDate, sprintEndDate } from "@/lib/year-sprint";
 import { computeProgress, computeInitiativeProgress, type HealthStatus, type ProgressBasis, type ProgressResult } from "@/lib/progress";
 import { computeEpicObservedStart, effectiveEpicStart } from "@/lib/epic-observed-start";
 import { computeEpicHealthVerdict } from "@/lib/epic-health";
@@ -2342,6 +2342,40 @@ export function MonthAnalytics({
       };
     });
 
+    // Workload Balance / User Progress reaches across the "scheduled
+    // only" filter to surface unscheduled-but-assigned work — but only
+    // in quarter / all-quarters scope, and pinned to the EARLIEST
+    // quarter the parent epic touches so each unscheduled story is
+    // counted exactly once across the year (no double-counting in
+    // Q2+Q3 for a multi-quarter epic). The sprint / single-month view
+    // stays kanban-only — the truth-table rule we settled with the
+    // user. When a single epic is focused, `scheduledStories` already
+    // equals `scopeStories` (unfiltered) in multi-period views, so the
+    // augmentation only kicks in for the un-focused workspace view.
+    const workloadStories = (() => {
+      if (!isMultiPeriodInsights || selectedEpicOption != null) return scheduledStories;
+      const targetQuarter = scopeMonths.length === 3
+        ? quarterOfMonth(scopeStartMonth)
+        : null;
+      const extra: UserStoryItem[] = [];
+      for (const { epic } of monthEpics) {
+        if (targetQuarter != null) {
+          const earliest = epicEarliestQuarter(epic, scopeStartMonth);
+          if (earliest !== targetQuarter) continue;
+        }
+        for (const story of epic.userStories ?? []) {
+          if (story.sprint != null) continue;
+          // Mirror `collectPeriodStories`'s team filter so unscheduled
+          // stories assigned to filtered-out teams don't sneak in.
+          if (filterEpicTeamIds?.length) {
+            const team = story.team ?? epic.team ?? "";
+            if (!filterEpicTeamIds.includes(team)) continue;
+          }
+          extra.push(story);
+        }
+      }
+      return extra.length > 0 ? scheduledStories.concat(extra) : scheduledStories;
+    })();
     const byAssignee = new Map<
       string,
       {
@@ -2351,7 +2385,7 @@ export function MonthAnalytics({
         storiesByStatus: { todo: number; inProgress: number; review: number; done: number };
       }
     >();
-    for (const story of scheduledStories) {
+    for (const story of workloadStories) {
       const assignee = story.assignee?.trim() || "Unassigned";
       const row =
         byAssignee.get(assignee) ?? {
