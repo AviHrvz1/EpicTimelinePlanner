@@ -5546,7 +5546,7 @@ export function MonthAnalytics({
                     <YAxis
                       allowDecimals={metric !== "storyCount"}
                       tick={{ fontSize: 10 }}
-                      width={44}
+                      width={60}
                       label={{
                         value: metric === "storyCount" ? "Stories" : "Days left",
                         angle: -90,
@@ -7474,7 +7474,7 @@ export function MonthAnalytics({
                       <YAxis
                         allowDecimals={false}
                         tick={{ fontSize: 10 }}
-                        width={44}
+                        width={60}
                         label={{ value: burnUpMetric === "daysLeft" ? "Days completed" : "Stories", angle: -90, position: "insideLeft", offset: 12, dy: 50, fill: "#64748b", fontSize: 13 }}
                         domain={[0, (dataMax: number) => Math.ceil(Math.max(dataMax, burnUpSingleEpicVisible ? burnUpScopeTotal : 0) * 1.22)]}
                         padding={{ bottom: 4 }}
