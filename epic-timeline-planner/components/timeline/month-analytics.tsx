@@ -2727,12 +2727,51 @@ export function MonthAnalytics({
     }
     return map;
   }, [initiatives]);
+  // Unscheduled stories that qualify for the current quarter/year view
+  // under the earliest-quarter pinning rule (Phase 4b). Drives both
+  // the Workload Balance and the Team/User Progress drilldown tables so
+  // each story shows up under exactly the same view its chart bar lit.
+  // Quarter view  → include where `epicEarliestQuarter === thisQuarter`.
+  // Year view     → include all unscheduled (no quarter restriction).
+  // Sprint / month → empty set (kanban-only, no unscheduled bleed-through).
+  // Focused-epic in multi-period → consumers use `scopedStories` directly
+  // (already the whole epic, scheduled + unscheduled).
+  const quarterPinnedUnscheduledStories = useMemo<UserStoryItem[]>(() => {
+    if (!isMultiPeriodInsights || selectedEpicOption != null) return [];
+    const targetQuarter = scopeMonths.length === 3
+      ? quarterOfMonth(scopeStartMonth)
+      : null;
+    const out: UserStoryItem[] = [];
+    for (const { epic } of monthEpics) {
+      if (targetQuarter != null) {
+        const earliest = epicEarliestQuarter(epic, scopeStartMonth);
+        if (earliest !== targetQuarter) continue;
+      }
+      for (const story of epic.userStories ?? []) {
+        if (story.sprint != null) continue;
+        if (filterEpicTeamIds?.length) {
+          const team = story.team ?? epic.team ?? "";
+          if (!filterEpicTeamIds.includes(team)) continue;
+        }
+        out.push(story);
+      }
+    }
+    return out;
+  }, [isMultiPeriodInsights, selectedEpicOption, scopeMonths.length, scopeStartMonth, monthEpics, filterEpicTeamIds]);
   const workloadDrilldownStoriesRaw = useMemo(() => {
     if (workloadDrilldownAssignee == null) return [];
-    return scopedStories
-      .filter((story) => story.sprint != null)
-      .sort((a, b) => a.title.localeCompare(b.title));
-  }, [workloadDrilldownAssignee, scopedStories]);
+    // Focused-epic multi-period: `scopedStories` already covers the whole
+    // epic (scheduled + unscheduled), so the drilldown shouldn't drop
+    // the unscheduled rows — they're real load for this epic.
+    if (isMultiPeriodInsights && selectedEpicOption != null) {
+      return scopedStories.slice().sort((a, b) => a.title.localeCompare(b.title));
+    }
+    const scheduled = scopedStories.filter((story) => story.sprint != null);
+    const combined = isMultiPeriodInsights
+      ? scheduled.concat(quarterPinnedUnscheduledStories)
+      : scheduled;
+    return combined.sort((a, b) => a.title.localeCompare(b.title));
+  }, [workloadDrilldownAssignee, scopedStories, isMultiPeriodInsights, selectedEpicOption, quarterPinnedUnscheduledStories]);
   const workloadDrilldownStories = useMemo(
     () => applyDrilldownFilterSort(
       workloadDrilldownStoriesRaw,
@@ -2750,10 +2789,15 @@ export function MonthAnalytics({
   const workloadDrilldownEmptyRows = Math.max(0, tableTargetRows - workloadDrilldownStories.length);
   const monthLoadDrilldownStoriesRaw = useMemo(() => {
     if (monthLoadDrilldownAssignee == null) return [];
-    return scopedStories
-      .filter((story) => story.sprint != null)
-      .sort((a, b) => a.title.localeCompare(b.title));
-  }, [monthLoadDrilldownAssignee, scopedStories]);
+    if (isMultiPeriodInsights && selectedEpicOption != null) {
+      return scopedStories.slice().sort((a, b) => a.title.localeCompare(b.title));
+    }
+    const scheduled = scopedStories.filter((story) => story.sprint != null);
+    const combined = isMultiPeriodInsights
+      ? scheduled.concat(quarterPinnedUnscheduledStories)
+      : scheduled;
+    return combined.sort((a, b) => a.title.localeCompare(b.title));
+  }, [monthLoadDrilldownAssignee, scopedStories, isMultiPeriodInsights, selectedEpicOption, quarterPinnedUnscheduledStories]);
   const monthLoadDrilldownStories = useMemo(
     () => applyDrilldownFilterSort(
       monthLoadDrilldownStoriesRaw,
