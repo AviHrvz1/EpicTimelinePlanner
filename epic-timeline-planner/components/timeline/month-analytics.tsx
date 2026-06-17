@@ -892,6 +892,31 @@ function renderStatusOption(key: string) {
   );
 }
 
+/** Renderer for the Epic-variant Status dropdown row — input is the
+ *  HUMAN label (e.g. "To do", "Unscheduled") rather than the raw enum
+ *  key, because the epic statuses are derived via `deriveEpicStatus()`
+ *  and already arrive in display form. Includes the "Unscheduled"
+ *  bucket that doesn't exist on the story-status renderer. */
+function renderEpicStatusOption(label: string) {
+  const meta = (() => {
+    switch (label) {
+      case "Done": return { Icon: CheckCircle2, color: "text-emerald-600" };
+      case "Review / Testing": return { Icon: CheckCheck, color: "text-violet-600" };
+      case "In progress": return { Icon: PlayCircle, color: "text-blue-600" };
+      case "To do": return { Icon: ListTodo, color: "text-amber-600" };
+      case "Unscheduled": return { Icon: UserX, color: "text-slate-500" };
+      default: return { Icon: Circle, color: "text-slate-500" };
+    }
+  })();
+  const { Icon } = meta;
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Icon className={cn("size-3.5 shrink-0", meta.color)} aria-hidden />
+      <span className="truncate text-slate-700">{label}</span>
+    </span>
+  );
+}
+
 /** Clickable column header for the drilldown tables. Click cycles
  *  none → asc → desc → none for that column. Active column shows a small
  *  arrow indicator. */
@@ -4762,9 +4787,7 @@ export function MonthAnalytics({
                         <DrilldownFilterDropdown
                           value={statusDrilldownEpicFilter.status}
                           options={uniqueEpicStatuses}
-                          renderOption={(label) => (
-                            <span className="inline-flex items-center gap-1.5 truncate">{label}</span>
-                          )}
+                          renderOption={renderEpicStatusOption}
                           onChange={(v) => setStatusDrilldownEpicFilter((p) => ({ ...p, status: v }))}
                           ariaLabel="Filter epic progress by status"
                         />
