@@ -5462,6 +5462,90 @@ export function MonthAnalytics({
           ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
+            {/* TEMPORARY diagnostic — captures the four divergent
+             *  "days left / completed" surfaces so we can pinpoint the
+             *  bugs without guessing. Click → JSON to clipboard. Remove
+             *  once the totals reconcile. */}
+            <button
+              type="button"
+              onClick={async () => {
+                const today = burnDownBaseSeries.perDay.find((r) => r.isToday);
+                const lastRow = burnDownBaseSeries.perDay[burnDownBaseSeries.perDay.length - 1];
+                const todayUp = burnUpBaseSeries.perDay.find((r) => r.isToday);
+                const lastUp = burnUpBaseSeries.perDay[burnUpBaseSeries.perDay.length - 1];
+                const burnDownEpicIds = burnDownEpicsForSeries.map((e) => e.id).sort();
+                const burnUpEpicIds = burnUpEpicsForSeries.map((e) => e.id).sort();
+                const onlyDown = burnDownEpicIds.filter((id) => !burnUpEpicIds.includes(id));
+                const onlyUp = burnUpEpicIds.filter((id) => !burnDownEpicIds.includes(id));
+                const perEpic = burnDownEpicsForSeries.map((e) => {
+                  const stories = e.userStories ?? [];
+                  const estTotal = stories.reduce((s, st) => s + Math.max(0, st.estimatedDays ?? 0), 0);
+                  const estCount = stories.filter((st) => st.estimatedDays != null).length;
+                  const daysLeftRaw = stories
+                    .filter((st) => st.status !== "done")
+                    .reduce((s, st) => s + Math.max(0, st.daysLeft ?? 0), 0);
+                  const daysLeftFallback = stories
+                    .filter((st) => st.status !== "done")
+                    .reduce((s, st) => s + Math.max(0, st.daysLeft ?? st.estimatedDays ?? 0), 0);
+                  const unscheduled = stories.filter((st) => st.sprint == null).length;
+                  const unestimated = stories.filter((st) => st.estimatedDays == null).length;
+                  return { id: e.id, title: e.title, team: e.team, stories: stories.length, estCount, unscheduled, unestimated, estTotal, daysLeftRaw, daysLeftFallback };
+                });
+                const dump = {
+                  capturedAt: new Date().toISOString(),
+                  surface: "Burndown vs Burnup vs Team Progress vs Workload Balance",
+                  basis: { burndownBasis, burnupBasis, progressBasis },
+                  scope: {
+                    selectedEpicId,
+                    selectedInitiativeId,
+                    focusedEpicTitle: selectedEpicOption?.epic.title ?? null,
+                    scopeMonths,
+                    isMultiPeriodInsights,
+                  },
+                  burnDown: {
+                    epicCount: burnDownEpicsForSeries.length,
+                    epicIds: burnDownEpicIds,
+                    headline: burnDownBaseSeries.headline,
+                    todayPoint: today ? { date: today.date, scope: today.scope, completed: today.completed, daysLeft: today.daysLeft, idealCompleted: today.idealCompleted, idealDaysLeft: today.idealDaysLeft } : null,
+                    lastPoint: lastRow ? { date: lastRow.date, scope: lastRow.scope, completed: lastRow.completed, daysLeft: lastRow.daysLeft } : null,
+                  },
+                  burnUp: {
+                    epicCount: burnUpEpicsForSeries.length,
+                    epicIds: burnUpEpicIds,
+                    headline: burnUpBaseSeries.headline,
+                    todayPoint: todayUp ? { date: todayUp.date, scope: todayUp.scope, completed: todayUp.completed, daysLeft: todayUp.daysLeft, idealCompleted: todayUp.idealCompleted } : null,
+                    lastPoint: lastUp ? { date: lastUp.date, scope: lastUp.scope, completed: lastUp.completed, daysLeft: lastUp.daysLeft } : null,
+                  },
+                  diff: {
+                    epicsOnlyInBurnDown: onlyDown,
+                    epicsOnlyInBurnUp: onlyUp,
+                    headlineScopeDiff: (burnDownBaseSeries.headline?.scope ?? 0) - (burnUpBaseSeries.headline?.scope ?? 0),
+                    headlineCompletedDiff: (burnDownBaseSeries.headline?.completed ?? 0) - (burnUpBaseSeries.headline?.completed ?? 0),
+                  },
+                  perEpic,
+                  totals: {
+                    rawDaysLeftSumOpen: perEpic.reduce((s, e) => s + e.daysLeftRaw, 0),
+                    fallbackDaysLeftSum: perEpic.reduce((s, e) => s + e.daysLeftFallback, 0),
+                    estTotalSum: perEpic.reduce((s, e) => s + e.estTotal, 0),
+                    estCountSum: perEpic.reduce((s, e) => s + e.estCount, 0),
+                    storyCountSum: perEpic.reduce((s, e) => s + e.stories, 0),
+                    unscheduledSum: perEpic.reduce((s, e) => s + e.unscheduled, 0),
+                    unestimatedSum: perEpic.reduce((s, e) => s + e.unestimated, 0),
+                  },
+                };
+                try {
+                  await navigator.clipboard.writeText(JSON.stringify(dump, null, 2));
+                  alert("Diagnostics copied to clipboard. Paste in chat.");
+                } catch {
+                  alert("Copy failed — open devtools console to see the dump.");
+                  console.log(dump);
+                }
+              }}
+              title="Copy Burndown↔Burnup diagnostics (TEMPORARY)"
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-rose-300 bg-rose-50 px-2 py-1 text-[12px] font-medium text-rose-700 transition hover:bg-rose-100"
+            >
+              ⚙ Diag
+            </button>
             {/* Plan toggle — one switch that flips the focused-epic plan
              *  overlay (ideal line + "Due DD/MM" marker + "Epic scheduled"
              *  start marker) on or off. Defaults to ON so the chart still
