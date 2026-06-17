@@ -2261,6 +2261,13 @@ export function MonthAnalytics({
     const scheduledStories = selectedEpicOption != null && isMultiPeriodInsights
       ? scopeStories
       : scopeStories.filter((story) => story.sprint != null);
+    // Donut "Stories Progress" always counts the full scope — unscheduled
+    // stories belong to the epic regardless of sprint assignment and need
+    // to land in their current status bucket so the donut reconciles with
+    // the Epic Scope Burnup. Workload-by-assignee + month burndown still
+    // use `scheduledStories` (their unscheduled-inclusion follows the
+    // earliest-quarter pinning rule handled by `collectWorkloadStories`).
+    const donutStories = scopeStories;
     // Month burndown/flow scope: stories that are open at month start.
     const openAtMonthStartStories = scheduledStories.filter(
       (story) => story.status === "todo" || story.status === "inProgress",
@@ -2271,10 +2278,10 @@ export function MonthAnalytics({
     );
 
     const statusCounts = {
-      todo: scheduledStories.filter((story) => story.status === "todo").length,
-      inProgress: scheduledStories.filter((story) => story.status === "inProgress").length,
-      review: scheduledStories.filter((story) => story.status === "review").length,
-      done: scheduledStories.filter((story) => story.status === "done").length,
+      todo: donutStories.filter((story) => story.status === "todo").length,
+      inProgress: donutStories.filter((story) => story.status === "inProgress").length,
+      review: donutStories.filter((story) => story.status === "review").length,
+      done: donutStories.filter((story) => story.status === "done").length,
     };
     // The "Unscheduled" bucket was a workspace-wide
     // `story.sprint == null` tally that doesn't belong on a
