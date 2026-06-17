@@ -1781,6 +1781,10 @@ export function MonthAnalytics({
   const [burndownVisibleKeys, setBurndownVisibleKeys] = useState<string[]>([]);
   const [burnUpVisibleKeys, setBurnUpVisibleKeys] = useState<string[]>([]);
   const [cfdVisibleKeys, setCfdVisibleKeys] = useState<string[]>([]);
+  /** Toggle for the dashed "Unscheduled" overlay line that sits above
+   *  the CFD status bands. ON by default so the planner sees the
+   *  uncommitted-work count without having to opt in. */
+  const [cfdShowUnscheduled, setCfdShowUnscheduled] = useState(true);
   /** "Forecast" toggles per chart. When on, project a straight-line
    *  trend from today's actual point to its zero-crossing (burndown) /
    *  scope-crossing (burnup) using the current burn rate, and extend
@@ -3408,15 +3412,12 @@ export function MonthAnalytics({
     // counting 7 Done stories. By tracking every story, the per-day
     // loop now plots stories that were always review as a flat Done
     // band, matching the Workload Balance current-state view.
-    // Match the donut's scope rule: in a multi-period focused-epic
-    // view, the CFD covers the WHOLE epic (unscheduled included) so
-    // it reconciles with the burndown / burnup / donut totals. In
-    // single-quarter / sprint scope, unscheduled stories aren't part
-    // of the period in question and stay filtered out.
-    const includeUnscheduled = selectedEpicOption != null && isMultiPeriodInsights;
-    const storiesToTrack = includeUnscheduled
-      ? sourceStories
-      : sourceStories.filter((story) => story.sprint != null);
+    // CFD always covers the whole epic / scope — unscheduled stories
+    // land in their current status bucket like everything else, and a
+    // separate dashed overlay line (computed below) surfaces the count
+    // of "still unscheduled AND not yet Done" stories so the gap between
+    // that line and the band stack reads as "uncommitted work to plan."
+    const storiesToTrack = sourceStories;
     const now = new Date();
     const periodStartMs3 = new Date(planYear, scopeStartMonth - 1, 1).getTime();
     const nowDayMs3 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -3434,6 +3435,7 @@ export function MonthAnalytics({
           inProgress: null,
           review: null,
           done: null,
+          unscheduledNotDone: null,
         };
       }
       // Cutoff for the snapshot bisection = start of NEXT day local.
@@ -3457,6 +3459,7 @@ export function MonthAnalytics({
       let inProgress = 0;
       let review = 0;
       let done = 0;
+      let unscheduledNotDone = 0;
       for (const story of storiesToTrack) {
         const snapshot = latestSnapshotAtDayCached(story, cutoff);
         const status = isTodayCell
@@ -3466,6 +3469,16 @@ export function MonthAnalytics({
         else if (status === "inProgress") inProgress += 1;
         else if (status === "review") review += 1;
         else if (status === "done") done += 1;
+        // "Unscheduled" is a scope-qualifier, not a status. Done
+        // unscheduled stories aren't counted here — Done is Done. The
+        // overlay tracks committed-but-still-unscheduled work waiting to
+        // be slotted into a sprint. Sprint comes from the per-day
+        // snapshot when available so the line reflects historic
+        // scheduling state, not just the live one.
+        const sprintAtDay = isTodayCell
+          ? story.sprint
+          : (snapshot?.sprint ?? story.sprint);
+        if (sprintAtDay == null && status !== "done") unscheduledNotDone += 1;
       }
       const dayStart = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate()).getTime();
       const nowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -3477,6 +3490,7 @@ export function MonthAnalytics({
         inProgress,
         review,
         done,
+        unscheduledNotDone,
       };
     });
   }, [selectedEpicOption, monthEpics, planYear, month, scopeStartMonth, scopeEndMonth]);
@@ -6463,6 +6477,26 @@ export function MonthAnalytics({
                       />
                       ) : null,
                     )}
+                    {/* Unscheduled overlay — count of stories in the
+                     *  focused scope that are still without a sprint
+                     *  AND not yet Done. Dashed slate line on top of the
+                     *  status bands; the gap between this line and the
+                     *  Done band's top reads as "uncommitted work to
+                     *  plan." Done-unscheduled is treated as just Done
+                     *  (qualifier moot) so it doesn't double-count. */}
+                    {cfdShowUnscheduled ? (
+                      <Line
+                        type="monotone"
+                        dataKey="unscheduledNotDone"
+                        name="Unscheduled"
+                        stroke="#64748b"
+                        strokeWidth={1.6}
+                        strokeDasharray="5 4"
+                        dot={false}
+                        connectNulls={false}
+                        isAnimationActive={false}
+                      />
+                    ) : null}
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -6514,6 +6548,30 @@ export function MonthAnalytics({
               </button>
             );
           })}
+          {/* Unscheduled overlay chip — separate from the status bands
+           *  because it isn't a status; the swatch mimics the dashed
+           *  line style so the chip and line visually correspond. */}
+          <button
+            type="button"
+            onClick={() => setCfdShowUnscheduled((v) => !v)}
+            title={cfdShowUnscheduled ? "Hide the unscheduled-not-done overlay" : "Show the unscheduled-not-done overlay"}
+            aria-pressed={cfdShowUnscheduled}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 transition",
+              cfdShowUnscheduled ? "text-slate-900 hover:bg-slate-200/70" : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700",
+            )}
+          >
+            <span
+              aria-hidden
+              className="inline-flex h-2.5 w-3.5 shrink-0 items-center justify-center"
+              style={{ opacity: cfdShowUnscheduled ? 1 : 0.35 }}
+            >
+              <svg width="14" height="2" viewBox="0 0 14 2" fill="none">
+                <line x1="0" y1="1" x2="14" y2="1" stroke="#64748b" strokeWidth="1.6" strokeDasharray="3 2" />
+              </svg>
+            </span>
+            Unscheduled
+          </button>
         </div>
       </article>
       </div>
