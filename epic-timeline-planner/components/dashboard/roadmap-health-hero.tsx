@@ -2367,14 +2367,19 @@ function computeRoadmapStats(
           teamAcc.estTotal += 1;
           teamAcc.daysLeft += story.status === "done" ? 0 : 1;
         } else if (progressBasis === "days") {
-          const left = Math.max(
-            0,
-            story.status === "done"
-              ? 0
-              : Number(story.daysLeft ?? story.estimatedDays ?? 0),
-          );
-          teamAcc.estTotal += estDaysStory;
-          teamAcc.daysLeft += left;
+          // Canonical (matches `computeProgress` and the `sumEstimatedDays`
+          // / `sumDaysLeft` helpers): skip stories without an estimate so
+          // the Team Progress card agrees with Burndown / Burnup / the
+          // drilldown footers. The old `daysLeft ?? estimatedDays ?? 0`
+          // fallback used to inflate "left" for unestimated stories that
+          // had a stray `daysLeft` value — verify-insights-totals caught
+          // the 6d drift this fix removes.
+          if (story.estimatedDays != null) {
+            teamAcc.estTotal += story.estimatedDays;
+            if (story.status !== "done") {
+              teamAcc.daysLeft += story.daysLeft ?? story.estimatedDays;
+            }
+          }
         }
       }
 

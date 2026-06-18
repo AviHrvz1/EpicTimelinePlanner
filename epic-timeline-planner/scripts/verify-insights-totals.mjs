@@ -130,55 +130,68 @@ function storiesProgressDonut() {
   };
 }
 
-// 5. Team Progress (roadmap-health-hero.tsx `computeRoadmapStats`).
-//    Bucketed by epic.team — unassigned epics fall into __unassigned__
-//    bucket. We sum across the visible teams (i.e. drop unassigned)
-//    because the card shows 5 teams + an optional Unassigned row.
+// Helper — the canonical day reducers from lib/progress.ts.
+function canonicalEstSum(stories) {
+  let sum = 0;
+  for (const s of stories) {
+    if (s.estimatedDays == null) continue;
+    sum += s.estimatedDays;
+  }
+  return sum;
+}
+function canonicalLeftSum(stories) {
+  let sum = 0;
+  for (const s of stories) {
+    if (s.estimatedDays == null) continue;
+    if (s.status === "done") continue;
+    sum += s.daysLeft ?? s.estimatedDays;
+  }
+  return sum;
+}
+
+// 5. Team Progress (roadmap-health-hero.tsx `computeRoadmapStats`,
+//    post-fix). Bucketed by epic.team — unassigned epics fall into
+//    __unassigned__ bucket. The card shows 5 teams + an optional
+//    Unassigned row.
 function teamProgress() {
-  let estDays = 0, leftDays = 0;
+  const teamStories = [];
   let stories = 0, doneStories = 0;
   for (const ini of initiatives) {
     for (const epic of ini.epics ?? []) {
       const team = (epic.team ?? "").trim() || "__unassigned__";
       if (team === "__unassigned__") continue;
       for (const s of epic.userStories ?? []) {
-        const est = Math.max(0, Number(s.estimatedDays ?? 0));
-        const left = Math.max(0, s.status === "done" ? 0 : Number(s.daysLeft ?? s.estimatedDays ?? 0));
-        estDays += est;
-        leftDays += left;
+        teamStories.push(s);
         stories += 1;
         if (s.status === "done") doneStories += 1;
       }
     }
   }
   return {
-    scopeDays: estDays,
-    completedDays: estDays - leftDays,
+    scopeDays: canonicalEstSum(teamStories),
+    completedDays: canonicalEstSum(teamStories) - canonicalLeftSum(teamStories),
     scopeStories: stories,
     completedStories: doneStories,
   };
 }
 
-// 6. Workload Balance (month-analytics.tsx — Σ est days / Σ days left
-//    over the rows shown in the drilldown). For All Quarters + no
-//    focused-epic + no team filter, the chart bars sum over all
-//    stories (scheduled + earliest-quarter-pinned unscheduled).
+// 6. Workload Balance card + 3 drilldowns (post-fix, all aligned to
+//    canonicalEstSum / canonicalLeftSum).
 function workloadBalance() {
-  let estDays = 0, leftDays = 0;
+  const all = [];
   let stories = 0, doneStories = 0;
   for (const ini of initiatives) {
     for (const epic of ini.epics ?? []) {
       for (const s of epic.userStories ?? []) {
-        estDays += s.estimatedDays ?? 0;
-        leftDays += Math.max(0, s.daysLeft ?? 0);
+        all.push(s);
         stories += 1;
         if (s.status === "done") doneStories += 1;
       }
     }
   }
   return {
-    scopeDays: estDays,
-    completedDays: estDays - leftDays,
+    scopeDays: canonicalEstSum(all),
+    completedDays: canonicalEstSum(all) - canonicalLeftSum(all),
     scopeStories: stories,
     completedStories: doneStories,
   };

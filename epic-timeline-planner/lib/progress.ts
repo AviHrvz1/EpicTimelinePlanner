@@ -90,6 +90,45 @@ export const HEALTH_AT_RISK_DELTA = 4;
  *  progress %, health verdict, and the API daysLeft invariant. */
 const TERMINAL_STATUSES = new Set(["done"]);
 
+/**
+ * Sum estimated days across a list of stories using the canonical
+ * `computeProgress` rule — skip stories where `estimatedDays == null`
+ * so unestimated work doesn't quietly inflate a footer total.
+ * Mirrors the days-basis branch of `computeProgress` exactly; any
+ * UI surface that needs a "Σ Est days" cell over a filtered story
+ * list should reach for this instead of inlining its own reducer.
+ */
+export function sumEstimatedDays(
+  stories: readonly ProgressStoryInput[],
+): number {
+  let sum = 0;
+  for (const s of stories) {
+    if (s.estimatedDays == null) continue;
+    sum += s.estimatedDays;
+  }
+  return sum;
+}
+
+/**
+ * Sum remaining estimated days for OPEN (non-`done`) stories that have
+ * an estimate. Falls back to `estimatedDays` only when `daysLeft` is
+ * null AND `estimatedDays` is set — same fallback `computeProgress`
+ * uses, no further inflations. Skips unestimated stories entirely so
+ * a workspace with 44 unestimated stories doesn't read as "+~44d" of
+ * ghost remaining work.
+ */
+export function sumDaysLeft(
+  stories: readonly ProgressStoryInput[],
+): number {
+  let sum = 0;
+  for (const s of stories) {
+    if (s.estimatedDays == null) continue;
+    if (TERMINAL_STATUSES.has(s.status)) continue;
+    sum += s.daysLeft ?? s.estimatedDays;
+  }
+  return sum;
+}
+
 /** Count of weekdays (Mon–Fri) in the closed interval [from, to]. Returns 0 if to is before from. */
 export function workingDaysBetween(from: Date, to: Date): number {
   if (to < from) return 0;

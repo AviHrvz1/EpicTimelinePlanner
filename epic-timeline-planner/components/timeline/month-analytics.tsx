@@ -70,7 +70,7 @@ import { EpicItem, InitiativeItem, StoryDailySnapshotItem, UserStoryItem } from 
 import { cn } from "@/lib/utils";
 import { MONTH_TEAM_COLUMNS, monthTeamLabelForId } from "@/lib/month-team-board";
 import { clampYearSprint, epicEarliestQuarter, globalSprintFromMonthLane, monthLaneFromGlobalSprint, quarterOfMonth, sprintStartDate, sprintEndDate } from "@/lib/year-sprint";
-import { computeProgress, computeInitiativeProgress, type HealthStatus, type ProgressBasis, type ProgressResult } from "@/lib/progress";
+import { computeProgress, computeInitiativeProgress, sumDaysLeft, sumEstimatedDays, type HealthStatus, type ProgressBasis, type ProgressResult } from "@/lib/progress";
 import { computeEpicObservedStart, effectiveEpicStart } from "@/lib/epic-observed-start";
 import { computeEpicHealthVerdict } from "@/lib/epic-health";
 import { computeStoryHealthVerdict, formatStoryHealthTooltip } from "@/lib/story-health";
@@ -2379,13 +2379,16 @@ export function MonthAnalytics({
       today1Based = Math.min(totalDays, Math.max(1, Math.floor((startToday - monthStart) / 86400000) + 1));
     }
 
+    // Canonical: match `sumEstimatedDays` / `sumDaysLeft` (skip
+    // unestimated, no `?? 1` floor) so the month-burndown agrees with
+    // the Epic-Scope Burndown's headline for the same population.
     const startValue =
       metric === "daysLeft"
-        ? openAtMonthStartStories.reduce((sum, s) => sum + (s.estimatedDays ?? s.daysLeft ?? 1), 0)
+        ? sumEstimatedDays(openAtMonthStartStories)
         : openAtMonthStartStories.length;
     const actualRemaining =
       metric === "daysLeft"
-        ? openAtMonthStartStories.reduce((sum, s) => sum + Math.max(0, s.daysLeft ?? 0), 0)
+        ? sumDaysLeft(openAtMonthStartStories)
         : openAtMonthStartStories.length;
     const roundBurndown = (n: number) => (metric === "storyCount" ? Math.round(n) : Number(n.toFixed(1)));
     const burndown = dayDates.map((cal, idx) => {
@@ -2459,10 +2462,21 @@ export function MonthAnalytics({
       else if (story.status === "inProgress") row.storiesByStatus.inProgress += 1;
       else if (story.status === "review") row.storiesByStatus.review += 1;
       else if (story.status === "done") row.storiesByStatus.done += 1;
-      row.estimatedTotal += Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
+      // Canonical (matches `computeProgress` and the `sumEstimatedDays` /
+      // `sumDaysLeft` helpers): skip unestimated stories from the days
+      // totals, and treat review-state stories as remaining work (only
+      // `done` is terminal). Without this alignment the WB card showed
+      // a few days different from Burndown / Burnup / drilldown footers
+      // even on the same population — script `verify-insights-totals.mjs`
+      // catches drift on every CI run.
+      if (story.estimatedDays != null) {
+        row.estimatedTotal += story.estimatedDays;
+        if (story.status !== "done") {
+          row.daysLeftTotal += story.daysLeft ?? story.estimatedDays;
+        }
+      }
       if (story.status === "todo" || story.status === "inProgress") {
         row.openCount += 1;
-        row.daysLeftTotal += Math.max(0, story.daysLeft ?? 0);
       }
       byAssignee.set(assignee, row);
     }
@@ -2563,9 +2577,12 @@ export function MonthAnalytics({
             else if (story.status === "inProgress") row.storiesByStatus.inProgress += 1;
             else if (story.status === "review") row.storiesByStatus.review += 1;
             else if (story.status === "done") row.storiesByStatus.done += 1;
-            row.estimatedTotal += Math.max(0, story.estimatedDays ?? story.daysLeft ?? 0);
-            if (story.status === "todo" || story.status === "inProgress") {
-              row.daysLeftTotal += Math.max(0, story.daysLeft ?? 0);
+            // Canonical (matches computeProgress + sumEstimatedDays / sumDaysLeft).
+            if (story.estimatedDays != null) {
+              row.estimatedTotal += story.estimatedDays;
+              if (story.status !== "done") {
+                row.daysLeftTotal += story.daysLeft ?? story.estimatedDays;
+              }
             }
             byTeam.set(teamKey, row);
           }
@@ -4972,10 +4989,10 @@ export function MonthAnalytics({
                       </th>
                       {/* Σ totals over the currently visible (filtered) rows. */}
                       <th className="min-w-0 px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
-                        Σ <span className="text-slate-300">|</span> {statusDrilldownStories.reduce((sum, s) => sum + (s.estimatedDays ?? 0), 0)}
+                        Σ <span className="text-slate-300">|</span> {sumEstimatedDays(statusDrilldownStories)}
                       </th>
                       <th className="min-w-0 px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
-                        Σ <span className="text-slate-300">|</span> {statusDrilldownStories.reduce((sum, s) => sum + (s.daysLeft ?? 0), 0)}
+                        Σ <span className="text-slate-300">|</span> {sumDaysLeft(statusDrilldownStories)}
                       </th>
                     </tr>
                     </>
@@ -6093,10 +6110,10 @@ export function MonthAnalytics({
                     </th>
                     {/* Σ totals over the currently visible (filtered) rows. */}
                     <th className="min-w-0 px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
-                      Σ <span className="text-slate-300">|</span> {workloadDrilldownStories.reduce((sum, s) => sum + (s.estimatedDays ?? 0), 0)}
+                      Σ <span className="text-slate-300">|</span> {sumEstimatedDays(workloadDrilldownStories)}
                     </th>
                     <th className="min-w-0 px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
-                      Σ <span className="text-slate-300">|</span> {workloadDrilldownStories.reduce((sum, s) => sum + (s.daysLeft ?? 0), 0)}
+                      Σ <span className="text-slate-300">|</span> {sumDaysLeft(workloadDrilldownStories)}
                     </th>
                   </tr>
                 </thead>
@@ -6876,10 +6893,10 @@ export function MonthAnalytics({
                               </th>
                               {/* Σ totals over the currently visible (filtered) rows. */}
                               <th className="min-w-0 px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
-                                Σ <span className="text-slate-300">|</span> {monthLoadDrilldownStories.reduce((sum, s) => sum + (s.estimatedDays ?? 0), 0)}
+                                Σ <span className="text-slate-300">|</span> {sumEstimatedDays(monthLoadDrilldownStories)}
                               </th>
                               <th className="min-w-0 px-2 py-0.5 text-right text-[11px] font-semibold tabular-nums text-slate-700">
-                                Σ <span className="text-slate-300">|</span> {monthLoadDrilldownStories.reduce((sum, s) => sum + (s.daysLeft ?? 0), 0)}
+                                Σ <span className="text-slate-300">|</span> {sumDaysLeft(monthLoadDrilldownStories)}
                               </th>
                             </tr>
                           </thead>
