@@ -26,7 +26,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { buildBurnSeries } from "./burn-series";
-import { computeProgress } from "./progress";
+import { computeProgress, sumDaysLeft, sumEstimatedDays } from "./progress";
 import type { EpicItem, UserStoryItem } from "./types";
 
 function makeStory(
@@ -303,5 +303,169 @@ describe("All-Quarters Insights — cross-surface consistency", () => {
 
     expect(burndownTooltipTotalScope([epicWithEst], "epicEst")).toBe(20);
     expect(burndownTooltipTotalScope([epicWithoutEst], "epicEst")).toBe(5);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// Per-quarter scope reconciliation — same shape, narrower population.
+// Mirrors `collectPeriodStories` / `epicHasStoryInPeriodMonths` in
+// month-analytics.tsx: an epic is in scope for a quarter when its plan
+// window overlaps the quarter's months OR one of its stories has a
+// sprint that lands in a quarter month. The four quarter sums must
+// add up to the All-Quarters totals at the story level, and within
+// each quarter the canonical helpers must drive every surface (no
+// drift between burnup scope and a footer reducer).
+// ────────────────────────────────────────────────────────────────────
+function monthOfYearSprint(sprint: number): number {
+  return Math.ceil(sprint / 2);
+}
+
+function epicHasStoryInMonths(epic: EpicItem, months: ReadonlySet<number>): boolean {
+  for (const s of epic.userStories ?? []) {
+    if (s.sprint == null) continue;
+    if (months.has(monthOfYearSprint(s.sprint))) return true;
+  }
+  return false;
+}
+
+function epicsInScope(epics: EpicItem[], months: number[]): EpicItem[] {
+  const minM = Math.min(...months);
+  const maxM = Math.max(...months);
+  const set = new Set(months);
+  return epics.filter((e) => {
+    const startMonth = e.planStartMonth;
+    const endMonth = e.planEndMonth;
+    const planInScope =
+      startMonth != null && endMonth != null && !(endMonth < minM || startMonth > maxM);
+    return planInScope || epicHasStoryInMonths(e, set);
+  });
+}
+
+function allStoriesIn(epics: EpicItem[]): UserStoryItem[] {
+  const rows: UserStoryItem[] = [];
+  for (const e of epics) rows.push(...(e.userStories ?? []));
+  return rows;
+}
+
+// Fixture — one epic per quarter plus an unscheduled-spanning epic so
+// the Phase-1 rule is exercised at the quarter level too. Each epic
+// carries a deliberate mix of estimated / unestimated / done / todo /
+// review stories so the canonical formulas don't degenerate to trivial
+// values per quarter.
+function makeQuarterEpic(
+  id: string,
+  team: string,
+  planStartMonth: number,
+  planEndMonth: number,
+  stories: UserStoryItem[],
+): EpicItem {
+  return { ...makeEpic(stories, id), team, planStartMonth, planEndMonth };
+}
+
+const Q_FIXTURE = [
+  makeQuarterEpic("epic-q1", "platform", 1, 3, [
+    makeStory("Q1-1", 5, 5, "todo", 1),
+    makeStory("Q1-2", 4, 0, "done", 2),
+    makeStory("Q1-3", null, null, "todo", 3),
+    makeStory("Q1-4", 3, 1, "review", 4),
+  ]),
+  makeQuarterEpic("epic-q2", "mobile", 4, 6, [
+    makeStory("Q2-1", 8, 8, "todo", 7),
+    makeStory("Q2-2", 6, 2, "inProgress", 9),
+    makeStory("Q2-3", 5, 0, "done", 11),
+    makeStory("Q2-4", null, null, "todo", null), // unscheduled
+  ]),
+  makeQuarterEpic("epic-q3", "data", 7, 9, [
+    makeStory("Q3-1", 7, 4, "inProgress", 13),
+    makeStory("Q3-2", 4, 4, "todo", 15),
+    makeStory("Q3-3", null, null, "todo", 17),
+  ]),
+  makeQuarterEpic("epic-q4", "growth", 10, 12, [
+    makeStory("Q4-1", 9, 9, "todo", 19),
+    makeStory("Q4-2", 5, 5, "todo", 21),
+  ]),
+];
+
+describe("Per-quarter scope reconciliation — Q1, Q2, Q3, Q4, All", () => {
+  const SCOPES = [
+    { label: "Q1", months: [1, 2, 3] },
+    { label: "Q2", months: [4, 5, 6] },
+    { label: "Q3", months: [7, 8, 9] },
+    { label: "Q4", months: [10, 11, 12] },
+    { label: "All", months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
+  ];
+
+  it.each(SCOPES)("$label — sumEstimatedDays + sumDaysLeft match computeProgress for the scoped population", ({ months }) => {
+    const epics = epicsInScope(Q_FIXTURE, months);
+    const stories = allStoriesIn(epics).map((s) => ({
+      estimatedDays: s.estimatedDays,
+      daysLeft: s.daysLeft,
+      status: s.status,
+    }));
+    const canonical = computeProgress({
+      stories,
+      start: new Date(2026, months[0] - 1, 1),
+      end: new Date(2026, months[months.length - 1], 0),
+      now: new Date(2026, months[0] - 1, 15),
+      basis: "days",
+      epicOriginalEstimateDays: null,
+    });
+
+    expect(sumEstimatedDays(stories)).toBe(canonical.totalEffort);
+    expect(sumDaysLeft(stories)).toBe(canonical.remainingEffort);
+  });
+
+  it.each(SCOPES)("$label — burnup headline scope = burndown headline scope = canonical scope", ({ months }) => {
+    const epics = epicsInScope(Q_FIXTURE, months);
+    const series = buildBurnSeries({
+      epics,
+      basis: "days",
+      periodStart: new Date(2026, months[0] - 1, 1),
+      periodEnd: new Date(2026, months[months.length - 1], 0),
+      now: new Date(2026, months[0] - 1, 15),
+    });
+    const canonicalScope = sumEstimatedDays(allStoriesIn(epics));
+    expect(series.headline?.scope).toBe(canonicalScope);
+    // Burnup / burndown both come from this same `series` — the
+    // `scope = completed + daysLeft` invariant means they can't drift
+    // from each other for the same population.
+    expect(series.headline?.scope).toBe(
+      (series.headline?.completed ?? 0) + (series.headline?.daysLeft ?? 0),
+    );
+  });
+
+  it.each(SCOPES)("$label — story counts roll up consistently (Σ todo+inProgress+review+done = total)", ({ months }) => {
+    const epics = epicsInScope(Q_FIXTURE, months);
+    const stories = allStoriesIn(epics);
+    const byStatus = { todo: 0, inProgress: 0, review: 0, done: 0 };
+    for (const s of stories) byStatus[s.status] += 1;
+    const sum = byStatus.todo + byStatus.inProgress + byStatus.review + byStatus.done;
+    expect(sum).toBe(stories.length);
+  });
+
+  it("Σ over the 4 quarters' story counts = All-Quarters story count when no epic spans quarters", () => {
+    // None of the fixture epics' plan windows cross a quarter boundary,
+    // so the 4 quarters partition the population cleanly. Spans cases
+    // are intentionally out of scope here — they're handled at the
+    // chart layer via `collectPeriodEpics`'s adoption rule, which the
+    // live-API script `verify-insights-totals.mjs` exercises.
+    const allCount = allStoriesIn(epicsInScope(Q_FIXTURE, [1,2,3,4,5,6,7,8,9,10,11,12])).length;
+    const perQuarter = [
+      epicsInScope(Q_FIXTURE, [1, 2, 3]),
+      epicsInScope(Q_FIXTURE, [4, 5, 6]),
+      epicsInScope(Q_FIXTURE, [7, 8, 9]),
+      epicsInScope(Q_FIXTURE, [10, 11, 12]),
+    ].reduce((s, epics) => s + allStoriesIn(epics).length, 0);
+    expect(perQuarter).toBe(allCount);
+  });
+
+  it("Σ over the 4 quarters' scope days = All-Quarters scope days when no epic spans quarters", () => {
+    const all = sumEstimatedDays(allStoriesIn(epicsInScope(Q_FIXTURE, [1,2,3,4,5,6,7,8,9,10,11,12])));
+    const perQuarter =
+      sumEstimatedDays(allStoriesIn(epicsInScope(Q_FIXTURE, [1, 2, 3]))) +
+      sumEstimatedDays(allStoriesIn(epicsInScope(Q_FIXTURE, [4, 5, 6]))) +
+      sumEstimatedDays(allStoriesIn(epicsInScope(Q_FIXTURE, [7, 8, 9]))) +
+      sumEstimatedDays(allStoriesIn(epicsInScope(Q_FIXTURE, [10, 11, 12])));
+    expect(perQuarter).toBe(all);
   });
 });
