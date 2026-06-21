@@ -1399,7 +1399,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
    * / Done in the unified Statuses dropdown. Lifted here so the Gantt can
    * apply the same cut and only show matching bars.
    */
-  const [ganttStatusFilter, setGanttStatusFilter] = useState<Set<"backlogEpic" | "todo" | "inProgress" | "review" | "done">>(
+  const [ganttStatusFilter, setGanttStatusFilter] = useState<Set<"backlogEpic" | "todo" | "inProgress" | "review" | "done" | "unscheduled">>(
     () => new Set(),
   );
   /** Hand-off filter for the Backlog Workspace, set when the planner
@@ -1688,7 +1688,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     }
   }, []);
   const handlePanelStatusFilterDerivedChange = useCallback(
-    (next: Set<"backlogEpic" | "todo" | "inProgress" | "review" | "done">) => {
+    (next: Set<"backlogEpic" | "todo" | "inProgress" | "review" | "done" | "unscheduled">) => {
       setGanttStatusFilter(next);
       if (next.size > 0) {
         // Picking a status verdict implies the planner wants to SEE the
@@ -1740,7 +1740,42 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   }, [heroScope]);
 
   const handleWorkProgressSliceClick = useCallback(
-    (status: "backlogEpic" | "todo" | "inProgress" | "review" | "done", label: string) => {
+    (status: "backlogEpic" | "todo" | "inProgress" | "review" | "done" | "unscheduled", label: string) => {
+      // "unscheduled" — clicked on the Work Progress · Epics donut's
+      // "Unscheduled" slice (epics without plan dates). Routed to:
+      //   · Backlog mode → set the Status column filter to "Unscheduled"
+      //     so the table shows stories whose `sprint == null`. Replaces
+      //     the prior status filter (no toggle / merge) so the planner
+      //     lands directly on the unscheduled rows without other
+      //     workflow buckets confusing the read.
+      //   · Roadmap Planning + epic scope → REPLACE `ganttStatusFilter`
+      //     with `{unscheduled}` so the epic panel + Gantt narrow to
+      //     epics with no plan dates, matching the donut slice's
+      //     population exactly. Workflow statuses stay implicitly "all"
+      //     (no AND-narrowing) — clicking again clears it.
+      if (status === "unscheduled") {
+        const isAlreadyIsolated =
+          ganttStatusFilter.size === 1 && ganttStatusFilter.has("unscheduled");
+        const next = isAlreadyIsolated ? new Set<typeof status>() : new Set<typeof status>(["unscheduled"]);
+        handlePanelStatusFilterDerivedChange(next as Set<"backlogEpic" | "todo" | "inProgress" | "review" | "done" | "unscheduled">);
+        if (topMode === "backlog") {
+          setBacklogIncomingStatusFilter(isAlreadyIsolated ? [] : ["unscheduled"]);
+          if (!isAlreadyIsolated) {
+            setBacklogIncomingWorkItemFilter([heroScope]);
+            clearHealthFilterEverywhere();
+            clearBacklogHygieneEverywhere();
+          } else {
+            setBacklogIncomingWorkItemFilter([]);
+          }
+          return;
+        }
+        if (isAlreadyIsolated) return;
+        // Roadmap Planning (or any other non-backlog mode at epic scope)
+        // — `ganttStatusFilter` now contains just "unscheduled", and the
+        // Gantt's `initiativeMatchesGanttStatusFilter` reads it. No mode
+        // switch; the planner stays where they are.
+        return;
+      }
       // Backlog mode: every click sets BOTH `workItemFilter=[heroScope]`
       // and toggles the picked status. Replace+toggle as confirmed in
       // plan — the donut click expresses a specific intent so we

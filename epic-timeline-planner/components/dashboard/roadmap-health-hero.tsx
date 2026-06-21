@@ -54,7 +54,7 @@ import { cn } from "@/lib/utils";
 // is to surface "work committed to but not yet placed" as a single
 // slice the planner can click to see what still needs scheduling.
 // Stories in scheduled epics fall back to normal status bucketing.
-type StoryExecStatus = "backlogEpic" | "todo" | "inProgress" | "review" | "done";
+type StoryExecStatus = "backlogEpic" | "todo" | "inProgress" | "review" | "done" | "unscheduled";
 
 /** Bi-directional map for the Health Distribution legend ↔ middle-panel
  *  HealthFilterMenu wiring. Labels match the strings in the donut slices. */
@@ -81,6 +81,12 @@ const STATUS_LABEL_TO_VALUE: Record<string, StoryExecStatus> = {
   "In progress": "inProgress",
   "Review / testing": "review",
   "Done": "done",
+  // "Unscheduled" — epic-scope donut slice for epics without plan dates.
+  // Routed by the app to the Gantt's epic filter (matches `planStartMonth
+  // == null`) AND to the Backlog table's status column "Unscheduled"
+  // option (matches `story.sprint == null`) — same vocabulary the planner
+  // already sees on both surfaces.
+  "Unscheduled": "unscheduled",
 };
 const STATUS_VALUE_TO_LABEL: Record<StoryExecStatus, string> = {
   backlogEpic: "Backlog epic",
@@ -88,6 +94,7 @@ const STATUS_VALUE_TO_LABEL: Record<StoryExecStatus, string> = {
   inProgress: "In progress",
   review: "Review / testing",
   done: "Done",
+  unscheduled: "Unscheduled",
 };
 
 /**

@@ -1347,7 +1347,7 @@ type InitiativeListPanelProps = {
    *  initiatives by the initiative-level workflow rollup (same recipe
    *  as the Work Progress donut). At other scopes the existing
    *  `panelStatusFilters` dropdown semantics is preserved. */
-  externalStatusFilter?: ReadonlySet<"todo" | "inProgress" | "review" | "done" | "backlogEpic"> | null;
+  externalStatusFilter?: ReadonlySet<"todo" | "inProgress" | "review" | "done" | "backlogEpic" | "unscheduled"> | null;
   /** Parent-owned team filter — currently driven by the Hero's Team
    *  Progress row clicks. When non-empty, the panel keeps initiatives
    *  whose epics include at least one belonging to the picked team(s).
@@ -1368,7 +1368,7 @@ type InitiativeListPanelProps = {
    *  non-matching epics from the bars too. Plan-only statuses (Scheduled /
    *  Unscheduled) are ignored here since the Gantt only renders scheduled
    *  epics anyway. */
-  onPanelStatusFilterDerivedChange?: (next: Set<UserStoryItem["status"]>) => void;
+  onPanelStatusFilterDerivedChange?: (next: Set<UserStoryItem["status"] | "backlogEpic" | "unscheduled">) => void;
   /** Fires with a derived Set of selected quarters whenever the panel's
    *  quarter filter changes. Empty Set means "All Quarters". Parent uses
    *  this to also cut the Gantt rows to epics whose plan-start quarter is
@@ -2930,24 +2930,22 @@ export function InitiativeListPanel({
   // is gated by the matching Hero donut state, mirroring the existing
   // Teams-tile pattern.
   //
-  // Health chips reveal on EITHER trigger:
-  //   (a) The Gantt chip toolbar's "Health" button — opens the
-  //       Roadmap Health popover and flips `showRoadmapProgress` (mirrored
-  //       here as `storyProgressDetailsVisible`). Treat that toggle as
-  //       "the planner is thinking about health right now" and surface
-  //       the chips on every initiative + epic row.
-  //   (b) A Health Distribution donut slice pick — non-empty
-  //       `healthFilter` set means the planner already chose a specific
-  //       verdict to focus on; the chips give per-row context.
-  // Execution-status chips ONLY reveal on a Work Progress donut pick
-  // (non-empty `externalStatusFilter`) — there is no equivalent "Status"
-  // button on the toolbar, so a slice pick is the single trigger.
+  // Each chip type tracks its OWN filter dimension — picking a status
+  // slice no longer reveals a health chip, and vice versa. The earlier
+  // `|| storyProgressDetailsVisible` fallback on `showHealthChips`
+  // coupled the two via `setShowRoadmapProgress(true)` in
+  // `handlePanelStatusFilterDerivedChange`, so filtering by "To Do"
+  // (workflow status) surfaced "On Track" (health verdict) on the same
+  // row — confusing planners who expect the row label to match the
+  // axis they picked. Both chips are independent now: pick a Health
+  // Distribution slice (or set `healthFilter` programmatically) to
+  // reveal health chips, pick a Work Progress slice to reveal status
+  // chips. The two can also coexist when both filters are active.
   //
   // Plan chips (Scheduled / Unscheduled / Q1-Q2) are NOT gated — they
   // describe schedule, not workflow status, and are independent of the
   // hero state.
-  const showHealthChips =
-    (healthFilter?.size ?? 0) > 0 || storyProgressDetailsVisible;
+  const showHealthChips = (healthFilter?.size ?? 0) > 0;
   const showStatusChips = (externalStatusFilter?.size ?? 0) > 0;
   const { active } = useDndContext();
   const isTimelineEpicDragActive = active != null && String(active.id).startsWith("timeline-epic:");
@@ -3267,19 +3265,72 @@ export function InitiativeListPanel({
     });
   };
   /**
-   * Bridge the panel's local execution-status filter to the parent so the
-   * Gantt can apply the same cut. Only emits the 4 execution statuses
-   * (todo / inProgress / review / done) — plan statuses Scheduled /
-   * Unscheduled don't translate to the Gantt's "show this bar?" question.
+   * Inbound sync — the Hero's Work Progress · Epics donut click sets the
+   * parent's `ganttStatusFilter` via `handleWorkProgressSliceClick`, but
+   * the panel dropdown is driven by its own `panelStatusFilters` state.
+   * Without this effect the parent's "Unscheduled" filter wouldn't show
+   * as a checked row in the dropdown (the dropdown would still read
+   * "All Statuses" even though the Gantt narrowed). The translation maps
+   * back to the panel's display labels — "unscheduled" / "backlogEpic"
+   * both surface as the dropdown's "Unscheduled" row since they share
+   * one underlying state (epic.planStartMonth == null).
+   */
+  const externalStatusFilterRef = useRef<ReadonlySet<string> | null | undefined>(externalStatusFilter);
+  externalStatusFilterRef.current = externalStatusFilter;
+  useEffect(() => {
+    if (externalStatusFilter == null) return;
+    const next: typeof panelStatusFilters = [];
+    if (externalStatusFilter.has("todo")) next.push("To Do");
+    if (externalStatusFilter.has("inProgress")) next.push("In Progress");
+    if (externalStatusFilter.has("review")) next.push("Review / Testing");
+    if (externalStatusFilter.has("done")) next.push("Done");
+    if (externalStatusFilter.has("backlogEpic") || externalStatusFilter.has("unscheduled")) {
+      next.push("Unscheduled");
+    }
+    if (next.length === 0) next.push("all");
+    setPanelStatusFilters(next);
+  }, [externalStatusFilter]);
+  /**
+   * Outbound sync — bridge the panel's local execution-status filter to
+   * the parent so the Gantt can apply the same cut. Emits the 4 workflow
+   * statuses plus the planning-state "unscheduled" alias (the panel
+   * dropdown's "Unscheduled" row is the user-facing equivalent of
+   * `backlogEpic` / `unscheduled` on the parent side). Skips the emit
+   * when the derived set matches what just arrived via
+   * `externalStatusFilter` — that's the echo from the inbound sync
+   * above and re-emitting would bounce the parent's setter forever.
+   * "Scheduled" still doesn't translate (no negative filter on Gantt).
    */
   useEffect(() => {
     if (!onPanelStatusFilterDerivedChange) return;
-    const set = new Set<UserStoryItem["status"]>();
+    const set = new Set<"todo" | "inProgress" | "review" | "done" | "backlogEpic" | "unscheduled">();
     if (!panelStatusFilters.includes("all")) {
       if (panelStatusFilters.includes("To Do")) set.add("todo");
       if (panelStatusFilters.includes("In Progress")) set.add("inProgress");
       if (panelStatusFilters.includes("Review / Testing")) set.add("review");
       if (panelStatusFilters.includes("Done")) set.add("done");
+      if (panelStatusFilters.includes("Unscheduled")) set.add("unscheduled");
+    }
+    // Echo guard — when the inbound sync just wrote `panelStatusFilters`
+    // from `externalStatusFilter`, the derived set will match the external
+    // by construction. Re-emitting creates a new Set identity on the
+    // parent and re-triggers our inbound sync, causing a render loop.
+    const external = externalStatusFilterRef.current;
+    if (external && external.size === set.size) {
+      let allMatch = true;
+      for (const v of set) {
+        // Both names of the planning-state alias are accepted as a match
+        // — the parent may have either "unscheduled" (donut-click route)
+        // or "backlogEpic" (legacy story-scope route) for the same state.
+        if (v === "unscheduled") {
+          if (!(external.has("unscheduled") || external.has("backlogEpic"))) {
+            allMatch = false; break;
+          }
+          continue;
+        }
+        if (!external.has(v)) { allMatch = false; break; }
+      }
+      if (allMatch) return;
     }
     onPanelStatusFilterDerivedChange(set);
   }, [panelStatusFilters, onPanelStatusFilterDerivedChange]);

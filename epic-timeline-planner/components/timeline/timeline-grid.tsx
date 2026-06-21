@@ -1941,7 +1941,7 @@ type TimelineGridProps = {
    * `healthFilterExternal`; the planner can have one or the other (the
    * dropdown enforces mutual exclusion in the panel).
    */
-  ganttStatusFilterExternal?: Set<"backlogEpic" | "todo" | "inProgress" | "review" | "done">;
+  ganttStatusFilterExternal?: Set<"backlogEpic" | "todo" | "inProgress" | "review" | "done" | "unscheduled">;
   /**
    * Quarter filter mirrored from the panel. When non-empty, the Gantt
    * drops epics whose plan-start quarter isn't in the Set. Lets the
@@ -6630,7 +6630,14 @@ export function TimelineGrid({
       // side panel surfaces those epics. The Gantt naturally empties
       // when this is the only filter, because backlog epics have no
       // bars to draw — no special-casing needed downstream.
-      if (ganttStatusFilter.has("backlogEpic") && epic.planStartMonth == null) {
+      // Both "backlogEpic" (story-scope donut "Backlog epic" slice) and
+      // "unscheduled" (epic-scope donut "Unscheduled" slice) name the same
+      // underlying state: epic without plan dates. Match either filter
+      // value against `planStartMonth == null`.
+      if (
+        (ganttStatusFilter.has("backlogEpic") || ganttStatusFilter.has("unscheduled")) &&
+        epic.planStartMonth == null
+      ) {
         return true;
       }
       // Real-status match: roll-up the epic's status (one verdict per
@@ -6644,10 +6651,14 @@ export function TimelineGrid({
   const initiativeMatchesGanttStatusFilter = useCallback(
     (initiative: InitiativeItem): boolean => {
       if (!ganttStatusFilter || ganttStatusFilter.size === 0) return true;
-      // `backlogEpic` is a planning-status slice (epic without a plan
-      // window), not a workflow rollup. Keep the legacy any-epic logic
-      // for that specific slice — there's no initiative-level analog.
-      if (ganttStatusFilter.has("backlogEpic")) {
+      // `backlogEpic` / `unscheduled` are planning-status slices (epic
+      // without a plan window), not workflow rollups. Keep the legacy
+      // any-epic logic for them — initiative-level "unscheduled" isn't
+      // a real concept, but the planner expects the parent initiative
+      // of an unscheduled epic to still surface in the side panel.
+      if (
+        ganttStatusFilter.has("backlogEpic") || ganttStatusFilter.has("unscheduled")
+      ) {
         const epics = initiative.epics ?? [];
         if (epics.some((e) => e.planStartMonth == null)) return true;
       }
