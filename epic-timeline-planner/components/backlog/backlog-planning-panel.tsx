@@ -330,7 +330,9 @@ type BacklogPlanningPanelProps = {
         /** Donut category names — story-scope uses `missingDescription`,
          *  `missingEstimate`, `missingSprint`, `stalled`; epic-scope uses
          *  `unestimated`, `unscheduled`, `noStories`, `hasUnestimatedChildren`.
-         *  `all-story` / `all-epic` toggle every category in that scope. */
+         *  `missingTeam` / `missingAssignee` are cross-scope (both donuts
+         *  emit them). `all-story` / `all-epic` toggle every category in
+         *  that scope. */
         category:
           | "missingDescription"
           | "missingEstimate"
@@ -340,6 +342,8 @@ type BacklogPlanningPanelProps = {
           | "unscheduled"
           | "noStories"
           | "hasUnestimatedChildren"
+          | "missingTeam"
+          | "missingAssignee"
           | "all-story"
           | "all-epic";
         on: boolean;
@@ -2931,6 +2935,13 @@ type HygieneFlags = {
    *  estimate. Mirrors the donut's "Unestimated stories" slice at
    *  epic scope. */
   unestimatedStories: boolean;
+  /** Cross-scope: item has no team owner (epic.team or, for a story,
+   *  story.team falling back to epic.team). Mirrors the new
+   *  "Missing team" Needs Attention slice. */
+  missingTeam: boolean;
+  /** Cross-scope: item has no person assignee. Mirrors the new
+   *  "Unassigned" Needs Attention slice. */
+  missingAssignee: boolean;
 };
 
 function hasEmptyText(value: string | null | undefined): boolean {
@@ -2951,9 +2962,16 @@ function applyHygieneFilters(
 ): InitiativeItem[] {
   const anyFlagOn =
     flags.missingDescription || flags.missingEstimate || flags.unscheduled || flags.stalled ||
-    flags.noStories || flags.unestimatedStories;
+    flags.noStories || flags.unestimatedStories ||
+    flags.missingTeam || flags.missingAssignee;
   if (!anyFlagOn) return rows;
-  const storyQualifies = (story: { description?: string | null; estimatedDays?: number | null; sprint?: number | null; id: string; status?: string }) => {
+  // Story qualification needs the parent epic to resolve the effective
+  // team (story.team falls back to epic.team — matches the rule used
+  // by the hero's `missingTeam` increment and the rest of the panel).
+  // We thread it through as a closure variable since the per-story
+  // callsites already iterate epics in the outer loop.
+  let currentEpicForStory: { team?: string | null } | null = null;
+  const storyQualifies = (story: { description?: string | null; estimatedDays?: number | null; sprint?: number | null; id: string; status?: string; team?: string | null; assignee?: string | null }) => {
     // Done stories are exempt from missing-estimate / no-sprint /
     // stalled (matches the hero count rules): once a story is closed
     // those fields are no longer planning blockers.
@@ -2962,11 +2980,17 @@ function applyHygieneFilters(
     if (flags.missingEstimate && (done || story.estimatedDays != null)) return false;
     if (flags.unscheduled && (done || story.sprint != null)) return false;
     if (flags.stalled && (done || !stalledStoryIds.has(story.id))) return false;
+    if (flags.missingAssignee && (done || !hasEmptyText(story.assignee))) return false;
+    if (flags.missingTeam) {
+      if (done) return false;
+      const effectiveTeam = (story.team ?? currentEpicForStory?.team) ?? null;
+      if (!hasEmptyText(effectiveTeam)) return false;
+    }
     // Epic-only flags don't filter stories on their own — they survive
     // here so an epic that qualifies still shows ITS children.
     return true;
   };
-  const epicQualifies = (epic: { description?: string | null; originalEstimateDays?: number | null; planStartMonth?: number | null; userStories?: { estimatedDays?: number | null }[] }) => {
+  const epicQualifies = (epic: { description?: string | null; originalEstimateDays?: number | null; planStartMonth?: number | null; team?: string | null; assignee?: string | null; userStories?: { estimatedDays?: number | null }[] }) => {
     if (flags.missingDescription && !hasEmptyText(epic.description)) return false;
     if (flags.missingEstimate && epic.originalEstimateDays != null) return false;
     if (flags.unscheduled && epic.planStartMonth != null) return false;
@@ -2975,6 +2999,8 @@ function applyHygieneFilters(
       flags.unestimatedStories &&
       !(epic.userStories ?? []).some((s) => s.estimatedDays == null)
     ) return false;
+    if (flags.missingTeam && !hasEmptyText(epic.team)) return false;
+    if (flags.missingAssignee && !hasEmptyText(epic.assignee)) return false;
     // "stalled" doesn't apply at epic level.
     return true;
   };
@@ -2982,6 +3008,11 @@ function applyHygieneFilters(
     .map((initiative) => {
       const epics = (initiative.epics ?? [])
         .map((epic) => {
+          // Thread the current epic to storyQualifies so the
+          // `missingTeam` flag can resolve the effective team
+          // (story.team ?? epic.team) without changing the predicate
+          // signature shape downstream consumers rely on.
+          currentEpicForStory = epic;
           if (scope === "epic") {
             // Strict epic-level: drop unless the epic ITSELF
             // qualifies. Stories pass through unchanged — they get
@@ -5573,6 +5604,14 @@ export function BacklogPlanningPanel({
    *  estimate. Mirrors the donut's "Unestimated stories" slice.
    *  Always toggles to Epic scope. */
   const [hygieneUnestimatedStories, setHygieneUnestimatedStories] = useState(false);
+  /** Cross-scope: filters items whose team owner is null. Story rows
+   *  resolve the effective team as `story.team ?? epic.team` — same
+   *  precedence the rest of the panel uses. Mirrors the new
+   *  "Missing team" Needs Attention slice. */
+  const [hygieneMissingTeam, setHygieneMissingTeam] = useState(false);
+  /** Cross-scope: filters items whose person assignee is null.
+   *  Mirrors the new "Unassigned" Needs Attention slice. */
+  const [hygieneMissingAssignee, setHygieneMissingAssignee] = useState(false);
   /** Stalled-detection settings — workspace-wide via localStorage. The
    *  threshold (days + statuses) parameterizes what the toggle catches.
    *  Default: 14 days for `inProgress` or `review`. */
@@ -5739,6 +5778,8 @@ export function BacklogPlanningPanel({
       setHygieneStalled(on);
       setHygieneNoStories(false);
       setHygieneUnestimatedStories(false);
+      setHygieneMissingTeam(on);
+      setHygieneMissingAssignee(on);
       // `on: false` arrives from the cross-chart mutual-exclusion
       // pathway (clicking Work Progress / Health Distribution clears
       // hygiene). Don't touch `workItemFilter` in that case — the
@@ -5753,6 +5794,8 @@ export function BacklogPlanningPanel({
       setHygieneUnscheduled(on);
       setHygieneNoStories(on);
       setHygieneUnestimatedStories(on);
+      setHygieneMissingTeam(on);
+      setHygieneMissingAssignee(on);
       // Stalled is story-only; leave it untouched for the epic-all path.
       if (on) setWorkItemFilter(["epic"]);
       return;
@@ -5768,6 +5811,8 @@ export function BacklogPlanningPanel({
       | "stalled"
       | "noStories"
       | "unestimatedStories"
+      | "missingTeam"
+      | "missingAssignee"
       | null =
       category === "missingDescription" ? "missingDescription"
       : category === "missingEstimate" || category === "unestimated" ? "missingEstimate"
@@ -5775,6 +5820,8 @@ export function BacklogPlanningPanel({
       : category === "stalled" ? "stalled"
       : category === "noStories" ? "noStories"
       : category === "hasUnestimatedChildren" ? "unestimatedStories"
+      : category === "missingTeam" ? "missingTeam"
+      : category === "missingAssignee" ? "missingAssignee"
       : null;
     if (toggleKey == null) return;
     // Radio behaviour: turning a single category ON via the hero
@@ -5787,6 +5834,8 @@ export function BacklogPlanningPanel({
       setHygieneStalled(toggleKey === "stalled");
       setHygieneNoStories(toggleKey === "noStories");
       setHygieneUnestimatedStories(toggleKey === "unestimatedStories");
+      setHygieneMissingTeam(toggleKey === "missingTeam");
+      setHygieneMissingAssignee(toggleKey === "missingAssignee");
     } else {
       if (toggleKey === "missingDescription") setHygieneMissingDescription(false);
       else if (toggleKey === "missingEstimate") setHygieneMissingEstimate(false);
@@ -5794,10 +5843,13 @@ export function BacklogPlanningPanel({
       else if (toggleKey === "stalled") setHygieneStalled(false);
       else if (toggleKey === "noStories") setHygieneNoStories(false);
       else if (toggleKey === "unestimatedStories") setHygieneUnestimatedStories(false);
+      else if (toggleKey === "missingTeam") setHygieneMissingTeam(false);
+      else if (toggleKey === "missingAssignee") setHygieneMissingAssignee(false);
     }
     if (on) {
       // Align Work Item with the click's scope. Stalled and the two
       // epic-only categories pin the scope explicitly; everything else
+      // (including the cross-scope `missingTeam` / `missingAssignee`)
       // honors the `scope` field that came with the hand-off.
       const forcedScope: "story" | "epic" =
         toggleKey === "stalled" ? "story"
@@ -7330,11 +7382,13 @@ export function BacklogPlanningPanel({
         stalled: hygieneStalled,
         noStories: hygieneNoStories,
         unestimatedStories: hygieneUnestimatedStories,
+        missingTeam: hygieneMissingTeam,
+        missingAssignee: hygieneMissingAssignee,
       },
       stalledStoryIds,
       hygieneFilterScope,
     ),
-  [backlogFilteredBeforeWorkItem, hygieneMissingDescription, hygieneMissingEstimate, hygieneUnscheduled, hygieneStalled, hygieneNoStories, hygieneUnestimatedStories, stalledStoryIds, hygieneFilterScope]);
+  [backlogFilteredBeforeWorkItem, hygieneMissingDescription, hygieneMissingEstimate, hygieneUnscheduled, hygieneStalled, hygieneNoStories, hygieneUnestimatedStories, hygieneMissingTeam, hygieneMissingAssignee, stalledStoryIds, hygieneFilterScope]);
 
   const fullyFiltered = useMemo(() => timePhase("fullyFiltered", () => {
     const base = applyWorkItemKindFilter(backlogFilteredWithHygiene, workItemFilter);
@@ -8148,6 +8202,8 @@ export function BacklogPlanningPanel({
     hygieneStalled ||
     hygieneNoStories ||
     hygieneUnestimatedStories ||
+    hygieneMissingTeam ||
+    hygieneMissingAssignee ||
     query.trim().length > 0 ||
     presetSearch.trim().length > 0;
 

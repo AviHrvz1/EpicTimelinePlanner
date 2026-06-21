@@ -1469,6 +1469,8 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
           | "missingEstimate"
           | "unscheduled"
           | "stalled"
+          | "missingTeam"
+          | "missingAssignee"
           | "all-story"
           | "all-epic";
         on: boolean;
@@ -1621,6 +1623,8 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         | "unscheduled"
         | "noStories"
         | "hasUnestimatedChildren"
+        | "missingTeam"
+        | "missingAssignee"
         | null,
     ) => {
       setTopMode("backlog");
@@ -1648,7 +1652,11 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                       ? null
                       : category === "hasUnestimatedChildren"
                         ? "missingEstimate"
-                        : null;
+                        : category === "missingTeam"
+                          ? "missingTeam"
+                          : category === "missingAssignee"
+                            ? "missingAssignee"
+                            : null;
       if (targetCategory) {
         setBacklogIncomingHygieneToggle({ category: targetCategory, on: true, scope });
       } else {
@@ -1666,6 +1674,17 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       setShowRoadmapProgress(false);
       setGanttStatusFilter(new Set());
       setBacklogIncomingStatusFilter([]);
+      // `missingTeam` is the safety-net category for team-less epics
+      // (the hero counts them regardless of the active team pick). If
+      // the planner is currently scoped to a specific team, the panel
+      // would still hide the orphans on click — they don't belong to
+      // that team. Clearing the team filter on the click lands the
+      // planner in the All-Teams view where the orphans actually
+      // appear. Same intent for stories: their effective team is null,
+      // so a team-scoped panel would hide them too.
+      if (category === "missingTeam") {
+        setGanttTeamFilter(new Set());
+      }
     },
     [],
   );
@@ -2019,6 +2038,19 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
    */
   const handleTeamProgressRowClick = useCallback(
     (teamId: string, label: string) => {
+      // "All Teams" sentinel — fires from the new synthetic row at
+      // the top of the Team Progress card. Always clears the team
+      // filter (never toggles into it) regardless of which mode the
+      // planner is in. Skips the per-mode branches below since the
+      // intent is unambiguously "reset to workspace-wide."
+      if (teamId === "__all_teams__") {
+        handlePanelTeamFilterDerivedChange(new Set());
+        if (topMode === "backlog") {
+          setBacklogIncomingTeamFilter([]);
+          setBacklogIncomingWorkItemFilter([]);
+        }
+        return;
+      }
       // Unified add/remove toggle — clicking a new team ADDS it to
       // the active set, clicking an already-selected team REMOVES
       // it. Works the same in every mode so the planner can build

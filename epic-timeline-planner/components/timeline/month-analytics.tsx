@@ -3330,33 +3330,50 @@ export function MonthAnalytics({
     return sum > 0 ? sum : null;
   }, [burndownBasis, metric, burndownFocusedEpicOption, monthBurndownEpics]);
   /** Resolved due date for the focused epic — drives the due-date marker
-   *  and the focused-epic ideal line's right edge. */
+   *  and the focused-epic ideal line's right edge. Returns null when the
+   *  epic has no `planEndMonth`: the chart used to fall back on the
+   *  scope's end (year-end on "All Quarters") which fabricated a "Due
+   *  31/12" marker for epics nobody had actually scheduled, plus
+   *  stretched the ideal line across the entire visible window. Hiding
+   *  the marker keeps the chart honest about what's planned vs not. */
   const selectedEpicDueDate = useMemo(() => {
     if (!burndownFocusedEpicOption) return null;
-    const dueSprint = burndownFocusedEpicOption.epic.planEndSprint;
-    const dueMonth = burndownFocusedEpicOption.epic.planEndMonth ?? scopeEndMonth;
-    const dueYear = burndownFocusedEpicOption.epic.planYear ?? planYear;
-    const dueDay = dueSprint === 1 ? 15 : new Date(dueYear, dueMonth, 0).getDate();
-    return new Date(dueYear, dueMonth - 1, dueDay);
-  }, [burndownFocusedEpicOption, scopeEndMonth, planYear]);
+    const epic = burndownFocusedEpicOption.epic;
+    if (epic.planEndMonth == null) return null;
+    const dueSprint = epic.planEndSprint;
+    const dueYear = epic.planYear ?? planYear;
+    const dueDay = epic.planEndDay ?? (dueSprint === 1 ? 15 : new Date(dueYear, epic.planEndMonth, 0).getDate());
+    return new Date(dueYear, epic.planEndMonth - 1, dueDay);
+  }, [burndownFocusedEpicOption, planYear]);
   /** Resolved plan-start date for the focused epic — drives the "Epic
    *  scheduled" marker at the ideal line's left edge. Mirror of
-   *  `selectedEpicDueDate` for the start side. Uses the same convention
-   *  as `epicPlanStartDate` in lib/burn-series.ts: explicit
-   *  `planStartDay` wins, else sprint 2 → day 16, else day 1. */
+   *  `selectedEpicDueDate` for the start side. Returns null when the
+   *  epic has no `planStartMonth` (same rationale as the due-side
+   *  fix). */
   const selectedEpicPlanStartDate = useMemo(() => {
     if (!burndownFocusedEpicOption) return null;
     const epic = burndownFocusedEpicOption.epic;
-    const startMonth = epic.planStartMonth ?? scopeStartMonth;
+    if (epic.planStartMonth == null) return null;
     const startYear = epic.planYear ?? planYear;
     const startDay = epic.planStartDay ?? (epic.planSprint === 2 ? 16 : 1);
-    return new Date(startYear, startMonth - 1, startDay);
-  }, [burndownFocusedEpicOption, scopeStartMonth, planYear]);
+    return new Date(startYear, epic.planStartMonth - 1, startDay);
+  }, [burndownFocusedEpicOption, planYear]);
+  /** True when a single epic is focused AND it has no plan window (no
+   *  `planStartMonth` AND no `planEndMonth`). Drives chart-level
+   *  hiding of the Epic scheduled / Due / ideal-line overlay AND the
+   *  Plan-toggle disabled state. The chart's actual + scope lines and
+   *  the Done icon (positioned at the real completion date) still
+   *  render. */
+  const focusedEpicIsUnscheduled = useMemo(() => {
+    if (!burndownFocusedEpicOption) return false;
+    const epic = burndownFocusedEpicOption.epic;
+    return epic.planStartMonth == null && epic.planEndMonth == null;
+  }, [burndownFocusedEpicOption]);
 
   /** True when the focused epic's actual line hits 0 anywhere in the
-   *  rendered window — drives the "Done ✓" marker on the due date.
-   *  Reads directly off `burnDownSeries.perDay` so the "done" check uses
-   *  the same per-epic daysLeft the chart line plots. */
+   *  rendered window — drives the "Done ✓" marker. Reads directly off
+   *  `burnDownSeries.perDay` so the "done" check uses the same per-epic
+   *  daysLeft the chart line plots. */
   const isFocusedBurndownDone = useMemo(() => {
     if (!burndownFocusedEpicOption) return false;
     const epicId = burndownFocusedEpicOption.epic.id;
@@ -3365,6 +3382,21 @@ export function MonthAnalytics({
       if (v != null && v.daysLeft === 0) return true;
     }
     return false;
+  }, [burndownFocusedEpicOption, burnDownSeries.perDay]);
+  /** Index of the FIRST day the focused epic's `daysLeft` hit 0 — the
+   *  date the Done ✓ marker should anchor to. Used to be glued to the
+   *  due-date marker, which placed the Done icon on whatever fake "due"
+   *  end-of-year date the chart had defaulted to, rather than on the
+   *  date the epic actually finished. Returns -1 when not done (or no
+   *  focused epic). */
+  const focusedBurndownDoneAtIdx = useMemo(() => {
+    if (!burndownFocusedEpicOption) return -1;
+    const epicId = burndownFocusedEpicOption.epic.id;
+    for (let i = 0; i < burnDownSeries.perDay.length; i++) {
+      const v = burnDownSeries.perDay[i]?.perEpic[epicId];
+      if (v != null && v.daysLeft === 0) return i;
+    }
+    return -1;
   }, [burndownFocusedEpicOption, burnDownSeries.perDay]);
   /** Adds a per-row `epicIdeal` field for the focused epic so the JSX's
    *  `<Line dataKey="epicIdeal">` keeps rendering. Sources from
@@ -3967,6 +3999,10 @@ export function MonthAnalytics({
     // Respect the legend filter: if the user has narrowed the burnup to a
     // single epic via the legend (or scope picker), use THAT epic's due
     // date. Otherwise fall back to the latest among all month epics.
+    // Epics without `planEndMonth` are SKIPPED instead of falling back
+    // on `scopeEndMonth` (which previously fabricated a year-end due
+    // date on "All Quarters" for unscheduled epics — see the matching
+    // fix in `selectedEpicDueDate`).
     const epicsToCheck = selectedEpicOption != null
       ? [selectedEpicOption.epic]
       : monthEpics
@@ -3976,15 +4012,15 @@ export function MonthAnalytics({
     let latestMs = -Infinity;
     let latestDate: Date | null = null;
     for (const epic of epicsToCheck) {
-      const dueMonth = epic.planEndMonth ?? scopeEndMonth;
+      if (epic.planEndMonth == null) continue;
       const dueYear = epic.planYear ?? planYear;
       const dueSprint = epic.planEndSprint;
-      const dueDay = dueSprint === 1 ? 15 : new Date(dueYear, dueMonth, 0).getDate();
-      const d = new Date(dueYear, dueMonth - 1, dueDay);
+      const dueDay = epic.planEndDay ?? (dueSprint === 1 ? 15 : new Date(dueYear, epic.planEndMonth, 0).getDate());
+      const d = new Date(dueYear, epic.planEndMonth - 1, dueDay);
       if (d.getTime() > latestMs) { latestMs = d.getTime(); latestDate = d; }
     }
     return latestDate;
-  }, [selectedEpicOption, monthEpics, burnUpVisibleKeys, scopeEndMonth, planYear]);
+  }, [selectedEpicOption, monthEpics, burnUpVisibleKeys, planYear]);
 
 
   /** Short date label used in tooltip text (e.g. "Due 31/12"). */
@@ -4102,6 +4138,16 @@ export function MonthAnalytics({
     });
   }, [burnUpData, burnUpDoneAtIdx]);
   const isBurnUpDone = burnUpDoneAtIdx >= 0;
+  /** X-axis tick at the burnup completion crossing — drives the Done
+   *  icon position on the burnup chart. Used to be pinned to the due-
+   *  date tick (`burnUpDueDateTickLabel`), so a completed-in-May epic
+   *  showed its Done badge on Dec 31 instead of where the line actually
+   *  reached scope. Now reads the labelShort at `burnUpDoneAtIdx`. */
+  const burnUpDoneTickLabel = useMemo<string | null>(() => {
+    if (burnUpDoneAtIdx < 0) return null;
+    const row = burnUpData[burnUpDoneAtIdx] as { labelShort?: string } | undefined;
+    return row?.labelShort ?? null;
+  }, [burnUpData, burnUpDoneAtIdx]);
   // (Previously: `burnUpCompletedStroke` resolved a single aggregate line
   //  color. Replaced by per-epic <Line> rendering on the chart, each one
   //  colored from LINE_PALETTE matching its legend row, so this memo is no
@@ -5499,11 +5545,15 @@ export function MonthAnalytics({
             <button
               type="button"
               onClick={() => setShowEpicPlanMarkers((v) => !v)}
-              title={showEpicPlanMarkers ? "Hide epic plan overlay (ideal, due, scheduled)" : "Show epic plan overlay (ideal, due, scheduled)"}
-              aria-pressed={showEpicPlanMarkers}
+              title={focusedEpicIsUnscheduled
+                ? "This epic has no plan dates set. Schedule it to see the plan overlay."
+                : (showEpicPlanMarkers ? "Hide epic plan overlay (ideal, due, scheduled)" : "Show epic plan overlay (ideal, due, scheduled)")}
+              aria-pressed={showEpicPlanMarkers && !focusedEpicIsUnscheduled}
+              disabled={focusedEpicIsUnscheduled}
               className={cn(
                 "inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[12px] font-medium transition",
-                showEpicPlanMarkers
+                "disabled:cursor-not-allowed disabled:opacity-50",
+                showEpicPlanMarkers && !focusedEpicIsUnscheduled
                   ? "border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100"
                   : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900",
               )}
@@ -5860,17 +5910,19 @@ export function MonthAnalytics({
                         );
                       })()
                       : null}
-                    {/* Done ✓ — sits ABOVE the due-date target (and above
-                     *  the "Due X/Y" label) when the focused epic's burndown
-                     *  has reached 0. Visual stacking top-to-bottom:
-                     *  "Done" text → green ✓ circle → "Due X/Y" label →
-                     *  red bullseye target. The label uses an offset large
-                     *  enough to clear the shape-drawn circle (which is at
-                     *  cy - 32 visually, not at the dot's anchor cy). */}
-                    {burndownFocusedEpicOption && selectedEpicDueMarker && isFocusedBurndownDone ? (
+                    {/* Done ✓ — anchored at the date the focused epic's
+                     *  burndown line first reached 0 (not at the due date,
+                     *  which used to be a separate marker and made the Done
+                     *  badge appear way after the actual completion). The
+                     *  Y stays near the bottom of the chart so the badge
+                     *  reads as "we finished here". Renders independent of
+                     *  the due marker — even on unscheduled epics the Done
+                     *  badge still appears at the real completion tick. */}
+                    {burndownFocusedEpicOption && isFocusedBurndownDone && focusedBurndownDoneAtIdx >= 0
+                      && monthBurndownWithDueTarget[focusedBurndownDoneAtIdx]?.axisLabel ? (
                       <ReferenceDot
-                        x={selectedEpicDueMarker.axisLabel}
-                        y={Math.max(selectedEpicDueMarker.y + (metric === "storyCount" ? 0.35 : 0.25), metric === "storyCount" ? 1 : 0.8)}
+                        x={String(monthBurndownWithDueTarget[focusedBurndownDoneAtIdx]?.axisLabel)}
+                        y={metric === "storyCount" ? 1 : 0.8}
                         r={0}
                         isFront
                         ifOverflow="visible"
@@ -6706,6 +6758,17 @@ export function MonthAnalytics({
             const useStoriesBasis = burndownBasis === "stories";
             const loadUnitSuffix = useStoriesBasis ? "" : "d";
             const loadUnitWord = useStoriesBasis ? "stories" : "days";
+            // Canonical "done" rule (matches `computeProgress` at
+            // lib/progress.ts:91 — `TERMINAL_STATUSES = new Set(["done"])`):
+            // only `status === "done"` counts as terminal. Review-state
+            // stories stay in the "open" bucket because they can bounce
+            // back to In Progress (the chip + percentage now agree with
+            // the Stories Progress donut and the dashboard hero Team
+            // Progress card). Earlier formula here treated review as
+            // already-done, which inflated the per-team "done" count by
+            // the review tally — a 23-story gap on the demo seed that
+            // the cross-surface verify script caught only because the
+            // test was added at the same time.
             const loadRows = teamMode
               ? teamsInScope.map((t) => ({
                   key: t.teamLabel,
@@ -6714,7 +6777,7 @@ export function MonthAnalytics({
                   image: null as string | null,
                   teamSlug: t.teamId ?? null,
                   daysLeft: useStoriesBasis
-                    ? t.storiesByStatus.todo + t.storiesByStatus.inProgress
+                    ? t.storiesByStatus.todo + t.storiesByStatus.inProgress + t.storiesByStatus.review
                     : t.daysLeftTotal,
                   estTotal: useStoriesBasis
                     ? t.storiesByStatus.todo
@@ -6737,7 +6800,7 @@ export function MonthAnalytics({
                   image: resolveAssigneeAvatar(row.assignee, workspaceDirectoryUsers).image,
                   teamSlug: null as string | null,
                   daysLeft: useStoriesBasis
-                    ? row.storiesByStatus.todo + row.storiesByStatus.inProgress
+                    ? row.storiesByStatus.todo + row.storiesByStatus.inProgress + row.storiesByStatus.review
                     : row.daysLeftTotal,
                   estTotal: useStoriesBasis
                     ? row.storiesByStatus.todo
@@ -7092,6 +7155,100 @@ export function MonthAnalytics({
                     className="h-full space-y-1 overflow-y-auto overflow-x-hidden pr-5 [&::-webkit-scrollbar]:hidden"
                     style={{ scrollbarWidth: "none" }}
                   >
+                  {/* "All Teams" aggregate row — mirrors the dashboard
+                   *  hero's All Teams affordance. Only renders in team
+                   *  mode (User Progress doesn't need an "All Users"
+                   *  rollup) and only when there's more than one team
+                   *  row to aggregate. Click opens the Team Progress
+                   *  drilldown with NO team-column filter applied so
+                   *  the planner sees every in-scope story across every
+                   *  team in one table. */}
+                  {teamMode && loadRows.length > 1 ? (() => {
+                    const aggEstTotal = loadRows.reduce((sum, r) => sum + r.estTotal, 0);
+                    const aggDaysLeft = loadRows.reduce((sum, r) => sum + r.daysLeft, 0);
+                    const aggDoneDays = Math.max(0, aggEstTotal - aggDaysLeft);
+                    const aggDonePct = aggEstTotal > 0 ? Math.round((aggDoneDays / aggEstTotal) * 100) : 100;
+                    const allDone = aggDaysLeft === 0 && aggEstTotal > 0;
+                    const untouched = aggDoneDays === 0 && aggDaysLeft > 0;
+                    const overCapacity = aggDaysLeft > aggEstTotal && aggEstTotal > 0;
+                    const unit = loadUnitSuffix;
+                    const noun = useStoriesBasis ? "stories" : "days";
+                    const formatVal = (n: number) => `${n}${unit}`;
+                    const titleText = useStoriesBasis
+                      ? `${aggEstTotal} ${noun} total · ${aggDoneDays} completed · ${aggDaysLeft} open`
+                      : `${aggEstTotal}${unit} estimated total · ${aggDoneDays}${unit} in review · ${aggDaysLeft}${unit} left`;
+                    const tone = {
+                      bar: "bg-indigo-400",
+                      chip: "bg-slate-50 text-slate-700 ring-slate-200/70",
+                      stroke: "#6366f1",
+                    };
+                    const chipBase = cn(
+                      "inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1",
+                      tone.chip,
+                    );
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMonthLoadDrilldownIsTeam(true);
+                          setMonthLoadDrilldownAssignee("All Teams");
+                          setMonthLoadDrilldownFilter({ ...EMPTY_DRILLDOWN_FILTER });
+                        }}
+                        className="w-full rounded-lg bg-white px-2 py-1.5 text-left transition-colors hover:bg-slate-50/60"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            aria-hidden
+                            className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 ring-1 ring-slate-200/80"
+                          >
+                            <Users className="size-3" strokeWidth={2.2} aria-hidden />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate text-[12.5px] font-semibold text-slate-800">All Teams</span>
+                              <span className="text-[10px] font-medium text-slate-400">· {loadRows.length} team{loadRows.length === 1 ? "" : "s"}</span>
+                              <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                                {allDone ? (
+                                  <span className={chipBase} title={titleText}>
+                                    <CheckCircle2 className="size-2.5 text-emerald-600" strokeWidth={2.5} aria-hidden />
+                                    <span className="text-emerald-700">Done</span>
+                                    <span className="opacity-50">·</span>
+                                    <span>{formatVal(aggEstTotal)}{useStoriesBasis ? ` ${noun}` : ""}</span>
+                                  </span>
+                                ) : overCapacity ? (
+                                  <span className={chipBase} title={titleText}>
+                                    <Clock className="size-2.5" strokeWidth={2.2} aria-hidden />
+                                    <span>{formatVal(aggEstTotal)} est</span>
+                                    <span className="opacity-50">·</span>
+                                    <span className="text-rose-700">{formatVal(aggDaysLeft)} to do</span>
+                                  </span>
+                                ) : untouched ? (
+                                  <span className={chipBase} title={titleText}>
+                                    <Clock className="size-2.5" strokeWidth={2.2} aria-hidden />
+                                    <span>{formatVal(aggDaysLeft)}{useStoriesBasis ? ` ${noun}` : ""} to do</span>
+                                  </span>
+                                ) : (
+                                  <span className={chipBase} title={titleText}>
+                                    <CheckCircle2 className="size-2.5 text-emerald-600" strokeWidth={2.5} aria-hidden />
+                                    <span className="text-emerald-700">{formatVal(aggDoneDays)} done</span>
+                                    <span className="opacity-50">·</span>
+                                    <span>{formatVal(aggDaysLeft)}{useStoriesBasis ? ` ${noun}` : ""} left</span>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="mt-1 relative h-2 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/50">
+                              <div
+                                className={cn("absolute inset-y-0 left-0 rounded-full transition-all", tone.bar)}
+                                style={{ width: `${aggDonePct}%` }}
+                              />
+                            </div>
+                          </div>
+                          <CircleProgress percent={aggDonePct} color={tone.stroke} />
+                        </div>
+                      </button>
+                    );
+                  })() : null}
                   {loadRows.map((row, rowIdx) => {
                     const doneDays = Math.max(0, row.estTotal - row.daysLeft);
                     const donePct = row.estTotal > 0 ? Math.round((doneDays / row.estTotal) * 100) : 100;
@@ -7413,11 +7570,15 @@ export function MonthAnalytics({
                 <button
                   type="button"
                   onClick={() => setShowEpicPlanMarkers((v) => !v)}
-                  title={showEpicPlanMarkers ? "Hide epic plan overlay (ideal, due, scheduled)" : "Show epic plan overlay (ideal, due, scheduled)"}
-                  aria-pressed={showEpicPlanMarkers}
+                  title={focusedEpicIsUnscheduled
+                    ? "This epic has no plan dates set. Schedule it to see the plan overlay."
+                    : (showEpicPlanMarkers ? "Hide epic plan overlay (ideal, due, scheduled)" : "Show epic plan overlay (ideal, due, scheduled)")}
+                  aria-pressed={showEpicPlanMarkers && !focusedEpicIsUnscheduled}
+                  disabled={focusedEpicIsUnscheduled}
                   className={cn(
                     "inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[12px] font-medium transition",
-                    showEpicPlanMarkers
+                    "disabled:cursor-not-allowed disabled:opacity-50",
+                    showEpicPlanMarkers && !focusedEpicIsUnscheduled
                       ? "border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100"
                       : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900",
                   )}
@@ -7729,17 +7890,16 @@ export function MonthAnalytics({
                           }}
                         />
                       ) : null}
-                      {/* Done ✓ — anchored at the burnup due-date label
-                       *  position when the completed line has reached scope.
-                       *  Sits BELOW the red due-date target so the visual
-                       *  stack reads top-to-bottom:
-                       *  "Due X/Y" label → red bullseye → green ✓ → "Done".
-                       *  Skipped on the story-count axis (no scope line to
-                       *  reach), when the due-date label isn't known, and
-                       *  in All view (each epic has its own due date). */}
-                      {burnUpSingleEpicVisible && isBurnUpDone && burnUpDueDateTickLabel ? (
+                      {/* Done ✓ — anchored at the date the burnup
+                       *  completion line first reached the scope total
+                       *  (not at the due date). A late-finish epic still
+                       *  shows the badge ON the date it actually crossed
+                       *  scope. Skipped on the story-count axis (no scope
+                       *  line to reach) and in the All view (each epic
+                       *  has its own due date and own crossing). */}
+                      {burnUpSingleEpicVisible && isBurnUpDone && burnUpDoneTickLabel ? (
                         <ReferenceDot
-                          x={burnUpDueDateTickLabel}
+                          x={burnUpDoneTickLabel}
                           y={burnUpScopeTotal}
                           r={0}
                           isFront

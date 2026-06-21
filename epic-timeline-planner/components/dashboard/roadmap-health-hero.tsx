@@ -27,7 +27,9 @@ import {
   Ruler,
   ShieldCheck,
   Sigma,
+  UserX,
   Users,
+  UsersRound,
   X,
   Zap,
 } from "lucide-react";
@@ -213,6 +215,8 @@ export function RoadmapHealthHero({
       | "unscheduled"
       | "noStories"
       | "hasUnestimatedChildren"
+      | "missingTeam"
+      | "missingAssignee"
       | null,
   ) => void;
   /** Reverse hand-off — when a backlog hygiene toggle is clicked, the
@@ -913,16 +917,28 @@ export function RoadmapHealthHero({
             const slices =
               naScope === "story"
                 ? [
+                    // Story-scope picks up "Unassigned" only — stories
+                    // are person-owned, and `story.team ?? epic.team`
+                    // resolution makes a separate "Missing team" story
+                    // category mostly noise (orphans are already caught
+                    // at epic scope).
                     { label: "Missing estimate", value: (naData as { missingEstimate: number }).missingEstimate, color: "#ef4444", icon: <Ruler className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
                     { label: "No sprint", value: (naData as { missingSprint: number }).missingSprint, color: "#f59e0b", icon: <CircleDashed className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
                     { label: "No description", value: (naData as { missingDescription: number }).missingDescription, color: "#ec4899", icon: <FileWarning className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
                     { label: "Stalled", value: (naData as { stalled: number }).stalled, color: "#a855f7", icon: <AlertOctagon className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
+                    { label: "Unassigned", value: (naData as { missingAssignee: number }).missingAssignee, color: "#0ea5e9", icon: <UserX className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
                   ]
                 : [
+                    // Epic-scope picks up "Missing team" only — epics
+                    // are team-owned, so a team-less epic is the real
+                    // planning gap. "Unassigned epic" was considered
+                    // and dropped (most workspaces don't person-own
+                    // epics, so the count would mostly be noise).
                     { label: "Unestimated", value: (naData as { unestimated: number }).unestimated, color: "#ef4444", icon: <Ruler className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
                     { label: "Unscheduled", value: (naData as { unscheduled: number }).unscheduled, color: "#f59e0b", icon: <CircleDashed className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
                     { label: "No stories", value: (naData as { noStories: number }).noStories, color: "#94a3b8", icon: <CircleDotDashed className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
                     { label: "Unestimated stories", value: (naData as { hasUnestimatedChildren: number }).hasUnestimatedChildren, color: "#ec4899", icon: <FileWarning className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
+                    { label: "Missing team", value: (naData as { missingTeam: number }).missingTeam, color: "#64748b", icon: <UsersRound className="size-3.5" strokeWidth={2} />, valueSuffix: unitSuffix },
                   ];
             const labelToCategory: Record<string, Parameters<NonNullable<typeof onNeedsAttentionClick>>[1]> = {
               "Missing estimate": "missingEstimate",
@@ -933,6 +949,8 @@ export function RoadmapHealthHero({
               "Unscheduled": "unscheduled",
               "No stories": "noStories",
               "Unestimated stories": "hasUnestimatedChildren",
+              "Missing team": "missingTeam",
+              "Unassigned": "missingAssignee",
             };
             return (
               <DonutCard
@@ -1405,6 +1423,122 @@ function TeamProgressCard({
             </div>
           );
         })()}
+        {/* Synthetic "All Teams" row at the top — mirrors the per-team
+         *  row layout (avatar, label, progress bar, done/left chip,
+         *  circular percentage) but aggregates the stats workspace-wide.
+         *  The discoverable one-click reset for the team filter — the
+         *  chip-X mechanism on the Gantt header still works for power
+         *  users, but newer planners had no obvious affordance to return
+         *  to workspace-wide. Sentinel `teamId: "__all_teams__"` is
+         *  caught by `handleTeamProgressRowClick` in epic-planner-app.tsx
+         *  and routed to `setGanttTeamFilter(new Set())`. */}
+        {!(rows.length === 0 || (rows.length === 1 && rows[0].teamId === "__unassigned__")) && (
+          (() => {
+            const isAllTeamsSelected = !selectedTeamIds || selectedTeamIds.size === 0;
+            // Aggregate the per-team totals workspace-wide. Mirrors
+            // the math each team row already does (estTotal / daysLeft
+            // / doneDays / donePct) so the chip + circle read the same
+            // language as the rows below. Status is left out of the
+            // aggregate (no meaningful single-verdict rollup across
+            // teams — the per-team chips already carry that).
+            const aggEstTotal = rows.reduce((sum, r) => sum + r.estTotal, 0);
+            const aggDaysLeft = rows.reduce((sum, r) => sum + r.daysLeft, 0);
+            const aggDoneDays = Math.max(0, aggEstTotal - aggDaysLeft);
+            const aggDonePct = aggEstTotal > 0 ? Math.round((aggDoneDays / aggEstTotal) * 100) : 0;
+            const tone = {
+              bar: "bg-indigo-400",
+              chipBg: "bg-slate-50",
+              icon: "text-slate-500",
+              stroke: "#6366f1",
+            };
+            const daysLeftVal = Math.round(aggDaysLeft);
+            const estTotalVal = Math.round(aggEstTotal);
+            const doneVal = Math.round(aggDoneDays);
+            const isStories = unitLabel === "stories";
+            const unit = isStories ? "" : "d";
+            const noun = isStories ? "stories" : "days";
+            const allDone = daysLeftVal === 0 && estTotalVal > 0;
+            const untouched = doneVal === 0 && daysLeftVal > 0;
+            const overCapacity = daysLeftVal > estTotalVal && estTotalVal > 0;
+            const chipBase = cn(
+              "inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-[10.5px] font-semibold tabular-nums text-slate-700",
+              tone.chipBg,
+            );
+            const titleText = isStories
+              ? `${estTotalVal} ${noun} total · ${doneVal} completed · ${daysLeftVal} open`
+              : `${estTotalVal}${unit} estimated total · ${doneVal}${unit} done · ${daysLeftVal}${unit} left`;
+            return (
+              <button
+                type="button"
+                onClick={onRowClick ? () => onRowClick("__all_teams__", "All Teams") : undefined}
+                disabled={!onRowClick}
+                className={cn(
+                  "w-full rounded-md px-1 py-0.5 text-left transition outline-none",
+                  onRowClick
+                    ? "cursor-pointer hover:bg-gradient-to-r hover:from-sky-50 hover:via-indigo-50 hover:to-violet-50 hover:ring-1 hover:ring-indigo-200/70 focus-visible:ring-2 focus-visible:ring-indigo-300"
+                    : "cursor-default",
+                  isAllTeamsSelected &&
+                    "bg-gradient-to-r from-sky-50 via-indigo-50 to-violet-50 ring-1 ring-indigo-200/70",
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  {/* Generic Users-glyph avatar — same 18×18 footprint
+                   *  as the per-team `TeamAvatar` so the column alignment
+                   *  stays clean. Neutral slate ring/background since
+                   *  "All Teams" has no team-specific tone. */}
+                  <span
+                    aria-hidden
+                    className="inline-flex size-[18px] shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 ring-1 ring-slate-200/80"
+                  >
+                    <Users className="size-3" strokeWidth={2.2} aria-hidden />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-1">
+                      <span className="truncate text-[12px] font-semibold text-slate-800">All Teams</span>
+                      <span className="text-[10px] font-medium text-slate-400">· {rows.length} team{rows.length === 1 ? "" : "s"}</span>
+                    </div>
+                    <div className="mt-0.5 relative h-1.5 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/50">
+                      <div
+                        className={cn("absolute inset-y-0 left-0 rounded-full transition-all", tone.bar)}
+                        style={{ width: `${aggDonePct}%` }}
+                      />
+                    </div>
+                  </div>
+                  {/* Done/left chip — same four-shape pattern as the
+                   *  per-team rows so the visual vocabulary matches. */}
+                  {allDone ? (
+                    <span className={chipBase} title={titleText}>
+                      <CheckCircle2 className="size-3 text-emerald-600" strokeWidth={2.5} aria-hidden />
+                      <span className="text-emerald-700">Done</span>
+                      <span className="text-slate-400">·</span>
+                      <span>{estTotalVal}{unit}{isStories ? ` ${noun}` : ""}</span>
+                    </span>
+                  ) : overCapacity ? (
+                    <span className={chipBase} title={titleText}>
+                      <Clock className={cn("size-3", tone.icon)} strokeWidth={2.2} aria-hidden />
+                      <span>{estTotalVal}{unit} est</span>
+                      <span className="text-slate-400">·</span>
+                      <span className="text-rose-700">{daysLeftVal}{unit}{isStories ? ` ${noun}` : ""} to do</span>
+                    </span>
+                  ) : untouched ? (
+                    <span className={chipBase} title={titleText}>
+                      <Clock className={cn("size-3", tone.icon)} strokeWidth={2.2} aria-hidden />
+                      <span>{daysLeftVal}{unit}{isStories ? ` ${noun}` : ""} to do</span>
+                    </span>
+                  ) : (
+                    <span className={chipBase} title={titleText}>
+                      <CheckCircle2 className="size-3 text-emerald-600" strokeWidth={2.5} aria-hidden />
+                      <span className="text-emerald-700">{doneVal}{unit} done</span>
+                      <span className="text-slate-400">·</span>
+                      <span>{daysLeftVal}{unit}{isStories ? ` ${noun}` : ""} left</span>
+                    </span>
+                  )}
+                  <CircleProgress percent={aggDonePct} color={tone.stroke} />
+                </div>
+              </button>
+            );
+          })()
+        )}
         {!(rows.length === 0 || (rows.length === 1 && rows[0].teamId === "__unassigned__")) && (
           rows.map((row, rowIdx) => {
             const atRisk = row.status === "atRisk" || row.status === "overdue";
@@ -2081,6 +2215,16 @@ function computeRoadmapStats(
     missingSprint: new Set<string>(),
     missingDescription: new Set<string>(),
     stalled: new Set<string>(),
+    // Story-scope picks up ONE completeness gap: story with no person
+    // assignee (`missingAssignee`). Stories are person-owned by design
+    // (the assignee is who's doing the work), so an unassigned story
+    // is a real planning gap — "planned for the team but no one's
+    // picked it up yet." The mirror "Missing team story" category was
+    // considered and dropped — story.team almost always inherits from
+    // the parent epic via `story.team ?? epic.team`, so the only time
+    // a story would be team-less is when the parent epic is also
+    // team-less (already caught by `missingTeam` at epic scope).
+    missingAssignee: new Set<string>(),
     any: new Set<string>(),
   };
   const needsAttentionEpicSets = {
@@ -2088,6 +2232,17 @@ function computeRoadmapStats(
     unscheduled: new Set<string>(),
     noStories: new Set<string>(),
     hasUnestimatedChildren: new Set<string>(),
+    // Epic-scope picks up ONE completeness gap that has no workflow
+    // analogue: epic with no team owner (`missingTeam`). Epics are
+    // team-owned by design (the bucketing axis for every card on the
+    // dashboard, the Gantt rows, the filter chip), so an epic without
+    // a team is a real planning gap. The mirror "Unassigned epic"
+    // category was considered and dropped — most workspaces don't
+    // person-own epics, so the count would mostly be noise. `missingTeam`
+    // BYPASSES the per-team `epicPasses` gate so orphans surface
+    // regardless of which team is picked (an orphan literally can't
+    // show under any specific team).
+    missingTeam: new Set<string>(),
     any: new Set<string>(),
   };
   /** Description coverage — counts of epics / stories that don't have any
@@ -2213,6 +2368,15 @@ function computeRoadmapStats(
           needsAttentionEpicSets.any.add(epic.id);
         }
       }
+      // `missingTeam` is the only NA epic category that BYPASSES the
+      // `epicPasses` team-filter gate — a team-less epic can't appear
+      // under any specific team, so it has to be surfaced workspace-
+      // wide. Without this, picking Platform would hide every orphan
+      // (the exact failure mode the planner asked us to fix).
+      if (!(epic.team ?? "").trim()) {
+        needsAttentionEpicSets.missingTeam.add(epic.id);
+        needsAttentionEpicSets.any.add(epic.id);
+      }
       const team = (epic.team ?? "").trim();
       // `teamIds` feeds the KPI strip "Teams" count and the Team
       // Progress accumulator — both intentionally workspace-wide.
@@ -2304,6 +2468,10 @@ function computeRoadmapStats(
             }
             if (stalledStoryIds && stalledStoryIds.has(story.id)) {
               needsAttentionStorySets.stalled.add(story.id);
+              needsAttentionStorySets.any.add(story.id);
+            }
+            if (!(story.assignee ?? "").trim()) {
+              needsAttentionStorySets.missingAssignee.add(story.id);
               needsAttentionStorySets.any.add(story.id);
             }
           }
@@ -2499,6 +2667,7 @@ function computeRoadmapStats(
         missingSprint: needsAttentionStorySets.missingSprint.size,
         missingDescription: needsAttentionStorySets.missingDescription.size,
         stalled: needsAttentionStorySets.stalled.size,
+        missingAssignee: needsAttentionStorySets.missingAssignee.size,
         total: needsAttentionStorySets.any.size,
       },
       epic: {
@@ -2506,6 +2675,7 @@ function computeRoadmapStats(
         unscheduled: needsAttentionEpicSets.unscheduled.size,
         noStories: needsAttentionEpicSets.noStories.size,
         hasUnestimatedChildren: needsAttentionEpicSets.hasUnestimatedChildren.size,
+        missingTeam: needsAttentionEpicSets.missingTeam.size,
         total: needsAttentionEpicSets.any.size,
       },
     },

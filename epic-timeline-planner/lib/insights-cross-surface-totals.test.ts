@@ -304,6 +304,116 @@ describe("All-Quarters Insights — cross-surface consistency", () => {
     expect(burndownTooltipTotalScope([epicWithEst], "epicEst")).toBe(20);
     expect(burndownTooltipTotalScope([epicWithoutEst], "epicEst")).toBe(5);
   });
+
+  // ─────────────────────────────────────────────────────────────
+  // Review-state stories must stay in the "open" bucket on every
+  // surface at story-count basis. The canonical rule in lib/progress.ts
+  // is `TERMINAL_STATUSES = new Set(["done"])` — reviews can bounce back
+  // to In Progress so they aren't terminal. The Insights Team Progress
+  // card previously counted review as already-done, which inflated
+  // per-team / All-Teams "done" by the review tally (a 23-story gap on
+  // the demo seed: hero showed 157 done, Insights showed 180). The
+  // helpers below mirror the per-row formulas the three surfaces use
+  // so the test fails if anyone reintroduces the asymmetry.
+  // ─────────────────────────────────────────────────────────────
+
+  /** Stories Progress donut (per the donut's slice values). */
+  function donutDoneCount(stories: UserStoryItem[]): number {
+    return stories.filter((s) => s.status === "done").length;
+  }
+
+  /** Dashboard hero Team Progress (per the per-team accumulator at
+   *  roadmap-health-hero.tsx — `status === "done"` increments the
+   *  team's done-stories tally). */
+  function heroTeamProgressDoneCount(stories: UserStoryItem[]): number {
+    return stories.filter((s) => s.status === "done").length;
+  }
+
+  /** Insights Team Progress card (per the per-team `loadRows` build at
+   *  month-analytics.tsx). Post-fix the formula is `estTotal - daysLeft`
+   *  where `daysLeft` counts todo + inProgress + review, so "done" maps
+   *  to `status === "done"` only. Mirrors the running source so a
+   *  regression in either direction (re-treating review as done, or
+   *  dropping review from `daysLeft`) trips this test. */
+  function insightsTeamProgressDoneCount(stories: UserStoryItem[]): number {
+    const buckets = { todo: 0, inProgress: 0, review: 0, done: 0 };
+    for (const s of stories) {
+      if (s.status === "todo") buckets.todo += 1;
+      else if (s.status === "inProgress") buckets.inProgress += 1;
+      else if (s.status === "review") buckets.review += 1;
+      else if (s.status === "done") buckets.done += 1;
+    }
+    const estTotal = buckets.todo + buckets.inProgress + buckets.review + buckets.done;
+    const daysLeft = buckets.todo + buckets.inProgress + buckets.review;
+    return estTotal - daysLeft;
+  }
+
+  describe("review-state stories are NOT done — story-count basis", () => {
+    const stories = [
+      makeStory("US-1", 2, 2, "todo"),
+      makeStory("US-2", 3, 1, "inProgress"),
+      makeStory("US-3", 4, 0, "review"),  // ← the key case
+      makeStory("US-4", 5, 0, "done"),
+    ];
+
+    it("Stories Progress donut counts only status==='done'", () => {
+      expect(donutDoneCount(stories)).toBe(1);
+    });
+
+    it("Dashboard hero Team Progress counts only status==='done'", () => {
+      expect(heroTeamProgressDoneCount(stories)).toBe(1);
+    });
+
+    it("Insights Team Progress counts only status==='done' (review is OPEN, not done)", () => {
+      expect(insightsTeamProgressDoneCount(stories)).toBe(1);
+    });
+
+    it("all three surfaces agree on the same 'done' count for the same population", () => {
+      expect(donutDoneCount(stories)).toBe(heroTeamProgressDoneCount(stories));
+      expect(donutDoneCount(stories)).toBe(insightsTeamProgressDoneCount(stories));
+    });
+
+    it("the Insights formula's 'left' bucket includes review (one review story → at least one open)", () => {
+      const buckets = { todo: 0, inProgress: 0, review: 0, done: 0 };
+      for (const s of stories) {
+        if (s.status === "todo") buckets.todo += 1;
+        else if (s.status === "inProgress") buckets.inProgress += 1;
+        else if (s.status === "review") buckets.review += 1;
+        else if (s.status === "done") buckets.done += 1;
+      }
+      const daysLeft = buckets.todo + buckets.inProgress + buckets.review;
+      // 1 todo + 1 inProgress + 1 review = 3 open
+      expect(daysLeft).toBe(3);
+    });
+  });
+
+  describe("review-state stories are NOT done — burn-series invariant under story basis", () => {
+    // Even at the chart layer, `buildBurnSeries` with the stories basis
+    // must roll review-state stories into the remaining bucket, not the
+    // completed bucket. Locks the Stories Progress donut and the burnup
+    // headline to the same population semantics as the Insights / hero
+    // Team Progress cards once review is reclassified.
+    const stories = [
+      makeStory("US-1", 2, 2, "todo"),
+      makeStory("US-2", 3, 1, "inProgress"),
+      makeStory("US-3", 4, 0, "review"),
+      makeStory("US-4", 5, 0, "done"),
+    ];
+    const epic = makeEpic(stories);
+
+    it("burnup headline completed equals the count of status==='done' (1, not 2)", () => {
+      const series = buildBurnSeries({
+        epics: [epic],
+        basis: "stories",
+        periodStart: new Date("2026-05-01"),
+        periodEnd: new Date("2026-06-30"),
+        now: new Date("2026-05-15"),
+      });
+      expect(series.headline?.scope).toBe(4);
+      expect(series.headline?.completed).toBe(1);
+      expect(series.headline?.daysLeft).toBe(3);
+    });
+  });
 });
 
 // ────────────────────────────────────────────────────────────────────
