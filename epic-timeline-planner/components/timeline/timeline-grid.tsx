@@ -759,7 +759,16 @@ function dayFractionWithinSprint(planYear: number, globalSprint: number, now: Da
  */
 function deriveEpicStatusKey(epic: EpicItem): UserStoryItem["status"] | null {
   const stories = epic.userStories ?? [];
-  if (stories.length === 0) return null;
+  // Empty-story epics roll up to "todo" — matches both the panel
+  // (`epicExecutionStatusMeta` returns the amber "To Do" chip) and the
+  // hero's Work Progress · Epics donut (`rollupWorkflowStatusLocal`
+  // returns "todo" on size 0). Returning null here used to exclude
+  // such epics from `epicMatchesGanttStatusFilter`, so a "To Do" filter
+  // showed the epic in the panel but not on the Gantt — visible bug
+  // when a "Discovery placeholder" epic with zero stories hit a Q+status
+  // narrowing. The bucketing of empty epics as "still-to-start" is the
+  // shared mental model; this aligns the Gantt to it.
+  if (stories.length === 0) return "todo";
   const counts = { todo: 0, inProgress: 0, review: 0, done: 0 };
   for (const s of stories) {
     if (s.status === "todo" || s.status === "inProgress" || s.status === "review" || s.status === "done") {
@@ -790,7 +799,11 @@ function deriveEpicStatusKey(epic: EpicItem): UserStoryItem["status"] | null {
  * Returns null only when the initiative has zero stories anywhere.
  */
 function deriveInitiativeStatusKey(initiative: InitiativeItem): UserStoryItem["status"] | null {
-  return rollupWorkflowStatus((initiative.epics ?? []).flatMap((e) => e.userStories ?? []));
+  // Same empty-population fix as `deriveEpicStatusKey`: when an
+  // initiative has zero stories anywhere, treat it as "todo" so the
+  // Gantt's "To Do" filter includes it (matches the donut + panel
+  // bucketing of empty initiatives).
+  return rollupWorkflowStatus((initiative.epics ?? []).flatMap((e) => e.userStories ?? [])) ?? "todo";
 }
 
 /**

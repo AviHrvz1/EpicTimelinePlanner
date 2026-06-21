@@ -669,10 +669,15 @@ export function EpicFormDialog({
   }, [epic?.userStories]);
 
   // Roll-up status derived from the epic's user stories.
-  // Empty: "—". All done: "Done". All review/done: "Review / Testing". Any in-progress (or mixed review+todo): "In progress". Else "To do".
+  // Empty: "To do" (an epic with no stories yet hasn't started — same
+  // bucket the hero's Work Progress · Epics donut, the panel's amber
+  // status chip, and the Gantt's filter rollup all assign it after the
+  // shared-empty-epic rollup fix). All done: "Done". All review/done:
+  // "Review / Testing". Any in-progress (or mixed review+todo):
+  // "In progress". Else "To do".
   const derivedEpicStatus = useMemo<{ label: string; key: "todo" | "inProgress" | "review" | "done" | "empty" }>(() => {
     const stories = epic?.userStories ?? [];
-    if (stories.length === 0) return { label: "—", key: "empty" };
+    if (stories.length === 0) return { label: "To do", key: "todo" };
     const counts = { todo: 0, inProgress: 0, review: 0, done: 0 };
     for (const s of stories) {
       const k = s.status as keyof typeof counts;

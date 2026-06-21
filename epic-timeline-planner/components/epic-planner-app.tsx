@@ -1699,9 +1699,28 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         // the labels.
         setShowRoadmapProgress(true);
         setLastPickedLabelLane("status");
+        return;
+      }
+      // Unselect path — the planner clicked the active status off (donut
+      // toggle or dropdown unchecked). The earlier handler left
+      // `showRoadmapProgress` + `lastPickedLabelLane` in their on-state
+      // residue, so the Gantt kept showing the status pills and the
+      // progress bar on the panel rows even though no filter was driving
+      // them. Reset both — but ONLY when no health filter is still
+      // active. A planner who has both pickets active and clears just
+      // the status one expects the health chips + bars to keep going;
+      // health is the lane that's still in play.
+      if (healthFilter.size === 0) {
+        setShowRoadmapProgress(false);
+        setLastPickedLabelLane(null);
+      } else {
+        // Health is the only remaining axis — re-anchor the lane there
+        // so downstream consumers (e.g. Gantt bar-label routing) know
+        // which dimension is now the active one.
+        setLastPickedLabelLane("health");
       }
     },
-    [],
+    [healthFilter],
   );
   /**
    * Work Progress donut slice click — story status is a backlog-domain
@@ -1915,14 +1934,24 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       if (next.size > 0) {
         setShowRoadmapProgress(true);
         setLastPickedLabelLane("health");
-      } else {
-        // Clearing all health verdicts (or hitting the eraser, which calls
-        // this with an empty Set) also drops the auto-enabled progress
-        // overlay — no health pills, no progress fill, no % badge.
+        return;
+      }
+      // Clearing all health verdicts — drop the auto-enabled progress
+      // overlay ONLY when no status filter is still in play. A planner
+      // who picked both axes and clears just the health one expects the
+      // status pills + progress bar to keep going (mirrors the symmetric
+      // guard in `handlePanelStatusFilterDerivedChange`). Without this
+      // guard, picking Health then unpicking it killed the status pills
+      // too — the unselect wiped one lane and dragged the other with it.
+      if (ganttStatusFilter.size === 0) {
         setShowRoadmapProgress(false);
+        setLastPickedLabelLane(null);
+      } else {
+        // Status is the only remaining axis — re-anchor the lane there.
+        setLastPickedLabelLane("status");
       }
     },
-    [topMode],
+    [topMode, ganttStatusFilter],
   );
   /**
    * Health Distribution slice click — scope-aware. Same in-mode-vs-
