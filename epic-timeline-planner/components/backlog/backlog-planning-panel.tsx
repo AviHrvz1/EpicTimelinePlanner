@@ -786,6 +786,46 @@ const BACKLOG_COLUMN_ORDER: BacklogColumnKey[] = [
 const HOVER_TOOLTIP_CLASS =
   "pointer-events-none absolute left-1/2 top-full z-[320] mt-1.5 w-max max-w-[18rem] -translate-x-1/2 whitespace-normal rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium leading-snug text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover/tip:opacity-100";
 
+/** Portal-based hover tooltip — same visual as HOVER_TOOLTIP_CLASS but
+ *  rendered into document.body with `position: fixed`, so it escapes
+ *  ancestor `overflow-x-auto` / `overflow-hidden` clipping that hides
+ *  the in-flow span tooltip when the trigger sits inside the
+ *  horizontally scrolling backlog table. */
+function HoverPortalTooltip({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const triggerRef = useRef<HTMLSpanElement>(null);
+  const show = () => {
+    const r = triggerRef.current?.getBoundingClientRect();
+    if (!r) return;
+    setPos({ top: r.bottom + 6, left: r.left + r.width / 2 });
+  };
+  const hide = () => setPos(null);
+  return (
+    <span
+      ref={triggerRef}
+      className="relative inline-flex"
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocus={show}
+      onBlur={hide}
+    >
+      {children}
+      {pos && typeof document !== "undefined"
+        ? createPortal(
+            <span
+              role="tooltip"
+              className="pointer-events-none fixed z-[9800] w-max max-w-[18rem] -translate-x-1/2 whitespace-normal rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium leading-snug text-slate-700 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm"
+              style={{ top: pos.top, left: pos.left }}
+            >
+              {label}
+            </span>,
+            document.body,
+          )
+        : null}
+    </span>
+  );
+}
+
 const BACKLOG_COLUMN_LABELS: Record<BacklogColumnKey, string> = {
   workItem: "Work item",
   roadmap: "Roadmap",
@@ -8628,11 +8668,15 @@ export function BacklogPlanningPanel({
      *  zebra-stripe data attributes so DOM diagnostics keep working. */
     labelOverride?: React.ReactNode,
   ) {
-    // When the planner is searching, force every group / scaffold parent
-    // open so the matching descendants are visible without having to
-    // expand each folder manually. Their manual collapse state is
-    // preserved — we just override the read, not the underlying map.
-    const isOpen = q ? true : (openGroupFolders[folderId] ?? (defaultOpenOverride ?? defaultGroupExpanded));
+    // When the planner is searching, default unset folders to open so
+    // the matching descendants are visible without having to expand
+    // each folder manually. The user's explicit toggle (in
+    // `openGroupFolders`) still wins in either direction — they can
+    // close a folder after finding the match.
+    const explicitOpen = openGroupFolders[folderId];
+    const isOpen = explicitOpen !== undefined
+      ? explicitOpen
+      : (q ? true : (defaultOpenOverride ?? defaultGroupExpanded));
     const renderedChildren = isOpen ? renderChildren() : null;
     return (
       <div key={folderId}>
@@ -8801,7 +8845,10 @@ export function BacklogPlanningPanel({
   ) {
     const folderId = `${epicPath}/epic:${epicId}`;
     // Search-active override: see comment in `renderFolderRow` above.
-    const isOpen = q ? true : (openGroupFolders[folderId] ?? defaultGroupExpanded);
+    const explicitOpen = openGroupFolders[folderId];
+    const isOpen = explicitOpen !== undefined
+      ? explicitOpen
+      : (q ? true : defaultGroupExpanded);
     const { estimated, left } = sumEstimatedAndLeft(epicRows);
     const originalEstimate = epicRows[0]?.epicOriginalEstimateDays ?? 0;
     const initModelForEpic = epicRows[0]?.initiativeId ? initiativeById.get(epicRows[0].initiativeId) : undefined;
@@ -8872,7 +8919,7 @@ export function BacklogPlanningPanel({
                     </span>
                   )}
                 </button>
-                <span className="group/tip relative inline-flex">
+                <HoverPortalTooltip label="Add a user story to this epic">
                   <button
                     type="button"
                     onClick={(event) => {
@@ -8893,8 +8940,7 @@ export function BacklogPlanningPanel({
                   >
                     <Plus className="size-3.5 text-slate-600" />
                   </button>
-                  <span role="tooltip" className={HOVER_TOOLTIP_CLASS}>Add a user story to this epic</span>
-                </span>
+                </HoverPortalTooltip>
                 {epicModelForRow?.planStartMonth == null && onJumpToRoadmapPlanning ? (
                   /* Epic has stories but isn't scheduled yet — surface
                    *  the same Schedule jump-link the standalone-epic path
@@ -9155,7 +9201,10 @@ export function BacklogPlanningPanel({
   ) {
     const folderId = `${initPath}/initiative:${initiativeId}`;
     // Search-active override: see comment in `renderFolderRow` above.
-    const isOpen = q ? true : (openGroupFolders[folderId] ?? defaultGroupExpanded);
+    const explicitOpen = openGroupFolders[folderId];
+    const isOpen = explicitOpen !== undefined
+      ? explicitOpen
+      : (q ? true : defaultGroupExpanded);
     const { estimated, left } = sumEstimatedAndLeft(initiativeRows);
     const initModelForRow = initiativeById.get(initiativeId);
     const initGanttRange = initModelForRow ? ganttDateRangeForInitiative(initModelForRow) : { start: null as Date | null, end: null as Date | null };
@@ -9218,7 +9267,7 @@ export function BacklogPlanningPanel({
                     </span>
                   )}
                 </button>
-                <span className="group/tip relative inline-flex">
+                <HoverPortalTooltip label="Add an epic to this initiative">
                   <button
                     type="button"
                     onClick={(event) => {
@@ -9240,8 +9289,7 @@ export function BacklogPlanningPanel({
                   >
                     <Plus className="size-3.5 text-slate-600" />
                   </button>
-                  <span role="tooltip" className={HOVER_TOOLTIP_CLASS}>Add an epic to this initiative</span>
-                </span>
+                </HoverPortalTooltip>
               </div>
             ),
             team: isEditingParentTeam("initiative", initiativeId) ? (
@@ -9697,7 +9745,10 @@ export function BacklogPlanningPanel({
     for (const [key, group] of entries) {
       const folderId = `${path}${level}:${key}`;
       // Search-active override: see comment in `renderFolderRow` above.
-    const isOpen = q ? true : (openGroupFolders[folderId] ?? defaultGroupExpanded);
+      const explicitOpen = openGroupFolders[folderId];
+      const isOpen = explicitOpen !== undefined
+        ? explicitOpen
+        : (q ? true : defaultGroupExpanded);
       const count = group.rows.length + group.standaloneRows.length;
       const indentPx = levelIndex * 14;
       // Compute per-level icons / actions / overrides — same logic as in
@@ -9730,7 +9781,7 @@ export function BacklogPlanningPanel({
           Schedule
         </button>
       ) : level === "quarter" ? (
-        <span className="group/tip relative inline-flex">
+        <HoverPortalTooltip label="Add a new initiative starting in this quarter">
           <button
             type="button"
             onClick={(event) => {
@@ -9743,8 +9794,7 @@ export function BacklogPlanningPanel({
           >
             <Plus className="size-3.5 text-slate-600" />
           </button>
-          <span role="tooltip" className={HOVER_TOOLTIP_CLASS}>Add a new initiative starting in this quarter</span>
-        </span>
+        </HoverPortalTooltip>
       ) : level === "roadmap" && onRenameRoadmap && key !== "__no_roadmap__" && editingRoadmapId !== key ? (
         <button
           type="button"
@@ -9915,7 +9965,10 @@ export function BacklogPlanningPanel({
   ): void {
     const folderId = `${pathPrefix}/epic:${epicId}`;
     // Search-active override: see comment in `renderFolderRow` above.
-    const isOpen = q ? true : (openGroupFolders[folderId] ?? defaultGroupExpanded);
+    const explicitOpen = openGroupFolders[folderId];
+    const isOpen = explicitOpen !== undefined
+      ? explicitOpen
+      : (q ? true : defaultGroupExpanded);
     out.push({
       key: `epic-${folderId}`,
       kind: "epic",
@@ -9946,7 +9999,10 @@ export function BacklogPlanningPanel({
   ): void {
     const folderId = `${pathPrefix}/initiative:${initiativeId}`;
     // Search-active override: see comment in `renderFolderRow` above.
-    const isOpen = q ? true : (openGroupFolders[folderId] ?? defaultGroupExpanded);
+    const explicitOpen = openGroupFolders[folderId];
+    const isOpen = explicitOpen !== undefined
+      ? explicitOpen
+      : (q ? true : defaultGroupExpanded);
     out.push({
       key: `init-${folderId}`,
       kind: "initiative",
@@ -10262,7 +10318,7 @@ export function BacklogPlanningPanel({
             Schedule
           </button>
         ) : level === "quarter" ? (
-          <span className="group/tip relative inline-flex">
+          <HoverPortalTooltip label="Add a new initiative starting in this quarter">
             <button
               type="button"
               onClick={(event) => {
@@ -10281,8 +10337,7 @@ export function BacklogPlanningPanel({
             >
               <Plus className="size-3.5 text-slate-600" />
             </button>
-            <span role="tooltip" className={HOVER_TOOLTIP_CLASS}>Add a new initiative starting in this quarter</span>
-          </span>
+          </HoverPortalTooltip>
         ) : level === "roadmap" && onRenameRoadmap && key !== "__no_roadmap__" && editingRoadmapId !== key ? (
           <button
             type="button"
@@ -10471,7 +10526,7 @@ export function BacklogPlanningPanel({
                         </span>
                       )}
                     </div>
-                    <span className="group/tip relative inline-flex">
+                    <HoverPortalTooltip label="Add an epic to this initiative">
                       <button
                         type="button"
                         onClick={(event) => {
@@ -10488,8 +10543,7 @@ export function BacklogPlanningPanel({
                       >
                         <Plus className="size-3.5 text-slate-600" />
                       </button>
-                      <span role="tooltip" className={HOVER_TOOLTIP_CLASS}>Add an epic to this initiative</span>
-                    </span>
+                    </HoverPortalTooltip>
                   </div>
                 ),
                 team: isEditingParentTeam("initiative", initiative.initiativeId) ? (
@@ -10709,7 +10763,7 @@ export function BacklogPlanningPanel({
                                 </span>
                               )}
                             </div>
-                            <span className="group/tip relative inline-flex">
+                            <HoverPortalTooltip label="Add a user story to this epic">
                               <button
                                 type="button"
                                 onClick={(event) => {
@@ -10726,8 +10780,7 @@ export function BacklogPlanningPanel({
                               >
                                 <Plus className="size-3.5 text-slate-600" />
                               </button>
-                              <span role="tooltip" className={HOVER_TOOLTIP_CLASS}>Add a user story to this epic</span>
-                            </span>
+                            </HoverPortalTooltip>
                             {epic.epicMonthNum == null && onJumpToRoadmapPlanning ? (
                               <button
                                 type="button"
@@ -12841,7 +12894,7 @@ export function BacklogPlanningPanel({
                               </span>
                             )}
                           </div>
-                          <span className="group/tip relative inline-flex">
+                          <HoverPortalTooltip label="Add initiative, epic, or user story under this initiative">
                             <button
                               type="button"
                               onClick={(event) => {
@@ -12853,8 +12906,7 @@ export function BacklogPlanningPanel({
                             >
                               <Plus className="size-3.5 text-slate-600" />
                             </button>
-                            <span role="tooltip" className={HOVER_TOOLTIP_CLASS}>Add initiative, epic, or user story under this initiative</span>
-                          </span>
+                          </HoverPortalTooltip>
                           {openCreateMenuKey === `initiative:${initiative.id}` ? (
                             <div className="absolute left-full top-1/2 z-30 ml-2 w-60 -translate-y-1/2 overflow-hidden rounded-xl border border-slate-200/90 bg-white/95 p-1.5 shadow-xl backdrop-blur-sm">
                               <p className="px-2 py-1 text-[11px] font-semibold tracking-normal text-slate-500">Create</p>
@@ -13180,7 +13232,7 @@ export function BacklogPlanningPanel({
                                         </span>
                                       )}
                                     </div>
-                                    <span className="group/tip relative inline-flex">
+                                    <HoverPortalTooltip label="Add epic or user story under this epic">
                                       <button
                                         type="button"
                                         onClick={(event) => {
@@ -13192,8 +13244,7 @@ export function BacklogPlanningPanel({
                                       >
                                         <Plus className="size-3.5 text-slate-600" />
                                       </button>
-                                      <span role="tooltip" className={HOVER_TOOLTIP_CLASS}>Add epic or user story under this epic</span>
-                                    </span>
+                                    </HoverPortalTooltip>
                                     {openCreateMenuKey === `epic:${epic.id}` ? (
                                       <div className="absolute left-full top-1/2 z-30 ml-2 w-52 -translate-y-1/2 rounded-xl border border-slate-200/90 bg-white/95 p-2 shadow-xl backdrop-blur-sm">
                                         <button
@@ -13522,7 +13573,7 @@ export function BacklogPlanningPanel({
                                           </span>
                                         )}
                                       </div>
-                                      <span className="group/tip relative inline-flex">
+                                      <HoverPortalTooltip label="Add a sibling user story under the same epic">
                                       <button
                                         type="button"
                                         onClick={(event) => {
@@ -13534,7 +13585,6 @@ export function BacklogPlanningPanel({
                                       >
                                         <Plus className="size-3.5 text-slate-600" />
                                       </button>
-                                      <span role="tooltip" className={HOVER_TOOLTIP_CLASS}>Add a sibling user story under the same epic</span>
                                       {openCreateMenuKey === `story:${story.id}` ? (
                                         <div className="absolute left-full top-1/2 z-30 ml-2 w-52 -translate-y-1/2 rounded-xl border border-slate-200/90 bg-white/95 p-2 shadow-xl backdrop-blur-sm">
                                           <button
@@ -13554,7 +13604,7 @@ export function BacklogPlanningPanel({
                                           </button>
                                         </div>
                                       ) : null}
-                                      </span>
+                                      </HoverPortalTooltip>
                                     </div>
                                       ),
                                       team: isEditingParentTeam("epic", epic.id) ? (
