@@ -204,7 +204,14 @@ type BacklogPlanningPanelProps = {
    *  panel's initiative search box is also pre-filled so the user lands
    *  right at the epic they wanted to schedule. */
   onJumpToRoadmapPlanning?: (epicTitle?: string) => void;
-  onCreateEpicQuick: (initiativeId: string, title: string) => Promise<void>;
+  onCreateEpicQuick: (
+    initiativeId: string,
+    title: string,
+    /** Optional plan-date defaults inherited from the click context
+     *  (e.g. "+" inside a Q1 group). When supplied, the new epic is
+     *  scheduled to that range instead of dropping into Unscheduled. */
+    schedule?: { planStartMonth: number; planEndMonth: number },
+  ) => Promise<void>;
   onCreateStoryQuick: (epicId: string, title: string) => Promise<void>;
   onPatchStoryQuick: (
     storyId: string,
@@ -871,7 +878,7 @@ const BACKLOG_COLUMN_MIN_WIDTHS: Record<BacklogColumnKey, number> = {
 };
 
 const BACKLOG_COLUMN_DEFAULT_WIDTHS: Record<BacklogColumnKey, number> = {
-  workItem: 420,
+  workItem: 480,
   roadmap: 160,
   team: 150,
   year: 104,
@@ -881,7 +888,7 @@ const BACKLOG_COLUMN_DEFAULT_WIDTHS: Record<BacklogColumnKey, number> = {
   month: 120,
   startDate: 150,
   endDate: 150,
-  status: 168,
+  status: 200,
   health: 120,
   sprint: 148,
   assignee: 190,
@@ -1902,7 +1909,7 @@ function BacklogAssigneePickEditor({
  * `BacklogTeamPickEditor`:
  *   - Trigger button: `Flag` + sprint label + chevron
  *   - Listbox: portaled to `document.body` with a sticky search input,
- *     "Unscheduled" as the clear-sprint option, then every assignable
+ *     "Backlog" as the clear-sprint option, then every assignable
  *     sprint for the row's year
  *   - Picks update the DRAFT via `onChange`; the surrounding cell
  *     owns commit (✓) and cancel (✕)
@@ -1980,13 +1987,16 @@ function BacklogSprintPickEditor({
   }, [open]);
 
   const q = query.trim().toLowerCase();
-  const unscheduledMatches = q === "" || "unscheduled".includes(q);
+  // Match against both the new "backlog" label and the legacy
+  // "unscheduled" wording so users typing either term still find the
+  // option. The underlying value key stays "unscheduled".
+  const unscheduledMatches = q === "" || "backlog".includes(q) || "unscheduled".includes(q);
   const filteredOptions = useMemo(() => {
     if (!q) return options;
     return options.filter((n) => `sprint ${n}`.includes(q) || String(n).includes(q));
   }, [options, q]);
 
-  const triggerLabel = value === "unscheduled" || value === "" ? "Unscheduled" : `Sprint ${value}`;
+  const triggerLabel = value === "unscheduled" || value === "" ? "Backlog" : `Sprint ${value}`;
 
   return (
     <span data-cell-editing className="relative inline-flex items-center" onMouseDown={(event) => event.stopPropagation()}>
@@ -2055,7 +2065,7 @@ function BacklogSprintPickEditor({
                       )}
                     >
                       <Flag className="size-3.5 shrink-0 text-slate-400" aria-hidden />
-                      <span className="truncate">Unscheduled</span>
+                      <span className="truncate">Backlog</span>
                     </button>
                   </li>
                 ) : null}
@@ -2528,7 +2538,10 @@ function labelChipClasses(_label: string): string {
 }
 
 function sprintLabel(sprint: number | null) {
-  return sprint == null ? "Unscheduled" : `Sprint ${sprint}`;
+  // "Backlog" — stories with no sprint assignment live in the backlog,
+  // not the Gantt's "Unscheduled" bucket (which means an epic has no
+  // plan dates). Distinct words for distinct concepts.
+  return sprint == null ? "Backlog" : `Sprint ${sprint}`;
 }
 
 /**
@@ -2859,7 +2872,7 @@ function teamIdToSummaryLabel(teamId: string): string {
 }
 
 function sprintFilterIdToSummaryLabel(id: string): string {
-  if (id === "unscheduled") return "Unscheduled";
+  if (id === "unscheduled") return "Backlog";
   const n = Number(id);
   if (!Number.isNaN(n) && String(n) === id) return `Sprint ${n}`;
   return id;
@@ -3131,17 +3144,23 @@ function storyCompletion(story: { status: string; estimatedDays?: number | null;
   return { label: "To do", percent: 0 };
 }
 
-function rollupWorkflowStatus(stories: Array<{ status: string }>): WorkflowStatus {
-  if (stories.length === 0) return "todo";
-  const statuses = stories.map((story) => story.status);
+function rollupWorkflowStatus(stories: Array<{ status: string; sprint?: number | null }>): WorkflowStatus {
+  // Backlog stories (sprint == null) carry the default "todo" from
+  // creation but represent "no execution signal yet" — leaking them
+  // into the rollup would surface a "To Do" pill on an epic whose only
+  // work hasn't been sprinted. The display layer renders "—" when this
+  // function returns the fallback (see status-pill render sites).
+  const sprinted = stories.filter((s) => s.sprint != null);
+  if (sprinted.length === 0) return "todo";
+  const statuses = sprinted.map((story) => story.status);
   if (statuses.every((status) => status === "done")) return "done";
   if (statuses.every((status) => status === "review" || status === "done")) return "review";
   if (statuses.some((status) => status === "inProgress" || status === "review" || status === "done")) return "inProgress";
   return "todo";
 }
 
-function rollupWorkflowStatusFromGroupedRows(rows: Array<{ storyStatus: string }>): WorkflowStatus {
-  return rollupWorkflowStatus(rows.map((row) => ({ status: row.storyStatus })));
+function rollupWorkflowStatusFromGroupedRows(rows: Array<{ storyStatus: string; storySprintNum?: number | null }>): WorkflowStatus {
+  return rollupWorkflowStatus(rows.map((row) => ({ status: row.storyStatus, sprint: row.storySprintNum })));
 }
 
 function workflowStatusLabel(status: WorkflowStatus): string {
@@ -4466,6 +4485,7 @@ function IsolatedCreateRowForm({
   submitting,
   saveDisabledExtra,
   leadingIcon,
+  hint,
 }: {
   placeholder: string;
   inputClassName?: string;
@@ -4482,32 +4502,47 @@ function IsolatedCreateRowForm({
   saveDisabledExtra?: boolean;
   /** Type-affordance icon (initiative/epic/story) shown left of the input. */
   leadingIcon?: ReactNode;
+  /** Optional read-only subtitle under the input — used to tell the
+   *  user where the new row will land (e.g. "Scheduled: Q1 (Jan – Mar)")
+   *  so the implicit context-inheritance is visible before save. */
+  hint?: ReactNode;
 }) {
   const [title, setTitle] = useState("");
   const trimmed = title.trim();
   const canSubmit = trimmed.length >= 2 && !submitting && !saveDisabledExtra;
+  // `formStyle` was historically a table-grid alignment hint
+  // (`gridTemplateColumns: tableGridTemplate`) so the composer's two
+  // cells matched the columns above. That made the Save/Cancel buttons
+  // drift to the far right (column "2 / -1"), visually disconnected
+  // from the input. We now ignore that grid alignment and render the
+  // composer as a self-contained card — input + hint + buttons in a
+  // tight flex row, with the inherited `inputWrapperStyle.paddingLeft`
+  // moved to the form itself so the card still respects tree indent.
+  const inheritedPaddingLeft = (inputWrapperStyle as { paddingLeft?: number | string } | undefined)?.paddingLeft;
+  void formStyle;
+  void rightSlotStyle;
   return (
     <form
       onSubmit={(event) => {
         event.preventDefault();
         if (canSubmit) onSubmit(trimmed);
       }}
-      className={formClassName ?? "grid min-w-full w-max items-center gap-3 bg-slate-50 py-2"}
-      style={formStyle}
+      className={formClassName ?? "inline-flex w-fit max-w-full items-start gap-2 rounded-md border border-indigo-100/70 bg-indigo-50/40 py-2 pl-2 pr-2 my-1"}
+      style={inheritedPaddingLeft != null ? { marginLeft: inheritedPaddingLeft } : undefined}
     >
-      <div className="flex min-w-0 items-center gap-2" style={inputWrapperStyle}>
+      <div className="flex min-w-0 flex-col gap-1">
         {leadingIcon ? (
           /* When a leading icon is provided, swap to a wrapper that owns the
            * border/ring so the icon sits visually INSIDE the field. */
-          <div className="relative flex h-9 max-w-[28rem] flex-1 items-center rounded-md bg-white ring-1 ring-slate-200 focus-within:ring-2 focus-within:ring-ring/40">
-            <span className="pointer-events-none flex h-full w-7 items-center justify-center text-slate-400">
+          <div className="relative flex h-9 w-[20rem] max-w-full items-center rounded-md bg-white shadow-sm ring-1 ring-slate-200/90 transition focus-within:ring-2 focus-within:ring-indigo-400/70 hover:ring-slate-300">
+            <span className="pointer-events-none flex h-full w-7 items-center justify-center text-sky-500">
               {leadingIcon}
             </span>
             <input
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               placeholder={placeholder}
-              className="h-full w-full bg-transparent pl-0 pr-2.5 text-[16px] outline-none"
+              className="h-full w-full bg-transparent pl-1.5 pr-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none"
               autoFocus
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
@@ -4522,7 +4557,7 @@ function IsolatedCreateRowForm({
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             placeholder={placeholder}
-            className={inputClassName ?? "h-9 w-full rounded-md bg-white px-2.5 text-[16px] outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-ring/40"}
+            className={inputClassName ?? "h-9 w-[20rem] max-w-full rounded-md bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 shadow-sm outline-none ring-1 ring-slate-200/90 transition focus:ring-2 focus:ring-indigo-400/70 hover:ring-slate-300"}
             autoFocus
             onKeyDown={(event) => {
               if (event.key === "Escape") {
@@ -4532,24 +4567,32 @@ function IsolatedCreateRowForm({
             }}
           />
         )}
+        {hint ? (
+          <span className="inline-flex items-center gap-1 text-[11.5px] font-medium text-slate-500">
+            <CalendarDays className="size-3 text-slate-400" aria-hidden />
+            {hint}
+          </span>
+        ) : null}
       </div>
-      <div className="flex items-center gap-2" style={rightSlotStyle}>
-        {extras}
+      {extras ? <div className="flex shrink-0 items-center">{extras}</div> : null}
+      <div className="flex shrink-0 items-center gap-1">
         <button
           type="submit"
           disabled={!canSubmit}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white disabled:opacity-45"
+          title="Save (Enter)"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-indigo-600 text-white shadow-sm transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 disabled:bg-slate-300 disabled:shadow-none"
           aria-label="Save"
         >
-          <Plus className="size-3.5" />
+          <Check className="size-4" strokeWidth={2.5} />
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200"
+          title="Cancel (Esc)"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-white text-slate-500 ring-1 ring-slate-200 transition hover:bg-slate-50 hover:text-slate-700 hover:ring-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
           aria-label="Cancel"
         >
-          <X className="size-3.5" />
+          <X className="size-4" />
         </button>
       </div>
     </form>
@@ -4952,6 +4995,12 @@ type BacklogStoryRowProps = {
   editingCellValue: string;
   /** True when the team editor popover is open for this row's epic. */
   isEditingTeam: boolean;
+  /** True when the parent-link editor is open on THIS row. Drives the
+   *  memo comparator so clicking the "Change parent" pencil actually
+   *  re-renders the row — without this, the panel-level
+   *  `editingParentLink` state flips but the memoized row keeps its
+   *  pre-edit cell render and the editor never appears. */
+  isEditingParent: boolean;
   ctx: BacklogStoryRowCtx;
 };
 
@@ -5535,6 +5584,7 @@ const BacklogStoryRow = ReactMemo(BacklogStoryRowImpl, (prev, next) =>
   prev.editingCellField === next.editingCellField &&
   prev.editingCellValue === next.editingCellValue &&
   prev.isEditingTeam === next.isEditingTeam &&
+  prev.isEditingParent === next.isEditingParent &&
   prev.ctx === next.ctx,
 );
 
@@ -5736,6 +5786,12 @@ export function BacklogPlanningPanel({
     kind: CreateKind;
     initiativeId?: string;
     epicId?: string;
+    /** Quarter inferred from the click site (1–4). When set on an
+     *  epic-kind create, the new epic is scheduled to that quarter's
+     *  full month range instead of being dropped into the Unscheduled
+     *  bucket — matches the user's mental model that "+" inside a Q1
+     *  group means the new row belongs in Q1. */
+    quarterHint?: 1 | 2 | 3 | 4;
   } | null>(null);
   const [storyTargetEpicId, setStoryTargetEpicId] = useState("");
   /** Roadmap picked when the user uses the header "+" to create an
@@ -5896,6 +5952,21 @@ export function BacklogPlanningPanel({
         : toggleKey === "noStories" || toggleKey === "unestimatedStories" ? "epic"
         : singleScope;
       setWorkItemFilter([forcedScope]);
+      // `unscheduled` epics have `planStartMonth == null`, so any active
+      // year / quarter / roadmap / parent / assignee / status / sprint
+      // filter can quietly hide them — the hero counts ignore those
+      // filters, so the click would surface 2 epics on the donut but 0
+      // in the panel. Clear them so the panel agrees with the hero. The
+      // user's team scope (`ganttTeamFilter`) is preserved.
+      if (toggleKey === "unscheduled") {
+        setYearFilter([]);
+        setQuarterFilter([]);
+        setRoadmapFilter([]);
+        setParentFilter([]);
+        setAssigneeFilter([]);
+        setStatusFilter([]);
+        setSprintFilter([]);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalHygieneToggle]);
@@ -7074,13 +7145,21 @@ export function BacklogPlanningPanel({
     return map;
   }, [initiatives, roadmapNameById]);
 
-  /** Small helper: render the Roadmap cell text given an initiativeId.
-   *  Falls back to a soft dash when no roadmap is linked. */
+  /** Small helper: render the Roadmap cell — `MapIcon` + name. Icon
+   *  matches the sky-500 tint used by the roadmap group header in the
+   *  grouped tree (lines ~9822, ~10479) so the column reads as part of
+   *  the same visual vocabulary. Falls back to a soft dash when no
+   *  roadmap is linked. */
   function renderRoadmapCell(initiativeId: string | null | undefined): ReactNode {
     if (!initiativeId) return <span className="text-slate-400">-</span>;
     const name = roadmapNameByInitiativeId.get(initiativeId);
     if (!name) return <span className="text-slate-400">-</span>;
-    return <span className="truncate text-[16px] text-slate-700">{name}</span>;
+    return (
+      <span className="inline-flex min-w-0 items-center gap-1.5 text-[16px] text-slate-700">
+        <MapIcon className="size-3.5 shrink-0 text-sky-500" strokeWidth={1.9} aria-hidden />
+        <span className="truncate">{name}</span>
+      </span>
+    );
   }
 
   const assigneeNameSuggestions = useMemo(
@@ -7125,12 +7204,13 @@ export function BacklogPlanningPanel({
     { id: "review", label: "Review / Testing" },
     { id: "done", label: "Done" },
     // Scheduling state — orthogonal to workflow status. "Scheduled" = the
-    // story has a sprint assigned; "Unscheduled" = no sprint yet. Combined
+    // story has a sprint assigned; "Backlog" = no sprint yet. Combined
     // with the workflow values via OR so a filter like
-    // ["inProgress", "Unscheduled"] surfaces both rows in progress AND
-    // rows that still need to be placed.
+    // ["inProgress", "Backlog"] surfaces both rows in progress AND
+    // rows that still need to be placed. The underlying id stays
+    // "unscheduled" so saved share-links keep working.
     { id: "scheduled", label: "Scheduled" },
-    { id: "unscheduled", label: "Unscheduled" },
+    { id: "unscheduled", label: "Backlog" },
   ];
   // Sprint-burndown verdicts the Health column paints. Same five
   // labels the hero's Health Distribution donut and the Roadmap
@@ -7145,7 +7225,7 @@ export function BacklogPlanningPanel({
     { id: "overdue", label: "Overdue" },
   ];
   const sprintOptions: OptionItem[] = [
-    { id: "unscheduled", label: "Unscheduled" },
+    { id: "unscheduled", label: "Backlog" },
     ...Array.from({ length: YEAR_SPRINT_MAX }, (_, i) => {
       const n = i + 1;
       return { id: String(n), label: `Sprint ${n}` };
@@ -8640,6 +8720,7 @@ export function BacklogPlanningPanel({
             editingCellField={isEditingCell ? editingStoryCell!.field : null}
             editingCellValue={isEditingCell ? editingStoryCell!.value : ""}
             isEditingTeam={isEditingParentTeam("epic", row.epicId)}
+            isEditingParent={editingParentLink?.kind === "story" && editingParentLink.id === row.storyId}
             ctx={storyRowCtx}
           />
         );
@@ -8946,14 +9027,16 @@ export function BacklogPlanningPanel({
                    *  the same Schedule jump-link the standalone-epic path
                    *  shows, so the user can dispatch this epic to the
                    *  Roadmap Planning view regardless of whether it has
-                   *  child stories or not. */
+                   *  child stories or not. Hidden until the row is
+                   *  hovered (or the button itself gets keyboard focus)
+                   *  so it doesn't crowd the title strip at rest. */
                   <button
                     type="button"
                     onClick={(event) => {
                       event.stopPropagation();
                       onJumpToRoadmapPlanning(epicTitle);
                     }}
-                    className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-sky-50 px-2 text-[11px] font-semibold text-sky-700 ring-1 ring-sky-200/80 transition hover:bg-sky-100 hover:ring-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+                    className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-sky-50 px-2 text-[11px] font-semibold text-sky-700 ring-1 ring-sky-200/80 opacity-0 transition hover:bg-sky-100 hover:ring-sky-300 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 group-hover/workitem:opacity-100"
                     aria-label={`Schedule epic "${epicTitle}" in Roadmap Planning`}
                   >
                     <ExternalLink className="size-3 text-sky-600" />
@@ -8999,9 +9082,11 @@ export function BacklogPlanningPanel({
                 )}
               </span>
             ),
-            status: epicRows.length === 0 ? (
-              // Epic with no surviving stories — show a neutral dash
-              // instead of the misleading default "To Do" rollup.
+            status: (epicModelForRow?.planStartMonth == null || epicRows.length === 0 || epicRows.every((r) => r.storySprintNum == null)) ? (
+              // No execution signal yet — epic unscheduled, no
+              // surviving stories, or every surviving story is in the
+              // backlog (sprint == null). Show a neutral dash instead
+              // of the misleading default "To Do" rollup.
               <span className="inline-flex min-w-[104px] items-center justify-center text-[16px] text-slate-400">—</span>
             ) : (
               <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[16px] font-normal tracking-wide", statusChip(rollupWorkflowStatusFromGroupedRows(epicRows)))}>
@@ -9169,6 +9254,7 @@ export function BacklogPlanningPanel({
             leadingIcon={createKindIcon("story")}
             onCancel={closeInlineCreator}
             onSubmit={(title) => { void handleCreateSubmit(null, title); }}
+            hint={composerHintFor(createSelection)}
           />
         ) : null}
         {isOpen ? (
@@ -9282,6 +9368,7 @@ export function BacklogPlanningPanel({
                         scope: "initiative",
                         kind: "epic",
                         initiativeId,
+                        quarterHint: extractQuarterFromPath(folderId) ?? undefined,
                       });
                     }}
                     className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-0 ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900 group-hover/workitem:opacity-100 focus-visible:opacity-100"
@@ -9445,6 +9532,7 @@ export function BacklogPlanningPanel({
             ) : undefined}
             onCancel={closeInlineCreator}
             onSubmit={(title) => { void handleCreateSubmit(null, title); }}
+            hint={composerHintFor(createSelection)}
           />
         ) : null}
         {isOpen ? (
@@ -9719,7 +9807,7 @@ export function BacklogPlanningPanel({
         }
         if (sprintKeys.size === 0) sprintKeys.add(-1);
         for (const sprintNum of sprintKeys) {
-          const label = sprintNum < 0 ? "Unscheduled" : sprintLabel(sprintNum);
+          const label = sprintNum < 0 ? "Backlog" : sprintLabel(sprintNum);
           const sort = sprintNum < 0 ? "99" : String(sprintNum).padStart(2, "0");
           const key = label;
           if (!groups.has(key)) {
@@ -9948,6 +10036,7 @@ export function BacklogPlanningPanel({
           editingCellField={isEditingCell ? editingStoryCell!.field : null}
           editingCellValue={isEditingCell ? editingStoryCell!.value : ""}
           isEditingTeam={isEditingParentTeam("epic", row.epicId)}
+          isEditingParent={editingParentLink?.kind === "story" && editingParentLink.id === row.storyId}
           ctx={storyRowCtx}
         />
       ),
@@ -10031,6 +10120,27 @@ export function BacklogPlanningPanel({
       for (const [epicId, epicRows] of byEpic) {
         const first = epicRows[0]!;
         pushEpicDescriptor(out, epicId, first.epicTitle, first.epicAssignee, epicRows, epicIndent, folderId);
+      }
+      // ALSO push any of this initiative's empty epics (0 stories) that
+      // belong in the current quarter context — without this, a freshly
+      // created epic vanishes after save because the story-driven
+      // walker only iterates rows that ARE stories. The quarter
+      // narrowing matches the user's mental model: an epic created
+      // under a Q1 group should appear there, not float across all
+      // quarter folders.
+      const initModel = initiativeById.get(initiativeId);
+      if (initModel) {
+        const knownEpicIds = new Set(byEpic.keys());
+        const pathQuarter = extractQuarterFromPath(folderId);
+        for (const epic of initModel.epics ?? []) {
+          if (knownEpicIds.has(epic.id)) continue;
+          if ((epic.userStories ?? []).length > 0) continue;
+          const epicQuarter = quarterNumFromMonth(epic.planStartMonth ?? null);
+          if (pathQuarter != null && epicQuarter != null && epicQuarter !== pathQuarter) continue;
+          if (pathQuarter == null && epicQuarter != null) continue;
+          if (pathQuarter != null && epicQuarter == null) continue;
+          pushEpicDescriptor(out, epic.id, epic.title, epic.assignee?.trim() || "Unassigned", [], epicIndent, folderId);
+        }
       }
     }
   }
@@ -10251,7 +10361,7 @@ export function BacklogPlanningPanel({
           const sprintKeys = initiativeIdToStorySprints.get(row.initiativeId);
           const keys = sprintKeys && sprintKeys.size > 0 ? sprintKeys : new Set([-1]);
           for (const sprintNum of keys) {
-            const label = sprintNum < 0 ? "Unscheduled" : sprintLabel(sprintNum);
+            const label = sprintNum < 0 ? "Backlog" : sprintLabel(sprintNum);
             const sort = sprintNum < 0 ? "99" : String(sprintNum).padStart(2, "0");
             if (!groups.has(label)) {
               groups.set(label, { label, sort, rows: [], standaloneRows: [] });
@@ -10274,7 +10384,7 @@ export function BacklogPlanningPanel({
           }
         }
         for (const [sprintNum, epics] of bySprint.entries()) {
-          const label = sprintNum < 0 ? "Unscheduled" : sprintLabel(sprintNum);
+          const label = sprintNum < 0 ? "Backlog" : sprintLabel(sprintNum);
           const sort = sprintNum < 0 ? "99" : String(sprintNum).padStart(2, "0");
           if (!groups.has(label)) {
             groups.set(label, { label, sort, rows: [], standaloneRows: [] });
@@ -10536,6 +10646,10 @@ export function BacklogPlanningPanel({
                             scope: "initiative",
                             kind: "epic",
                             initiativeId: initiative.initiativeId,
+                            // Standalone initiatives don't carry a path so derive
+                            // the quarter from the initiative's startMonth — by
+                            // construction it's the quarter folder it lives in.
+                            quarterHint: quarterNumFromMonth(standInitModel?.startMonth ?? null) ?? undefined,
                           });
                         }}
                         className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded ring-1 ring-slate-200 text-slate-700 transition hover:bg-white hover:text-slate-900"
@@ -10701,6 +10815,7 @@ export function BacklogPlanningPanel({
                 leadingIcon={createKindIcon(createSelection.kind)}
                 onCancel={closeInlineCreator}
                 onSubmit={(title) => { void handleCreateSubmit(null, title); }}
+                hint={composerHintFor(createSelection)}
               />
             ) : null}
             {isInitOpen ? (
@@ -10788,7 +10903,7 @@ export function BacklogPlanningPanel({
                                   event.stopPropagation();
                                   onJumpToRoadmapPlanning(epic.epicTitle);
                                 }}
-                                className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-sky-50 px-2 text-[11px] font-semibold text-sky-700 ring-1 ring-sky-200/80 transition hover:bg-sky-100 hover:ring-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+                                className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-sky-50 px-2 text-[11px] font-semibold text-sky-700 ring-1 ring-sky-200/80 opacity-0 transition hover:bg-sky-100 hover:ring-sky-300 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 group-hover/workitem:opacity-100"
                                 title={`Open Roadmap Planning and search "${epic.epicTitle}" to schedule`}
                                 aria-label={`Schedule epic "${epic.epicTitle}" in Roadmap Planning`}
                               >
@@ -10996,6 +11111,7 @@ export function BacklogPlanningPanel({
                         leadingIcon={createKindIcon("story")}
                         onCancel={closeInlineCreator}
                         onSubmit={(title) => { void handleCreateSubmit(null, title); }}
+                        hint={composerHintFor(createSelection)}
                       />
                     ) : null}
                   </div>
@@ -11039,6 +11155,7 @@ export function BacklogPlanningPanel({
     kind: CreateKind;
     initiativeId?: string;
     epicId?: string;
+    quarterHint?: 1 | 2 | 3 | 4;
   }) {
     setOpenCreateMenuKey(null);
     setCreateSelection(selection);
@@ -11049,6 +11166,74 @@ export function BacklogPlanningPanel({
     } else {
       setStoryTargetEpicId(selection.epicId ?? "");
     }
+  }
+
+  /** Pulls the quarter (1–4) out of a grouped-tree path like
+   *  `roadmap:X/year:2026/quarter:Q2/initiative:Y`. Returns null when
+   *  the path doesn't contain a quarter segment (ungrouped view or
+   *  grouping that doesn't include "quarter"). */
+  function extractQuarterFromPath(path: string): 1 | 2 | 3 | 4 | null {
+    const match = path.match(/quarter:Q([1-4])\b/);
+    if (!match) return null;
+    const n = Number(match[1]);
+    return n === 1 || n === 2 || n === 3 || n === 4 ? n : null;
+  }
+
+  /** Numeric variant of `quarterFromMonth` (which returns "Q1"…"Q4"
+   *  string labels) — used to seed `createSelection.quarterHint` from
+   *  a sibling epic's / parent initiative's startMonth so new epics
+   *  inherit the schedule of the bucket they're created in. */
+  function quarterNumFromMonth(month: number | null | undefined): 1 | 2 | 3 | 4 | null {
+    if (month == null) return null;
+    if (month >= 1 && month <= 3) return 1;
+    if (month >= 4 && month <= 6) return 2;
+    if (month >= 7 && month <= 9) return 3;
+    if (month >= 10 && month <= 12) return 4;
+    return null;
+  }
+
+  /** First and last month of a quarter (1-indexed). */
+  function quarterMonthRange(quarter: 1 | 2 | 3 | 4): { start: number; end: number } {
+    const start = (quarter - 1) * 3 + 1;
+    return { start, end: start + 2 };
+  }
+
+  /** "Scheduled: Q1 (Jan – Mar)" hint shown under the inline composer
+   *  when a quarter context has been inferred — makes the implicit
+   *  inheritance visible before the user hits Enter. */
+  function formatScheduledHint(quarter: 1 | 2 | 3 | 4): string {
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const { start, end } = quarterMonthRange(quarter);
+    return `Scheduled: Q${quarter} (${monthNames[start - 1]} – ${monthNames[end - 1]})`;
+  }
+
+  /** Hint that surfaces context for the row about to be created. For
+   *  epics it shows the inherited quarter (or "Backlog"); for stories
+   *  it shows the parent epic title so the user can confirm they're
+   *  adding under the right epic; for initiatives it shows the
+   *  roadmap. Keeps every composer self-documenting about WHERE the
+   *  new row will land. */
+  function composerHintFor(selection: typeof createSelection): string | null {
+    if (!selection) return null;
+    if (selection.kind === "epic") {
+      if (selection.quarterHint) return formatScheduledHint(selection.quarterHint);
+      return "Will be added to Backlog (Unscheduled)";
+    }
+    if (selection.kind === "story") {
+      const targetEpicId =
+        selection.scope === "initiative" ? storyTargetEpicId : selection.epicId;
+      if (!targetEpicId) return null;
+      const epic = epicById.get(targetEpicId);
+      if (!epic) return null;
+      return `Under: ${epic.title}`;
+    }
+    if (selection.kind === "initiative") {
+      const roadmapId = initiativeTargetRoadmapId.trim();
+      const roadmapName = roadmapId ? roadmapNameById.get(roadmapId) : null;
+      if (roadmapName) return `In: ${roadmapName}`;
+      return null;
+    }
+    return null;
   }
 
   /**
@@ -11070,7 +11255,11 @@ export function BacklogPlanningPanel({
         await onCreateInitiativeQuick(title);
       } else if (createSelection.kind === "epic") {
         if (!createSelection.initiativeId) return;
-        await onCreateEpicQuick(createSelection.initiativeId, title);
+        const q = createSelection.quarterHint;
+        const schedule = q != null
+          ? { planStartMonth: quarterMonthRange(q).start, planEndMonth: quarterMonthRange(q).end }
+          : undefined;
+        await onCreateEpicQuick(createSelection.initiativeId, title, schedule);
         setOpenInitiatives((prev) => ({ ...prev, [createSelection.initiativeId!]: true }));
       } else {
         const epicId = createSelection.scope === "initiative" ? storyTargetEpicId : createSelection.epicId;
@@ -12042,6 +12231,7 @@ export function BacklogPlanningPanel({
             leadingIcon={createKindIcon("initiative")}
             onCancel={closeInlineCreator}
             onSubmit={(title) => { void handleCreateSubmit(null, title); }}
+            hint={composerHintFor(createSelection)}
           />
         </div>
       ) : null}
@@ -12798,6 +12988,7 @@ export function BacklogPlanningPanel({
                         editingCellField={isEditingCell ? editingStoryCell!.field : null}
                         editingCellValue={isEditingCell ? editingStoryCell!.value : ""}
                         isEditingTeam={isEditingParentTeam("epic", row.epicId)}
+                        isEditingParent={editingParentLink?.kind === "story" && editingParentLink.id === row.storyId}
                         ctx={storyRowCtx}
                       />
                     ),
@@ -12938,6 +13129,10 @@ export function BacklogPlanningPanel({
                                     scope: "initiative",
                                     kind: "epic",
                                     initiativeId: initiative.id,
+                                    // Inherit quarter from the parent initiative's
+                                    // startMonth (best-effort proxy for the bucket
+                                    // the user is looking at in the ungrouped view).
+                                    quarterHint: quarterNumFromMonth(initiative.startMonth) ?? undefined,
                                   })
                                 }
                                 className="group/menu-item flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition hover:bg-amber-50"
@@ -13118,6 +13313,7 @@ export function BacklogPlanningPanel({
                       leadingIcon={createKindIcon("initiative")}
                       onCancel={closeInlineCreator}
                       onSubmit={(title) => { void handleCreateSubmit(null, title); }}
+                      hint={composerHintFor(createSelection)}
                     />
                   ) : null}
 
@@ -13153,6 +13349,7 @@ export function BacklogPlanningPanel({
                           ) : undefined}
                           onCancel={closeInlineCreator}
                           onSubmit={(title) => { void handleCreateSubmit(null, title); }}
+                          hint={composerHintFor(createSelection)}
                         />
                       ) : null}
                       {(initiative.epics ?? [])
@@ -13255,6 +13452,11 @@ export function BacklogPlanningPanel({
                                               scope: "epic",
                                               kind: "epic",
                                               initiativeId: initiative.id,
+                                              // Sibling epic's planStartMonth tells us the quarter
+                                              // the new epic should land in — matches the user's
+                                              // mental model that "+" next to a Q1 epic creates
+                                              // another Q1 epic, not an Unscheduled one.
+                                              quarterHint: quarterNumFromMonth(epic.planStartMonth) ?? undefined,
                                             })
                                           }
                                           className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[16px] font-medium text-slate-700 hover:!bg-indigo-50/40"
@@ -13322,7 +13524,7 @@ export function BacklogPlanningPanel({
                                     )}
                                   </span>
                                 ),
-                                status: (epic.userStories ?? []).length === 0 ? (
+                                status: (epic.planStartMonth == null || (epic.userStories ?? []).filter((s) => s.sprint != null).length === 0) ? (
                                   <span className="inline-flex min-w-[104px] items-center justify-center text-[16px] text-slate-400">—</span>
                                 ) : (
                                   <span className={cn("inline-flex min-w-[104px] items-center justify-center gap-1.5 justify-self-center rounded-full px-3 py-[3px] text-[16px] font-semibold tracking-wide", statusChip(epicWorkflowStatus))}>
@@ -13493,14 +13695,15 @@ export function BacklogPlanningPanel({
                                     ? "Type epic title and press Enter..."
                                     : "Type user story title and press Enter..."
                                 }
-                                formClassName={cn("grid min-w-full w-max items-center gap-3 py-2")}
+                                formClassName={cn("grid min-w-full w-max items-center gap-3 py-3")}
                                 formStyle={{ gridTemplateColumns: tableGridTemplate }}
-                                inputWrapperStyle={{ paddingLeft: 48 }}
+                                inputWrapperStyle={{ paddingLeft: 96 }}
                                 rightSlotStyle={createFormRestGridStyle}
                                 submitting={submittingKey === "create"}
                                 leadingIcon={createKindIcon(createSelection.kind)}
                                 onCancel={closeInlineCreator}
                                 onSubmit={(title) => { void handleCreateSubmit(null, title); }}
+                                hint={composerHintFor(createSelection)}
                               />
                             ) : null}
 
@@ -13919,6 +14122,7 @@ export function BacklogPlanningPanel({
                                       leadingIcon={createKindIcon("story")}
                                       onCancel={closeInlineCreator}
                                       onSubmit={(title) => { void handleCreateSubmit(null, title); }}
+                                      hint={composerHintFor(createSelection)}
                                     />
                                   ) : null}
                                   </div>

@@ -683,19 +683,27 @@ export function EpicFormDialog({
   // "Review / Testing". Any in-progress (or mixed review+todo):
   // "In progress". Else "To do".
   const derivedEpicStatus = useMemo<{ label: string; key: "todo" | "inProgress" | "review" | "done" | "empty" }>(() => {
-    const stories = epic?.userStories ?? [];
-    if (stories.length === 0) return { label: "To do", key: "todo" };
+    // "Empty" signal — no execution to roll up: epic isn't on the
+    // Gantt (planStartMonth == null), has zero stories, or every
+    // story is in the backlog (sprint == null, default "todo" but no
+    // real signal). Display "—" instead of leaking the default to
+    // "To do".
+    const allStories = epic?.userStories ?? [];
+    const sprinted = allStories.filter((s) => s.sprint != null);
+    if (epic?.planStartMonth == null || sprinted.length === 0) {
+      return { label: "—", key: "empty" };
+    }
     const counts = { todo: 0, inProgress: 0, review: 0, done: 0 };
-    for (const s of stories) {
+    for (const s of sprinted) {
       const k = s.status as keyof typeof counts;
       if (k in counts) counts[k] += 1;
     }
-    if (counts.done === stories.length) return { label: "Done", key: "done" };
+    if (counts.done === sprinted.length) return { label: "Done", key: "done" };
     if (counts.inProgress > 0) return { label: "In progress", key: "inProgress" };
-    if (counts.review + counts.done === stories.length) return { label: "Review / Testing", key: "review" };
+    if (counts.review + counts.done === sprinted.length) return { label: "Review / Testing", key: "review" };
     if (counts.review > 0 || counts.done > 0) return { label: "In progress", key: "inProgress" };
     return { label: "To do", key: "todo" };
-  }, [epic?.userStories]);
+  }, [epic?.userStories, epic?.planStartMonth]);
   const infoTooltipClass =
     "pointer-events-none absolute left-1/2 top-0 z-[320] w-48 max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-[calc(100%+8px)] whitespace-normal rounded-lg border border-indigo-200/80 bg-gradient-to-b from-white to-indigo-50/40 px-2.5 py-1.5 text-[12px] font-medium leading-snug text-slate-700 opacity-0 shadow-md ring-1 ring-indigo-100/70 backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100";
   // Same look as `infoTooltipClass` but anchored *below* the trigger — for

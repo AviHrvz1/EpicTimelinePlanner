@@ -2114,10 +2114,15 @@ function DonutSvg({
  */
 type WorkflowStatus = "todo" | "inProgress" | "review" | "done";
 function rollupWorkflowStatusLocal(
-  stories: ReadonlyArray<{ status: string | null | undefined }>,
+  stories: ReadonlyArray<{ status: string | null | undefined; sprint?: number | null }>,
 ): WorkflowStatus {
-  if (stories.length === 0) return "todo";
-  const statuses = stories.map((s) => s.status ?? "todo");
+  // Mirror the canonical rule in lib/workflow-rollup.ts: backlog
+  // stories (sprint == null) are filtered out before the rollup —
+  // they carry the default "todo" from creation but represent "no
+  // execution signal yet".
+  const sprinted = stories.filter((s) => s.sprint != null);
+  if (sprinted.length === 0) return "todo";
+  const statuses = sprinted.map((s) => s.status ?? "todo");
   if (statuses.every((s) => s === "done")) return "done";
   if (statuses.every((s) => s === "review" || s === "done")) return "review";
   if (statuses.some((s) => s === "inProgress" || s === "review" || s === "done")) return "inProgress";

@@ -3635,10 +3635,25 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     // charts. The backlog endpoint (`?year=all&slim=1` at the other call
     // sites) intentionally omits `includeDeleted` so the backlog list
     // shows live data only.
-    const data = await parseJson<InitiativeItem[]>(
-      await fetch(`/api/initiatives?year=${targetYear}&roadmapId=${targetRoadmapId}&includeDeleted=1`, { cache: "no-store" }),
-    );
-    setInitiatives(data);
+    //
+    // The backlog workspace reads from a SEPARATE cross-roadmap cache
+    // (`backlogInitiatives`, year=all & roadmapId=all). Without
+    // refreshing that cache too, mutations made from any other surface
+    // (edits in dialogs, deletes, drag-and-drop sprint changes, etc.)
+    // leave the backlog table stale. Only refetch the backlog cache if
+    // it has already been populated — keeps page loads that never
+    // touch the backlog workspace from paying for an unused request.
+    const backlogLoaded = backlogInitiativesRef.current !== null;
+    const refreshTimeline = (async () => {
+      const data = await parseJson<InitiativeItem[]>(
+        await fetch(`/api/initiatives?year=${targetYear}&roadmapId=${targetRoadmapId}&includeDeleted=1`, { cache: "no-store" }),
+      );
+      setInitiatives(data);
+    })();
+    await Promise.all([
+      refreshTimeline,
+      backlogLoaded ? refreshBacklogInitiatives() : Promise.resolve(),
+    ]);
   }
 
   async function refreshRoadmaps() {
@@ -4225,7 +4240,17 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   }
 
 
-  async function createEpicQuick(initiativeId: string, title: string) {
+  async function createEpicQuick(
+    initiativeId: string,
+    title: string,
+    /** Optional plan-date defaults inherited from the click context
+     *  (e.g. the backlog panel's "+" inside a Q1 group passes
+     *  {planStartMonth: 1, planEndMonth: 3} so the new epic lands in
+     *  Q1 instead of dropping into Unscheduled). Wins over the
+     *  Roadmap-Planning view's focused-month / quarter fallback when
+     *  supplied. */
+    schedule?: { planStartMonth: number; planEndMonth: number },
+  ) {
     console.log("[create-epic] POST", { initiativeId, title, caller: new Error().stack?.split("\n").slice(1, 4).join(" | ") });
     // Month view: stamp the focused month (single month placement).
     // Quarter view (no focused month): stamp the full quarter range so
@@ -4235,10 +4260,12 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     const epicFocusedQuarter = focusedQuarterLabel
       ? QUARTERS.find((q) => q.label === focusedQuarterLabel)
       : null;
-    const planStartMonth = activeTimelineMonth
+    const planStartMonth = schedule?.planStartMonth
+      ?? activeTimelineMonth
       ?? epicFocusedQuarter?.months[0]
       ?? null;
-    const planEndMonth = activeTimelineMonth
+    const planEndMonth = schedule?.planEndMonth
+      ?? activeTimelineMonth
       ?? epicFocusedQuarter?.months[epicFocusedQuarter.months.length - 1]
       ?? null;
     const response = await fetch(`/api/initiatives/${initiativeId}/epics`, {
@@ -4257,11 +4284,20 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     }
     const created = (await response.clone().json().catch(() => null)) as { id?: string } | null;
     console.log("[create-epic] POST ok", { initiativeId, createdId: created?.id });
-    // Refresh BOTH the regular roadmap-scoped initiatives AND the backlog's
-    // `roadmapId=all&slim=1` cache. The backlog table reads from
-    // `backlogInitiatives`, so without the second refresh new rows created
-    // from the backlog table itself never show up.
-    await Promise.all([refresh(), refreshBacklogInitiatives()]);
+    // Surface where the new epic landed so the user isn't surprised
+    // if scrolled past the destination row. Skips when planning to
+    // the same focused month / quarter (no scroll surprise — the row
+    // appears under the click).
+    if (schedule) {
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const q = Math.floor((schedule.planStartMonth - 1) / 3) + 1;
+      toast.success(
+        `Epic added to Q${q} (${monthNames[schedule.planStartMonth - 1]} – ${monthNames[schedule.planEndMonth - 1]})`,
+      );
+    } else if (planStartMonth == null) {
+      toast.success("Epic added to Backlog");
+    }
+    await refresh();
   }
 
   async function createInitiativeQuick(
@@ -4315,7 +4351,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
       throw new Error("Failed to create initiative");
     }
     const created = (await response.json()) as { id: string };
-    await Promise.all([refresh(), refreshBacklogInitiatives()]);
+    await refresh();
     return created.id;
   }
 
@@ -4328,7 +4364,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
     if (!response.ok) {
       throw new Error("Failed to create user story");
     }
-    await Promise.all([refresh(), refreshBacklogInitiatives()]);
+    await refresh();
   }
 
   async function scheduleInitiative(initiativeId: string, month: number, timelineRow?: number) {
@@ -7579,7 +7615,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                     // Backlog reads from `backlogInitiatives` (fetched with roadmapId=all), separate from the
                     // year-scoped `initiatives` used by the timeline. Refresh both so the backlog table reflects
                     // inline edits immediately.
-                    await Promise.all([refresh(), refreshBacklogInitiatives()]);
+                    await refresh();
                     console.log("[BacklogPatch] onPatchStoryQuick refresh review", { storyId });
                   } catch (err) {
                     console.error("[BacklogPatch] onPatchStoryQuick error", err);
@@ -7605,7 +7641,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                       toastShown = true;
                       throw new Error("Failed to patch initiative");
                     }
-                    await Promise.all([refresh(), refreshBacklogInitiatives()]);
+                    await refresh();
                     console.log("[BacklogPatch] onPatchInitiativeQuick refresh review", { initiativeId });
                   } catch (err) {
                     console.error("[BacklogPatch] onPatchInitiativeQuick error", err);
@@ -7630,7 +7666,7 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
                       toastShown = true;
                       throw new Error("Failed to patch epic");
                     }
-                    await Promise.all([refresh(), refreshBacklogInitiatives()]);
+                    await refresh();
                     console.log("[BacklogPatch] onPatchEpicQuick refresh review", { epicId });
                   } catch (err) {
                     console.error("[BacklogPatch] onPatchEpicQuick error", err);

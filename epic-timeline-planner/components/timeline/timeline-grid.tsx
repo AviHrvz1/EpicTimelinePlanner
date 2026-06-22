@@ -758,7 +758,6 @@ function dayFractionWithinSprint(planYear: number, globalSprint: number, now: Da
  * Returns null when the epic has zero stories.
  */
 function deriveEpicStatusKey(epic: EpicItem): UserStoryItem["status"] | null {
-  const stories = epic.userStories ?? [];
   // Empty-story epics roll up to "todo" — matches both the panel
   // (`epicExecutionStatusMeta` returns the amber "To Do" chip) and the
   // hero's Work Progress · Epics donut (`rollupWorkflowStatusLocal`
@@ -768,6 +767,15 @@ function deriveEpicStatusKey(epic: EpicItem): UserStoryItem["status"] | null {
   // when a "Discovery placeholder" epic with zero stories hit a Q+status
   // narrowing. The bucketing of empty epics as "still-to-start" is the
   // shared mental model; this aligns the Gantt to it.
+  //
+  // Backlog stories (sprint == null) are filtered out before the
+  // rollup — they carry the default "todo" but represent "no
+  // execution signal yet". An epic whose only stories are backlog
+  // collapses to the same "todo" fallback as the empty-stories case.
+  // The display chip render sites separately render "—" for this
+  // case; the filter behaviour (Q+todo includes the epic) is
+  // preserved.
+  const stories = (epic.userStories ?? []).filter((s) => s.sprint != null);
   if (stories.length === 0) return "todo";
   const counts = { todo: 0, inProgress: 0, review: 0, done: 0 };
   for (const s of stories) {
@@ -789,6 +797,22 @@ function deriveEpicStatusKey(epic: EpicItem): UserStoryItem["status"] | null {
   if (counts.review > 0 && counts.todo === 0) return "review";
   if (counts.done > 0 || counts.review > 0) return "inProgress";
   return "todo";
+}
+
+/**
+ * Display-layer variant of `deriveEpicStatusKey` — returns null when
+ * the epic has no execution signal yet (unscheduled, zero stories,
+ * or every story is in the backlog with `sprint == null`). Callers
+ * use this for chip / badge rendering so the default "todo" rollup
+ * doesn't leak onto an epic that isn't actually in flight. The plain
+ * `deriveEpicStatusKey` keeps its "todo" fallback so the Gantt's
+ * "To Do" status filter still includes these epics (preserves the
+ * Q+To-Do empty-epic fix).
+ */
+function deriveDisplayEpicStatusKey(epic: EpicItem): UserStoryItem["status"] | null {
+  const sprinted = (epic.userStories ?? []).filter((s) => s.sprint != null);
+  if (epic.planStartMonth == null || sprinted.length === 0) return null;
+  return deriveEpicStatusKey(epic);
 }
 
 /**
@@ -1592,7 +1616,7 @@ function EpicGanttLaneRow({
             showProgress={showProgress}
             healthStatus={healthStatus}
             healthTooltip={healthTooltip}
-            epicStatus={deriveEpicStatusKey(epic)}
+            epicStatus={deriveDisplayEpicStatusKey(epic)}
             isOverdue={planYear != null && epicIsOverdueByPlan(epic, planYear)}
             daysPastPlan={planYear != null ? (epicOverdueMeta(epic, planYear)?.daysPastPlan ?? 0) : 0}
             onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
@@ -1652,7 +1676,7 @@ function EpicGanttLaneRow({
             showProgress={showProgress}
             healthStatus={healthStatus}
             healthTooltip={healthTooltip}
-            epicStatus={deriveEpicStatusKey(epic)}
+            epicStatus={deriveDisplayEpicStatusKey(epic)}
             isOverdue={planYear != null && epicIsOverdueByPlan(epic, planYear)}
             daysPastPlan={planYear != null ? (epicOverdueMeta(epic, planYear)?.daysPastPlan ?? 0) : 0}
             onUnschedule={onUnscheduleEpic ? () => onUnscheduleEpic(epic.id) : undefined}
@@ -7563,7 +7587,7 @@ export function TimelineGrid({
                                 showRoadmapProgress &&
                                 lastPickedLabelLane !== "team" &&
                                 lastPickedLabelLane !== "health"
-                                  ? epicLiveStatus
+                                  ? deriveDisplayEpicStatusKey(row.epic)
                                   : null
                               }
                               // Overdue is a HEALTH-VERDICT signal — it lives next
@@ -10461,7 +10485,7 @@ export function TimelineGrid({
                                           showProgress={showRoadmapProgress || healthFilter.size > 0}
                                           healthStatus={(showRoadmapProgress || healthFilter.size > 0) && epicHasDataQ && healthFilter.size > 0 ? epicHealthQ.status : null}
                                           healthTooltip={epicHealthTooltipQ}
-                                          epicStatus={showRoadmapProgress && healthFilter.size === 0 ? epicLiveStatusQ : null}
+                                          epicStatus={showRoadmapProgress && healthFilter.size === 0 ? deriveDisplayEpicStatusKey(row.epic) : null}
                                           // See year-roadmap branch — Overdue lives in the health-
                                           // verdict pill exclusively, never alongside the status pill.
                                           isOverdue={false}

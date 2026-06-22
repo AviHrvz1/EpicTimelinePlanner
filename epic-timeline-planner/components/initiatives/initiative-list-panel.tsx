@@ -955,7 +955,7 @@ function storyStatusMeta(story: UserStoryItem, contextMonth: number | null): {
   if (story.sprint == null) {
     return {
       sprintLabel: null,
-      statusLabel: "Unscheduled",
+      statusLabel: "Backlog",
       statusClassName: "text-muted-foreground",
       showStatusBadge: false,
     };
@@ -1160,13 +1160,18 @@ function epicPlanningStatusMeta(epic: EpicItem): { label: string; className: str
 }
 
 function epicExecutionStatusMeta(epic: EpicItem): { label: string; className: string } {
-  const stories = epic.userStories ?? [];
-  if (stories.length === 0) {
+  // No execution signal yet: epic isn't on the Gantt
+  // (planStartMonth == null), has zero stories, or every story is in
+  // the backlog (sprint == null, default "todo" but no real signal).
+  // Display "—" instead of leaking the default to "To Do".
+  const sprintedStories = (epic.userStories ?? []).filter((s) => s.sprint != null);
+  if (epic.planStartMonth == null || sprintedStories.length === 0) {
     return {
-      label: "To Do",
-      className: "border border-amber-200/90 bg-amber-50 text-amber-800",
+      label: "—",
+      className: "border border-slate-200/90 bg-slate-50 text-slate-500",
     };
   }
+  const stories = sprintedStories;
   if (stories.every((s) => s.status === "done")) {
     return {
       label: "Done",
@@ -1198,11 +1203,21 @@ function initiativeExecutionStatusMeta(initiative: InitiativeItem): { label: str
   const epics = initiative.epics ?? [];
   if (epics.length === 0) {
     return {
-      label: "To Do",
-      className: "border border-amber-200/90 bg-amber-50 text-amber-800",
+      label: "—",
+      className: "border border-slate-200/90 bg-slate-50 text-slate-500",
     };
   }
-  const statuses = epics.map((epic) => epicExecutionStatusMeta(epic).label);
+  // Drop epics with no execution signal ("—") before the rollup so an
+  // unscheduled epic doesn't dilute the parent's status.
+  const statuses = epics
+    .map((epic) => epicExecutionStatusMeta(epic).label)
+    .filter((label) => label !== "—");
+  if (statuses.length === 0) {
+    return {
+      label: "—",
+      className: "border border-slate-200/90 bg-slate-50 text-slate-500",
+    };
+  }
   if (statuses.every((label) => label === "Done")) {
     return {
       label: "Done",
@@ -3537,11 +3552,14 @@ export function InitiativeListPanel({
       if (!panelTeamFilterIds.includes("all") && !panelTeamFilterIds.includes(normalizedEpicTeamId(epic))) return false;
       if (!panelStatusFilters.includes("all")) {
         const planning = epicPlanningStatusMeta(epic).label;
-        const execution = epicExecutionStatusMeta(epic).label as "To Do" | "In Progress" | "Review / Testing" | "Done";
+        // execution may be "—" for unscheduled / all-backlog epics —
+        // those never match the execution filters by design; the
+        // "Unscheduled" planning filter is the right way to surface them.
+        const execution = epicExecutionStatusMeta(epic).label;
         const matches =
           (panelStatusFilters.includes("Scheduled") && planning !== "Unscheduled") ||
           (panelStatusFilters.includes("Unscheduled") && planning === "Unscheduled") ||
-          panelStatusFilters.includes(execution);
+          (panelStatusFilters as readonly string[]).includes(execution);
         if (!matches) {
           return false;
         }
@@ -3605,12 +3623,21 @@ export function InitiativeListPanel({
             (epic.userStories ?? []).some((s) => s.title.toLowerCase().includes(q)),
         )
       : monthPanelEpicsFiltered;
-    if (!newestEpicId) return base;
-    const newestIdx = base.findIndex(({ epic }) => epic.id === newestEpicId);
-    if (newestIdx <= 0) return base;
-    const result = [...base];
-    result.unshift(...result.splice(newestIdx, 1));
-    return result;
+    // Sort newest-first by `createdAt` (DESC). The `newestEpicId` pin
+    // only worked when the panel was mounted at the moment of creation;
+    // creating an epic in the backlog workspace and then navigating
+    // here missed the detection and the new epic fell back to
+    // alphabetical, where it hid below the "AI-*" prefix block. Sorting
+    // by `createdAt` always lands the freshly-created row on top
+    // regardless of which surface the create happened on. Title is the
+    // tie-breaker for identical seed timestamps.
+    void newestEpicId;
+    return [...base].sort((a, b) => {
+      const aT = new Date(a.epic.createdAt).getTime();
+      const bT = new Date(b.epic.createdAt).getTime();
+      if (aT !== bT) return bT - aT;
+      return a.epic.title.localeCompare(b.epic.title);
+    });
   }, [monthPanelEpicsFiltered, epicSearch, newestEpicId]);
 
   const epicSearchSuggestionsList = useMemo(() => {

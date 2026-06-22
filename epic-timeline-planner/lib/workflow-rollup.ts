@@ -12,20 +12,28 @@
  * produces counts that look correct in isolation but disagree under
  * a single click.
  *
- * Returns null when the input has zero stories — callers decide
- * whether to surface that as "no verdict" (Gantt: drop from filter)
- * or fold to "todo" (donut: count it as a todo initiative).
+ * Backlog stories (`sprint == null`) are filtered out before the
+ * rollup. They carry the default `status="todo"` from creation but
+ * represent "no execution signal yet" — counting them would leak the
+ * default into the parent's status pill. If no sprinted stories
+ * remain after filtering, the rollup returns null exactly like the
+ * empty-stories case.
+ *
+ * Returns null when the input has zero sprinted stories — callers
+ * decide whether to surface that as "no verdict" (Gantt: drop from
+ * filter) or fold to "todo" (donut: count it as a todo initiative).
  */
 import type { UserStoryItem } from "@/lib/types";
 
 export type WorkflowStatusKey = NonNullable<UserStoryItem["status"]>;
 
 export function rollupWorkflowStatus(
-  stories: ReadonlyArray<{ status: string | null | undefined }>,
+  stories: ReadonlyArray<{ status: string | null | undefined; sprint?: number | null }>,
 ): WorkflowStatusKey | null {
-  if (stories.length === 0) return null;
+  const sprinted = stories.filter((s) => s.sprint != null);
+  if (sprinted.length === 0) return null;
   const counts = { todo: 0, inProgress: 0, review: 0, done: 0 };
-  for (const s of stories) {
+  for (const s of sprinted) {
     if (
       s.status === "todo" ||
       s.status === "inProgress" ||
@@ -36,9 +44,9 @@ export function rollupWorkflowStatus(
     }
   }
   if (counts.inProgress > 0) return "inProgress";
-  if (counts.done === stories.length) return "done";
+  if (counts.done === sprinted.length) return "done";
   if (counts.done > 0 && counts.todo === 0) return "done";
-  if (counts.review === stories.length) return "review";
+  if (counts.review === sprinted.length) return "review";
   if (counts.review > 0 && counts.todo === 0) return "review";
   if (counts.done > 0 || counts.review > 0) return "inProgress";
   return "todo";
