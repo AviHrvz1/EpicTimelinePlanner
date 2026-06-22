@@ -1709,7 +1709,19 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
   const handlePanelStatusFilterDerivedChange = useCallback(
     (next: Set<"backlogEpic" | "todo" | "inProgress" | "review" | "done" | "unscheduled">) => {
       setGanttStatusFilter(next);
-      if (next.size > 0) {
+      // Workflow statuses ("To Do" / "In Progress" / "Review / Testing"
+      // / "Done") justify revealing the Gantt's status pills + progress
+      // overlay — they describe live work on planned epics. The
+      // planning-state alias alone ("unscheduled" / "backlogEpic") does
+      // NOT: an unscheduled epic has no plan window, so a status pill +
+      // progress bar on a ghost row reads as misleading "we're tracking
+      // this" signal when no tracking is actually possible. Treat an
+      // unscheduled-only filter the same as an empty filter for the
+      // purposes of the overlay.
+      const hasWorkflowStatus = Array.from(next).some(
+        (v) => v === "todo" || v === "inProgress" || v === "review" || v === "done",
+      );
+      if (hasWorkflowStatus) {
         // Picking a status verdict implies the planner wants to SEE the
         // status pills on bars. The pills are gated on `showRoadmapProgress`
         // (same gate as the health pills), so flip it on alongside the
@@ -1720,15 +1732,11 @@ export function EpicPlannerApp({ initialInitiatives, year, initialRoadmaps, init
         setLastPickedLabelLane("status");
         return;
       }
-      // Unselect path — the planner clicked the active status off (donut
-      // toggle or dropdown unchecked). The earlier handler left
-      // `showRoadmapProgress` + `lastPickedLabelLane` in their on-state
-      // residue, so the Gantt kept showing the status pills and the
-      // progress bar on the panel rows even though no filter was driving
-      // them. Reset both — but ONLY when no health filter is still
-      // active. A planner who has both pickets active and clears just
-      // the status one expects the health chips + bars to keep going;
-      // health is the lane that's still in play.
+      // Empty set OR unscheduled-only — drop the auto-enabled progress
+      // overlay ONLY when no health filter is still in play. A planner
+      // who has both axes picked and clears just the status one (or
+      // narrows it to unscheduled-only) expects the health chips + bars
+      // to keep going; health is the lane that's still in play.
       if (healthFilter.size === 0) {
         setShowRoadmapProgress(false);
         setLastPickedLabelLane(null);

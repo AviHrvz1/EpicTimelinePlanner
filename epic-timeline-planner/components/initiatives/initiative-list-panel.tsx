@@ -1950,12 +1950,24 @@ function InitiativeTreeCard({
   const [newestEpicId, setNewestEpicId] = useState<string | null>(null);
   const prevEpicIdsRef = useRef<Set<string>>(new Set(initiative.epics?.map((e) => e.id) ?? []));
   const epics = useMemo(() => {
-    const sorted = [...(initiative.epics ?? [])].sort((a, b) => {
-      if (a.id === newestEpicId) return 1;
-      if (b.id === newestEpicId) return -1;
+    // Sort by `createdAt` ascending — the earliest-created epic is at
+    // the top of the initiative. Ties (identical timestamps, e.g. seed
+    // data) fall back on title for stable display. The previous
+    // alphabetical sort buried newly-created epics inside the alphabet
+    // and a planner who just added one had to scroll to find it; an
+    // ascending-by-creation order keeps the history readable AND lands
+    // freshly-created rows at the bottom where the planner is already
+    // looking (the "create epic" affordance lives at the bottom of the
+    // initiative card). `newestEpicId` pin is no longer needed since
+    // freshly-created rows naturally land at the bottom under this
+    // ordering.
+    void newestEpicId;
+    return [...(initiative.epics ?? [])].sort((a, b) => {
+      const aT = new Date(a.createdAt).getTime();
+      const bT = new Date(b.createdAt).getTime();
+      if (aT !== bT) return aT - bT;
       return a.title.localeCompare(b.title);
     });
-    return sorted;
   }, [initiative.epics, newestEpicId]);
   const initiativeStories = epics.flatMap((e) => e.userStories ?? []);
   const initiativeStoryTotal = initiativeStories.length;
@@ -3279,26 +3291,45 @@ export function InitiativeListPanel({
   externalStatusFilterRef.current = externalStatusFilter;
   useEffect(() => {
     if (externalStatusFilter == null) return;
-    const next: typeof panelStatusFilters = [];
-    if (externalStatusFilter.has("todo")) next.push("To Do");
-    if (externalStatusFilter.has("inProgress")) next.push("In Progress");
-    if (externalStatusFilter.has("review")) next.push("Review / Testing");
-    if (externalStatusFilter.has("done")) next.push("Done");
-    if (externalStatusFilter.has("backlogEpic") || externalStatusFilter.has("unscheduled")) {
-      next.push("Unscheduled");
-    }
-    if (next.length === 0) next.push("all");
-    setPanelStatusFilters(next);
+    // Functional setState — preserves the panel's "Unscheduled" pick
+    // when the inbound sync fires for a workflow-only change. Without
+    // this, picking "Unscheduled" + "To Do" in the panel would round-
+    // trip back as just "To Do" (the external propagation strips
+    // "unscheduled" by design, and a non-functional replacement would
+    // then wipe the panel-side label too).
+    setPanelStatusFilters((prev) => {
+      const hadUnscheduled = prev.includes("Unscheduled");
+      const next: typeof prev = [];
+      if (externalStatusFilter.has("todo")) next.push("To Do");
+      if (externalStatusFilter.has("inProgress")) next.push("In Progress");
+      if (externalStatusFilter.has("review")) next.push("Review / Testing");
+      if (externalStatusFilter.has("done")) next.push("Done");
+      // Donut-click route puts "unscheduled" (or legacy "backlogEpic")
+      // into external; surface that as the panel's "Unscheduled" row.
+      // OR carry forward the panel's existing pick — see comment above.
+      if (
+        externalStatusFilter.has("backlogEpic") ||
+        externalStatusFilter.has("unscheduled") ||
+        hadUnscheduled
+      ) {
+        next.push("Unscheduled");
+      }
+      if (next.length === 0) next.push("all");
+      return next;
+    });
   }, [externalStatusFilter]);
   /**
    * Outbound sync — bridge the panel's local execution-status filter to
    * the parent so the Gantt can apply the same cut. Emits the 4 workflow
-   * statuses plus the planning-state "unscheduled" alias (the panel
-   * dropdown's "Unscheduled" row is the user-facing equivalent of
-   * `backlogEpic` / `unscheduled` on the parent side). Skips the emit
-   * when the derived set matches what just arrived via
-   * `externalStatusFilter` — that's the echo from the inbound sync
-   * above and re-emitting would bounce the parent's setter forever.
+   * statuses ONLY; the "Unscheduled" panel row is decoupled from the
+   * Gantt's status filter by user request: an unscheduled epic has no
+   * plan dates, so narrowing the Gantt to "Unscheduled" leaves an empty
+   * timeline (or just ghost-adopted rows) — the panel-side narrow is
+   * what the planner wanted, not a Gantt cut. The echo guard compares
+   * workflow-only items between external and our derived set since the
+   * planning-state alias ("unscheduled" / "backlogEpic") in external is
+   * intentionally absent from what we emit; treating it as "neutral"
+   * lets the donut-click filter on the parent survive a panel sync.
    * "Scheduled" still doesn't translate (no negative filter on Gantt).
    */
   useEffect(() => {
@@ -3309,28 +3340,24 @@ export function InitiativeListPanel({
       if (panelStatusFilters.includes("In Progress")) set.add("inProgress");
       if (panelStatusFilters.includes("Review / Testing")) set.add("review");
       if (panelStatusFilters.includes("Done")) set.add("done");
-      if (panelStatusFilters.includes("Unscheduled")) set.add("unscheduled");
+      // "Unscheduled" intentionally NOT added — see the docblock above.
     }
-    // Echo guard — when the inbound sync just wrote `panelStatusFilters`
-    // from `externalStatusFilter`, the derived set will match the external
-    // by construction. Re-emitting creates a new Set identity on the
-    // parent and re-triggers our inbound sync, causing a render loop.
+    // Echo guard — compare workflow-only items. The donut-click route
+    // may leave "unscheduled" / "backlogEpic" in external; both are
+    // neutral for this comparison because we never emit them. If our
+    // workflow set already matches external's workflow items, our
+    // emit wouldn't change anything material and we skip it (avoiding
+    // a render bounce that would wipe the donut-click filter).
     const external = externalStatusFilterRef.current;
-    if (external && external.size === set.size) {
+    if (external) {
+      let externalWorkflowSize = 0;
       let allMatch = true;
-      for (const v of set) {
-        // Both names of the planning-state alias are accepted as a match
-        // — the parent may have either "unscheduled" (donut-click route)
-        // or "backlogEpic" (legacy story-scope route) for the same state.
-        if (v === "unscheduled") {
-          if (!(external.has("unscheduled") || external.has("backlogEpic"))) {
-            allMatch = false; break;
-          }
-          continue;
-        }
-        if (!external.has(v)) { allMatch = false; break; }
+      for (const v of external) {
+        if (v === "unscheduled" || v === "backlogEpic") continue;
+        externalWorkflowSize += 1;
+        if (!(set as ReadonlySet<string>).has(v)) { allMatch = false; }
       }
-      if (allMatch) return;
+      if (allMatch && externalWorkflowSize === set.size) return;
     }
     onPanelStatusFilterDerivedChange(set);
   }, [panelStatusFilters, onPanelStatusFilterDerivedChange]);
@@ -3607,20 +3634,23 @@ export function InitiativeListPanel({
   }, [epicSearch, epicSearchSuggestionsList]);
 
   const initiativeList = useMemo(
-    () =>
-      initiatives
-        .slice()
-        .sort((a, b) => {
-          // The just-created initiative always wins — keeps it visually
-          // pinned at the top until the next reload / new creation, so
-          // the user doesn't have to scroll for the row they just made.
-          if (newestInitiativeId != null) {
-            if (a.id === newestInitiativeId) return -1;
-            if (b.id === newestInitiativeId) return 1;
-          }
-          if (a.status !== b.status) return a.status === "backlog" ? -1 : 1;
-          return a.timelineRow - b.timelineRow || a.title.localeCompare(b.title);
-        }),
+    () => {
+      // Sort by `createdAt` ascending — earliest first, newest last.
+      // Ties (identical timestamps from seed data) fall back to title.
+      // Drops the prior status-then-timelineRow sort + the
+      // newestInitiativeId pin: freshly-created initiatives naturally
+      // land at the bottom under ascending creation order, which is
+      // where the planner is already looking after using the "create
+      // initiative" affordance. The historic order also makes the
+      // list scannable as a timeline of when work was added.
+      void newestInitiativeId;
+      return initiatives.slice().sort((a, b) => {
+        const aT = new Date(a.createdAt).getTime();
+        const bT = new Date(b.createdAt).getTime();
+        if (aT !== bT) return aT - bT;
+        return a.title.localeCompare(b.title);
+      });
+    },
     [initiatives, newestInitiativeId],
   );
   // Search-driven auto-expansion: when the user types a query that matches an

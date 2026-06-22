@@ -14,6 +14,7 @@ import {
   CircleDashed,
   CircleDotDashed,
   Clock,
+  Eraser,
   Eye,
   FileWarning,
   Flag,
@@ -349,7 +350,7 @@ export function RoadmapHealthHero({
         <span>{teamScopeChipIds.length} teams</span>
       )}
       {onClearTeamFilter ? (
-        <X
+        <Eraser
           className="size-3 shrink-0 opacity-0 transition group-hover/teamchip:opacity-100"
           aria-hidden
         />
@@ -1805,7 +1806,7 @@ function DonutCard({
               aria-label="Clear selection on this chart"
               className="inline-flex size-6 items-center justify-center rounded-md bg-white/85 text-slate-500 ring-1 ring-slate-200/80 transition hover:bg-rose-50 hover:text-rose-600 hover:ring-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
             >
-              <X className="size-3.5" strokeWidth={2.4} />
+              <Eraser className="size-3.5" strokeWidth={2.4} />
             </button>
           ) : null}
         </div>
